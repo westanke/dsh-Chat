@@ -16,10 +16,16 @@ import 'process_group.dart';
 import 'sessions_drawer.dart';
 
 class ChatPage extends StatefulWidget {
-  const ChatPage({super.key, required this.state, required this.colors});
+  const ChatPage({
+    super.key,
+    required this.state,
+    required this.colors,
+    required this.onOpenSettings,
+  });
 
   final ChatState state;
   final DsColors colors;
+  final VoidCallback onOpenSettings;
 
   @override
   State<ChatPage> createState() => _ChatPageState();
@@ -54,7 +60,11 @@ class _ChatPageState extends State<ChatPage> {
       key: _scaffoldKey,
       backgroundColor: c.bgBase,
       drawerScrimColor: c.drawerScrim,
-      drawer: SessionsDrawer(state: st, colors: c),
+      drawer: SessionsDrawer(
+        state: st,
+        colors: c,
+        onOpenSettings: widget.onOpenSettings,
+      ),
       appBar: _TopBar(
         colors: c,
         title: st.sessionTitle,
@@ -133,10 +143,18 @@ class _TopBar extends StatelessWidget implements PreferredSizeWidget {
               color: connected ? colors.labelPrimary : colors.labelTertiary,
             ),
             const SizedBox(width: 18),
-            Icon(
-              Icons.add_circle_outline,
-              size: 24,
-              color: colors.labelPrimary,
+            // 官方「新建对话」加号：此前是纯展示 Icon，onNewChat 参数没接上（死交互）。
+            Tooltip(
+              message: '新建对话',
+              child: InkResponse(
+                onTap: onNewChat,
+                radius: 20,
+                child: Icon(
+                  Icons.add_circle_outline,
+                  size: 24,
+                  color: colors.labelPrimary,
+                ),
+              ),
             ),
             const SizedBox(width: DsSpacing.screenPad),
           ],

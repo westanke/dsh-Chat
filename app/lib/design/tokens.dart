@@ -160,6 +160,20 @@ class DsColors {
   /// 抽屉遮罩：官方浅色抽屉打开时页面仍是白底（无灰幕），深色保留淡遮罩。
   Color get drawerScrim =>
       dark ? const Color(0x50000000) : const Color(0x00000000);
+
+  // ---- 设置页（本工程自定义功能色，非官方截图实测，docs/design-tokens.md §4.4）----
+  /// 设置页分区卡片底色（浅 #F9FAFB / 深 #232324）。
+  Color get settingsSurface => dark ? DsPalette.c875 : DsPalette.c50;
+
+  /// 设置页只读信息行 / 权限药丸底色（浅纯白 / 深 #2C2C2E）。
+  Color get settingsField => dark ? DsPalette.c850 : DsPalette.c00;
+
+  /// 设置页明文 HTTP 警告条底色（暖色半透明，浅/深通用）。
+  Color get settingsWarnBg => const Color(0x1AF5A623);
+
+  /// 设置页明文 HTTP 警告条文字（浅棕 / 深暖黄）。
+  Color get settingsWarnFg =>
+      dark ? const Color(0xFFFFC24B) : const Color(0xFF8A5A00);
 }
 
 /// 字号（官方 token，sp；行高随 dp 换算）。
@@ -359,4 +373,30 @@ class DsSpacing {
 
   /// 头像到文字间距：官方头像右 43.7dp → 手机号左 54dp。
   static const drawerAvatarGap = 10.0;
+
+  // ---- 设置页（本工程自定义布局，docs/design-tokens.md §4.4）----
+  /// 设置页内容最大宽度（仿 companion SettingsScreen widthIn(max=720.dp)）。
+  static const settingsMaxWidth = 720.0;
+
+  /// 设置页根左右 / 上下外边距（仿 companion padding(h20, v28)）。
+  static const settingsPadH = 20.0;
+  static const settingsPadV = 28.0;
+
+  /// 分区标题与内容/分区之间的垂直间距。
+  static const settingsSectionGap = 22.0;
+
+  /// 分区卡片圆角 / 内边距。
+  static const settingsCardRadius = 14.0;
+  static const settingsCardPadH = 16.0;
+  static const settingsCardPadV = 6.0;
+
+  /// 行内最小高度（仿官方 56dp 触控行）。
+  static const settingsRowMinHeight = 52.0;
+
+  /// 行内图标与文字间距、药丸间距。
+  static const settingsIconGap = 14.0;
+  static const settingsChipGap = 7.0;
+  static const settingsChipPadH = 10.0;
+  static const settingsChipPadV = 6.0;
+  static const settingsChipRadius = 16.0;
 }

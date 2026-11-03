@@ -9,6 +9,7 @@ import 'package:flutter/foundation.dart';
 import '../bridge/dlog.dart';
 import '../bridge/gateway.dart';
 import '../bridge/models.dart';
+import '../design/app_settings.dart';
 
 class ChatState extends ChangeNotifier {
   ChatState(this._gateway) {
@@ -127,8 +128,17 @@ class ChatState extends ChangeNotifier {
     streaming = true;
     notifyListeners();
     try {
-      DshLog.w('ui send start sid=$sessionId');
-      final sid = await _gateway.sendText(sessionId: sessionId, text: trimmed);
+      // 繁忙发送模式（对照 companion ComposerSendPolicy）：运行中再发消息时，
+      // queue = 排队等当前回合结束，steer = 立即打断。设置页写入的偏好在这里落地。
+      final mode = appSettings.busySendMode == BusySendMode.steer
+          ? 'steer'
+          : 'queue';
+      DshLog.w('ui send start sid=$sessionId mode=$mode');
+      final sid = await _gateway.sendText(
+        sessionId: sessionId,
+        text: trimmed,
+        mode: mode,
+      );
       DshLog.w('ui send done sid=$sid');
       if (sessionId == null && sid != null) {
         sessionId = sid;

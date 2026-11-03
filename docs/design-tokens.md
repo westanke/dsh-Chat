@@ -133,7 +133,7 @@ App 实测墨迹高（density 3.0）：H1 71px、H2 61px、H3 57px、正文 45px
 
 浅色对照：选中 chip 前景实测 (66,110,254) = `#426efe`（`chipSelectedFgLight`）；输入条容器为**纯白浮层** (255,255,255) + 柔和投影，不是灰块。
 
-主题切换：`MaterialApp.theme/darkTheme/themeMode = ThemeMode.system`，`DsColors(dark)` 由 `Theme.of(context).brightness` 决定，全部样式走语义别名，UI 层零裸色（宪法 §4，`grep -rn "Colors\.\|Color(0x" app/lib/ui` 应无输出）。
+主题切换（`ui/settings_page.dart` 落地后）：`MaterialApp.themeMode` 由 `AppSettings.themeMode`（system/light/dark 三档）受控，`theme`/`darkTheme` 仍是 `DsColors(false)/DsColors(true)` 两套；`DsColors(dark)` 由 `Theme.of(context).brightness` 决定并下传给各页面，全部样式走语义别名，UI 层零裸色（宪法 §4，`grep -rn "Colors\.\|Color(0x" app/lib/ui` 应无输出）。默认 `ThemeMode.system` 与加机制前逐字段一致。
 
 ## 4.2 侧边抽屉 App 实测（ref/official-drawer.png vs app-drawer8.png）
 
@@ -170,6 +170,26 @@ App 实测墨迹高（density 3.0）：H1 71px、H2 61px、H3 57px、正文 45px
 | turn 失败提示（模型限流 / 额度耗尽） | 对齐（danger 底 8% + danger 文字，`role=error`） | app-error-banner2.png |
 
 已知未覆盖：iOS 侧**未编译验证**（本机无 macOS/Xcode 工具链，代码已就位）；chip 宽度 64.3dp vs 官方 67.7dp（3.4dp 微差，来自中文字形宽度差异）。
+
+## 4.4 设置页（本工程自定义，非官方截图实测）
+
+设置页是 dsh-Chat 新增功能（对照 dsh-companion `ui/SettingsScreen.kt`，但全部为纯本地偏好，不照抄官方 App 视觉）。此处色值/spacing 无官方截图依据，故单独登记、不与 §4 官方实测混列；宪法 §4 要求「新 UI 元素先在本文档登记」，以下为 `lib/design/tokens.dart` 中 `DsColors` / `DsSpacing` 新增条目的唯一依据。
+
+| 元素 | 取值 | token |
+|---|---|---|
+| 分区卡片底 | 浅 `#F9FAFB`(c50) / 深 `#232324`(c875) | `DsColors.settingsSurface` |
+| 只读信息行 / 权限药丸底 | 浅纯白(c00) / 深 `#2C2C2E`(c850) | `DsColors.settingsField` |
+| 明文 HTTP 警告条底 | `#F5A623` 10% 透明（浅/深通用） | `DsColors.settingsWarnBg` |
+| 警告条文字 | 浅 `#8A5A00` / 深 `#FFC24B` | `DsColors.settingsWarnFg` |
+| 内容最大宽度 | 720dp（仿 companion `widthIn(max=720.dp)`） | `DsSpacing.settingsMaxWidth` |
+| 根外边距 | 左右 20 / 上下 28（仿 companion `padding(h20,v28)`） | `settingsPadH=20` / `settingsPadV=28` |
+| 分区间距 | 22dp | `settingsSectionGap` |
+| 卡片圆角 / 内边距 | 14dp / 左右 16、上下 6 | `settingsCardRadius` / `settingsCardPadH` / `settingsCardPadV` |
+| 行最小高度 | 52dp（仿官方 56dp 触控行） | `settingsRowMinHeight` |
+| 图标-文字 / 药丸间距 | 14dp / 7dp | `settingsIconGap` / `settingsChipGap` |
+| 药丸内边距 / 圆角 | 左右 10、上下 6 / 16dp | `settingsChipPadH` / `settingsChipPadV` / `settingsChipRadius` |
+
+字号 / 主题 / 发送模式等行为偏好见 `lib/design/app_settings.dart`（对照 companion `AppPreferences`）：`normalizeFontScale` 夹 0.8–1.5 且 NaN/Inf→1.0，`effectiveFontScale` 与系统字号相乘（对齐 `AppFontScale.kt` 的 `base.fontScale * appScale`，Flutter 侧用自定义 `TextScaler` 包装 `MediaQuery` 平台 scaler，不覆盖系统无障碍字号）。
 
 ## 5. 截图资产（ref/）
 - official-login-page.png 登录页（+86 152 1388 0002 / 验证码输入 / 发送验证码按钮）

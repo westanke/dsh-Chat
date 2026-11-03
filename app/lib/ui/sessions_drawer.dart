@@ -9,10 +9,16 @@ import '../design/tokens.dart';
 import 'chat_state.dart';
 
 class SessionsDrawer extends StatefulWidget {
-  const SessionsDrawer({super.key, required this.state, required this.colors});
+  const SessionsDrawer({
+    super.key,
+    required this.state,
+    required this.colors,
+    required this.onOpenSettings,
+  });
 
   final ChatState state;
   final DsColors colors;
+  final VoidCallback onOpenSettings;
 
   @override
   State<SessionsDrawer> createState() => SessionsDrawerState();
@@ -140,7 +146,11 @@ class SessionsDrawerState extends State<SessionsDrawer> {
                       ],
                     ),
             ),
-            SessionsDrawerFooter(colors: c, label: state.deviceLabel),
+            SessionsDrawerFooter(
+              colors: c,
+              label: state.deviceLabel,
+              onOpenSettings: widget.onOpenSettings,
+            ),
           ],
         ),
       ),
@@ -192,10 +202,12 @@ class SessionsDrawerFooter extends StatelessWidget {
     super.key,
     required this.colors,
     required this.label,
+    required this.onOpenSettings,
   });
 
   final DsColors colors;
   final String label;
+  final VoidCallback onOpenSettings;
 
   @override
   Widget build(BuildContext context) {
@@ -224,7 +236,22 @@ class SessionsDrawerFooter extends StatelessWidget {
               style: DsTypography.base.copyWith(color: colors.labelPrimary),
             ),
           ),
-          Icon(Icons.more_horiz, size: 20, color: colors.drawerGroupLabel),
+          // 三点菜单：官方是纯展示图标，这里接成设置页入口（关闭抽屉后再推路由）。
+          Tooltip(
+            message: '设置',
+            child: InkResponse(
+              onTap: () {
+                Navigator.pop(context);
+                onOpenSettings();
+              },
+              radius: 20,
+              child: Icon(
+                Icons.more_horiz,
+                size: 20,
+                color: colors.drawerGroupLabel,
+              ),
+            ),
+          ),
         ],
       ),
     );

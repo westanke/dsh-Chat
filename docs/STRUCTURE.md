@@ -13,16 +13,20 @@
 
 | 文件 | 用途 | 状态 |
 |---|---|---|
-| `main.dart` | 入口：DshLog 初始化、主题装配、自动连接（凭证持久化）、路由（连接页 ⇄ 聊天页） | ✅ 装机验证 |
-| `design/tokens.dart` | DsPalette / DsColors / DsTypography / DsSpacing —— 全部样式值唯一出口 | ✅ |
+| `main.dart` | 入口：DshLog 初始化、主题装配（三档 / 字号缩放由 `AppSettings` 驱动）、自动连接（凭证持久化）、路由（连接页 ⇄ 聊天页 ⇄ 设置页） | ✅ 装机验证 |
+| `design/tokens.dart` | DsPalette / DsColors / DsTypography / DsSpacing —— 全部样式值唯一出口（§4.4 设置页 token） | ✅ |
+| `design/app_settings.dart` | 本地偏好 `AppSettings`（界面风格三档 / 字号缩放 / 跟随系统 / 繁忙发送模式 / 诊断日志）+ `AppFontScaler`（与系统字号相乘的 TextScaler）；枚举按 name 持久化，凭据分库 | ✅ 单测覆盖 |
 | `bridge/models.dart` | SessionEvent / ChatMessage / DshSession / DshWorkspace / PromptPart / MessageDelta / MessageCommitted / HistoryPage（含 `turn/end` 失败解析）；re-export `tool_call.dart` | ✅ 单测覆盖 |
 | `bridge/tool_call.dart` | ToolCallInfo + 工具措辞表 `toolPhrases` + 摘要 `toolSummary` + `RawToolCall` / `extractToolCalls`（从 models.dart 拆出，控行数） | ✅ 单测覆盖 |
 | `bridge/gateway.dart` | WS `/ws/mobile`：子协议 `dsh-mobile-v1`、hello.protocol=3、requestId（**data 内回显**）、退避重连 1→2→4→8→16s、心跳 25s | ✅ 装机验证 |
 | `bridge/credentials.dart` | shared_preferences 持久化 `{baseUrl, token}`，实现「一次配对，此后自动连接」 | ✅ |
 | `bridge/device.dart` | MethodChannel `dsh/device#ianaZone` → IANA 时区（clientTimeZone 必需 `Area/Location`） | ✅ |
-| `bridge/dlog.dart` | 文件日志 `/data/data/<pkg>/files/dsh.log`（vivo 过滤 flutter 日志，只能落文件） | ✅ |
-| `ui/chat_page.dart` | 聊天主页：顶栏（会话名 + 静音 + 新对话）/ 空态问候 / 消息列表（自动滚底）/ 流式项 / 思考流折叠 / 消息操作条 | ✅ 装机验证 |
-| `ui/chat_state.dart` | ChangeNotifier：会话列表 / 打开会话 / 发送 / 流式累积 / 推送分发 | ✅ 装机验证 |
+| `bridge/dlog.dart` | 文件日志 `/data/data/<pkg>/files/dsh.log`（vivo 过滤 flutter 日志，只能落文件）；`enabled` 开关 + `read()` 供设置页诊断日志区 | ✅ |
+| `ui/chat_page.dart` | 聊天主页：顶栏（会话名 + 静音 + 新对话，加号接 `newChat`） / 空态问候 / 消息列表（自动滚底）/ 流式项 / 思考流折叠 / 消息操作条 / 设置页入口 | ✅ 装机验证 |
+| `ui/chat_state.dart` | ChangeNotifier：会话列表 / 打开会话 / 发送（按偏好携带 `mode: queue\|steer`）/ 流式累积 / 推送分发 | ✅ 装机验证 |
+| `ui/settings_page.dart` | 设置页主文件：Scaffold + 分区骨架（`settings_sections.dart` / `settings_widgets.dart` 是同库 `part`，共享私有成员，宪法 §7 控行数） | ✅ 单测覆盖 |
+| `ui/settings_sections.dart` | 设置页分区：连接与设备信息（hello 只读）/ 界面风格三档 / 字号缩放与跟随系统 / 繁忙发送模式 / 诊断日志 / 关于 / 断开连接；不摆无授权的服务端开关 | ✅ 单测覆盖 |
+| `ui/settings_widgets.dart` | 设置页通用组件：`_Section` / `_InfoRow` / `_ActionRow` / `_SwitchRow` / `_SegmentedRow` / `_ScopeChip` / `_WarningBanner` | ✅ 单测覆盖 |
 | `ui/composer.dart` | 输入条：白浮层圆角容器 + 输入框 + 深度思考 / 智能搜索 chips + 加号 / 语音 / 发送圆按钮 + 底部免责提示 | ✅ 装机验证 |
 | `ui/connect_page.dart` | 配对页：bridge 地址 + 配对码 | ✅ 装机验证 |
 | `ui/md_view.dart` | GptMarkdown 定制：官方 token 全量映射、任务列表预处理、codeBuilder/tableBuilder 接线 | ✅ 装机验证 |
@@ -30,7 +34,7 @@
 | `ui/md_table.dart` | 自绘表格：banner「表格 + 复制/下载/展开」+ 官方 #fafafa 底 + #dcdcdc 线 | ✅ 装机验证 |
 | `ui/message_actions.dart` | 助手消息操作条：复制 / 喜欢 / 不喜欢 / 朗读 / 分享 + 右侧重新生成 | ✅ 装机验证 |
 | `ui/process_group.dart` | 工具调用折叠组：折叠一行「执行了命令，读取了文件…」，点开展开逐条明细 | ✅ 装机验证 |
-| `ui/sessions_drawer.dart` | 侧边会话抽屉：胶囊搜索框 + 日期分组（今天/昨天/更早）+ 纯文字条目 + 底部账号栏 | ✅ 装机验证 |
+| `ui/sessions_drawer.dart` | 侧边会话抽屉：胶囊搜索框 + 日期分组（今天/昨天/更早）+ 纯文字条目 + 底部账号栏（三点接设置页入口） | ✅ 装机验证 |
 | `ui/brand_mark.dart` | 空态品牌标记 DsBrandMark（`_WhalePainter` 原创 Path 绘制：圆身 + 双瓣尾鳍 + 月牙腹部 + 眼睛），不引用官方素材 | ✅ 装机验证 |
 
 ## 平台侧（框架通道与清单）
@@ -46,6 +50,8 @@
 
 | 文件 | 覆盖 |
 |---|---|
+| `app_settings_test.dart` | `normalizeFontScale`（NaN/Inf/越界夹取）、`AppFontScaler` 与系统字号相乘、`AppSettings` 默认值与 `effectiveFontScale` |
+| `settings_page_test.dart` | 设置页渲染：界面风格三档 / 繁忙发送模式两档 / 字号滑块与跟随系统 / 诊断日志开关均真实生效 |
 | `models_test.dart` | 协议模型 round-trip、`data.message.content` 提取、注入上下文过滤（`source.kind != user`）、displayTitle 兜底、工具调用措辞表 / 摘要 / 过程组合并去重与耗时、`turn/end` 失败 → `role=error` |
 | `md_view_test.dart` | MD 全家福 / 超长表格**不溢出**（360dp 宽，断言 `takeException() == null`） |
 | `widget_test.dart` | 冷启动进连接页 |
@@ -65,7 +71,8 @@
 - 消费对象：`dsh-remote-bridge` v2.10.0，协议 `dsh-mobile-v1`，hello.protocol=3。
 - 事实来源：`/media/wangke/OFFICE/workspace/dsh-remote-bridge/docs/api/`（openapi/asyncapi）
   + `docs/project/API.md` §客户端→服务端帧。
-- 用到的帧：`ping/subscribe/unsubscribe/message/workspaces/sessions/history/hello`；
+- 用到的帧：`ping/subscribe/unsubscribe/message/workspaces/sessions/history/hello`
+  （`message.mode` 由本地偏好取 `queue` 或 `steer`，对照 companion 的繁忙发送策略）；
   推送：`event(chat.message.delta|chat.message.committed|chat.turn.failed)`、
   `connection-resync-required`、`question-requested`。
 
