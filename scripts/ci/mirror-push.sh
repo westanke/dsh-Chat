@@ -23,6 +23,9 @@ SOURCES=(
   "Gitee|https://gitee.com/westanke/dsh-Chat.git"
   "AtomGit|https://atomgit.com/westanke163/dsh-Chat.git"
 )
+# 探测顺序 Gitee 优先、AtomGit 兜底。实测（2026-11-03 首跑）GitHub runner 到
+# gitee.com 的 HTTPS 被拦，自动落到 AtomGit —— 所以 gitee 与 atomgit 必须同批
+# 推送；只推主站会让镜像拿不到新提交。
 
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT

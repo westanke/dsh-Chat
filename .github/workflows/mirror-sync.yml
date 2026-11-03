@@ -40,6 +40,10 @@ jobs:
           trap 'rm -rf "$WORK"' EXIT
           SRC_LABEL=""
           SRC_URL=""
+          # 探测顺序：Gitee 优先，AtomGit 兜底。实测（2026-11-03 首跑）GitHub
+          # runner 到 gitee.com 的 HTTPS 会被拦（ls-remote 失败），于是自动落到
+          # AtomGit —— 这就是为什么 gitee 与 atomgit 必须**同批推送**：
+          # 只推主站会让镜像拿不到新提交。两个都不可达才报错退出。
           for entry in \
             "Gitee|https://gitee.com/westanke/dsh-Chat.git" \
             "AtomGit|https://atomgit.com/westanke163/dsh-Chat.git"; do
