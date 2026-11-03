@@ -16,18 +16,20 @@
 | `main.dart` | 入口：DshLog 初始化、主题装配（三档 / 字号缩放由 `AppSettings` 驱动）、自动连接（凭证持久化）、路由（连接页 ⇄ 聊天页 ⇄ 设置页） | ✅ 装机验证 |
 | `design/tokens.dart` | DsPalette / DsColors / DsTypography / DsSpacing / DsMotion —— 全部样式值唯一出口（§4.4 设置页、§4.6 FAB/滚动动效 token） | ✅ |
 | `design/app_settings.dart` | 本地偏好 `AppSettings`（界面风格三档 / 字号缩放 / 跟随系统 / 繁忙发送模式 / 诊断日志）+ `AppFontScaler`（与系统字号相乘的 TextScaler）；枚举按 name 持久化，凭据分库 | ✅ 单测覆盖 |
-| `bridge/models.dart` | SessionEvent / ChatMessage / DshSession / DshWorkspace / PromptPart / MessageDelta / MessageCommitted / HistoryPage（含 `turn/end` 失败解析）；re-export `tool_call.dart` | ✅ 单测覆盖 |
+| `bridge/models.dart` | SessionEvent / ChatMessage / DshSession / DshWorkspace / PromptPart / MessageDelta / MessageCommitted / HistoryPage（含 `turn/end` 失败解析；`rawEvents` 归一化原始事件 + `projections` 透传首屏投影）；re-export `tool_call.dart` | ✅ 单测覆盖 |
+| `bridge/projections.dart` | 纯 Dart 投影解析：`trajectoryOf()` 客户端按 data.turn 分组原始事件（轨迹 Sheet）；`todoItems()` / `agentTeamProjectionOf()` 读服务端 `projections.values.*`（团队 / TODO）；全部容忍投影缺席 | ✅ 单测覆盖 |
 | `bridge/tool_call.dart` | ToolCallInfo + 工具措辞表 `toolPhrases` + 摘要 `toolSummary` + `RawToolCall` / `extractToolCalls`（从 models.dart 拆出，控行数） | ✅ 单测覆盖 |
-| `bridge/gateway.dart` | WS `/ws/mobile`：子协议 `dsh-mobile-v1`、hello.protocol=3、requestId（**data 内回显**）、退避重连 1→2→4→8→16s、心跳 25s；`cancelTurn()` 发 `session-cancel` 帧 | ✅ 装机验证 |
+| `bridge/gateway.dart` | WS `/ws/mobile`：子协议 `dsh-mobile-v1`、hello.protocol=3、requestId（**data 内回显**）、退避重连 1→2→4→8→16s、心跳 25s；`cancelTurn()` 发 `session-cancel` 帧；`history()` 原样透传可选 `projections` | ✅ 装机验证 |
 | `bridge/credentials.dart` | shared_preferences 持久化 `{baseUrl, token}`，实现「一次配对，此后自动连接」 | ✅ |
 | `bridge/device.dart` | MethodChannel `dsh/device#ianaZone` → IANA 时区（clientTimeZone 必需 `Area/Location`） | ✅ |
 | `bridge/dlog.dart` | 文件日志 `/data/data/<pkg>/files/dsh.log`（vivo 过滤 flutter 日志，只能落文件）；`enabled` 开关 + `read()` 供设置页诊断日志区 | ✅ |
-| `ui/chat_page.dart` | 聊天主页：顶栏（会话名 + 静音→会话统计 + 新对话，加号接 `newChat`） / 空态问候 / 设置页入口；消息列表与消息项拆成同库 `part`（宪法 §7 控行数） | ✅ 装机验证 |
+| `ui/chat_page.dart` | 聊天主页：顶栏（会话名 + 新对话加号接 `newChat` + ⋯ 溢出菜单） / 空态问候 / 设置页入口；消息列表与消息项拆成同库 `part`（宪法 §7 控行数） | ✅ 装机验证 |
 | `ui/chat_message_list.dart` | `part of chat_page.dart`：消息列表 + 跳转最新 FAB + 滚动冻结 / 贴底跟随（`wantsBottom` 粘性意图、80ms 解冻、140ms 渐显）；判据在 `scroll_follow.dart` | ✅ 单测覆盖 |
 | `ui/chat_message_items.dart` | `part of chat_page.dart`：消息项（双击复制整条）/ 流式项 / 思考块折叠 / 消息操作条（重新生成接线） | ✅ 装机验证 |
 | `ui/scroll_follow.dart` | 滚动跟随纯函数：`shouldAutoFollow` / `shouldShowFab` / `computeAtBottom` / `freezeSnapshot` / `isUserScrollGesture`（只认 dragDetails），对照 companion 三处滚动实现 | ✅ 单测覆盖 |
-| `ui/chat_state.dart` | ChangeNotifier：会话列表 / 打开会话 / 发送（按偏好携带 `mode: queue\|steer`）/ `cancelTurn()` 停止回合 / `regenerateAt()` 重新生成 / `retryLast()` 失败重试 / 流式累积 / 推送分发 | ✅ 装机验证 |
+| `ui/chat_state.dart` | ChangeNotifier：会话列表 / 打开会话 / 发送（按偏好携带 `mode: queue\|steer`）/ `cancelTurn()` 停止回合 / `regenerateAt()` 重新生成 / `retryLast()` 失败重试 / 流式累积 / 推送分发；保存 `rawEvents` 与可选 `projections` 供三个面板，切会话清空防串台 | ✅ 装机验证 |
 | `ui/stats_sheet.dart` | 会话统计 Sheet：`chatStatsOf()` 由已加载消息本地计算（消息/工具/思考/错误数），零网络请求；对照 companion ChatStatsSheet | ✅ 单测覆盖 |
+| `ui/projection_sheets.dart` | 三个零请求面板：运行轨迹（rawEvents 本地分组、点节点展开原始 JSON）/ 智能团队（projections.values.agentTeam，含三枚普通消息话术 chips）/ 待办任务（projections.values.todos）；投影缺席显示空态而非隐藏入口 | ✅ 单测覆盖 |
 | `ui/settings_page.dart` | 设置页主文件：Scaffold + 分区骨架（`settings_sections.dart` / `settings_widgets.dart` 是同库 `part`，共享私有成员，宪法 §7 控行数） | ✅ 单测覆盖 |
 | `ui/settings_sections.dart` | 设置页分区：连接与设备信息（hello 只读）/ 界面风格三档 / 字号缩放与跟随系统 / 繁忙发送模式 / 诊断日志 / 关于 / 断开连接；不摆无授权的服务端开关 | ✅ 单测覆盖 |
 | `ui/settings_widgets.dart` | 设置页通用组件：`_Section` / `_InfoRow` / `_ActionRow` / `_SwitchRow` / `_SegmentedRow` / `_ScopeChip` / `_WarningBanner` | ✅ 单测覆盖 |
@@ -58,6 +60,7 @@
 | `settings_page_test.dart` | 设置页渲染：界面风格三档 / 繁忙发送模式两档 / 字号滑块与跟随系统 / 诊断日志开关均真实生效 |
 | `chat_actions_test.dart` | `chatStatsOf()` 本地统计、`Composer` 发送键三态、`ChatState.regenerateAt/retryLast` 重发用户消息 |
 | `scroll_follow_test.dart` | `shouldAutoFollow` 粘性意图自锁回归、`shouldShowFab` / `computeAtBottom` / `freezeSnapshot` 空表 / `isUserScrollGesture` 程序滚动不算手势 |
+| `projections_test.dart` | `trajectoryOf()` 按 turn 分组 / 组内 seq 排序 / 丢弃过程细节 / 未知轮次垫底；`todoItems()` 只认 `{content,status}`；`agentTeamProjectionOf()` 缺省回退与空壳 null；`HistoryPage` 保留原始事件与投影 |
 | `models_test.dart` | 协议模型 round-trip、`data.message.content` 提取、注入上下文过滤（`source.kind != user`）、displayTitle 兜底、工具调用措辞表 / 摘要 / 过程组合并去重与耗时、`turn/end` 失败 → `role=error` |
 | `md_view_test.dart` | MD 全家福 / 超长表格**不溢出**（360dp 宽，断言 `takeException() == null`） |
 | `widget_test.dart` | 冷启动进连接页 |
@@ -78,7 +81,9 @@
 - 事实来源：`/media/wangke/OFFICE/workspace/dsh-remote-bridge/docs/api/`（openapi/asyncapi）
   + `docs/project/API.md` §客户端→服务端帧。
 - 用到的帧：`ping/subscribe/unsubscribe/message/workspaces/sessions/history/hello`
-  （`message.mode` 由本地偏好取 `queue` 或 `steer`，对照 companion 的繁忙发送策略）；
+  （`message.mode` 由本地偏好取 `queue` 或 `steer`，对照 companion 的繁忙发送策略；
+  `history` 首屏应答的可选 `projections.values.{todos,agentTeam,subagentCatalog}` 供
+  团队 / TODO 面板只读展示，轨迹面板则由 `events` 客户端本地分组）；
   `session-cancel`（停止当前回合，应答 `session-cancelled` 会回显 requestId，可 await）；
   推送：`event(chat.message.delta|chat.message.committed|chat.turn.failed)`、
   `connection-resync-required`、`question-requested`。
@@ -97,4 +102,8 @@
 5. **`user/message` 带 `data.source.kind`**（`user` / `runtime-context` / `skill-catalog` /
    `time-context`），注入上下文也记成 user/message → 只显示 `kind == 'user'`。
 6. **`assistant/message` 的 content 在 `data.message.content`**，`user/message` 在
-   `data.content`。
+    `data.content`。
+7. **`history` 首屏应答的 `projections` 是可选字段**：内核没给基线时整个字段缺席
+    （不是空对象），且只在首屏带、翻页不带（`API.md:165,766`）。`GatewayClient.history()`
+    原样透传，UI 必须容忍 null/缺席，不能把「读不到投影」当成「没有这个功能」
+    （v2.2.44 真机踩过，会做出永不渲染的入口）。

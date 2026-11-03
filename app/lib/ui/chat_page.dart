@@ -16,6 +16,7 @@ import 'composer.dart';
 import 'md_view.dart';
 import 'message_actions.dart';
 import 'process_group.dart';
+import 'projection_sheets.dart';
 import 'scroll_follow.dart';
 import 'sessions_drawer.dart';
 import 'stats_sheet.dart';
@@ -78,8 +79,8 @@ class _ChatPageState extends State<ChatPage> {
         title: st.sessionTitle,
         onMenu: () => _scaffoldKey.currentState?.openDrawer(),
         onNewChat: () => st.newChat(),
-        onStats: () => showChatStatsSheet(context, st, c),
         connected: st.connectionState == GatewayState.ready,
+        state: st,
       ),
       body: SafeArea(
         child: Column(
@@ -111,16 +112,16 @@ class _TopBar extends StatelessWidget implements PreferredSizeWidget {
     required this.title,
     required this.onMenu,
     required this.onNewChat,
-    required this.onStats,
     required this.connected,
+    required this.state,
   });
 
   final DsColors colors;
   final String title;
   final VoidCallback onMenu;
   final VoidCallback onNewChat;
-  final VoidCallback onStats;
   final bool connected;
+  final ChatState state;
 
   @override
   Size get preferredSize => const Size.fromHeight(DsSpacing.topBarHeight);
@@ -150,22 +151,6 @@ class _TopBar extends StatelessWidget implements PreferredSizeWidget {
               ),
             ),
             const SizedBox(width: 8),
-            // 官方静音图标是纯展示；这里接成「会话统计」入口
-            // （对照 companion ChatHeader ⋯ 菜单里的「会话统计」Sheet）。
-            Tooltip(
-              message: '会话统计',
-              child: InkResponse(
-                onTap: onStats,
-                radius: 20,
-                child: Icon(
-                  Icons.volume_off_outlined,
-                  size: 22,
-                  color: connected
-                      ? colors.labelPrimary
-                      : colors.labelTertiary,
-                ),
-              ),
-            ),
             const SizedBox(width: 18),
             // 官方「新建对话」加号：此前是纯展示 Icon，onNewChat 参数没接上（死交互）。
             Tooltip(
@@ -180,12 +165,67 @@ class _TopBar extends StatelessWidget implements PreferredSizeWidget {
                 ),
               ),
             ),
+            // 溢出菜单收纳三个「本地投影」面板与会话统计
+            // （对照 companion ChatHeader 的 ⋯ 菜单：轨迹 / 团队 / 统计 /
+            // 后台任务 …；TODO 面板在 companion 是消息区内嵌，这里收进同一菜单）。
+            _OverflowMenu(colors: colors, state: state),
             const SizedBox(width: DsSpacing.screenPad),
           ],
         ),
       ),
     );
   }
+}
+
+// ---------- 顶栏溢出菜单（本地投影面板入口） ----------
+
+class _OverflowMenu extends StatelessWidget {
+  const _OverflowMenu({required this.colors, required this.state});
+
+  final DsColors colors;
+  final ChatState state;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = colors;
+    return PopupMenuButton<String>(
+      tooltip: '更多',
+      icon: Icon(Icons.more_vert, size: 22, color: c.labelPrimary),
+      color: c.settingsSurface,
+      onSelected: (value) {
+        switch (value) {
+          case 'stats':
+            showChatStatsSheet(context, state, c);
+          case 'trajectory':
+            showTrajectorySheet(context, state, c);
+          case 'team':
+            showTeamSheet(context, state, c);
+          case 'todo':
+            showTodoSheet(context, state, c);
+        }
+      },
+      itemBuilder: (context) => <PopupMenuEntry<String>>[
+        _menuItem('stats', Icons.bar_chart, '会话统计'),
+        _menuItem('trajectory', Icons.timeline, '运行轨迹'),
+        _menuItem('team', Icons.groups_outlined, '智能团队'),
+        _menuItem('todo', Icons.checklist_outlined, '待办任务'),
+      ],
+    );
+  }
+
+  PopupMenuItem<String> _menuItem(String value, IconData icon, String label) =>
+      PopupMenuItem<String>(
+        value: value,
+        child: Row(
+          children: [
+            Icon(icon, size: 18, color: colors.labelSecondary),
+            const SizedBox(width: DsSpacing.chipIconGap),
+            Text(label,
+                style: DsTypography.small
+                    .copyWith(color: colors.labelPrimary)),
+          ],
+        ),
+      );
 }
 
 // ---------- 空态问候 ----------

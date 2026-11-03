@@ -75,6 +75,15 @@ class ChatState extends ChangeNotifier {
   List<DshSession> sessions = [];
   List<ChatMessage> messages = [];
 
+  /// 当前会话的原始历史事件（轨迹 Sheet 本地分组用，零网络请求）。
+  /// 形状：[{type, seq, time, data}]，data 为原样 Map。
+  List<Map<String, dynamic>> rawEvents = [];
+
+  /// 服务端算好的投影（团队 / TODO / 权限等）。可能为 null：内核没给基线时
+  /// 整个字段缺席，且只在 history 首屏带、翻页不带（API.md:165,766）。
+  /// 面板必须容忍缺席，不能把「读不到」渲染成「功能不存在」。
+  Map<String, dynamic>? projections;
+
   /// 当前会话标题（顶栏居中显示，官方行为：会话名 + 新对话无标题）。
   String get sessionTitle {
     final id = sessionId;
@@ -107,6 +116,10 @@ class ChatState extends ChangeNotifier {
 
   Future<void> openSession(DshSession s) async {
     sessionId = s.id;
+    // 切会话先清空原始事件/投影：防止上一会话的团队/TODO 串台
+    // （reloadHistory 里 projections 缺席时会保留上一份）。
+    rawEvents = [];
+    projections = null;
     _gateway.subscribe(s.id);
     await reloadHistory();
   }
@@ -114,6 +127,8 @@ class ChatState extends ChangeNotifier {
   Future<void> newChat() async {
     sessionId = null;
     messages = [];
+    rawEvents = [];
+    projections = null;
     _clearStream();
     _gateway.subscribe(null);
     notifyListeners();
@@ -124,8 +139,14 @@ class ChatState extends ChangeNotifier {
     if (id == null || id.isEmpty) return;
     try {
       final page = await _gateway.history(id, maxMessages: 200);
-      DshLog.w('ui history id=$id items=${page.items.length}');
+      DshLog.w('ui history id=$id items=${page.items.length} '
+          'raw=${page.rawEvents.length} '
+          'projections=${page.projections != null}');
       messages = page.items;
+      rawEvents = page.rawEvents;
+      // 翻页/刷新时 projections 可能缺席：保留上一份（同会话），避免面板闪空。
+      // 切会话时 newChat()/openSession() 会先清空，不会串台。
+      projections = page.projections ?? projections;
       notifyListeners();
     } on RequestException catch (e) {
       lastError = '加载历史失败：${e.message}';

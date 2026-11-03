@@ -258,11 +258,28 @@ class MessageCommitted {
 
 /// 历史响应（REST 与 WS history 同源）：{events, hasMore, projections?}。
 class HistoryPage {
-  const HistoryPage({required this.items, required this.hasMore});
+  const HistoryPage({
+    required this.items,
+    required this.hasMore,
+    this.rawEvents = const [],
+    this.projections,
+  });
 
   /// 已装配为 UI 消息（user/assistant/process；tool/turn 等装配进 process）。
   final List<ChatMessage> items;
   final bool hasMore;
+
+  /// 原始事件（已剥掉 REST `{event:...}` 外包装，保留 `{type,seq,time,data}`）。
+  /// 轨迹 Sheet 由客户端本地分组用，不参与消息流装配（对照 companion
+  /// `Trajectory.kt:98-127`：只读 `entry.event`，不读 view）。
+  final List<Map<String, dynamic>> rawEvents;
+
+  /// 服务端算好的投影（团队 / TODO / 权限 / token 等）。**可选**：内核没给基线时
+  /// 整个字段缺席（不是空对象），且只在 history 首屏应答带、翻页不带
+  /// （bridge `docs/project/API.md:165,766`）。UI 必须容忍 null/缺席，不能把
+  /// 「读不到投影」当成「没有这个功能」（v2.2.44 真机踩过）。
+  /// 形状：`{asOfSeq?, kind?, values: {...}}`。
+  final Map<String, dynamic>? projections;
 
   /// 从 REST events / WS history 的 events 数组装配。
   ///
@@ -275,8 +292,12 @@ class HistoryPage {
   /// 2. 相邻的 `tool/call` + `tool/result` 按 callId 合并进同一个过程组；
   /// 3. 出现真正有正文的 assistant 消息时，先把当前过程组 flush 掉，再追加正文消息；
   /// 4. 过程组内只有 1 次工具调用时照样产出一组，折不折由 UI 决定（官方折叠态同理）。
-  factory HistoryPage.fromEvents(List<dynamic> rawEvents) {
+  factory HistoryPage.fromEvents(
+    List<dynamic> rawEvents, {
+    Map<String, dynamic>? projections,
+  }) {
     final items = <ChatMessage>[];
+    final normalized = <Map<String, dynamic>>[];
 
     // 当前过程组的累积缓冲。
     final groupCalls = <ToolCallInfo>[];
@@ -308,6 +329,14 @@ class HistoryPage {
           ? Map<String, dynamic>.from(e['event'] as Map)
           : Map<String, dynamic>.from(e as Map);
       final event = SessionEvent.fromJson(ev);
+      // 保留归一化后的原始事件（剥掉 REST 外包装），轨迹 Sheet 用它分组。
+      // data 用 SessionEvent.fromJson 已做过的 Map<String,dynamic> 转换结果。
+      normalized.add(<String, dynamic>{
+        'type': event.type,
+        'seq': event.seq,
+        'time': event.time,
+        'data': event.data,
+      });
       final content = () {
         final inner = event.data['message'];
         if (inner is Map && inner['content'] != null) return inner['content'];
@@ -431,6 +460,11 @@ class HistoryPage {
       }
     }
     flushGroup();
-    return HistoryPage(items: items, hasMore: false);
+    return HistoryPage(
+      items: items,
+      hasMore: false,
+      rawEvents: normalized,
+      projections: projections,
+    );
   }
 }

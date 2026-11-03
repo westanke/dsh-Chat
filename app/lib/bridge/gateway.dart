@@ -393,7 +393,14 @@ class GatewayClient {
       'maxMessages': ?maxMessages,
     });
     final events = r['events'] as List? ?? const [];
-    return HistoryPage.fromEvents(events);
+    // projections 只在首屏 history 应答带（翻页不带），且内核没给基线时整个
+    // 字段缺席（不是空对象，API.md:165,766）。这里原样透传、不强求形状，
+    // 让 UI 自己容忍 null/缺席，避免「读不到=功能不存在」的死入口。
+    final raw = r['projections'];
+    final projections = raw is Map
+        ? Map<String, dynamic>.from(raw)
+        : null;
+    return HistoryPage.fromEvents(events, projections: projections);
   }
 
   /// 发消息。sessionId 省略则服务端自动建会话（响应携带新 sessionId）。

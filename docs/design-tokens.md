@@ -220,6 +220,19 @@ App 实测墨迹高（density 3.0）：H1 71px、H2 61px、H3 57px、正文 45px
 
 行为判据（纯函数，`ui/scroll_follow.dart`，可单测）：`computeAtBottom`（容差 `kAtBottomTolerance=48`）、`shouldAutoFollow`（**唯一守卫是粘性 `wantsBottom`，刻意不用瞬时 atBottom**，避 `PITFALLS.md:574-616` 自锁）、`shouldAnimateFollow`（流式 jumpTo、非流式 animateTo）、`shouldShowFab`（`!atBottom && !scrolling`）、`freezeSnapshot`（空表返回 null，避 companion 固化空表事故）、`isUserScrollGesture`（**只认 `dragDetails != null`，不认 `UserScrollNotification`**，因程序滚动也发后者）。会话切换重置 `kInitialWantsBottom=true`。
 
+## 4.7 运行轨迹 / 智能团队 / 待办任务面板（本工程自定义，复用既有 token）
+
+提交 D 的三个面板全部**复用 §4 既有语义 token，无新增色值/字号/间距**（宪法 §4 单一来源），入口收进顶栏 ⋯ 溢出菜单（对照 companion `ChatHeader.kt` ⋯ 菜单）：
+
+| 面板 | 对照 companion | 数据来源 | 样式 / 协议 |
+|---|---|---|---|
+| 运行轨迹 Sheet | `ChatTrajectorySheet.kt:56-176` + `Trajectory.kt:98-127` | `ChatState.rawEvents` 客户端按 `data.turn` 分组（组内按 seq 升序），零请求；点节点展开 `prettyJson(data)` 原始事件 | `DsColors.bgLayer1/labelPrimary/labelSecondary/brand/mdCodeBlockBg/mdCodeBlockText`、`DsTypography.h4/small/smallStrong/caption/codeBlock`、`DsSpacing.*`；无新 token |
+| 智能团队 Sheet | `TeamPanelSheet.kt:79-198` + `AgentTeamProjection.kt:100-151` | 服务端 `projections.values.{agentTeam,subagentCatalog}` 只读展示；三枚指挥 chips 只发普通用户消息 | `ActionChip` 用 `DsColors.chipSelectedBg`；投影缺席显示空态，不隐藏入口 |
+| 待办任务 Sheet | `ChatAttachments.kt:371-450` + `ChatPresentation.kt:77-85` | 服务端 `projections.values.todos`（只认 `{content,status}`）；空列表显示空态 | 三态图标 `Icons.check_circle_outline/timelapse/radio_button_unchecked`，颜色取 `brand/labelPrimary/labelTertiary` |
+| ⋯ 溢出菜单 | `ChatHeader.kt:144-304` | 收纳会话统计 / 轨迹 / 团队 / 待办四个入口 | `PopupMenuButton`，`color: DsColors.settingsSurface`，图标 `Icons.more_vert` |
+
+数据契约约束（bridge `API.md:165,167,766`）：`projections` 可选、内核没给基线时整个字段缺席（不是空对象）、只在 `history` 首屏应答带、翻页不带。三个面板对 null/缺席一律显示「本会话暂无数据」空态，**不把「读不到投影」当成「没有这个功能」**（v2.2.44 真机踩过）。纯函数 `trajectoryOf/todoItems/agentTeamProjectionOf/prettyJson` 在 `bridge/projections.dart`，零 Flutter 依赖，单测覆盖。
+
 ## 5. 截图资产（ref/）
 - official-login-page.png 登录页（+86 152 1388 0002 / 验证码输入 / 发送验证码按钮）
 - official-welcome.png 欢迎引导页（开启对话主按钮）
