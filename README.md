@@ -11,6 +11,8 @@
   <img alt="License" src="https://img.shields.io/badge/license-AGPL--3.0-2da44e">
   <img alt="Platforms" src="https://img.shields.io/badge/platform-Android%20%7C%20iOS-586069">
   <img alt="Built with Flutter" src="https://img.shields.io/badge/built%20with-Flutter-02569B">
+  <a href="https://github.com/westanke/dsh-Chat/actions/workflows/ci.yml"><img
+     alt="CI" src="https://github.com/westanke/dsh-Chat/actions/workflows/ci.yml/badge.svg"></a>
 </p>
 
 `dsh-Chat` 是 [`dsh-remote-bridge`](https://github.com/westanke/dsh-remote-bridge) 的 Flutter 客户端：
@@ -61,6 +63,22 @@ flutter build apk --debug   # 真机验证前
 
 Android 工具链在 `/media/wangke/OFFICE/workspace/android-toolchain/`（jdk17 + sdk），
 真机安装时 vivo 会弹风险拦截页，需勾选确认后再点继续安装。
+
+> ⚠️ 2026-11-03 实测：该工具链目录与 `~/flutter` 在开发机上**均不存在**，
+> `flutter`/`dart`/`java` 也不在 PATH。上面的命令需先补齐工具链才能跑；
+> 当前 `flutter analyze` 与 `flutter test` 由 CI（GitHub Actions）代为执行。
+
+## CI
+
+`.github/workflows/ci.yml` 两道闸门，每次推送都跑：
+
+| 闸门 | 内容 |
+|---|---|
+| `docs-check` | `bash scripts/ci/docs-check.sh`：`app/lib/` 全部文件已登记进 `docs/STRUCTURE.md`、无死链、无旧仓名残留 |
+| `analyze + test` | `flutter pub get` → `flutter analyze` → `flutter test`（24 例），stable 通道 |
+
+刻意**不**跑 `flutter build apk`：产物不入库，验收在本机真机（见 `ci.yml` 头注释）。
+GitHub 是本仓的镜像从站，日常推送目标在 Gitee（见 [AGENTS.md §10](AGENTS.md)）。
 
 ## 仓库结构
 
