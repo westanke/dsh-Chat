@@ -204,6 +204,22 @@ App 实测墨迹高（density 3.0）：H1 71px、H2 61px、H3 57px、正文 45px
 | 停止运行 | `ChatHeader.kt` → WS `session-cancel` | `GatewayClient.cancelTurn(sessionId)` → `request('session-cancel', {'sessionId'})`；应答 `session-cancelled` 会回显 requestId（不在排除表）可 await |
 | 朗读 / 分享 | companion 无对应能力（全仓 grep 核实） | 官方 App 像素图标保留视觉，但明确 SnackBar「暂不支持」，不留 `() {}` 空实现 |
 
+## 4.6 跳转最新 FAB 与滚动跟随（本工程自定义，新增布局/动效 token）
+
+提交 C 对照 companion `ChatDetail.kt:443-450 / 691-717`、`ChatScrollDiag.kt:254-273`、`ChatScrollFreeze.kt:42-82`。**新增的是尺寸与动效常量（本工程自定义，非官方截图实测），颜色全部复用 §1 语义别名**（宪法 §4）：
+
+| 元素 | token | 取值 | 对照 companion / 依据 |
+|---|---|---|---|
+| 圆形 FAB 直径 | `DsSpacing.fabSize` | 48.0 | `ChatDetail.kt:697` `size 48.dp` |
+| FAB 到右下角间距 | `DsSpacing.fabMargin` | 16.0 | `ChatDetail.kt:697` `padding 16.dp` |
+| FAB 内箭头图标 | `DsSpacing.fabIconSize` | 24.0 | 常规 Icon 尺寸 |
+| FAB 底色 / 描边 / 图标 | `DsColors.bgLayer2` / `borderL2` / `brand` | 语义别名 | 屏内浮层，无裸色 |
+| FAB 渐显时长 / 目标不透明度 | `DsMotion.fabFade` / `DsMotion.fabOpacity` | 140ms / 0.88 | `ChatDetail.kt:693` 0.88f、`:696` `tween(140)`（`AnimatedOpacity`，刻意不用 `AnimatedVisibility` 避重载歧义） |
+| 滚动停止后解冻延迟 | `DsMotion.freezeSettle` | 80ms | `ChatScrollFreeze.kt` `delay(80)` |
+| 非流式自动贴底时长 | `DsMotion.scrollSettle` | 140ms | 与 FAB 渐显同节奏 |
+
+行为判据（纯函数，`ui/scroll_follow.dart`，可单测）：`computeAtBottom`（容差 `kAtBottomTolerance=48`）、`shouldAutoFollow`（**唯一守卫是粘性 `wantsBottom`，刻意不用瞬时 atBottom**，避 `PITFALLS.md:574-616` 自锁）、`shouldAnimateFollow`（流式 jumpTo、非流式 animateTo）、`shouldShowFab`（`!atBottom && !scrolling`）、`freezeSnapshot`（空表返回 null，避 companion 固化空表事故）、`isUserScrollGesture`（**只认 `dragDetails != null`，不认 `UserScrollNotification`**，因程序滚动也发后者）。会话切换重置 `kInitialWantsBottom=true`。
+
 ## 5. 截图资产（ref/）
 - official-login-page.png 登录页（+86 152 1388 0002 / 验证码输入 / 发送验证码按钮）
 - official-welcome.png 欢迎引导页（开启对话主按钮）

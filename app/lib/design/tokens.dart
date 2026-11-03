@@ -399,4 +399,31 @@ class DsSpacing {
   static const settingsChipPadH = 10.0;
   static const settingsChipPadV = 6.0;
   static const settingsChipRadius = 16.0;
+
+  // ---- 跳转最新 FAB（本工程自定义，docs/design-tokens.md §4.6）----
+  /// 圆形按钮直径（仿 companion ChatDetail.kt:697 size 48.dp）。
+  static const fabSize = 48.0;
+
+  /// FAB 到右下角的间距（仿 companion padding 16.dp）。
+  static const fabMargin = 16.0;
+
+  /// FAB 内箭头图标尺寸。
+  static const fabIconSize = 24.0;
+}
+
+/// 聊天页滚动相关动效（本工程自定义，docs/design-tokens.md §4.6）。
+class DsMotion {
+  const DsMotion._();
+
+  /// 跳转最新 FAB 渐显 / 渐隐时长（仿 companion ChatDetail.kt:696 tween(140)）。
+  static const Duration fabFade = Duration(milliseconds: 140);
+
+  /// FAB 目标不透明度（仿 companion ChatDetail.kt:693 0.88f）。
+  static const double fabOpacity = 0.88;
+
+  /// 滚动停止后多久解除冻结快照（仿 companion ChatScrollFreeze.kt delay(80)）。
+  static const Duration freezeSettle = Duration(milliseconds: 80);
+
+  /// 非流式自动贴底滚动时长（点击 FAB / 新消息落地）。
+  static const Duration scrollSettle = Duration(milliseconds: 140);
 }
