@@ -191,6 +191,19 @@ App 实测墨迹高（density 3.0）：H1 71px、H2 61px、H3 57px、正文 45px
 
 字号 / 主题 / 发送模式等行为偏好见 `lib/design/app_settings.dart`（对照 companion `AppPreferences`）：`normalizeFontScale` 夹 0.8–1.5 且 NaN/Inf→1.0，`effectiveFontScale` 与系统字号相乘（对齐 `AppFontScale.kt` 的 `base.fontScale * appScale`，Flutter 侧用自定义 `TextScaler` 包装 `MediaQuery` 平台 scaler，不覆盖系统无障碍字号）。
 
+## 4.5 聊天页新增交互（本工程自定义，复用既有 token）
+
+提交 B 的聊天页新增元素全部**复用 §4 既有语义 token，无新增色值/字号/间距**（宪法 §4 单一来源）。登记其来源与对照实现：
+
+| 新增元素 | 对照 companion | 取值 / 协议 |
+|---|---|---|
+| 顶栏「会话统计」入口 | `ChatHeader.kt` ⋯ 菜单 → `ChatStatsSheet.kt` | 静音图标改为可点；Sheet 用 `DsColors.bgLayer1/labelPrimary/labelSecondary`、`DsTypography.h4/small/smallStrong`，`showModalBottomSheet`；统计由 `chatStatsOf(messages)` 本地计算，零请求 |
+| 双击复制整条消息 | `ChatMessageItems.kt` `combinedClickable onDoubleClick` | `GestureDetector(onDoubleTap)` 包气泡/正文，**刻意不挂 onLongPress**（否则选词手柄不出），`Clipboard.setData` + SnackBar |
+| 发送键三态 | `ChatComposer.kt` `ComposerSendPolicy.resolve` | `enum _SendKeyState { send, stop, disabled }`：有正文→`Icons.arrow_upward`、运行中且空→`Icons.stop` 发 `session-cancel`、其余→`+`/`graphic_eq` 占位；复用 `DsSpacing.composerButtonSize` / `_RoundIconButton` |
+| 「重新生成 / 失败重试」 | `ChatRetry.kt`（重发最后一条有正文用户消息） | 协议无 regenerate 帧、未接 fork → 采用「重新提问」语义；`lastUserTextBefore()` 纯函数跳过空正文，`regenerateAt(int)` / `retryLast()` |
+| 停止运行 | `ChatHeader.kt` → WS `session-cancel` | `GatewayClient.cancelTurn(sessionId)` → `request('session-cancel', {'sessionId'})`；应答 `session-cancelled` 会回显 requestId（不在排除表）可 await |
+| 朗读 / 分享 | companion 无对应能力（全仓 grep 核实） | 官方 App 像素图标保留视觉，但明确 SnackBar「暂不支持」，不留 `() {}` 空实现 |
+
 ## 5. 截图资产（ref/）
 - official-login-page.png 登录页（+86 152 1388 0002 / 验证码输入 / 发送验证码按钮）
 - official-welcome.png 欢迎引导页（开启对话主按钮）

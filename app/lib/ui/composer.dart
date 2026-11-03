@@ -7,17 +7,26 @@ import 'package:flutter/material.dart';
 
 import '../design/tokens.dart';
 
+/// 发送键三态（对照 companion 的 ComposerSendPolicy）。
+enum _SendKeyState { send, stop, disabled }
+
 class Composer extends StatefulWidget {
   const Composer({
     super.key,
     required this.colors,
     required this.onSend,
+    required this.onCancel,
     this.enabled = true,
+    this.streaming = false,
   });
 
   final DsColors colors;
   final ValueChanged<String> onSend;
+  /// 运行中且输入为空时，发送键变成「停止」并回调这里（session-cancel）。
+  final VoidCallback onCancel;
   final bool enabled;
+  /// 是否有回合在跑（对照 companion 的 ComposerSendPolicy 三态）。
+  final bool streaming;
 
   @override
   State<Composer> createState() => _ComposerState();
@@ -31,6 +40,14 @@ class _ComposerState extends State<Composer> {
   DsColors get c => widget.colors;
 
   bool get _hasText => _controller.text.trim().isNotEmpty;
+
+  /// 发送键三态（对照 companion ComposerSendPolicy.resolve）：
+  /// 有正文=发送；运行中且无正文=停止；其余=占位（+ / 语音）。
+  _SendKeyState get _sendKeyState {
+    if (_hasText) return _SendKeyState.send;
+    if (widget.streaming) return _SendKeyState.stop;
+    return _SendKeyState.disabled;
+  }
 
   @override
   void dispose() {
@@ -120,28 +137,38 @@ class _ComposerState extends State<Composer> {
                       onTap: () => setState(() => _smartSearch = !_smartSearch),
                     ),
                     const Spacer(),
-                    if (_hasText)
-                      _RoundIconButton(
-                        colors: c,
-                        filled: true,
-                        icon: Icons.arrow_upward,
-                        onPressed: widget.enabled ? _send : null,
-                      )
-                    else ...[
-                      _RoundIconButton(
-                        colors: c,
-                        filled: false,
-                        icon: Icons.add,
-                        onPressed: null,
-                      ),
-                      const SizedBox(width: DsSpacing.composerButtonGap),
-                      _RoundIconButton(
-                        colors: c,
-                        filled: false,
-                        icon: Icons.graphic_eq,
-                        onPressed: null,
-                      ),
-                    ],
+                    switch (_sendKeyState) {
+                      _SendKeyState.send => _RoundIconButton(
+                          colors: c,
+                          filled: true,
+                          icon: Icons.arrow_upward,
+                          onPressed: widget.enabled ? _send : null,
+                        ),
+                      _SendKeyState.stop => _RoundIconButton(
+                          colors: c,
+                          filled: true,
+                          icon: Icons.stop,
+                          onPressed: widget.enabled ? widget.onCancel : null,
+                        ),
+                      _SendKeyState.disabled => Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            _RoundIconButton(
+                              colors: c,
+                              filled: false,
+                              icon: Icons.add,
+                              onPressed: null,
+                            ),
+                            const SizedBox(width: DsSpacing.composerButtonGap),
+                            _RoundIconButton(
+                              colors: c,
+                              filled: false,
+                              icon: Icons.graphic_eq,
+                              onPressed: null,
+                            ),
+                          ],
+                        ),
+                    },
                   ],
                 ),
               ],

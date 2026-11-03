@@ -11,6 +11,20 @@ import '../bridge/gateway.dart';
 import '../bridge/models.dart';
 import '../design/app_settings.dart';
 
+/// 纯函数：取 [0..end] 区间里最后一条有正文的用户消息文本
+/// （对照 companion ChatRetry.kt：排除只有图片 / 空正文的用户消息）。
+/// 抽成顶层函数便于单测，协议没有 regenerate 帧，重新生成=重新提问。
+String? lastUserTextBefore(List<ChatMessage> messages, int end) {
+  if (messages.isEmpty) return null;
+  String? last;
+  final stop = end.clamp(0, messages.length - 1);
+  for (var i = 0; i <= stop; i++) {
+    final m = messages[i];
+    if (m.role == 'user' && m.text.trim().isNotEmpty) last = m.text;
+  }
+  return last;
+}
+
 class ChatState extends ChangeNotifier {
   ChatState(this._gateway) {
     _sub = _gateway.events.listen(_onEvent);
@@ -121,18 +135,23 @@ class ChatState extends ChangeNotifier {
 
   Future<void> send(String text) async {
     final trimmed = text.trim();
-    if (trimmed.isEmpty || streaming) return;
+    // 不再因 streaming 直接拒绝：运行中再发由「繁忙发送模式」决定语义
+    // （对照 companion ComposerSendPolicy：queue 排队 / steer 插话）。
+    if (trimmed.isEmpty) return;
     lastError = null;
     messages = [...messages, ChatMessage(role: 'user', text: trimmed)];
-    _clearStream();
+    // 繁忙发送模式（对照 companion ComposerSendPolicy）：运行中再发消息时，
+    // queue = 排队等当前回合结束，steer = 立即打断。设置页偏好在这里落地。
+    final mode = appSettings.busySendMode == BusySendMode.steer
+        ? 'steer'
+        : 'queue';
+    // steer 会打断当前回合：清掉流式缓冲；queue 保留当前流式显示继续跑。
+    // 注意：queue 时首回合 committed 会短暂置 streaming=false，随后次回合
+    // delta 再置回 true（本版本不做多回合队列跟踪，属已知简化）。
+    if (!streaming || mode == 'steer') _clearStream();
     streaming = true;
     notifyListeners();
     try {
-      // 繁忙发送模式（对照 companion ComposerSendPolicy）：运行中再发消息时，
-      // queue = 排队等当前回合结束，steer = 立即打断。设置页写入的偏好在这里落地。
-      final mode = appSettings.busySendMode == BusySendMode.steer
-          ? 'steer'
-          : 'queue';
       DshLog.w('ui send start sid=$sessionId mode=$mode');
       final sid = await _gateway.sendText(
         sessionId: sessionId,
@@ -153,6 +172,37 @@ class ChatState extends ChangeNotifier {
       notifyListeners();
     }
   }
+
+  /// 停止当前回合（对照 companion ChatHeader 的「停止运行」）：
+  /// 发 session-cancel 帧，立即收起流式显示，再重拉历史拿落库的最终状态。
+  Future<void> cancelTurn() async {
+    final id = sessionId;
+    if (!streaming || id == null || id.isEmpty) return;
+    streaming = false;
+    _clearStream();
+    lastError = null;
+    notifyListeners();
+    try {
+      await _gateway.cancelTurn(id);
+      await reloadHistory();
+    } on RequestException catch (e) {
+      lastError = '停止失败：${e.message}';
+      notifyListeners();
+    }
+  }
+
+  /// 「重新生成」：重发指定助手消息之前（含）最后一条有正文的用户消息。
+  /// 协议没有 regenerate 帧、本版本也未接 fork，因此采用「重新提问」语义
+  /// （对照 companion ChatRetry.kt：排除只有图片/空正文的用户消息）。
+  Future<void> regenerateAt(int index) async {
+    if (streaming) return;
+    final last = lastUserTextBefore(messages, index);
+    if (last == null) return;
+    await send(last);
+  }
+
+  /// 失败重试：重发历史里最后一条有正文的用户消息。
+  Future<void> retryLast() => regenerateAt(messages.length - 1);
 
   void _clearStream() {
     streamText = '';

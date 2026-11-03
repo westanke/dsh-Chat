@@ -3,6 +3,7 @@
 library;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../bridge/gateway.dart';
 import '../bridge/models.dart';
@@ -14,6 +15,7 @@ import 'md_view.dart';
 import 'message_actions.dart';
 import 'process_group.dart';
 import 'sessions_drawer.dart';
+import 'stats_sheet.dart';
 
 class ChatPage extends StatefulWidget {
   const ChatPage({
@@ -70,6 +72,7 @@ class _ChatPageState extends State<ChatPage> {
         title: st.sessionTitle,
         onMenu: () => _scaffoldKey.currentState?.openDrawer(),
         onNewChat: () => st.newChat(),
+        onStats: () => showChatStatsSheet(context, st, c),
         connected: st.connectionState == GatewayState.ready,
       ),
       body: SafeArea(
@@ -84,6 +87,8 @@ class _ChatPageState extends State<ChatPage> {
               colors: c,
               enabled: st.connectionState == GatewayState.ready,
               onSend: st.send,
+              onCancel: st.cancelTurn,
+              streaming: st.streaming,
             ),
           ],
         ),
@@ -100,6 +105,7 @@ class _TopBar extends StatelessWidget implements PreferredSizeWidget {
     required this.title,
     required this.onMenu,
     required this.onNewChat,
+    required this.onStats,
     required this.connected,
   });
 
@@ -107,6 +113,7 @@ class _TopBar extends StatelessWidget implements PreferredSizeWidget {
   final String title;
   final VoidCallback onMenu;
   final VoidCallback onNewChat;
+  final VoidCallback onStats;
   final bool connected;
 
   @override
@@ -137,10 +144,21 @@ class _TopBar extends StatelessWidget implements PreferredSizeWidget {
               ),
             ),
             const SizedBox(width: 8),
-            Icon(
-              Icons.volume_off_outlined,
-              size: 22,
-              color: connected ? colors.labelPrimary : colors.labelTertiary,
+            // 官方静音图标是纯展示；这里接成「会话统计」入口
+            // （对照 companion ChatHeader ⋯ 菜单里的「会话统计」Sheet）。
+            Tooltip(
+              message: '会话统计',
+              child: InkResponse(
+                onTap: onStats,
+                radius: 20,
+                child: Icon(
+                  Icons.volume_off_outlined,
+                  size: 22,
+                  color: connected
+                      ? colors.labelPrimary
+                      : colors.labelTertiary,
+                ),
+              ),
             ),
             const SizedBox(width: 18),
             // 官方「新建对话」加号：此前是纯展示 Icon，onNewChat 参数没接上（死交互）。
@@ -252,8 +270,15 @@ class _MessageListState extends State<_MessageList> {
     final state = widget.state;
     final colors = widget.colors;
     final items = <Widget>[];
-    for (final m in state.messages) {
-      items.add(_MessageItem(message: m, colors: colors));
+    for (var i = 0; i < state.messages.length; i++) {
+      items.add(
+        _MessageItem(
+          message: state.messages[i],
+          colors: colors,
+          index: i,
+          state: state,
+        ),
+      );
     }
     if (state.streaming) {
       items.add(_StreamingItem(state: state, colors: colors));
@@ -283,10 +308,28 @@ class _MessageListState extends State<_MessageList> {
 }
 
 class _MessageItem extends StatelessWidget {
-  const _MessageItem({required this.message, required this.colors});
+  const _MessageItem({
+    required this.message,
+    required this.colors,
+    required this.index,
+    required this.state,
+  });
 
   final ChatMessage message;
   final DsColors colors;
+  final int index;
+  final ChatState state;
+
+  /// 双击复制整条消息（对照 companion ChatMessageItems.kt 的
+  /// combinedClickable onDoubleClick + ClipboardManager）。
+  Future<void> _copyAll(BuildContext context) async {
+    if (message.text.isEmpty) return;
+    await Clipboard.setData(ClipboardData(text: message.text));
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('已复制整条消息')),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -310,42 +353,49 @@ class _MessageItem extends StatelessWidget {
         ),
       );
     }
-    if (message.role == 'user') {
-      return Align(
-        alignment: Alignment.centerRight,
-        child: Container(
-          margin: const EdgeInsets.only(
-            top: DsSpacing.blockGap,
-            left: DsSpacing.hMargin,
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 12),
-          constraints: const BoxConstraints(maxWidth: 280),
-          decoration: BoxDecoration(
-            color: colors.userBubble,
-            borderRadius: BorderRadius.circular(DsSpacing.bubbleRadius),
-          ),
-          child: Text(
-            message.text,
-            style: DsTypography.base.copyWith(
-              color: colors.userBubbleText,
-              height: 24 / 16,
+    // 双击复制：包在气泡/正文外，不挂 onLongPress（否则选词手柄出不来）。
+    final bubble = message.role == 'user'
+        ? Align(
+            alignment: Alignment.centerRight,
+            child: Container(
+              margin: const EdgeInsets.only(
+                top: DsSpacing.blockGap,
+                left: DsSpacing.hMargin,
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 12),
+              constraints: const BoxConstraints(maxWidth: 280),
+              decoration: BoxDecoration(
+                color: colors.userBubble,
+                borderRadius: BorderRadius.circular(DsSpacing.bubbleRadius),
+              ),
+              child: Text(
+                message.text,
+                style: DsTypography.base.copyWith(
+                  color: colors.userBubbleText,
+                  height: 24 / 16,
+                ),
+              ),
             ),
-          ),
-        ),
-      );
-    }
-    // 助手消息：全宽 MD 渲染 + 思考流 + 底部操作条。
-    return Padding(
-      padding: const EdgeInsets.only(top: DsSpacing.blockGap),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          if (message.reasoning.isNotEmpty)
-            _ThinkBlock(text: message.reasoning, colors: colors),
-          DsMarkdownView(text: message.text, colors: colors),
-          DsMessageActions(colors: colors, text: message.text),
-        ],
-      ),
+          )
+        : Padding(
+            padding: const EdgeInsets.only(top: DsSpacing.blockGap),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (message.reasoning.isNotEmpty)
+                  _ThinkBlock(text: message.reasoning, colors: colors),
+                DsMarkdownView(text: message.text, colors: colors),
+                DsMessageActions(
+                  colors: colors,
+                  text: message.text,
+                  onRegenerate: () => state.regenerateAt(index),
+                ),
+              ],
+            ),
+          );
+    return GestureDetector(
+      onDoubleTap: () => _copyAll(context),
+      child: bubble,
     );
   }
 }

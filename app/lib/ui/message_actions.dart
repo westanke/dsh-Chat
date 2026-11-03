@@ -41,6 +41,15 @@ class _DsMessageActionsState extends State<DsMessageActions> {
     });
   }
 
+  /// 朗读 / 分享是官方 App 像素里的既有图标，但 dsh-remote-bridge 协议
+  /// 与对照的 companion 都没有对应能力（全仓 grep 核实）。不删视觉，
+  /// 也不留 `() {}` 空实现：明确告知用户暂时不支持，避免死交互。
+  void _unsupported(BuildContext context, String feature) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('$feature暂不支持')),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final c = widget.colors;
@@ -74,13 +83,13 @@ class _DsMessageActionsState extends State<DsMessageActions> {
             icon: Icons.volume_up_outlined,
             color: c.labelTertiary,
             tooltip: '朗读',
-            onTap: () {},
+            onTap: () => _unsupported(context, '朗读'),
           ),
           _ActionIcon(
             icon: Icons.share_outlined,
             color: c.labelTertiary,
             tooltip: '分享',
-            onTap: () {},
+            onTap: () => _unsupported(context, '分享'),
           ),
           const Spacer(),
           _ActionIcon(

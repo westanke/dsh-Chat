@@ -411,6 +411,15 @@ class GatewayClient {
     return r['sessionId'] as String? ?? sessionId;
   }
 
+  /// 停止当前回合（对照 companion ChatHeader 的「停止运行」）。
+  /// session-cancelled 应答不在 REQUEST_ID_ECHO_EXCLUDED_KINDS 排除表里，
+  /// 会经 withRequestIdEcho 注入 data.requestId（ws-protocol.ts:611），因此
+  /// 可以像其它请求一样 await（ws-sessions.ts:93-102：缺 sessionId 回
+  /// MISSING_PARAMS，否则 chat.cancel 后回 {kind:'session-cancelled'}）。
+  Future<void> cancelTurn(String sessionId) async {
+    await request('session-cancel', {'sessionId': sessionId});
+  }
+
   /// 订阅会话推送。subscribed 帧在 bridge 的 REQUEST_ID_ECHO_EXCLUDED_KINDS
   /// 排除表里（不回显 requestId），不能走 request() 等应答——发出即成功，
   /// 与 kotlin-sdk MobileGatewayClient.subscribe() 一致。
