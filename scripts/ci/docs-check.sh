@@ -55,16 +55,19 @@ done < <(grep -oE '`[A-Za-z0-9_/]+\.dart`' "$STRUCT" | tr -d '`' | sort -u)
 [ "$ghost" -eq 0 ] && say "  ✅ 无死链"
 
 # ── 3) 旧仓库名残留 ────────────────────────────────────────────────────
-# 排除 .git / 构建产物 / ref/（ref/ 是从旧目录带过来的历史抓包与快照，
-# 里面的绝对路径属于当时的事实记录，不回改）。
+# 两处合法出现，必须放过：
+#   - ref/：从旧目录带过来的历史抓包与快照，里面的绝对路径是当时的事实记录，不回改；
+#   - AGENTS.md §2.4：改名纪律本身就要写出旧名（「本仓原名 xxx，已改名」），
+#     否则后人无从知道改过名。该行必须带 `改名纪律` 标记，脚本据此豁免。
 say "检查改名前缀残留 …"
 hits=$(grep -rIn "$OLD_NAME" \
         --include='*.md' --include='*.dart' --include='*.sh' \
         --include='*.yml' --include='*.yaml' --include='*.json' \
         --exclude-dir=.git --exclude-dir=build --exclude-dir=.dart_tool \
-        --exclude-dir=ref --exclude="$(basename "$0")" . 2>/dev/null)
+        --exclude-dir=ref --exclude="$(basename "$0")" . 2>/dev/null \
+      | grep -v '改名纪律')   # 宪法 §2.4 的改名纪律行是有意提及旧名
 if [ -n "$hits" ]; then
-  bad "仍存在旧仓库名 $OLD_NAME"
+  bad "仍存在旧仓库名 $OLD_NAME（除 ref/ 与 §2.4 改名纪律行外不应有命中）"
   printf '%s\n' "$hits" | sed 's/^/      /'
 else
   say "  ✅ 无残留"

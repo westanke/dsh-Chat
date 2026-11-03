@@ -32,8 +32,8 @@
    图标自绘或用开源图标集（Material Symbols / 自绘 path）。
 3. **仿界面不冒品牌**：布局、间距、配色对齐官方是工程要求；但启动页 logo、
    关于页、客服/官网链接等品牌触点必须用本工程自己的。
-4. 本仓原名 `dsh-flutter-deepseek`，2026-11-03 已整体改名为 **`dsh-Chat`**（目录、
-   文档、测试路径、设备 ID 前缀全部同步，`ref/daemon-stack.txt` 等历史快照除外）。
+4. 本仓原名 `dsh-flutter-deepseek`（改名纪律：旧名仅此行留档），2026-11-03 已整体改名为
+   **`dsh-Chat`**（目录、文档、测试路径、设备 ID 前缀全部同步，`ref/daemon-stack.txt` 等历史快照除外）。
    现在**仓库名、目录名、产物标识符里都没有 `deepseek`**，可以公开源码。
    改名纪律：任何新增文件/文档不得再出现旧名（`scripts/ci/docs-check.sh` 会拦住）。
 
