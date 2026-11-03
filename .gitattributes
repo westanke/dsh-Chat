@@ -1,0 +1,42 @@
+# 仓库级行尾/编码策略。**这一层必须存在**：没有它，Windows 上 checkout 出来的
+# .sh 会带 CRLF，直接在 `bash scripts/push-all.sh` 时报 "$'\r': command not found"。
+* text=auto
+
+# Shell 脚本与 gradlew 必须是 LF —— CI 在 Linux/macOS 上直接执行它们。
+*.sh text eol=lf
+app/android/gradlew text eol=lf
+
+# Windows 批处理必须是 CRLF，否则 cmd.exe 解析出错。
+*.bat text eol=crlf
+
+# ── 明确声明为二进制：这些文件参与逐字节比对，任何行尾/编码转换都会让测试红 ──
+# *.png 是基线截图（app/test 里渲染结果要与它逐像素比对），
+# *.svg 是矢量基线，*.ttf/*.otf 是字体，音视频与归档同理。
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.svg binary
+*.ttf binary
+*.otf binary
+*.woff binary
+*.woff2 binary
+
+# 移动端构建产物 / 原生库 / 归档（即使被 .gitignore 挡住，本地强制 add 时也不许转行尾）
+*.apk binary
+*.aab binary
+*.aar binary
+*.jar binary
+*.so binary
+*.a binary
+*.dylib binary
+*.zip binary
+*.gz binary
+*.tgz binary
+*.keystore binary
+*.jks binary
+
+# pubspec.lock 要入库（可复现构建），但它是文本，保持 auto 即可；此处仅作说明注释。
+# ref/ 下的 .json 是真实链路抓包，同样按文本入库（体积可控，且 diff 可读）。

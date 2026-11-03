@@ -1,0 +1,59 @@
+# ── Flutter / Dart 构建产物 ────────────────────────────────────────────────
+# app/ 自带一份标准 Flutter 模板 .gitignore（.dart_tool/、/build/、.idea/ 等），
+# 但根仓库这一层要能独立兜住：从仓库根 `git status` 看到的必须是干净源码树。
+app/.dart_tool/
+app/build/
+app/.flutter-plugins
+app/.flutter-plugins-dependencies
+app/.packages
+app/*.iml
+app/.idea/
+
+# ── Android / Gradle ──────────────────────────────────────────────────────
+# local.properties 里有本机绝对路径（sdk.dir / flutter.sdk），到别人机器上必错。
+app/android/local.properties
+app/android/.gradle/
+app/android/app/.cxx/
+app/android/key.properties
+*.jks
+*.keystore
+
+# ── iOS ───────────────────────────────────────────────────────────────────
+# Flutter 每次 `pub get` 都会重写这几个文件，内容是本机路径，不属于源码。
+app/ios/Flutter/Generated.xcconfig
+app/ios/Flutter/flutter_export_environment.sh
+app/ios/Flutter/ephemeral/
+app/ios/Pods/
+app/ios/.symlinks/
+app/ios/Flutter/App.framework
+app/ios/Flutter/Flutter.framework
+
+# ── ref/ 派生产物 ──────────────────────────────────────────────────────────
+# ref/ 是设计基准素材（官方 App 截图、样式、真实链路 JSON），**要入库**；
+# 下面这些是从官方 APK 里机械解包/转储出来的中间产物，体积大且可 100% 复现，
+# 所以不入库。原 APK 本身同理 —— 它是第三方版权物，不该进我们的仓库。
+ref/apk-extract/
+ref/deepseek.apk
+ref/apk-resources.txt
+
+# ── ref/ 内的真实凭证样张（**绝对不能入库**）────────────────────────────────
+# 这些是联调真机上抓下来的活凭证，进了 git 历史就等于泄漏，事后清理还得改写历史。
+# probe-token.json 里是明文 token；pairing.json 是配对码；math-session.txt 是会话 id。
+ref/probe-token.json
+ref/pairing.json
+ref/math-session.txt
+
+# ── 通用 ──────────────────────────────────────────────────────────────────
+*.log
+.DS_Store
+Thumbs.db
+.tmp/
+.testenv/
+
+# 本地临时提交信息 / 校验文件：早期调试留下的一次性文件，防止误提交
+.commitmsg
+.cm2
+.tm2
+.cm
+.mm
+.c3

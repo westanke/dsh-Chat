@@ -1,0 +1,70 @@
+name: CI
+
+# 与 dsh-remote-bridge / dsh-companion 的门禁口径一致：**静态检查 + 单测 + 文档契约**
+# 跑绿才算可提交。差别在于本仓是 Flutter 应用：
+#   - dsh-remote-bridge 的 `pnpm check` = typecheck → test → docs:check → build
+#   - 本仓的等价物 = `flutter analyze` → `flutter test` → docs/STRUCTURE.md 契约检查
+#
+# 刻意**不**在 CI 里 `flutter build apk`：
+#   1) 真机构建需要 Android SDK + JDK17 + gradle 缓存，冷启动要十几分钟，
+#      而这个仓库的验收动作是在本机真机（vivo V2080A）上装机，CI 里构建产出没人用；
+#   2) 构建产物不入库，发版走本地 `flutter build apk` + 手工上传 Release。
+#   真要加构建任务时，照 dsh-companion 的 android.yml 抄 setup-java/setup-android 三段。
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+# 同一分支连推时只保留最新一次，避免排队堆积（与模板仓一致）。
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ── 文档契约：零依赖，几秒跑完，放在前面当快速失败闸门 ──────────────────
+  docs:
+    name: docs-check
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      # 宪法 AGENTS.md §8 要求「改了 lib/ 就在同一提交里改 docs/STRUCTURE.md」。
+      # 人肉记不住，所以做成机检 —— 这是模板仓 `pnpm docs:check` 在本仓的等价物。
+      - name: 文档契约（STRUCTURE.md 覆盖全部 lib/ 文件、无死链、无旧仓名）
+        run: bash scripts/ci/docs-check.sh
+
+  # ── Flutter 门禁：静态分析 + 单测 ────────────────────────────────────
+  test:
+    name: analyze + test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: app   # Flutter 工程根在 app/，pubspec.yaml 在那里
+    steps:
+      - uses: actions/checkout@v4
+
+      # 版本口径：pubspec.lock 尾部要求 dart >=3.13.7 / flutter >=3.47.0，
+      # 本机开发用的 stable 是 3.47.9。这里跟 stable 通道、不写死小版本 ——
+      # 写死会和本机 SDK 漂移，flutter-action 的版本表也未必有我们这一版。
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: 打印工具链版本（排障用）
+        run: |
+          flutter --version
+          dart --version
+
+      - name: 依赖还原
+        run: flutter pub get
+
+      - name: 静态分析
+        run: flutter analyze
+
+      - name: 单元测试
+        run: flutter test
