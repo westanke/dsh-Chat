@@ -9,11 +9,14 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 
+import '../bridge/content.dart';
 import '../bridge/gateway.dart';
 import '../bridge/models.dart';
 import '../bridge/permissions.dart';
 import '../bridge/platform.dart';
 import '../design/tokens.dart';
+
+part 'composer_widgets.dart';
 
 /// 发送键三态（对照 companion 的 ComposerSendPolicy）。
 enum _SendKeyState { send, stop, disabled }
@@ -25,6 +28,7 @@ class Composer extends StatefulWidget {
     required this.onSend,
     required this.onSendWithImage,
     required this.onCancel,
+    required this.onCommand,
     this.enabled = true,
     this.streaming = false,
     this.sessionId,
@@ -38,6 +42,8 @@ class Composer extends StatefulWidget {
   final void Function(String text, PromptPart image) onSendWithImage;
   /// 运行中且输入为空时，发送键变成「停止」并回调这里（session-cancel）。
   final VoidCallback onCancel;
+  /// 斜杠命令执行回调（整行 `/xxx args` 发送时走这里；chat_state.runCommand）。
+  final ValueChanged<String> onCommand;
   final bool enabled;
   /// 是否有回合在跑（对照 companion 的 ComposerSendPolicy 三态）。
   final bool streaming;
@@ -78,10 +84,76 @@ class _ComposerState extends State<Composer> {
 
   bool get _hasText => _controller.text.trim().isNotEmpty;
 
+  // ---- 斜杠命令补全（真机反馈 2026-11-04 第 3 项）----
+
+  /// 会话可用命令（进入命令草稿态时拉一次并缓存；切会话由 _commandsSid 失效）。
+  List<SlashCommand>? _commands;
+  String? _commandsSid;
+
+  /// 当前命令草稿（`/` 开头才有）：（命令名片段, 已敲参数）。
+  ({String nameFragment, String args})? get _slashDraft {
+    if (!widget.enabled || widget.sessionId == null) return null;
+    return parseSlashDraft(_controller.text);
+  }
+
+  /// 命令面板数据：草稿态 + 命令清单就绪时给出前缀过滤结果（最多 6 条）。
+  List<SlashCommand> get _slashMatches {
+    final draft = _slashDraft;
+    final cmds = _commands;
+    if (draft == null || cmds == null) return const [];
+    final matches = cmds.where((c) => c.matchesQuery(draft.nameFragment));
+    return matches.take(6).toList();
+  }
+
+  Future<void> _ensureCommands() async {
+    final gw = widget.gateway;
+    final sid = widget.sessionId;
+    if (gw == null || sid == null) return;
+    if (_commands != null && _commandsSid == sid) return;
+    _commandsSid = sid;
+    try {
+      final raw = await gw.listCommands(sid);
+      final list = SlashCommandList.from(raw);
+      if (mounted) setState(() => _commands = list.commands);
+    } on RequestException {
+      // 命令清单拉不到就不给面板（发送路径仍可整行 execute，服务端会报错）。
+      if (mounted) setState(() => _commands = const []);
+    }
+  }
+
+  /// 点选命令：输入框替换为 `/name ` 并聚焦，让用户接着敲参数。
+  void _applyCommand(SlashCommand cmd) {
+    final draft = _slashDraft;
+    final args = draft?.args ?? '';
+    _controller.text = args.isEmpty
+        ? '/${cmd.name} '
+        : '/${cmd.name} $args';
+    _controller.selection = TextSelection.collapsed(
+      offset: _controller.text.length,
+    );
+    setState(() {});
+  }
+
+  /// 发送时若整行是 `/xxx ...`（且没挂图片）→ 走命令执行而非聊天发送。
+  bool _trySendCommand() {
+    final sid = widget.sessionId;
+    if (sid == null || _pendingImage != null) return false;
+    final text = _controller.text.trim();
+    if (!text.startsWith('/')) return false;
+    final draft = parseSlashDraft(text);
+    if (draft == null) return false;
+    widget.onCommand(text);
+    setState(() {
+      _controller.clear();
+    });
+    return true;
+  }
+
   /// 发送键三态（对照 companion ComposerSendPolicy.resolve）：
-  /// 有正文=发送；运行中且无正文=停止；其余=占位（+ / 语音）。
+  /// 有正文或待发图片=发送；运行中且两者皆无=停止；其余=占位（+ / 语音）。
+  /// 真机反馈 2026-11-04 第 2 项：单发图片（无文本）也要亮发送键。
   _SendKeyState get _sendKeyState {
-    if (_hasText) return _SendKeyState.send;
+    if (_hasText || _pendingImage != null) return _SendKeyState.send;
     if (widget.streaming) return _SendKeyState.stop;
     return _SendKeyState.disabled;
   }
@@ -95,6 +167,8 @@ class _ComposerState extends State<Composer> {
   void _send() {
     final text = _controller.text.trim();
     if (text.isEmpty && _pendingImage == null) return;
+    // 斜杠命令优先（真机反馈 2026-11-04 第 3 项）：`/xxx args` 不进聊天。
+    if (_trySendCommand()) return;
     final img = _pendingImage;
     if (img == null) {
       widget.onSend(text);
@@ -268,6 +342,12 @@ class _ComposerState extends State<Composer> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
+          if (_slashMatches.isNotEmpty)
+            _CommandPanel(
+              colors: c,
+              matches: _slashMatches,
+              onPick: _applyCommand,
+            ),
           Container(
             decoration: BoxDecoration(
               color: c.inputFill,
@@ -309,7 +389,11 @@ class _ComposerState extends State<Composer> {
                       isDense: true,
                       contentPadding: EdgeInsets.zero,
                     ),
-                    onChanged: (_) => setState(() {}),
+                    onChanged: (_) {
+                      setState(() {});
+                      // 进入 `/` 草稿态时按需拉命令清单（每会话一次）。
+                      if (_slashDraft != null) _ensureCommands();
+                    },
                   ),
                 ),
                 const SizedBox(height: 10),
@@ -390,88 +474,6 @@ class _ComposerState extends State<Composer> {
           ),
           const SizedBox(height: 10),
         ],
-      ),
-    );
-  }
-}
-
-/// 胶囊 chip：未选中为白底 + 细描边，选中为浅蓝底 + 品牌色文字。
-class _Chip extends StatelessWidget {
-  const _Chip({
-    required this.icon,
-    required this.label,
-    required this.active,
-    required this.colors,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final String label;
-  final bool active;
-  final DsColors colors;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final fg = active ? colors.chipSelectedFg : colors.labelPrimary;
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(DsSpacing.chipRadius),
-      child: Container(
-        height: DsSpacing.chipHeight,
-        padding: const EdgeInsets.symmetric(horizontal: DsSpacing.chipPadH),
-        decoration: BoxDecoration(
-          color: active ? colors.chipSelectedBg : colors.inputFill,
-          borderRadius: BorderRadius.circular(DsSpacing.chipRadius),
-          border: Border.all(
-            color: active ? colors.chipSelectedBg : colors.inputBorder,
-          ),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: DsSpacing.chipIconSize, color: fg),
-            const SizedBox(width: DsSpacing.chipIconGap),
-            Text(label, style: DsTypography.chipLabel.copyWith(color: fg)),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// 圆形按钮：filled=品牌色实心（发送），否则细描边（+ / 语音）。
-class _RoundIconButton extends StatelessWidget {
-  const _RoundIconButton({
-    required this.colors,
-    required this.filled,
-    required this.icon,
-    required this.onPressed,
-  });
-
-  final DsColors colors;
-  final bool filled;
-  final IconData icon;
-  final VoidCallback? onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: DsSpacing.composerButtonSize,
-      height: DsSpacing.composerButtonSize,
-      child: IconButton(
-        onPressed: onPressed,
-        padding: EdgeInsets.zero,
-        icon: Icon(icon, size: 18),
-        color: filled ? colors.onBrand : colors.labelPrimary,
-        style: IconButton.styleFrom(
-          backgroundColor: filled ? colors.brand : colors.none,
-          shape: CircleBorder(
-            side: filled
-                ? BorderSide.none
-                : BorderSide(color: colors.labelPrimary, width: 1.4),
-          ),
-        ),
       ),
     );
   }

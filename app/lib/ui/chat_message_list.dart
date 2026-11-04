@@ -183,6 +183,31 @@ class _MessageListState extends State<_MessageList> {
 
   List<Widget> _buildChildren(ChatState state, DsColors colors) {
     final items = <Widget>[];
+    // 历史翻页入口（真机反馈 2026-11-04 第 5 项）：服务端还有更早事件时，
+    // 列表头放「加载更早消息」按钮（上滑触发不可靠，官方做法是显式入口）。
+    if (state.historyHasMore) {
+      items.add(
+        Center(
+          child: Padding(
+            padding: const EdgeInsets.only(bottom: DsSpacing.blockGap),
+            child: state.loadingOlder
+                ? const Padding(
+                    padding: EdgeInsets.all(8),
+                    child: SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  )
+                : TextButton.icon(
+                    onPressed: state.loadOlder,
+                    icon: const Icon(Icons.expand_less, size: 18),
+                    label: const Text('加载更早消息'),
+                  ),
+          ),
+        ),
+      );
+    }
     for (var i = 0; i < state.messages.length; i++) {
       items.add(
         _MessageItem(

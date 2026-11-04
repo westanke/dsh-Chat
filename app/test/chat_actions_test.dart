@@ -110,6 +110,7 @@ void main() {
               onSend: onSend,
               onSendWithImage: (_, _) {},
               onCancel: onCancel,
+              onCommand: (_) {},
               streaming: streaming,
             ),
           ),

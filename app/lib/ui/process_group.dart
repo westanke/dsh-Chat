@@ -16,6 +16,7 @@ import 'package:flutter/material.dart';
 
 import '../bridge/models.dart';
 import '../design/tokens.dart';
+import 'md_code_block.dart';
 
 class DsProcessGroup extends StatefulWidget {
   const DsProcessGroup({super.key, required this.group, required this.colors});
@@ -207,6 +208,24 @@ class _ToolDetail extends StatelessWidget {
     return raw;
   }
 
+  /// bash 命令原文（真机反馈 2026-11-04 第 6 项）：name 为 bash / tools.bash
+  /// 时从 arguments 里取 command 字段，按 BASH 代码块渲染（DsCodeBlock）。
+  String? _bashCommand() {
+    if (call.name != 'bash' && call.name != 'tools.bash') return null;
+    final raw = call.rawArguments;
+    if (raw == null || raw.trim().isEmpty) return null;
+    try {
+      final parsed = jsonDecode(raw);
+      if (parsed is Map) {
+        final cmd = parsed['command'];
+        if (cmd is String && cmd.trim().isNotEmpty) return cmd;
+      }
+    } on FormatException {
+      return null;
+    }
+    return null;
+  }
+
   String? _duration() {
     final ms = call.durationMs;
     if (ms == null || ms < 0) return null; // 负值（时钟倒退）不显示
@@ -218,7 +237,8 @@ class _ToolDetail extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = colors;
-    final args = _prettyArgs();
+    final bash = _bashCommand();
+    final args = bash == null ? _prettyArgs() : null;
     final result = call.resultText;
     final dur = _duration();
     return Padding(
@@ -227,61 +247,55 @@ class _ToolDetail extends StatelessWidget {
         top: 4,
         bottom: 4,
       ),
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(DsSpacing.inlineCodePadH),
-        decoration: BoxDecoration(
-          color: c.mdInlineCodeBg,
-          borderRadius: BorderRadius.circular(DsSpacing.inlineCodeRadius),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (dur != null)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 4),
-                child: Text(
-                  '耗时 $dur',
-                  style: DsTypography.caption.copyWith(
-                    color: c.labelTertiary,
-                  ),
-                ),
-              ),
-            if (args != null) ...[
-              Text(
-                '输入',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (dur != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 4),
+              child: Text(
+                '耗时 $dur',
                 style: DsTypography.caption.copyWith(color: c.labelTertiary),
               ),
-              const SizedBox(height: 2),
-              Text(
-                args,
-                style: DsTypography.codeBlock.copyWith(
-                  color: c.labelSecondary,
-                ),
+            ),
+          // bash 命令按 BASH 代码块样式（语法高亮 + 复制按钮 + 语言名头）。
+          if (bash != null) ...[
+            DsCodeBlock(name: 'BASH', code: bash, colors: c),
+            const SizedBox(height: 6),
+          ] else if (args != null) ...[
+            Text(
+              '输入',
+              style: DsTypography.caption.copyWith(color: c.labelTertiary),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              args,
+              style: DsTypography.codeBlock.copyWith(
+                color: c.labelSecondary,
               ),
-              const SizedBox(height: 6),
-            ],
-            if (result != null) ...[
-              Text(
-                call.failed ? '错误' : '输出',
-                style: DsTypography.caption.copyWith(color: c.labelTertiary),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                result,
-                maxLines: 24,
-                overflow: TextOverflow.ellipsis,
-                style: DsTypography.codeBlock.copyWith(
-                  color: call.failed ? c.danger : c.labelSecondary,
-                ),
-              ),
-            ] else if (!call.failed && call.durationMs != null)
-              Text(
-                '结果为空',
-                style: DsTypography.caption.copyWith(color: c.labelTertiary),
-              ),
+            ),
+            const SizedBox(height: 6),
           ],
-        ),
+          if (result != null) ...[
+            Text(
+              call.failed ? '错误' : '输出',
+              style: DsTypography.caption.copyWith(color: c.labelTertiary),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              result,
+              maxLines: 24,
+              overflow: TextOverflow.ellipsis,
+              style: DsTypography.codeBlock.copyWith(
+                color: call.failed ? c.danger : c.labelSecondary,
+              ),
+            ),
+          ] else if (!call.failed && call.durationMs != null)
+            Text(
+              '结果为空',
+              style: DsTypography.caption.copyWith(color: c.labelTertiary),
+            ),
+        ],
       ),
     );
   }

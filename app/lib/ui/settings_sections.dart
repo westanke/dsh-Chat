@@ -307,7 +307,7 @@ class _AboutSection extends StatelessWidget {
           title: '版本 $_appVersion',
           subtitle: '与 app/pubspec.yaml 的 version 保持一致',
         ),
-        _InfoRow(
+        _UpdateCheckRow(colors: c),        _InfoRow(
           colors: c,
           icon: Icons.cable_outlined,
           title: '$_subprotocol · protocol $_helloProtocol',
@@ -318,86 +318,6 @@ class _AboutSection extends StatelessWidget {
   }
 }
 
-// ---------- 断开连接 ----------
-
-class _DisconnectSection extends StatelessWidget {
-  const _DisconnectSection({
-    required this.colors,
-    required this.onDisconnect,
-  });
-
-  final DsColors colors;
-  final Future<void> Function() onDisconnect;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = colors;
-    return Padding(
-      padding: const EdgeInsets.only(
-        top: DsSpacing.settingsSectionGap,
-        bottom: DsSpacing.settingsSectionGap,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          OutlinedButton(
-            onPressed: () => _confirm(context),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: c.danger,
-              side: BorderSide(color: c.danger),
-              minimumSize: const Size.fromHeight(50),
-              shape: const StadiumBorder(),
-            ),
-            child: Text(
-              '断开连接',
-              style: DsTypography.baseStrong.copyWith(color: c.danger),
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            '将断开当前连接、清除本机配对并回到连接页；下次启动需重新输入配对码。',
-            style: DsTypography.caption.copyWith(color: c.labelTertiary),
-            textAlign: TextAlign.center,
-          ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _confirm(BuildContext context) async {
-    final c = colors;
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        backgroundColor: c.settingsSurface,
-        title: Text(
-          '断开连接？',
-          style: DsTypography.h4.copyWith(color: c.labelPrimary),
-        ),
-        content: Text(
-          '本机配对信息会被清除，需要重新输入配对码才能再次连接。',
-          style: DsTypography.small.copyWith(color: c.labelSecondary),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: Text(
-              '取消',
-              style: DsTypography.small.copyWith(color: c.labelPrimary),
-            ),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: Text(
-              '断开',
-              style: DsTypography.smallStrong.copyWith(color: c.danger),
-            ),
-          ),
-        ],
-      ),
-    );
-    if (ok != true) return;
-    await onDisconnect();
-    if (context.mounted) Navigator.of(context).pop();
-  }
-}
+/// 检查新版本（真机反馈 2026-11-04 第 9 项）：拉 Gitee → 失败落 GitHub 的
+/// 最新 Release，与 `_appVersion` 比语义化版本；有新版用系统下载器下载 APK
+/// （通知栏提示，用户点通知进安装流程）。

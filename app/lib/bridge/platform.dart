@@ -64,4 +64,21 @@ class DshPlatform {
       return null;
     }
   }
+
+  /// 交给系统 DownloadManager 下载 APK（真机反馈 2026-11-04 第 9 项）。
+  /// 返回是否成功入队（重复 URL 会返回已有任务的 id，同样算成功）。
+  /// 下载完成在系统通知栏；装包动作由用户点通知触发（零权限，Android 8+
+  /// 的「安装未知应用」授权在系统安装器里向用户索取）。
+  static Future<bool> downloadApk(String url, String name) async {
+    if (url.trim().isEmpty || name.trim().isEmpty) return false;
+    try {
+      return await _channel
+              .invokeMethod<bool>('downloadApk', {'url': url, 'name': name}) ??
+          false;
+    } on PlatformException {
+      return false;
+    } on MissingPluginException {
+      return false;
+    }
+  }
 }

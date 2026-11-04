@@ -10,6 +10,8 @@ import '../bridge/dlog.dart';
 import '../bridge/gateway.dart';
 import '../bridge/models.dart';
 import '../design/app_settings.dart';
+import 'mobile_workspace.dart';
+import 'session_groups.dart';
 
 /// 纯函数：取 [0..end] 区间里最后一条有正文的用户消息文本
 /// （对照 companion ChatRetry.kt：排除只有图片 / 空正文的用户消息）。
@@ -59,35 +61,30 @@ class ChatState extends ChangeNotifier {
     return 'DSH Bridge';
   }
 
-  /// 会话分组：按 updatedAt 归成「今天 / 昨天 / 更早」（官方抽屉的日期分组）。
-  Map<String, List<DshSession>> get sessionGroups {
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final yesterday = today.subtract(const Duration(days: 1));
-    final out = <String, List<DshSession>>{};
-    for (final s in sessions) {
-      final t = DateTime.fromMillisecondsSinceEpoch(s.updatedAt).toLocal();
-      final day = DateTime(t.year, t.month, t.day);
-      final label = day == today
-          ? '今天'
-          : day == yesterday
-          ? '昨天'
-          : '更早';
-      out.putIfAbsent(label, () => []).add(s);
-    }
-    // 固定顺序，避免 Map 迭代顺序随插入变化
-    final ordered = <String, List<DshSession>>{};
-    for (final k in const ['今天', '昨天', '更早']) {
-      final v = out[k];
-      if (v != null && v.isNotEmpty) ordered[k] = v;
-    }
-    return ordered;
-  }
+  /// 会话分组：实现在 session_groups.dart（顶层纯函数，宪法 500 行拆分）。
+  Map<String, List<DshSession>> get sessionGroups =>
+      groupSessionsByWorkspace(sessions);
 
   String? sessionId;
   String? _pendingSessionId;
   List<DshSession> sessions = [];
   List<ChatMessage> messages = [];
+
+  /// 历史翻页（真机反馈 2026-11-04 第 5 项）：
+  /// [historyHasMore] 服务端还有更早事件（history 应答 hasMore）；
+  /// [loadingOlder] 翻页请求进行中（按钮转圈/防重复点击）。
+  String? _mobileWorkspaceId; // 本连接内已知的手机工作区（mobile_workspace.dart）
+
+  bool historyHasMore = false;
+  bool loadingOlder = false;
+
+  /// 已加载的最小 seq（下一页 beforeSeq）；-1 = 流式中的临时消息，跳过。
+  int? get oldestSeq {
+    for (final m in messages) {
+      if (m.seq >= 0) return m.seq;
+    }
+    return null;
+  }
 
   /// 当前会话的原始历史事件（轨迹 Sheet 本地分组用，零网络请求）。
   /// 形状：[{type, seq, time, data}]，data 为原样 Map。
@@ -134,6 +131,8 @@ class ChatState extends ChangeNotifier {
     // （reloadHistory 里 projections 缺席时会保留上一份）。
     rawEvents = [];
     projections = null;
+    historyHasMore = false;
+    loadingOlder = false;
     _gateway.subscribe(s.id);
     await reloadHistory();
   }
@@ -143,6 +142,8 @@ class ChatState extends ChangeNotifier {
     messages = [];
     rawEvents = [];
     projections = null;
+    historyHasMore = false;
+    loadingOlder = false;
     _clearStream();
     _gateway.subscribe(null);
     notifyListeners();
@@ -155,9 +156,11 @@ class ChatState extends ChangeNotifier {
       final page = await _gateway.history(id, maxMessages: 200);
       DshLog.w('ui history id=$id items=${page.items.length} '
           'raw=${page.rawEvents.length} '
-          'projections=${page.projections != null}');
+          'projections=${page.projections != null} '
+          'hasMore=${page.hasMore}');
       messages = page.items;
       rawEvents = page.rawEvents;
+      historyHasMore = page.hasMore;
       // 翻页/刷新时 projections 可能缺席：保留上一份（同会话），避免面板闪空。
       // 切会话时 newChat()/openSession() 会先清空，不会串台。
       projections = page.projections ?? projections;
@@ -165,6 +168,45 @@ class ChatState extends ChangeNotifier {
     } on RequestException catch (e) {
       lastError = '加载历史失败：${e.message}';
       notifyListeners();
+    }
+  }
+
+  /// 向上翻页加载更早消息（真机反馈 2026-11-04 第 5 项）：
+  /// beforeSeq = 当前已加载的最小 seq，返回的更早事件 prepend 到头部并按
+  /// seq 去重（防刷新窗口内重叠）。翻页应答不带 projections（API.md:766）。
+  Future<void> loadOlder() async {
+    final id = sessionId;
+    if (id == null || id.isEmpty || loadingOlder || !historyHasMore) return;
+    final before = oldestSeq;
+    if (before == null || before <= 0) return;
+    loadingOlder = true;
+    notifyListeners();
+    try {
+      final page = await _gateway.history(
+        id,
+        maxMessages: 200,
+        beforeSeq: before,
+      );
+      DshLog.w('ui history-older id=$id before=$before '
+          'items=${page.items.length} hasMore=${page.hasMore}');
+      if (id != sessionId) return; // 翻页期间切了会话：丢弃
+      final known = messages
+          .where((m) => m.seq >= 0)
+          .map((m) => m.seq)
+          .toSet();
+      final fresh = page.items
+          .where((m) => m.seq < 0 || !known.contains(m.seq))
+          .toList();
+      messages = [...fresh, ...messages];
+      rawEvents = [...page.rawEvents, ...rawEvents];
+      historyHasMore = page.hasMore;
+      notifyListeners();
+    } on RequestException catch (e) {
+      lastError = '加载更早消息失败：${e.message}';
+      notifyListeners();
+    } finally {
+      loadingOlder = false;
+      if (id == sessionId) notifyListeners();
     }
   }
 
@@ -197,6 +239,24 @@ class ChatState extends ChangeNotifier {
     notifyListeners();
     try {
       DshLog.w('ui send start sid=$sessionId mode=$mode');
+      // 新会话落「手机会话」分组（真机反馈 2026-11-04 第 7 项）：
+      // message 帧自动建会话不带 workspaceId（ws-basic.ts:39-47，落未分组），
+      // 所以首条消息前先 session-create{workspaceId} 显式建到手机工作区。
+      if (sessionId == null) {
+        final wsId = await ensureMobileWorkspace(_gateway, _mobileWorkspaceId);
+        if (wsId != null) {
+          try {
+            final sid = await _gateway.createSessionInWorkspace(wsId);
+            DshLog.w('ui pre-created session $sid in workspace $wsId');
+            _mobileWorkspaceId = wsId;
+            sessionId = sid;
+            _pendingSessionId = sid;
+          } on RequestException catch (e) {
+            // 建会话失败不阻断发消息：退回 message 帧自动建（落未分组）。
+            DshLog.w('ui pre-create session FAIL ${e.code}');
+          }
+        }
+      }
       final sid = await _gateway.sendText(
         sessionId: sessionId,
         text: trimmed,
@@ -232,6 +292,33 @@ class ChatState extends ChangeNotifier {
       await reloadHistory();
     } on RequestException catch (e) {
       lastError = '停止失败：${e.message}';
+      notifyListeners();
+    }
+  }
+
+  /// 执行斜杠命令（真机反馈 2026-11-04 第 3 项）：`/xxx args` 整行走
+  /// command-execute 帧，不出现在用户气泡里（bridge 端命令不入 chat 历史）。
+  Future<void> runCommand(String line) async {
+    final id = sessionId;
+    if (id == null || id.isEmpty) return;
+    lastError = null;
+    try {
+      final r = await _gateway.executeCommand(sessionId: id, line: line);
+      final result = r['result'];
+      final kind = result is Map ? (result['kind'] ?? '') as String : '';
+      if (kind == 'error') {
+        final text = result is Map && result['text'] is String
+            ? result['text'] as String
+            : '命令执行失败';
+        lastError = text;
+        notifyListeners();
+        return;
+      }
+      // 成功的命令大多自带落盘事件（如 /model 走 session 事件）；保险起见
+      // 重拉一次历史，把命令效果落到 UI。
+      await reloadHistory();
+    } on RequestException catch (e) {
+      lastError = '命令执行失败：${e.message}';
       notifyListeners();
     }
   }

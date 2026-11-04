@@ -38,6 +38,8 @@ Future<bool> showModelSheet(
   String? pendingProvider = current.provider;
   String? pendingModel = current.model;
   String? pendingEffort = current.reasoningEffort;
+  // 分组收缩状态（真机反馈第 4 项）：默认只展开当前供应商，其余折叠。
+  final expanded = <String>{if (current.provider.isNotEmpty) current.provider};
 
   final changed = await showModalBottomSheet<bool>(
     context: context,
@@ -76,65 +78,104 @@ Future<bool> showModelSheet(
                 child: ListView(
                   children: [
                     for (final g in groups) ...[
-                      Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: DsSpacing.settingsCardPadH,
-                          vertical: 6,
-                        ),
-                        child: Text(
-                          g.name,
-                          style: DsTypography.smallStrong.copyWith(
-                            color: colors.labelSecondary,
+                      // 供应商分组头（可点收缩；真机反馈第 4 项）。
+                      InkWell(
+                        onTap: () => setSheetState(() {
+                          if (!expanded.remove(g.id)) expanded.add(g.id);
+                        }),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: DsSpacing.settingsCardPadH,
+                            vertical: 6,
+                          ),
+                          child: Row(
+                            children: [
+                              Text(
+                                g.name,
+                                style: DsTypography.smallStrong.copyWith(
+                                  color: colors.labelSecondary,
+                                ),
+                              ),
+                              const Spacer(),
+                              Icon(
+                                expanded.contains(g.id)
+                                    ? Icons.expand_less
+                                    : Icons.expand_more,
+                                size: 18,
+                                color: colors.labelTertiary,
+                              ),
+                            ],
                           ),
                         ),
                       ),
-                      for (final m in g.models)
-                        ListTile(
-                          dense: true,
-                          leading: Icon(
-                            pendingProvider == g.id && pendingModel == m.id
-                                ? Icons.check_circle
-                                : Icons.circle_outlined,
-                            size: 20,
-                            color: pendingProvider == g.id &&
-                                    pendingModel == m.id
-                                ? colors.brand
-                                : colors.labelTertiary,
+                      // 折叠组只留组头；当前选中的模型即使组被折叠也提示一行。
+                      if (expanded.contains(g.id))
+                        for (final m in g.models)
+                          ListTile(
+                            dense: true,
+                            leading: Icon(
+                              pendingProvider == g.id && pendingModel == m.id
+                                  ? Icons.check_circle
+                                  : Icons.circle_outlined,
+                              size: 20,
+                              color: pendingProvider == g.id &&
+                                      pendingModel == m.id
+                                  ? colors.brand
+                                  : colors.labelTertiary,
+                            ),
+                            title: Text(
+                              m.name,
+                              style: DsTypography.base.copyWith(
+                                color: colors.labelPrimary,
+                              ),
+                            ),
+                            subtitle: m.reasoning == null ||
+                                    m.reasoning!.efforts.isEmpty
+                                ? null
+                                : Wrap(
+                                    spacing: 6,
+                                    children: [
+                                      for (final e in m.reasoning!.efforts)
+                                        ChoiceChip(
+                                          label: Text(
+                                            reasoningEffortLabel(e.id),
+                                            style: DsTypography.caption,
+                                          ),
+                                          selected: pendingProvider == g.id &&
+                                              pendingModel == m.id &&
+                                              pendingEffort == e.id,
+                                          onSelected: (_) => setSheetState(() {
+                                            pendingProvider = g.id;
+                                            pendingModel = m.id;
+                                            pendingEffort = e.id;
+                                          }),
+                                        ),
+                                    ],
+                                  ),
+                            onTap: () => setSheetState(() {
+                              pendingProvider = g.id;
+                              pendingModel = m.id;
+                              pendingEffort = m.reasoning?.defaultEffort;
+                            }),
                           ),
-                          title: Text(
-                            m.name,
-                            style: DsTypography.base.copyWith(
-                              color: colors.labelPrimary,
+                      if (!expanded.contains(g.id) &&
+                          pendingProvider == g.id &&
+                          pendingModel != null)
+                        Padding(
+                          padding: const EdgeInsets.only(
+                            left: DsSpacing.settingsCardPadH + 6,
+                            bottom: 6,
+                          ),
+                          child: Text(
+                            g.models
+                                    .where((m) => m.id == pendingModel)
+                                    .firstOrNull
+                                    ?.name ??
+                                pendingModel!,
+                            style: DsTypography.small.copyWith(
+                              color: colors.brand,
                             ),
                           ),
-                          subtitle: m.reasoning == null ||
-                                  m.reasoning!.efforts.isEmpty
-                              ? null
-                              : Wrap(
-                                  spacing: 6,
-                                  children: [
-                                    for (final e in m.reasoning!.efforts)
-                                      ChoiceChip(
-                                        label: Text(
-                                          reasoningEffortLabel(e.id),
-                                          style: DsTypography.caption,
-                                        ),
-                                        selected: pendingProvider == g.id &&
-                                            pendingModel == m.id &&
-                                            pendingEffort == e.id,
-                                        onSelected: (_) => setSheetState(() {
-                                          pendingProvider = g.id;
-                                          pendingModel = m.id;
-                                          pendingEffort = e.id;
-                                        }),
-                                      ),
-                                  ],
-                                ),
-                          onTap: () => setSheetState(() {
-                            pendingProvider = g.id;
-                            pendingModel = m.id;
-                            pendingEffort = m.reasoning?.defaultEffort;
-                          }),
                         ),
                     ],
                     if (failures.isNotEmpty)

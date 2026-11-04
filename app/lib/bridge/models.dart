@@ -3,8 +3,10 @@
 /// docs/project/API.md 与姊妹仓 dsh-companion 的历史事件映射（ChatHistoryMapping.kt）。
 library;
 
+import 'content.dart';
 import 'tool_call.dart';
 
+export 'content.dart';
 export 'tool_call.dart';
 
 /// 内核历史事件（原样透传）。
@@ -32,38 +34,8 @@ class SessionEvent {
   );
 }
 
-/// 从 content（primitive / array）提取 text+reasoning 文本，
-/// 规则与 companion ChatHistoryMapping.contentTextParts 一致。
-class ContentParts {
-  const ContentParts({this.text = '', this.reasoning = ''});
-  final String text;
-  final String reasoning;
-
-  factory ContentParts.from(dynamic content) {
-    String text = '';
-    String reasoning = '';
-    void take(String type, String? t) {
-      if (t == null || t.isEmpty) return;
-      if (type == 'reasoning') {
-        reasoning += (reasoning.isEmpty ? '' : '\n\n') + t;
-      } else {
-        text += (text.isEmpty ? '' : '\n') + t;
-      }
-    }
-
-    if (content is String) return ContentParts(text: content);
-    if (content is List) {
-      for (final block in content) {
-        if (block is Map) {
-          final type = (block['type'] ?? '') as String;
-          final t = block['text'];
-          if (t is String) take(type, t);
-        }
-      }
-    }
-    return ContentParts(text: text, reasoning: reasoning);
-  }
-}
+/// ContentParts / ContentImageRef / PromptPart 已拆到 content.dart
+/// （宪法 §7 单文件 ≤500 行），经上方 export 继续暴露。
 
 /// 聊天 UI 消息（由历史事件或实时流装配）。
 class ChatMessage {
@@ -71,6 +43,7 @@ class ChatMessage {
     required this.role,
     required this.text,
     this.reasoning = '',
+    this.images = const [],
     this.seq = -1,
     this.streaming = false,
     this.toolCalls = const [],
@@ -81,6 +54,10 @@ class ChatMessage {
   final String role; // 'user' | 'assistant' | 'process' | 'error'
   String text;
   String reasoning;
+
+  /// content 里的图片引用（历史形状：attachment 引用，无字节；真机反馈
+  /// 2026-11-04 第 1 项：手机端要显示历史图片）。
+  final List<ContentImageRef> images;
   int seq; // -1 = 尚未 committed（流式中的临时消息）
   bool streaming;
 
@@ -128,6 +105,8 @@ class DshSession {
     required this.blank,
     this.title,
     this.workspaceId,
+    this.workspaceTitle,
+    this.cwdAbsolute,
   });
 
   final String id;
@@ -138,6 +117,14 @@ class DshSession {
   final String? title;
   final String? workspaceId;
 
+  /// 所属工作区名（chat-adapter.ts:273,498 随会话视图一起下发）；
+  /// 抽屉按它分组（真机反馈 2026-11-04 第 7 项），空 = 「未分组」。
+  final String? workspaceTitle;
+
+  /// 会话工作目录绝对路径（chat-adapter.ts:494，给手机端拼 @绝对路径 用；
+  /// 真机反馈 2026-11-04 第 3 项的 @ 补全数据源）。
+  final String? cwdAbsolute;
+
   factory DshSession.fromJson(Map<String, dynamic> j) => DshSession(
     id: (j['id'] ?? '') as String,
     rootId: (j['rootId'] ?? '') as String,
@@ -146,6 +133,8 @@ class DshSession {
     blank: (j['blank'] ?? false) as bool,
     title: j['title'] as String?,
     workspaceId: j['workspaceId'] as String?,
+    workspaceTitle: j['workspaceTitle'] as String?,
+    cwdAbsolute: j['cwdAbsolute'] as String?,
   );
 
   String get displayTitle {
@@ -175,41 +164,6 @@ class DshWorkspace {
     rootId: (j['rootId'] ?? '') as String,
     path: (j['path'] ?? '') as String,
   );
-}
-
-/// PromptContentPart（chat-adapter.ts）：文本 / 图片（base64）/ 文件回执。
-class PromptPart {
-  const PromptPart.text(String this.text_)
-    : type = 'text',
-      mediaType = null,
-      data = null,
-      name = null,
-      receiptId = null;
-  const PromptPart.image(this.mediaType, this.data, {this.name})
-    : type = 'image',
-      text_ = null,
-      receiptId = null;
-
-  final String type;
-  final String? text_; // type=text
-  final String? mediaType; // type=image（白名单 png/jpeg/webp/gif）
-  final String? data; // type=image, base64 裸串
-  final String? name; // type=image, 可选文件名（chat-adapter.ts:26-29）
-  final String? receiptId; // type=file
-
-  Map<String, dynamic> toJson() => switch (type) {
-    'text' => {'type': 'text', 'text': text_},
-    // name 非空才输出（companion 因 encodeDefaults 丢 mediaType 翻过车，
-    // 这里反过来：schema 支持 name，就按 schema 发）。
-    'image' => {
-      'type': 'image',
-      'mediaType': mediaType,
-      'data': data,
-      'name': ?name,
-    },
-    'file' => {'type': 'file', 'receiptId': receiptId},
-    _ => {'type': 'text', 'text': text_ ?? ''},
-  };
 }
 
 /// 实时推送 chat.message.delta（asyncapi §ChatMessageDelta）。
@@ -304,6 +258,7 @@ class HistoryPage {
   factory HistoryPage.fromEvents(
     List<dynamic> rawEvents, {
     Map<String, dynamic>? projections,
+    bool hasMore = false,
   }) {
     final items = <ChatMessage>[];
     final normalized = <Map<String, dynamic>>[];
@@ -361,10 +316,16 @@ class HistoryPage {
           final kind = src is Map ? src['kind'] : null;
           if (kind != null && kind != 'user') break;
           final parts = ContentParts.from(content);
-          if (parts.text.isNotEmpty) {
+          // 纯图无文字也要上屏（真机反馈 2026-11-04 第 1 项）。
+          if (parts.text.isNotEmpty || parts.images.isNotEmpty) {
             flushGroup();
             items.add(
-              ChatMessage(role: 'user', text: parts.text, seq: event.seq),
+              ChatMessage(
+                role: 'user',
+                text: parts.text,
+                images: parts.images,
+                seq: event.seq,
+              ),
             );
           }
 
@@ -476,7 +437,9 @@ class HistoryPage {
     flushGroup();
     return HistoryPage(
       items: items,
-      hasMore: false,
+      // 真机反馈 2026-11-04 第 5 项：hasMore 由调用方从应答传入
+      // （REST openapi.yaml:944-1009 / WS history 帧都带）。
+      hasMore: hasMore,
       rawEvents: normalized,
       projections: projections,
     );

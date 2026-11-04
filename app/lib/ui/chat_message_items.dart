@@ -15,6 +15,12 @@ class _MessageItem extends StatelessWidget {
   final int index;
   final ChatState state;
 
+  /// 下载器（chat_page build 时注入，见 _imageFetcher）。
+  static ImageFetcher? _imageFetcher;
+
+  /// 助手消息文本里的 image-handoff 占位（纯文本模型发图回路）。
+  DsImageRef? get _handoff => handoffRefOf(message.text);
+
   /// 双击复制整条消息（对照 companion ChatMessageItems.kt 的
   /// combinedClickable onDoubleClick + ClipboardManager）。
   Future<void> _copyAll(BuildContext context) async {
@@ -63,12 +69,29 @@ class _MessageItem extends StatelessWidget {
                 color: colors.userBubble,
                 borderRadius: BorderRadius.circular(DsSpacing.bubbleRadius),
               ),
-              child: Text(
-                message.text,
-                style: DsTypography.base.copyWith(
-                  color: colors.userBubbleText,
-                  height: 24 / 16,
-                ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // 历史图片（attachment 引用；真机反馈 2026-11-04 第 1 项）。
+                  for (final ref in imageRefsOf(message.images))
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: DsChatImage(
+                        ref: ref,
+                        colors: colors,
+                        fetcher: _imageFetcher!,
+                      ),
+                    ),
+                  if (message.text.isNotEmpty)
+                    Text(
+                      message.text,
+                      style: DsTypography.base.copyWith(
+                        color: colors.userBubbleText,
+                        height: 24 / 16,
+                      ),
+                    ),
+                ],
               ),
             ),
           )
@@ -79,6 +102,17 @@ class _MessageItem extends StatelessWidget {
               children: [
                 if (message.reasoning.isNotEmpty)
                   _ThinkBlock(text: message.reasoning, colors: colors),
+                // 纯文本模型的图片交接（反馈第 8 条手机端显示回路）：
+                // 文本里的 [Image: source: .../<sha256>.<ext>] 占位换成取回的图。
+                if (_handoff != null)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: DsChatImage(
+                      ref: _handoff!,
+                      colors: colors,
+                      fetcher: _imageFetcher!,
+                    ),
+                  ),
                 DsMarkdownView(text: message.text, colors: colors),
                 DsMessageActions(
                   colors: colors,

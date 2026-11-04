@@ -11,6 +11,7 @@ import '../bridge/gateway.dart';
 import '../bridge/models.dart';
 import '../design/tokens.dart';
 import 'brand_mark.dart';
+import 'chat_image.dart';
 import 'chat_state.dart';
 import 'composer.dart';
 import 'md_view.dart';
@@ -57,6 +58,9 @@ class _ChatPageState extends State<ChatPage>
     super.initState();
     st.addListener(_onChange);
     st.loadSessions();
+    // 历史图片下载器（真机反馈 2026-11-04 第 1 项）：attachment / image-handoff
+    // 都走 REST，token 从 gateway 拿。
+    _MessageItem._imageFetcher = gatewayImageFetcher(st.gateway);
     _drawerCtrl = AnimationController(
       vsync: this,
       duration: DsMotion.drawerShift,
@@ -180,6 +184,7 @@ class _ChatPageState extends State<ChatPage>
               onSend: st.send,
               onSendWithImage: st.sendWithImage,
               onCancel: st.cancelTurn,
+              onCommand: st.runCommand,
               streaming: st.streaming,
               sessionId: st.sessionId,
               gateway: st.gateway,

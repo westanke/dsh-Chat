@@ -1,7 +1,10 @@
 package com.dsh.dshchat
 
+import android.app.DownloadManager
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.os.Environment
 import android.provider.OpenableColumns
 import android.speech.tts.TextToSpeech
 import io.flutter.embedding.android.FlutterActivity
@@ -84,6 +87,37 @@ class MainActivity : FlutterActivity() {
                         } catch (e: Exception) {
                             pickImageResult = null
                             result.success(null)
+                        }
+                    }
+                    "downloadApk" -> {
+                        // 系统下载器下载 APK（真机反馈 2026-11-04 第 9 项）。
+                        // DownloadManager 是系统服务，不需要任何运行时权限；
+                        // 下载完成在通知栏，用户点通知即可进入安装流程。
+                        val args = call.arguments as? Map<*, *>
+                        val url = args?.get("url") as? String
+                        val name = args?.get("name") as? String
+                        if (url.isNullOrBlank() || name.isNullOrBlank()) {
+                            result.success(false)
+                        } else {
+                            try {
+                                val req = DownloadManager.Request(Uri.parse(url))
+                                    .setTitle(name)
+                                    .setDescription("DSH Chat 更新包")
+                                    .setMimeType(
+                                        "application/vnd.android.package-archive")
+                                    .setNotificationVisibility(
+                                        DownloadManager.Request
+                                            .VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+                                    .setDestinationInExternalPublicDir(
+                                        Environment.DIRECTORY_DOWNLOADS, name)
+                                    .setAllowedOverMetered(true)
+                                val dm = getSystemService(DOWNLOAD_SERVICE)
+                                    as DownloadManager
+                                dm.enqueue(req)
+                                result.success(true)
+                            } catch (e: Exception) {
+                                result.success(false)
+                            }
                         }
                     }
                     else -> result.notImplemented()

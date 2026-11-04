@@ -17,14 +17,19 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'dart:async';
+
 import '../bridge/credentials.dart';
 import '../bridge/dlog.dart';
 import '../bridge/gateway.dart';
+import '../bridge/platform.dart';
+import '../bridge/release_check.dart';
 import '../design/app_settings.dart';
 import '../design/tokens.dart';
 
 part 'settings_sections.dart';
 part 'settings_widgets.dart';
+part 'settings_update.dart';
 
 /// 与 app/pubspec.yaml 的 version 保持一致（Flutter 无 BuildConfig，
 /// 不引入 package_info_plus，避免为一个展示字符串增加依赖，宪法 §8）。

@@ -10,65 +10,24 @@ library;
 
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math';
 
 import 'package:flutter/foundation.dart';
 
-import 'device.dart';
 import 'dlog.dart';
-
-import 'dart:math';
 
 import 'package:web_socket_channel/status.dart' as ws_status;
 import 'package:web_socket_channel/io.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
 import 'models.dart';
+import 'gateway_events.dart';
+export 'gateway_api.dart';
+export 'gateway_events.dart';
+export 'gateway_http.dart';
+export 'gateway_rest.dart';
 
-/// 连接状态。
-enum GatewayState { idle, connecting, ready, closed, authFailed }
-
-/// 网关推送事件（客户端 UI 消费）。
-sealed class GatewayEvent {}
-
-class DeltaEvent extends GatewayEvent {
-  DeltaEvent(this.delta);
-  final MessageDelta delta;
-}
-
-class CommittedEvent extends GatewayEvent {
-  CommittedEvent(this.committed);
-  final MessageCommitted committed;
-}
-
-class TurnFailedEvent extends GatewayEvent {
-  TurnFailedEvent(this.sessionId, this.message);
-  final String sessionId;
-  final String message;
-}
-
-class ResyncEvent extends GatewayEvent {
-  ResyncEvent(this.dropped);
-  final int dropped;
-}
-
-/// 会话内核事件（`chat.session.event`）：实时流只带 {sessionId, eventType, seq}，
-/// **不带事件体**（bridge chat-adapter.ts 的 base 就这三个字段）。
-///
-/// 工具调用因此拿不到 name/arguments —— UI 只能靠重拉 history 拿到完整明细。
-/// 这里把 eventType 透出来，让上层决定「值得重拉」的类型（tool/call 等）。
-class SessionEventReceived extends GatewayEvent {
-  SessionEventReceived(this.sessionId, this.eventType);
-  final String sessionId;
-  final String eventType;
-}
-
-class RequestException implements Exception {
-  RequestException(this.code, this.message);
-  final String code;
-  final String message;
-  @override
-  String toString() => 'RequestException($code): $message';
-}
+/// 网关推送事件与异常类型在 gateway_events.dart（宪法 §7 拆分）。
 
 class GatewayClient {
   GatewayClient({required this.baseUrl});
@@ -369,119 +328,7 @@ class GatewayClient {
     );
   }
 
-  // ---- 业务封装 ----
-
-  Future<List<DshWorkspace>> workspaces() async {
-    final r = await request('workspaces', const {});
-    final list = r['workspaces'] as List? ?? const [];
-    return list
-        .map((e) => DshWorkspace.fromJson(Map<String, dynamic>.from(e as Map)))
-        .toList();
-  }
-
-  Future<List<DshSession>> sessions() async {
-    final r = await request('sessions', const {});
-    final list = r['sessions'] as List? ?? const [];
-    return list
-        .map((e) => DshSession.fromJson(Map<String, dynamic>.from(e as Map)))
-        .toList();
-  }
-
-  Future<HistoryPage> history(String sessionId, {int? maxMessages}) async {
-    final r = await request('history', {
-      'sessionId': sessionId,
-      'maxMessages': ?maxMessages,
-    });
-    final events = r['events'] as List? ?? const [];
-    // projections 只在首屏 history 应答带（翻页不带），且内核没给基线时整个
-    // 字段缺席（不是空对象，API.md:165,766）。这里原样透传、不强求形状，
-    // 让 UI 自己容忍 null/缺席，避免「读不到=功能不存在」的死入口。
-    final raw = r['projections'];
-    final projections = raw is Map
-        ? Map<String, dynamic>.from(raw)
-        : null;
-    return HistoryPage.fromEvents(events, projections: projections);
-  }
-
-  /// 发消息。sessionId 省略则服务端自动建会话（响应携带新 sessionId）。
-  /// contentParts 为空时发纯文本；带图时传 PromptPart.image（base64 裸串，
-  /// mediaType 白名单 png/jpeg/webp/gif，REST 请求体上限 12 MiB）。
-  Future<String?> sendText({
-    String? sessionId,
-    required String text,
-    String mode = 'queue',
-    List<PromptPart>? contentParts,
-  }) async {
-    final parts = [
-      if (text.isNotEmpty) PromptPart.text(text),
-      ...?contentParts,
-    ];
-    final r = await request('message', {
-      'sessionId': ?sessionId,
-      'mode': mode,
-      'content': parts.map((p) => p.toJson()).toList(),
-      'clientTimeZone': DshDevice.ianaZone,
-    });
-    return r['sessionId'] as String? ?? sessionId;
-  }
-
-  /// 停止当前回合（对照 companion ChatHeader 的「停止运行」）。
-  /// session-cancelled 应答不在 REQUEST_ID_ECHO_EXCLUDED_KINDS 排除表里，
-  /// 会经 withRequestIdEcho 注入 data.requestId（ws-protocol.ts:611），因此
-  /// 可以像其它请求一样 await（ws-sessions.ts:93-102：缺 sessionId 回
-  /// MISSING_PARAMS，否则 chat.cancel 后回 {kind:'session-cancelled'}）。
-  Future<void> cancelTurn(String sessionId) async {
-    await request('session-cancel', {'sessionId': sessionId});
-  }
-
-  /// 权限档位清单（真机反馈 2026-11-04：输入条「深度思考」chip 改权限档位）。
-  /// permission-options 不在排除表（ws-settings.ts:40-82），可 await；
-  /// 需要 chat.read scope，缺则回 error FORBIDDEN_SCOPE。
-  /// 注意：PermissionCatalog 定义在 permissions.dart（models 层单向依赖
-  /// gateway 的 RequestException，gateway 不能反向 import permissions），
-  /// 这里返回原始 data，由 permissions.dart 的 `parsePermissionCatalog` 收敛。
-  Future<Map<String, dynamic>> permissionOptionsRaw() =>
-      request('permission-options', const {});
-
-  /// 切换会话权限档位。内部执行内核斜杠命令 `/permission name`，
-  /// 不触发模型（ws-commands.ts:163-176）。result.kind == 'error' 是
-  /// 业务失败（传输成功），调用方要检查并展示 result.text。
-  Future<void> setPermission(String sessionId, String name) async {
-    final r = await request('permission', {
-      'sessionId': sessionId,
-      'name': name,
-    });
-    final result = r['result'];
-    if (result is Map && result['kind'] == 'error') {
-      final text = (result['text'] ?? '切换失败') as String;
-      throw RequestException('PERMISSION', text);
-    }
-  }
-
-  /// 会话可用的模型清单（models 帧，sessionId 必需——ws-models.ts:51-54
-  /// 缺了回 MISSING_PARAMS；应答 data 含 current/routable/groups/failures）。
-  /// 应答 kind=models 在回显表内，可直接 await。原始 data 由
-  /// models_view.dart 收敛成 SessionModels（models 层单向依赖）。
-  Future<Map<String, dynamic>> sessionModels(String sessionId) =>
-      request('models', {'sessionId': sessionId});
-
-  /// 切换会话模型。应答 kind 是 `sent`（五个生产者共享 kind），
-  /// data.type=='select-model' 才是本帧的应答（ws-models.ts:74-80）——
-  /// request() 的 pending 按 requestId 关联（data 里回显），而本桥的
-  /// sent 应答也带 requestId，所以可以直接 await，取 data.type 判别。
-  Future<Map<String, dynamic>> selectModel({
-    required String sessionId,
-    required String provider,
-    required String model,
-    String? reasoningEffort,
-  }) async {
-    return request('select-model', {
-      'sessionId': sessionId,
-      'provider': provider,
-      'model': model,
-      'reasoningEffort': ?reasoningEffort,
-    });
-  }
+  // ---- 业务封装（实现在 gateway_api.dart 的 extension GatewayApi）----
 
   /// 订阅会话推送。subscribed 帧在 bridge 的 REQUEST_ID_ECHO_EXCLUDED_KINDS
   /// 排除表里（不回显 requestId），不能走 request() 等应答——发出即成功，
@@ -498,3 +345,6 @@ class GatewayClient {
     _eventCtrl.close();
   }
 }
+
+/// REST 字节下载（附件 / 图片交接共用）：实现拆到 gateway_http.dart
+/// （宪法 §7 单文件 ≤500 行），这里 export 让消费方继续只 import gateway。
