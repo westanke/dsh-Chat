@@ -60,8 +60,11 @@ class _ChatPageState extends State<ChatPage>
     st.addListener(_onChange);
     st.loadSessions();
     // 历史图片下载器（真机反馈 2026-11-04 第 1 项）：attachment / image-handoff
-    // 都走 REST，token 从 gateway 拿。
-    _MessageItem._imageFetcher = gatewayImageFetcher(st.gateway);
+    // 都走 REST，token 从 gateway 拿；sessionId 在 _onChange 里随会话刷新。
+    final sid0 = st.sessionId;
+    if (sid0 != null && sid0.isNotEmpty) {
+      _MessageItem._imageFetcher = gatewayImageFetcher(st.gateway, sid0);
+    }
     _drawerCtrl = AnimationController(
       vsync: this,
       duration: DsMotion.drawerShift,
@@ -82,6 +85,12 @@ class _ChatPageState extends State<ChatPage>
   }
 
   void _onChange() {
+    // 图片下载器要跟当前会话走：attachments 接口必填 sessionId query
+    // （内核按会话事件校验引用），换会话就换下载器。
+    final sid = st.sessionId;
+    if (sid != null && sid.isNotEmpty) {
+      _MessageItem._imageFetcher = gatewayImageFetcher(st.gateway, sid);
+    }
     if (mounted) setState(() {});
   }
 

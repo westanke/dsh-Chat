@@ -66,10 +66,13 @@ extension GatewayApi on GatewayClient {
   /// openapi.yaml:348-366）：历史图片引用 sha256:`<hex>`，冒号须 percent-encode；
   /// 需要 files.read scope（设备默认 scope 含它）；响应是原始字节 + immutable
   /// 缓存。真机反馈 2026-11-04 第 1 项的取图通道。
-  Future<List<int>> fetchAttachment(String attachmentId) =>
+  /// **必须带 `sessionId` query**：内核要先确认该会话的事件确实引用了这张图
+  /// 才放行（bridge files.ts attachmentsAndImage，缺它回 400 BODY_INVALID）。
+  Future<List<int>> fetchAttachment(String attachmentId, String sessionId) =>
       gatewayHttpBytes(
         this,
-        '/api/v1/attachments/${Uri.encodeComponent(attachmentId)}',
+        '/api/v1/attachments/${Uri.encodeComponent(attachmentId)}'
+        '?sessionId=${Uri.encodeComponent(sessionId)}',
       );
 
   /// 取图片交接产物（REST GET /api/v1/image-handoff?name=`<bare>`，
