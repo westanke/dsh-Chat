@@ -214,6 +214,101 @@ void main() {
     expect(toolSummary(null), isNull);
   });
 
+  test('toolPhrases 真机反馈后新增的中文措辞（2026-11-04）', () {
+    expect(toolPhrases('read_image', null), ['读取了图片']);
+    expect(toolPhrases('memory', null), ['记录了记忆']);
+    expect(toolPhrases('job_output', null), ['查看了任务输出']);
+    expect(toolPhrases('adb_ui', null), ['检查了手机界面']);
+    expect(toolPhrases('working_directory', null), ['切换了工作目录']);
+    expect(toolPhrases('todo_write', null), ['更新了任务清单']);
+    expect(toolPhrases('update_goal', null), ['更新了目标']);
+    expect(toolPhrases('subagent', null), ['派出了子任务']);
+    expect(toolPhrases('ask_user_question', null), ['向用户提问']);
+  });
+
+  test('toolResultText：text 段拼接、image 占位、空兜底', () {
+    expect(
+      toolResultText([
+        {'type': 'text', 'text': '第一行'},
+        {'type': 'text', 'text': '第二行'},
+      ]),
+      '第一行\n第二行',
+    );
+    expect(toolResultText([{'type': 'image'}]), '[图片]');
+    expect(
+      toolResultText([
+        {'type': 'image'},
+        {'type': 'text', 'text': '图说'},
+      ]),
+      '图说',
+    );
+    expect(toolResultText('纯字符串'), '纯字符串');
+    expect(toolResultText([{'type': 'text', 'text': '   '}]), isNull);
+    expect(toolResultText(null), isNull);
+    expect(toolResultText([]), isNull);
+  });
+
+  test('过程组：tool/result 的正文进入 ToolCallInfo.resultText（详情可查看）', () {
+    final page = HistoryPage.fromEvents([
+      {
+        'type': 'tool/call',
+        'time': 1000,
+        'data': {
+          'callId': 'c1',
+          'name': 'bash',
+          'arguments': '{"command":"ls -la"}',
+        },
+      },
+      {
+        'type': 'tool/result',
+        'time': 2500,
+        'data': {
+          'message': {
+            'toolCallId': 'c1',
+            'isError': false,
+            'content': [
+              {'type': 'text', 'text': 'file1.dart\nfile2.dart'},
+            ],
+          },
+        },
+      },
+    ]);
+    final groups = page.items.where((m) => m.isProcess).toList();
+    expect(groups, hasLength(1));
+    final call = groups.first.toolCalls.single;
+    expect(call.resultText, 'file1.dart\nfile2.dart');
+    expect(call.rawArguments, '{"command":"ls -la"}');
+    expect(call.durationMs, 1500);
+    expect(call.failed, isFalse);
+  });
+
+  test('过程组：失败的 tool/result 保留错误正文与 failed 标记', () {
+    final page = HistoryPage.fromEvents([
+      {
+        'type': 'tool/call',
+        'time': 1000,
+        'data': {'callId': 'c2', 'name': 'bash', 'arguments': '{}'},
+      },
+      {
+        'type': 'tool/result',
+        'time': 1200,
+        'data': {
+          'message': {
+            'toolCallId': 'c2',
+            'isError': true,
+            'content': [
+              {'type': 'text', 'text': 'command not found: foo'},
+            ],
+          },
+        },
+      },
+    ]);
+    final groups = page.items.where((m) => m.isProcess).toList();
+    final call = groups.first.toolCalls.single;
+    expect(call.failed, isTrue);
+    expect(call.resultText, 'command not found: foo');
+  });
+
   test('过程组：空正文的 assistant 消息不劈碎工具调用', () {
     final page = HistoryPage.fromEvents([
       {

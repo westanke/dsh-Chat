@@ -432,6 +432,9 @@ class HistoryPage {
           final idx = groupCalls.indexWhere((c) => c.callId == callId);
           if (idx < 0) break;
           final failed = (msg is Map && msg['isError'] == true);
+          raw
+            ..failed = failed
+            ..resultText = toolResultText(msg is Map ? msg['content'] : null);
           final info = ToolCallInfo(
             callId: callId,
             name: raw.name,
@@ -441,6 +444,8 @@ class HistoryPage {
             durationMs: event.time - raw.time > 0
                 ? event.time - raw.time
                 : null,
+            resultText: raw.resultText,
+            rawArguments: raw.arguments,
           );
           groupCalls[idx] = info;
           groupEnd = event.time;

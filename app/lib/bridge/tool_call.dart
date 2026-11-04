@@ -17,6 +17,8 @@ class ToolCallInfo {
     this.summary,
     this.failed = false,
     this.durationMs,
+    this.resultText,
+    this.rawArguments,
   });
 
   final String callId;
@@ -29,6 +31,13 @@ class ToolCallInfo {
   final String? summary;
   final bool failed;
   final int? durationMs;
+
+  /// 执行结果正文（tool/result 的 text 段拼接；图片段一行占位）。
+  /// 详情展开用，companion ChatToolPresentation 的 toolResultText 口径。
+  final String? resultText;
+
+  /// arguments 原串（JSON 字符串），详情展开用（models.dart 组装时带上）。
+  final String? rawArguments;
 
   /// 折叠行用的主短语（run_code 取第一个，其余就是唯一那个）。
   String get phrase => phrases.isEmpty ? name : phrases.first;
@@ -52,12 +61,36 @@ const Map<String, String> toolPhraseByName = {
   'bash': '执行了命令',
   'pwsh': '执行了命令',
   'read': '读取了文件',
+  'read_image': '读取了图片',
   'write': '已写入文件',
   'edit': '修改了文件',
   'grep': '搜索了内容',
   'glob': '搜索了文件',
   'web_fetch': '已访问网页',
   'web_search': '已搜索网页',
+  'memory': '记录了记忆',
+  'job_output': '查看了任务输出',
+  'job_kill': '停止了任务',
+  'adb_ui': '检查了手机界面',
+  'working_directory': '切换了工作目录',
+  'todo_write': '更新了任务清单',
+  'wait_agent': '等待了子任务',
+  'update_goal': '更新了目标',
+  'compress': '压缩了上下文',
+  'workflow': '编排了子任务',
+  'send_message': '发送了消息',
+  'lead': '调度了团队',
+  'skill': '调用了技能',
+  'schedule_create': '创建了定时任务',
+  'schedule_list': '查看了定时任务',
+  'schedule_delete': '删除了定时任务',
+  'schedule_update': '修改了定时任务',
+  'team_task_create': '创建了团队任务',
+  'team_task_list': '查看了团队任务',
+  'team_task_get': '查看了任务详情',
+  'team_task_update': '更新了团队任务',
+  'subagent': '派出了子任务',
+  'ask_user_question': '向用户提问',
 };
 
 List<String> toolPhrases(String name, String? arguments) {
@@ -106,13 +139,43 @@ String? toolSummary(String? arguments) {
   return null;
 }
 
+/// 从 tool/result 的 content 数组提取正文（companion toolResultText 口径）：
+/// text 段直接拼接，image 段一行占位（字节在服务端附件存储，拿不到）。
+String? toolResultText(dynamic content) {
+  if (content is String) {
+    final s = content.trim();
+    return s.isEmpty ? null : s;
+  }
+  if (content is! List) return null;
+  final buf = StringBuffer();
+  var hasImage = false;
+  for (final block in content) {
+    if (block is! Map) continue;
+    final type = (block['type'] ?? '') as String;
+    if (type == 'image') {
+      hasImage = true;
+    } else if (block['text'] is String) {
+      final t = (block['text'] as String).trim();
+      if (t.isNotEmpty) {
+        if (buf.isNotEmpty) buf.writeln();
+        buf.write(t);
+      }
+    }
+  }
+  var out = buf.toString().trim();
+  if (out.isEmpty && hasImage) out = '[图片]';
+  return out.isEmpty ? null : out;
+}
+
 /// 解析中的工具调用（result 还没到）。
 class RawToolCall {
-  const RawToolCall({
+  RawToolCall({
     required this.callId,
     required this.name,
     required this.arguments,
     required this.time,
+    this.resultText,
+    this.failed = false,
   });
 
   final String callId;
@@ -120,11 +183,18 @@ class RawToolCall {
   final String? arguments;
   final int time;
 
+  /// tool/result 的正文（text 段拼接 + 图片一行占位），到达时补上。
+  String? resultText;
+  bool failed;
+
   ToolCallInfo toInfo() => ToolCallInfo(
     callId: callId,
     name: name,
     phrases: toolPhrases(name, arguments),
     summary: toolSummary(arguments),
+    failed: failed,
+    resultText: resultText,
+    rawArguments: arguments,
   );
 }
 
