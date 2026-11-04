@@ -194,13 +194,15 @@ except Exception: print('')" 2>/dev/null || true)
     local payload
     payload=$(VER="$VER" TAG="$TAG" APK_NAME="$APK_NAME" SIZE="$SIZE" SHA="$SHA" python3 -c '
 import json, os
+tag = os.environ["TAG"]; apk = os.environ["APK_NAME"]
+size = int(os.environ["SIZE"]); sha = os.environ["SHA"]
 body = "\n".join([
-    f"## {os.environ[\"TAG\"]}", "",
-    f"- 产物：`{os.environ[\"APK_NAME\"]}`，**{int(os.environ[\"SIZE\"]):,} 字节**",
-    f"- SHA-256：`{os.environ[\"SHA\"]}`", "",
+    "## " + tag, "",
+    "- 产物：`" + apk + "`，**{:,} 字节**".format(size),
+    "- SHA-256：`" + sha + "`", "",
     "变更详情见仓库提交记录；协议要求 dsh-remote-bridge ≥ 2.10.0（hello.protocol=3）。",
 ])
-print(json.dumps({"tag_name": os.environ["TAG"], "name": os.environ["VER"],
+print(json.dumps({"tag_name": tag, "name": os.environ["VER"],
                   "body": body, "target_commitish": "main"}))
 ')
     # access_token 必须挂 query 不进 JSON body（companion v2.2.47 踩过 40001）。
@@ -247,13 +249,15 @@ except Exception: print('')" 2>/dev/null || true)
     local payload
     payload=$(VER="$VER" TAG="$TAG" APK_NAME="$APK_NAME" SIZE="$SIZE" SHA="$SHA" python3 -c '
 import json, os
+tag = os.environ["TAG"]; apk = os.environ["APK_NAME"]
+size = int(os.environ["SIZE"]); sha = os.environ["SHA"]
 body = "\n".join([
-    f"## {os.environ[\"TAG\"]}", "",
-    f"- 产物：`{os.environ[\"APK_NAME\"]}`，**{int(os.environ[\"SIZE\"]):,} 字节**",
-    f"- SHA-256：`{os.environ[\"SHA\"]}`", "",
-    f"下载：https://gitee.com/westanke/dsh-Chat/releases/download/{os.environ[\"TAG\"]}/{os.environ[\"APK_NAME\"]}",
+    "## " + tag, "",
+    "- 产物：`" + apk + "`，**{:,} 字节**".format(size),
+    "- SHA-256：`" + sha + "`", "",
+    "下载：https://gitee.com/westanke/dsh-Chat/releases/download/" + tag + "/" + apk,
 ])
-print(json.dumps({"tag_name": os.environ["TAG"], "name": os.environ["VER"],
+print(json.dumps({"tag_name": tag, "name": os.environ["VER"],
                   "body": body, "target_commitish": "main"}))
 ')
     curl -s -X POST "https://atomgit.com/api/v5/repos/$REPO_ATOMGIT/releases" \
