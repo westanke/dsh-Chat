@@ -10,8 +10,11 @@ import '../bridge/dlog.dart';
 import '../bridge/gateway.dart';
 import '../bridge/models.dart';
 import '../design/app_settings.dart';
+import 'hitl_state.dart';
 import 'mobile_workspace.dart';
 import 'session_groups.dart';
+
+export 'hitl_state.dart';
 
 /// 纯函数：取 [0..end] 区间里最后一条有正文的用户消息文本
 /// （对照 companion ChatRetry.kt：排除只有图片 / 空正文的用户消息）。
@@ -52,6 +55,9 @@ class ChatState extends ChangeNotifier {
     final v = p['currentValue'];
     return v is String && v.isNotEmpty ? v : null;
   }
+
+  /// HITL 挂起表（question_card.dart 渲染；事件转发见 _onEvent）。
+  HitlState get hitlState => hitl;
 
   /// 当前设备名（抽屉底部账号栏显示，官方是手机号；bridge 侧是设备档案）。
   String get deviceLabel {
@@ -94,6 +100,17 @@ class ChatState extends ChangeNotifier {
   /// 整个字段缺席，且只在 history 首屏带、翻页不带（API.md:165,766）。
   /// 面板必须容忍缺席，不能把「读不到」渲染成「功能不存在」。
   Map<String, dynamic>? projections;
+
+  // ---- HITL 问答 / 审批（真机反馈补充：DSH 向用户提问）----
+  // 状态与动作在 hitl_state.dart（宪法 §7 拆分）；这里组合并转发事件。
+
+  final HitlState hitl = HitlState();
+
+  List<PendingQuestion> get sessionQuestions =>
+      hitl.sessionQuestions(sessionId);
+
+  List<PendingApproval> get sessionApprovals =>
+      hitl.sessionApprovals(sessionId);
 
   /// 当前会话标题（顶栏居中显示，官方行为：会话名 + 新对话无标题）。
   String get sessionTitle {
@@ -395,7 +412,61 @@ class ChatState extends ChangeNotifier {
         // 正文都只能靠重拉 history 拿到。一轮 turn 事件很密，800ms 防抖限流。
         if (!_isCurrent(sessionId)) return;
         _scheduleToolRefresh();
+      case QuestionRequestedEvent(:final question):
+        // HITL 提问（含 replay 补推）：按 callId 去重入表（全连接）。
+        DshLog.w(
+          'ui question requested callId=${question.callId} '
+          'sid=${question.sessionId} n=${question.questions.length}',
+        );
+        hitl.onQuestionRequested(question);
+      case QuestionResolvedEvent(:final sessionId, :final callId):
+        DshLog.w('ui question settled callId=$callId sid=$sessionId');
+        hitl.onQuestionResolved(callId);
+      case ApprovalRequestedEvent(:final approval):
+        DshLog.w('ui approval requested id=${approval.approvalId}');
+        hitl.onApprovalRequested(approval);
+      case ApprovalResolvedEvent(:final sessionId, :final approvalId):
+        DshLog.w('ui approval resolved id=$approvalId sid=$sessionId');
+        hitl.onApprovalResolved(approvalId);
     }
+  }
+
+  // ---- HITL 动作（问答 / 审批；失败落 lastError）----
+
+  /// 提交一套答案（question-answer 帧）。成功即本地摘卡。
+  Future<void> answerQuestion(
+    PendingQuestion question,
+    List<QuestionAnswerItem> answers,
+  ) async {
+    lastError = null;
+    try {
+      await hitl.answerQuestion(_gateway, question, answers);
+    } on RequestException catch (e) {
+      lastError = '提交回答失败：${e.message}';
+    }
+    notifyListeners();
+  }
+
+  /// 放弃一条提问（question-cancel）；continued 态取消不了会提示。
+  Future<void> cancelQuestion(PendingQuestion question) async {
+    lastError = null;
+    try {
+      await hitl.cancelQuestion(_gateway, question);
+    } on RequestException catch (e) {
+      lastError = '无法跳过该提问：${e.message}';
+    }
+    notifyListeners();
+  }
+
+  /// 审批决定（allowed-once / rejected）。成功即本地摘卡。
+  Future<void> decideApproval(PendingApproval approval, bool allow) async {
+    lastError = null;
+    try {
+      await hitl.decideApproval(_gateway, approval, allow);
+    } on RequestException catch (e) {
+      lastError = '审批操作失败：${e.message}';
+    }
+    notifyListeners();
   }
 
   Timer? _toolRefreshTimer;

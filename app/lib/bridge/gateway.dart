@@ -22,10 +22,12 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 
 import 'models.dart';
 import 'gateway_events.dart';
+import 'questions.dart';
 export 'gateway_api.dart';
 export 'gateway_events.dart';
 export 'gateway_http.dart';
 export 'gateway_rest.dart';
+export 'questions.dart';
 
 /// 网关推送事件与异常类型在 gateway_events.dart（宪法 §7 拆分）。
 
@@ -244,8 +246,36 @@ class GatewayClient {
             eventType,
           ),
         );
+      case 'chat.userQuestions/requested':
+        final q = PendingQuestion.from(
+          (payload['sessionId'] ?? '') as String,
+          payload,
+        );
+        DshLog.w('gw question requested callId=${q.callId} n=${q.questions.length}');
+        _eventCtrl.add(QuestionRequestedEvent(q));
+      case 'chat.userQuestions/answered' || 'chat.userQuestions/dismissed':
+        // settled（App 先答 / 电脑端先答 / 超时 / 中止）：卡片要移除。
+        DshLog.w('gw question settled $type callId=${payload['callId']}');
+        _eventCtrl.add(
+          QuestionResolvedEvent(
+            (payload['sessionId'] ?? '') as String,
+            (payload['callId'] ?? '') as String,
+          ),
+        );
+      case 'chat.approval.requested':
+        final a = PendingApproval.from(payload);
+        DshLog.w('gw approval requested id=${a.approvalId} tool=${a.toolName}');
+        _eventCtrl.add(ApprovalRequestedEvent(a));
+      case 'chat.approval.resolved':
+        DshLog.w('gw approval resolved id=${payload['approvalId']}');
+        _eventCtrl.add(
+          ApprovalResolvedEvent(
+            (payload['sessionId'] ?? '') as String,
+            (payload['approvalId'] ?? '') as String,
+          ),
+        );
       default:
-        break; // 其余事件第一版忽略（approval/question 后续接）
+        break; // 其余事件忽略（goal/task 等低频帧暂不消费）
     }
   }
 

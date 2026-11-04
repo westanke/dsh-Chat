@@ -19,6 +19,7 @@ import 'message_actions.dart';
 import 'model_sheet.dart';
 import 'process_group.dart';
 import 'projection_sheets.dart';
+import 'question_card.dart';
 import 'scroll_follow.dart';
 import 'sessions_drawer.dart';
 import 'stats_sheet.dart';
@@ -173,6 +174,13 @@ class _ChatPageState extends State<ChatPage>
       body: SafeArea(
         child: Column(
           children: [
+            // HITL 问答/审批卡（DSH 向用户提问；无挂起项时不占空间）。
+            HitlPanel(
+              state: st.hitlState,
+              colors: c,
+              onAnswer: st.answerQuestion,
+              onDecide: st.decideApproval,
+            ),
             Expanded(
               child: st.isEmpty
                   ? _Greeting(colors: c)

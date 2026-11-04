@@ -201,4 +201,62 @@ extension GatewayApi on GatewayClient {
       'reasoningEffort': ?reasoningEffort,
     });
   }
+
+  /// 回答一条提问（question-answer 帧，ws-protocol.ts:275-281）。
+  /// 应答 kind=question-response data={callId, action:'answer', accepted,
+  /// reason?}；accepted=false 的 reason：not-pending / reply-queued /
+  /// bad-response / not-answerable（continued 态要改走 REST 答题通道）。
+  /// 成功后 bridge 会推 userQuestions/answered 让卡片消失（客户端无需自删，
+  /// 但 chat_state 仍会保守移除）。
+  Future<void> answerQuestion({
+    required String sessionId,
+    required String callId,
+    required List<QuestionAnswerItem> answers,
+  }) async {
+    final r = await request('question-answer', {
+      'sessionId': sessionId,
+      'callId': callId,
+      'answers': [for (final a in answers) a.toJson()],
+    });
+    if (r['accepted'] == false) {
+      throw RequestException(
+        'QUESTION_REJECTED',
+        (r['reason'] ?? '回答未被接受') as String,
+      );
+    }
+  }
+
+  /// 取消一条本桥接管的提问（question-cancel，rpcId 优先）。
+  /// 应答 kind=question-response action='cancel'；continued 态取消不了。
+  Future<void> cancelQuestion({
+    required String sessionId,
+    required String callId,
+    String? rpcId,
+  }) => request('question-cancel', {
+    'sessionId': sessionId,
+    'rpcId': ?rpcId,
+    'callId': callId,
+  });
+
+  /// 工具审批决定（approval-response 帧，ws-protocol.ts:267-272）。
+  /// outcome 只有 allowed-once / rejected（无「始终允许」）。
+  /// 应答 kind=approval-response data.accepted=true 后 bridge 再补推
+  /// approval-resolved 让卡片消失。
+  Future<void> decideApproval({
+    required String sessionId,
+    required String approvalId,
+    required bool allow,
+  }) async {
+    final r = await request('approval-response', {
+      'sessionId': sessionId,
+      'approvalId': approvalId,
+      'outcome': allow ? 'allowed-once' : 'rejected',
+    });
+    if (r['accepted'] == false) {
+      throw RequestException(
+        'APPROVAL_REJECTED',
+        (r['reason'] ?? '审批未被接受') as String,
+      );
+    }
+  }
 }

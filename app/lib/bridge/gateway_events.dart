@@ -8,6 +8,7 @@
 library;
 
 import 'models.dart';
+import 'questions.dart';
 
 /// 连接状态。
 enum GatewayState { idle, connecting, ready, closed, authFailed }
@@ -40,6 +41,32 @@ class SessionEventReceived extends GatewayEvent {
   SessionEventReceived(this.sessionId, this.eventType);
   final String sessionId;
   final String eventType;
+}
+
+/// DSH 向用户提问（chat.userQuestions/requested；replay 同形状带 replayed）。
+class QuestionRequestedEvent extends GatewayEvent {
+  QuestionRequestedEvent(this.question);
+  final PendingQuestion question;
+}
+
+/// 提问已结算（chat.userQuestions/answered|dismissed：电脑端先答 / 超时 / 中止）。
+class QuestionResolvedEvent extends GatewayEvent {
+  QuestionResolvedEvent(this.sessionId, this.callId);
+  final String sessionId;
+  final String callId;
+}
+
+/// 工具审批请求（chat.approval.requested，chat-adapter.ts:1477-1492）。
+class ApprovalRequestedEvent extends GatewayEvent {
+  ApprovalRequestedEvent(this.approval);
+  final PendingApproval approval;
+}
+
+/// 审批已结算（chat.approval.resolved：其他端已决定）。
+class ApprovalResolvedEvent extends GatewayEvent {
+  ApprovalResolvedEvent(this.sessionId, this.approvalId);
+  final String sessionId;
+  final String approvalId;
 }
 
 /// WS 请求 / REST 通道共用的错误（code 是稳定的错误名，如 HTTP_404/TIMEOUT）。
