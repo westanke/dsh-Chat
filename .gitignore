@@ -63,3 +63,4 @@ app/android/build/
 # 发版产物（73MB APK 不入库，只留 SHA256SUMS.txt 供 tag 内 cmp 校验）
 artifacts/*.apk
 artifacts/.verify-*
+ref/dsh1-*.txt
