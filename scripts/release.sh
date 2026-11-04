@@ -138,9 +138,15 @@ else
   exit 1
 fi
 
-# token 从本机 dsh-git 凭据读（~/.git-credentials 在本机不存在）。
-GT=$(grep -m1 '^gitee\.com ' ~/.config/dsh-git/tokens.conf 2>/dev/null | sed -E 's/.*token=([A-Za-z0-9]+).*/\1/' || true)
-AT=$(grep -m1 '^atomgit\.com ' ~/.config/dsh-git/tokens.conf 2>/dev/null | sed -E 's/.*token=([A-Za-z0-9]+).*/\1/' || true)
+# token 从本机 dsh-git 凭据读。构建期常把 HOME 覆盖到 tools/dsh-home
+# （flutter 遥测只读文件系统会炸），所以同时兜底真实家目录的绝对路径。
+for CONF_HOME in "$HOME" "/home/wangke"; do
+  if [ -f "$CONF_HOME/.config/dsh-git/tokens.conf" ]; then
+    TOKENS_CONF="$CONF_HOME/.config/dsh-git/tokens.conf"; break
+  fi
+done
+GT=$([ -n "${TOKENS_CONF:-}" ] && grep -m1 '^gitee\.com ' "$TOKENS_CONF" | sed -E 's/.*token=([A-Za-z0-9]+).*/\1/' || true)
+AT=$([ -n "${TOKENS_CONF:-}" ] && grep -m1 '^atomgit\.com ' "$TOKENS_CONF" | sed -E 's/.*token=([A-Za-z0-9]+).*/\1/' || true)
 [ -n "$GT" ] && ok "Gitee token 就绪" || warn "没有 Gitee token，Release 会跳过"
 [ -n "$AT" ] && ok "AtomGit token 就绪" || warn "没有 AtomGit token，Release 会跳过"
 say ""
