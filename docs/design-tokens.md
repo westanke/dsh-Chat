@@ -142,6 +142,7 @@ App 实测墨迹高（density 3.0）：H1 71px、H2 61px、H3 57px、正文 45px
 | 元素 | 官方实测 | 我们的 token / 实现 |
 |---|---|---|
 | 抽屉宽度 | 右缘 x864px = 288dp（屏宽 80%） | `DsSpacing.drawerWidth = 288` |
+| **推挤式打开** | 抽屉滑入时**聊天页整体（含顶栏）被推向右侧屏外**，页面右缘与抽屉右缘对齐后停在屏外，浅色模式无灰幕；非 Flutter `Scaffold.drawer` 的覆盖式（页面不动） | 自绘 `AnimationController` + `Transform.translate`：页面位移 = `drawerWidth × Curves.easeOutCubic(t)`，抽屉同曲线滑入；**无 scrim**（浅色 `drawerScrim` 本就是全透明），点击页面残条或系统返回关闭 |
 | 搜索框 | y117..248（顶 39dp、高 44dp）、x44..852（左 15dp、**右距仅 4dp**） | `drawerSearchPadTop = 11`、`drawerSearchHeight = 44`、`drawerSearchPadH = 15`、`drawerSearchPadRight = 4` |
 | 搜索框底色 | (245,245,245) 全圆角胶囊 | `DsColors.drawerSearchFill`（浅 `#F5F5F5` / 深 `c800`）、`drawerSearchRadius = 22` |
 | 搜索图标 | 墨 x84..131 y159..206（20dp） | `Icons.search size: 20`、`drawerSearchInset = 11`、`drawerSearchIconGap = 6` |

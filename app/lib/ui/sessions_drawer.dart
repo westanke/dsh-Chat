@@ -14,11 +14,16 @@ class SessionsDrawer extends StatefulWidget {
     required this.state,
     required this.colors,
     required this.onOpenSettings,
+    required this.onClose,
   });
 
   final ChatState state;
   final DsColors colors;
   final VoidCallback onOpenSettings;
+
+  /// 推挤式抽屉不走 Navigator 路由，条目点选后用这个回调收起抽屉
+  /// （原 Scaffold.drawer 方案里是 Navigator.pop，会在 Stack 实现下误弹聊天页）。
+  final VoidCallback onClose;
 
   @override
   State<SessionsDrawer> createState() => SessionsDrawerState();
@@ -138,7 +143,7 @@ class SessionsDrawerState extends State<SessionsDrawer> {
                                 selected: s.id == state.sessionId,
                                 colors: c,
                                 onTap: () {
-                                  Navigator.pop(context);
+                                  widget.onClose();
                                   state.openSession(s);
                                 },
                               ),
@@ -150,6 +155,7 @@ class SessionsDrawerState extends State<SessionsDrawer> {
               colors: c,
               label: state.deviceLabel,
               onOpenSettings: widget.onOpenSettings,
+              onClose: widget.onClose,
             ),
           ],
         ),
@@ -203,11 +209,15 @@ class SessionsDrawerFooter extends StatelessWidget {
     required this.colors,
     required this.label,
     required this.onOpenSettings,
+    required this.onClose,
   });
 
   final DsColors colors;
   final String label;
   final VoidCallback onOpenSettings;
+
+  /// 推挤式抽屉关闭回调（见 SessionsDrawer.onClose 注释）。
+  final VoidCallback onClose;
 
   @override
   Widget build(BuildContext context) {
@@ -241,7 +251,7 @@ class SessionsDrawerFooter extends StatelessWidget {
             message: '设置',
             child: InkResponse(
               onTap: () {
-                Navigator.pop(context);
+                onClose();
                 onOpenSettings();
               },
               radius: 20,

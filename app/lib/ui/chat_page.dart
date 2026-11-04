@@ -40,8 +40,13 @@ class ChatPage extends StatefulWidget {
   State<ChatPage> createState() => _ChatPageState();
 }
 
-class _ChatPageState extends State<ChatPage> {
+class _ChatPageState extends State<ChatPage>
+    with SingleTickerProviderStateMixin {
   final _scaffoldKey = GlobalKey<ScaffoldState>();
+  late final AnimationController _drawerCtrl;
+  // 抽屉打开时，官方是把聊天页整体推出屏外（推挤式），不是 Scaffold.drawer
+  // 的覆盖式。曲线/时长登记在 docs/design-tokens.md §4.2 与 DsMotion。
+  late final Animation<double> _drawerShift;
 
   ChatState get st => widget.state;
   DsColors get c => widget.colors;
@@ -51,11 +56,22 @@ class _ChatPageState extends State<ChatPage> {
     super.initState();
     st.addListener(_onChange);
     st.loadSessions();
+    _drawerCtrl = AnimationController(
+      vsync: this,
+      duration: DsMotion.drawerShift,
+      value: 0,
+    );
+    _drawerShift = CurvedAnimation(
+      parent: _drawerCtrl,
+      curve: Curves.easeOutCubic,
+      reverseCurve: Curves.easeInCubic,
+    );
   }
 
   @override
   void dispose() {
     st.removeListener(_onChange);
+    _drawerCtrl.dispose();
     super.dispose();
   }
 
@@ -63,21 +79,88 @@ class _ChatPageState extends State<ChatPage> {
     if (mounted) setState(() {});
   }
 
+  void _openDrawer() => _drawerCtrl.forward();
+
+  void _closeDrawer() => _drawerCtrl.reverse();
+
   @override
   Widget build(BuildContext context) {
+    // 深色保留淡遮罩（drawerScrim 深色 0x50000000）；浅色官方无灰幕（全透明），
+    // 页面被推走本身就是「打开中」的视觉反馈。
+    final scrim = AnimatedBuilder(
+      animation: _drawerShift,
+      builder: (context, _) => _drawerShift.value == 0
+          ? const SizedBox.shrink()
+          : Positioned.fill(
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: _closeDrawer,
+                child: ColoredBox(
+                  color: Color.lerp(
+                    c.none,
+                    c.drawerScrim,
+                    _drawerShift.value,
+                  )!,
+                ),
+              ),
+            ),
+    );
+    final page = AnimatedBuilder(
+      animation: _drawerShift,
+      builder: (context, child) => Transform.translate(
+        offset: Offset(DsSpacing.drawerPageShift * _drawerShift.value, 0),
+        child: child,
+      ),
+      child: _buildChatScaffold(context),
+    );
+    final drawer = ClipRect(
+      child: AnimatedBuilder(
+        animation: _drawerShift,
+        builder: (context, child) => Align(
+          alignment: Alignment.centerLeft,
+          widthFactor: _drawerShift.value,
+          child: child,
+        ),
+        child: SizedBox(
+          width: DsSpacing.drawerWidth,
+          child: SessionsDrawer(
+            state: st,
+            colors: c,
+            onOpenSettings: widget.onOpenSettings,
+            onClose: _closeDrawer,
+          ),
+        ),
+      ),
+    );
+    return Stack(
+      children: [
+        Positioned.fill(child: page),
+        // 抽屉关闭时给左缘留一条手势热区，可像官方一样从边缘拖出/点按呼出。
+        Positioned(
+          left: 0,
+          top: 0,
+          bottom: 0,
+          width: _drawerShift.value == 0 ? DsSpacing.drawerEdgeDragWidth : 0,
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: _openDrawer,
+            child: const SizedBox.shrink(),
+          ),
+        ),
+        scrim,
+        drawer,
+      ],
+    );
+  }
+
+  Widget _buildChatScaffold(BuildContext context) {
     return Scaffold(
       key: _scaffoldKey,
       backgroundColor: c.bgBase,
-      drawerScrimColor: c.drawerScrim,
-      drawer: SessionsDrawer(
-        state: st,
-        colors: c,
-        onOpenSettings: widget.onOpenSettings,
-      ),
       appBar: _TopBar(
         colors: c,
         title: st.sessionTitle,
-        onMenu: () => _scaffoldKey.currentState?.openDrawer(),
+        onMenu: _openDrawer,
         onNewChat: () => st.newChat(),
         connected: st.connectionState == GatewayState.ready,
         state: st,

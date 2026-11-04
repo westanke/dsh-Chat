@@ -319,6 +319,13 @@ class DsSpacing {
   /// 抽屉宽度：右缘 x864px ≈ 288dp（屏宽 360dp 的 80%）。
   static const drawerWidth = 288.0;
 
+  /// 推挤式抽屉：菜单按钮点击热区宽（从左缘滑入可拖出抽屉）。
+  static const drawerEdgeDragWidth = 20.0;
+
+  /// 推挤式抽屉：聊天页被推出的位移 = `drawerWidth`（整页滑到屏外，
+  /// 右缘与抽屉右缘对齐，官方 official-drawer.png 页面残条为空对齐）。
+  static const drawerPageShift = drawerWidth;
+
   /// 搜索框高度：y117..248 = 132px ≈ 44dp。
   static const drawerSearchHeight = 44.0;
 
@@ -417,6 +424,9 @@ class DsMotion {
 
   /// 跳转最新 FAB 渐显 / 渐隐时长（仿 companion ChatDetail.kt:696 tween(140)）。
   static const Duration fabFade = Duration(milliseconds: 140);
+
+  /// 推挤式抽屉滑入/滑出时长（官方体感 ~250ms，easeOutCubic）。
+  static const Duration drawerShift = Duration(milliseconds: 250);
 
   /// FAB 目标不透明度（仿 companion ChatDetail.kt:693 0.88f）。
   static const double fabOpacity = 0.88;
