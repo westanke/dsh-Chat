@@ -7,7 +7,7 @@
 </p>
 
 <p align="center">
-  <img alt="Version" src="https://img.shields.io/badge/version-1.0.2-087f8c">
+  <img alt="Version" src="https://img.shields.io/badge/version-1.0.3-087f8c">
   <img alt="License" src="https://img.shields.io/badge/license-AGPL--3.0-2da44e">
   <img alt="Platforms" src="https://img.shields.io/badge/platform-Android%20%7C%20iOS-586069">
   <img alt="Built with Flutter" src="https://img.shields.io/badge/built%20with-Flutter-02569B">
@@ -39,6 +39,7 @@
 
 | 平台 | 状态 |
 |---|---|
+| APK | [`dsh-Chat-v1.0.3.apk`](https://gitee.com/westanke/dsh-Chat/releases/download/v1.0.3/dsh-Chat-v1.0.3.apk)<br>75,568,325 字节 · SHA-256 `1a222ae5b612cbaa8d95aaa2071eb14e4f22a4eca34a464eb1ae2ed53e86ee1b` |
 | APK | [`dsh-Chat-v1.0.2.apk`](https://gitee.com/westanke/dsh-Chat/releases/download/v1.0.2/dsh-Chat-v1.0.2.apk)<br>73,897,157 字节 · SHA-256 `70f17e56a36a68f791f1d1f995bf759ffaec7d297014365d3be9a6c5a0e558ca` |
 | APK | [`dsh-Chat-v1.0.1.apk`](https://gitee.com/westanke/dsh-Chat/releases/download/v1.0.1/dsh-Chat-v1.0.1.apk)<br>73,880,773 字节 · SHA-256 `25ad31f942451456238a25798cc0de91c14eee9049e25459ae38825610c190b5` |
 | Android | **已装机验证**（vivo V2080A 真机）：配对、自动重连、流式对话、Markdown 全家福、工具折叠、抽屉、深色模式 |
