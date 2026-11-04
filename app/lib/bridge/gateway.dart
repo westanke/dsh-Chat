@@ -404,15 +404,22 @@ class GatewayClient {
   }
 
   /// 发消息。sessionId 省略则服务端自动建会话（响应携带新 sessionId）。
+  /// contentParts 为空时发纯文本；带图时传 PromptPart.image（base64 裸串，
+  /// mediaType 白名单 png/jpeg/webp/gif，REST 请求体上限 12 MiB）。
   Future<String?> sendText({
     String? sessionId,
     required String text,
     String mode = 'queue',
+    List<PromptPart>? contentParts,
   }) async {
+    final parts = [
+      if (text.isNotEmpty) PromptPart.text(text),
+      ...?contentParts,
+    ];
     final r = await request('message', {
       'sessionId': ?sessionId,
       'mode': mode,
-      'content': [PromptPart.text(text).toJson()],
+      'content': parts.map((p) => p.toJson()).toList(),
       'clientTimeZone': DshDevice.ianaZone,
     });
     return r['sessionId'] as String? ?? sessionId;

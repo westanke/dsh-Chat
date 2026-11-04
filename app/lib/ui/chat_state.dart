@@ -168,13 +168,22 @@ class ChatState extends ChangeNotifier {
     }
   }
 
-  Future<void> send(String text) async {
+  /// 带图发送（真机反馈 2026-11-04 第 2 项）：图片走 PromptPart.image
+  /// （base64 内联，mediaType 白名单），文本可空。
+  Future<void> sendWithImage(String text, PromptPart image) =>
+      send(text, imagePart: image);
+
+  Future<void> send(String text, {PromptPart? imagePart}) async {
     final trimmed = text.trim();
+    // 纯图无文字也允许发（图片是完整消息内容）；两者都空才忽略。
+    if (trimmed.isEmpty && imagePart == null) return;
     // 不再因 streaming 直接拒绝：运行中再发由「繁忙发送模式」决定语义
     // （对照 companion ComposerSendPolicy：queue 排队 / steer 插话）。
-    if (trimmed.isEmpty) return;
     lastError = null;
-    messages = [...messages, ChatMessage(role: 'user', text: trimmed)];
+    messages = [
+      ...messages,
+      ChatMessage(role: 'user', text: trimmed.isEmpty ? '[图片]' : trimmed),
+    ];
     // 繁忙发送模式（对照 companion ComposerSendPolicy）：运行中再发消息时，
     // queue = 排队等当前回合结束，steer = 立即打断。设置页偏好在这里落地。
     final mode = appSettings.busySendMode == BusySendMode.steer
@@ -192,6 +201,7 @@ class ChatState extends ChangeNotifier {
         sessionId: sessionId,
         text: trimmed,
         mode: mode,
+        contentParts: imagePart == null ? null : [imagePart],
       );
       DshLog.w('ui send done sid=$sid');
       if (sessionId == null && sid != null) {

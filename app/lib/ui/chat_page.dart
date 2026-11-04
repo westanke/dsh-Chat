@@ -178,6 +178,7 @@ class _ChatPageState extends State<ChatPage>
               colors: c,
               enabled: st.connectionState == GatewayState.ready,
               onSend: st.send,
+              onSendWithImage: st.sendWithImage,
               onCancel: st.cancelTurn,
               streaming: st.streaming,
               sessionId: st.sessionId,

@@ -183,21 +183,30 @@ class PromptPart {
     : type = 'text',
       mediaType = null,
       data = null,
+      name = null,
       receiptId = null;
-  const PromptPart.image(this.mediaType, this.data, {String? name})
+  const PromptPart.image(this.mediaType, this.data, {this.name})
     : type = 'image',
       text_ = null,
       receiptId = null;
 
   final String type;
   final String? text_; // type=text
-  final String? mediaType; // type=image
-  final String? data; // type=image, base64
+  final String? mediaType; // type=image（白名单 png/jpeg/webp/gif）
+  final String? data; // type=image, base64 裸串
+  final String? name; // type=image, 可选文件名（chat-adapter.ts:26-29）
   final String? receiptId; // type=file
 
   Map<String, dynamic> toJson() => switch (type) {
     'text' => {'type': 'text', 'text': text_},
-    'image' => {'type': 'image', 'mediaType': mediaType, 'data': data},
+    // name 非空才输出（companion 因 encodeDefaults 丢 mediaType 翻过车，
+    // 这里反过来：schema 支持 name，就按 schema 发）。
+    'image' => {
+      'type': 'image',
+      'mediaType': mediaType,
+      'data': data,
+      'name': ?name,
+    },
     'file' => {'type': 'file', 'receiptId': receiptId},
     _ => {'type': 'text', 'text': text_ ?? ''},
   };

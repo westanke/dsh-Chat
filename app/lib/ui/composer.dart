@@ -4,10 +4,15 @@
 /// + 右侧「+」「语音」两个圆形按钮；容器下方居中免责提示。
 library;
 
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 
 import '../bridge/gateway.dart';
+import '../bridge/models.dart';
 import '../bridge/permissions.dart';
+import '../bridge/platform.dart';
 import '../design/tokens.dart';
 
 /// 发送键三态（对照 companion 的 ComposerSendPolicy）。
@@ -18,6 +23,7 @@ class Composer extends StatefulWidget {
     super.key,
     required this.colors,
     required this.onSend,
+    required this.onSendWithImage,
     required this.onCancel,
     this.enabled = true,
     this.streaming = false,
@@ -28,6 +34,8 @@ class Composer extends StatefulWidget {
 
   final DsColors colors;
   final ValueChanged<String> onSend;
+  /// 带图发送（真机反馈 2026-11-04 第 2 项）：文本可空、图片 part 必带。
+  final void Function(String text, PromptPart image) onSendWithImage;
   /// 运行中且输入为空时，发送键变成「停止」并回调这里（session-cancel）。
   final VoidCallback onCancel;
   final bool enabled;
@@ -46,6 +54,18 @@ class Composer extends StatefulWidget {
 class _ComposerState extends State<Composer> {
   final _controller = TextEditingController();
   bool _loadingOptions = false;
+
+  /// 待发送图片（选图后暂存，随下一条消息一起发；真机反馈 2026-11-04 第 2 项）。
+  ({String path, String name, String mediaType, String base64})? _pendingImage;
+
+  /// 协议白名单（chat-adapter.ts:26-29；其它类型在选图时直接拒绝）。
+  static const _imageWhitelist = {
+    'png': 'image/png',
+    'jpg': 'image/jpeg',
+    'jpeg': 'image/jpeg',
+    'webp': 'image/webp',
+    'gif': 'image/gif',
+  };
 
   DsColors get c => widget.colors;
 
@@ -74,9 +94,52 @@ class _ComposerState extends State<Composer> {
 
   void _send() {
     final text = _controller.text.trim();
-    if (text.isEmpty) return;
-    widget.onSend(text);
-    setState(() => _controller.clear());
+    if (text.isEmpty && _pendingImage == null) return;
+    final img = _pendingImage;
+    if (img == null) {
+      widget.onSend(text);
+    } else {
+      // 图片上限 8MiB 原始字节（companion MAX_SOURCE_IMAGE_BYTES 口径；
+      // base64 后 ~10.7MiB，REST 12MiB 请求体内）。超限拒绝并提示。
+      final bytes = File(img.path).lengthSync();
+      if (bytes > 8 * 1024 * 1024) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('图片超过 8MB，请选小一点的图')),
+        );
+        return;
+      }
+      widget.onSendWithImage(
+        text,
+        PromptPart.image(img.mediaType, img.base64, name: img.name),
+      );
+    }
+    setState(() {
+      _controller.clear();
+      _pendingImage = null;
+    });
+  }
+
+  /// 调系统选择器选图 → 复制进缓存 → base64 暂存。
+  Future<void> _pickImage() async {
+    final picked = await DshPlatform.pickImage();
+    if (picked == null || !mounted) return;
+    final ext = picked['name']!.split('.').last.toLowerCase();
+    final mediaType = _imageWhitelist[ext];
+    if (mediaType == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('仅支持 PNG/JPEG/WebP/GIF 图片')),
+      );
+      return;
+    }
+    final bytes = await File(picked['path']!).readAsBytes();
+    setState(() {
+      _pendingImage = (
+        path: picked['path']!,
+        name: picked['name']!,
+        mediaType: mediaType,
+        base64: base64Encode(bytes),
+      );
+    });
   }
 
   /// 拉取权限档位清单并弹出选择菜单（真机反馈 2026-11-04 第 4 项）。
@@ -260,6 +323,28 @@ class _ComposerState extends State<Composer> {
                       onTap: _pickPermission,
                     ),
                     const Spacer(),
+                    if (_pendingImage != null)
+                      Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: Chip(
+                          avatar: Icon(
+                            Icons.image_outlined,
+                            size: DsSpacing.chipIconSize,
+                            color: c.chipSelectedFg,
+                          ),
+                          label: Text(
+                            _pendingImage!.name,
+                            style: DsTypography.caption.copyWith(
+                              color: c.chipSelectedFg,
+                            ),
+                          ),
+                          onDeleted: () =>
+                              setState(() => _pendingImage = null),
+                          backgroundColor: c.chipSelectedBg,
+                          side: BorderSide.none,
+                          visualDensity: VisualDensity.compact,
+                        ),
+                      ),
                     switch (_sendKeyState) {
                       _SendKeyState.send => _RoundIconButton(
                           colors: c,
@@ -280,7 +365,8 @@ class _ComposerState extends State<Composer> {
                               colors: c,
                               filled: false,
                               icon: Icons.add,
-                              onPressed: null,
+                              onPressed:
+                                  widget.enabled ? _pickImage : null,
                             ),
                             const SizedBox(width: DsSpacing.composerButtonGap),
                             _RoundIconButton(
