@@ -15,6 +15,7 @@ import 'chat_state.dart';
 import 'composer.dart';
 import 'md_view.dart';
 import 'message_actions.dart';
+import 'model_sheet.dart';
 import 'process_group.dart';
 import 'projection_sheets.dart';
 import 'scroll_follow.dart';
@@ -278,7 +279,7 @@ class _OverflowMenu extends StatelessWidget {
       tooltip: '更多',
       icon: Icon(Icons.more_vert, size: 22, color: c.labelPrimary),
       color: c.settingsSurface,
-      onSelected: (value) {
+      onSelected: (value) async {
         switch (value) {
           case 'stats':
             showChatStatsSheet(context, state, c);
@@ -288,6 +289,21 @@ class _OverflowMenu extends StatelessWidget {
             showTeamSheet(context, state, c);
           case 'todo':
             showTodoSheet(context, state, c);
+          case 'model':
+            final sid = state.sessionId;
+            if (sid == null || sid.isEmpty) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('请先打开一个会话再调整模型')),
+              );
+              return;
+            }
+            final changed = await showModelSheet(
+              context,
+              colors: c,
+              gateway: state.gateway,
+              sessionId: sid,
+            );
+            if (changed) await state.reloadHistory();
         }
       },
       itemBuilder: (context) => <PopupMenuEntry<String>>[
@@ -295,6 +311,7 @@ class _OverflowMenu extends StatelessWidget {
         _menuItem('trajectory', Icons.timeline, '运行轨迹'),
         _menuItem('team', Icons.groups_outlined, '智能团队'),
         _menuItem('todo', Icons.checklist_outlined, '待办任务'),
+        _menuItem('model', Icons.tune, '调整模型'),
       ],
     );
   }

@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:dshchat/bridge/models_view.dart';
 import 'package:dshchat/bridge/permissions.dart';
 
 void main() {
@@ -94,4 +95,85 @@ void main() {
     expect(permissionLabelOf('workspace-write'), '工作区读写');
     expect(permissionLabelOf('weird-value'), 'weird-value');
   });
+
+group('SessionModels select-model 应答收敛（models 帧）', () {
+  test('fromJson：current/routable/groups/failures 全解析', () {
+    final m = SessionModels.fromJson({
+      'sessionId': 's1',
+      'current': {
+        'provider': 'deepseek',
+        'model': 'deepseek-chat',
+        'reasoningEffort': 'high',
+      },
+      'routable': true,
+      'groups': [
+        {
+          'id': 'deepseek',
+          'name': 'DeepSeek',
+          'models': [
+            {
+              'id': 'deepseek-chat',
+              'name': 'DeepSeek Chat',
+              'reasoning': {
+                'efforts': [
+                  {'id': 'off', 'name': 'off'},
+                  {'id': 'high', 'name': 'high'},
+                ],
+                'defaultEffort': 'off',
+              },
+            },
+            {'id': 'deepseek-reasoner', 'name': 'DeepSeek Reasoner'},
+          ],
+        },
+      ],
+      'failures': [
+        {'provider': 'openai', 'message': 'unavailable'},
+      ],
+    });
+    expect(m.routable, isTrue);
+    expect(m.current.provider, 'deepseek');
+    expect(m.current.model, 'deepseek-chat');
+    expect(m.current.reasoningEffort, 'high');
+    expect(m.groups, hasLength(1));
+    expect(m.groups.single.models, hasLength(2));
+    expect(m.groups.single.models.first.reasoning!.efforts.map((e) => e.id),
+        ['off', 'high']);
+    expect(m.groups.single.models.first.reasoning!.defaultEffort, 'off');
+    expect(m.failures.single.provider, 'openai');
+  });
+
+  test('parseSelectModelReply：data.type=select-model 才有效', () {
+    final ok = parseSelectModelReply({
+      'type': 'select-model',
+      'sessionId': 's1',
+      'accepted': true,
+      'selected': {
+        'provider': 'deepseek',
+        'model': 'deepseek-reasoner',
+        'reasoningEffort': 'max',
+      },
+    });
+    expect(ok!.provider, 'deepseek');
+    expect(ok.model, 'deepseek-reasoner');
+    expect(ok.reasoningEffort, 'max');
+
+    // sent 共享 kind：message 应答 data.type != select-model 必须拒绝。
+    expect(parseSelectModelReply({'type': 'message'}), isNull);
+    expect(parseSelectModelReply({'type': 'select-model'}), isNull);
+  });
+
+  test('ModelSelection toJson round-trip + reasoningEffortLabel', () {
+    final s = ModelSelection(
+      provider: 'p',
+      model: 'm',
+      reasoningEffort: 'high',
+    );
+    final back = ModelSelection.fromJson(s.toJson());
+    expect(back.provider, 'p');
+    expect(back.reasoningEffort, 'high');
+    expect(reasoningEffortLabel('off'), '关闭');
+    expect(reasoningEffortLabel('max'), '最高');
+    expect(reasoningEffortLabel('weird'), 'weird');
+  });
+});
 }

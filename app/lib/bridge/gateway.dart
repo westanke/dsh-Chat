@@ -451,6 +451,31 @@ class GatewayClient {
     }
   }
 
+  /// 会话可用的模型清单（models 帧，sessionId 必需——ws-models.ts:51-54
+  /// 缺了回 MISSING_PARAMS；应答 data 含 current/routable/groups/failures）。
+  /// 应答 kind=models 在回显表内，可直接 await。原始 data 由
+  /// models_view.dart 收敛成 SessionModels（models 层单向依赖）。
+  Future<Map<String, dynamic>> sessionModels(String sessionId) =>
+      request('models', {'sessionId': sessionId});
+
+  /// 切换会话模型。应答 kind 是 `sent`（五个生产者共享 kind），
+  /// data.type=='select-model' 才是本帧的应答（ws-models.ts:74-80）——
+  /// request() 的 pending 按 requestId 关联（data 里回显），而本桥的
+  /// sent 应答也带 requestId，所以可以直接 await，取 data.type 判别。
+  Future<Map<String, dynamic>> selectModel({
+    required String sessionId,
+    required String provider,
+    required String model,
+    String? reasoningEffort,
+  }) async {
+    return request('select-model', {
+      'sessionId': sessionId,
+      'provider': provider,
+      'model': model,
+      'reasoningEffort': ?reasoningEffort,
+    });
+  }
+
   /// 订阅会话推送。subscribed 帧在 bridge 的 REQUEST_ID_ECHO_EXCLUDED_KINDS
   /// 排除表里（不回显 requestId），不能走 request() 等应答——发出即成功，
   /// 与 kotlin-sdk MobileGatewayClient.subscribe() 一致。
