@@ -84,6 +84,10 @@ class ChatState extends ChangeNotifier {
   bool historyHasMore = false;
   bool loadingOlder = false;
 
+  /// 翻页刚 prepend 过更早消息（第二轮反馈 A）：列表层消费后清零，
+  /// 用于跳过一次贴底跟随，保住用户阅读位置。
+  bool historyPageJustLoaded = false;
+
   /// 已加载的最小 seq（下一页 beforeSeq）；-1 = 流式中的临时消息，跳过。
   int? get oldestSeq {
     for (final m in messages) {
@@ -150,6 +154,7 @@ class ChatState extends ChangeNotifier {
     projections = null;
     historyHasMore = false;
     loadingOlder = false;
+    historyPageJustLoaded = false;
     _gateway.subscribe(s.id);
     await reloadHistory();
   }
@@ -161,6 +166,7 @@ class ChatState extends ChangeNotifier {
     projections = null;
     historyHasMore = false;
     loadingOlder = false;
+    historyPageJustLoaded = false;
     _clearStream();
     _gateway.subscribe(null);
     notifyListeners();
@@ -191,6 +197,10 @@ class ChatState extends ChangeNotifier {
   /// 向上翻页加载更早消息（真机反馈 2026-11-04 第 5 项）：
   /// beforeSeq = 当前已加载的最小 seq，返回的更早事件 prepend 到头部并按
   /// seq 去重（防刷新窗口内重叠）。翻页应答不带 projections（API.md:766）。
+  ///
+  /// 真机反馈 2026-11-04 第二轮 A：翻页成功置 [historyPageJustLoaded] 标记，
+  /// 列表层据此跳过一次贴底跟随——否则用户点按钮时 _wantsBottom 仍为 true，
+  /// prepend 后 maxScrollExtent 暴涨触发 followBottom，视觉上「新消息被冲走」。
   Future<void> loadOlder() async {
     final id = sessionId;
     if (id == null || id.isEmpty || loadingOlder || !historyHasMore) return;
@@ -214,8 +224,11 @@ class ChatState extends ChangeNotifier {
       final fresh = page.items
           .where((m) => m.seq < 0 || !known.contains(m.seq))
           .toList();
-      messages = [...fresh, ...messages];
-      rawEvents = [...page.rawEvents, ...rawEvents];
+      if (fresh.isNotEmpty) {
+        messages = [...fresh, ...messages];
+        rawEvents = [...page.rawEvents, ...rawEvents];
+        historyPageJustLoaded = true;
+      }
       historyHasMore = page.hasMore;
       notifyListeners();
     } on RequestException catch (e) {

@@ -132,7 +132,8 @@ void main() {
       );
       expect(find.byIcon(Icons.arrow_upward), findsOneWidget);
       expect(find.byIcon(Icons.stop), findsNothing);
-      expect(find.byIcon(Icons.add), findsNothing);
+      // 加图按钮常驻（第二轮反馈 D）：有文字也在。
+      expect(find.byIcon(Icons.add), findsOneWidget);
     });
 
     testWidgets('streaming + empty shows stop', (tester) async {

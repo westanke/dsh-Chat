@@ -66,14 +66,50 @@ class DshPlatform {
   }
 
   /// 交给系统 DownloadManager 下载 APK（真机反馈 2026-11-04 第 9 项）。
-  /// 返回是否成功入队（重复 URL 会返回已有任务的 id，同样算成功）。
-  /// 下载完成在系统通知栏；装包动作由用户点通知触发（零权限，Android 8+
-  /// 的「安装未知应用」授权在系统安装器里向用户索取）。
-  static Future<bool> downloadApk(String url, String name) async {
-    if (url.trim().isEmpty || name.trim().isEmpty) return false;
+  /// 返回任务 id（>0 有效，-1 = 失败）；用 [downloadStatus] 轮询进度，
+  /// 完成后用 [installApk] 拉起安装（第二轮反馈 C）。
+  static Future<int> downloadApk(String url, String name) async {
+    if (url.trim().isEmpty || name.trim().isEmpty) return -1;
     try {
-      return await _channel
-              .invokeMethod<bool>('downloadApk', {'url': url, 'name': name}) ??
+      return await _channel.invokeMethod<int>('downloadApk', {
+            'url': url,
+            'name': name,
+          }) ??
+          -1;
+    } on PlatformException {
+      return -1;
+    } on MissingPluginException {
+      return -1;
+    }
+  }
+
+  /// 查询下载任务状态（第二轮反馈 C）。status：8 = 完成，16 = 失败，
+  /// 1-4 = 运行中（DownloadManager.STATUS_* 原值透传）。
+  /// 任务不存在/被清理也按失败回（status 16）。
+  static Future<Map<String, int>?> downloadStatus(int id) async {
+    if (id <= 0) return null;
+    try {
+      final r = await _channel
+          .invokeMethod<Map<Object?, Object?>>('downloadStatus', {'id': id});
+      if (r == null) return null;
+      return {
+        'status': (r['status'] as num?)?.toInt() ?? 16,
+        'bytes': (r['bytes'] as num?)?.toInt() ?? 0,
+        'total': (r['total'] as num?)?.toInt() ?? 0,
+      };
+    } on PlatformException {
+      return null;
+    } on MissingPluginException {
+      return null;
+    }
+  }
+
+  /// 拉起系统安装器安装已完成的 APK（第二轮反馈 C）。
+  /// 返回是否成功调起；「安装未知应用」授权由系统安装器向用户索取。
+  static Future<bool> installApk(int id) async {
+    if (id <= 0) return false;
+    try {
+      return await _channel.invokeMethod<bool>('installApk', {'id': id}) ??
           false;
     } on PlatformException {
       return false;

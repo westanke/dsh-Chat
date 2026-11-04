@@ -38,6 +38,25 @@ def backfill(text: str, ver: str, code: str, size: int, sha: str, apk: str) -> s
         if n != 1:
             print(f"  ⚠️ 锚点未命中（期望 1 处，实际 {n}）：{pat}", file=sys.stderr)
 
+    # 3) 设置页版本号（真机反馈 2026-11-04 第二轮 B：发版只 bump pubspec，
+    #    settings_page.dart 的 _appVersion 硬编码没人同步，App 里显示旧版本）。
+    #    锚点唯一：`const String _appVersion = '…';`
+    settings = pathlib.Path("app/lib/ui/settings_page.dart")
+    if settings.exists():
+        stext = settings.read_text(encoding="utf-8")
+        sout, n = re.subn(
+            r"(const String _appVersion = ')[\d.]+\+\d+(';)",
+            rf"\g<1>{ver}+{code}\g<2>",
+            stext,
+        )
+        if n == 1:
+            settings.write_text(sout, encoding="utf-8")
+            print(f"  ✅ settings_page.dart _appVersion 已同步 {ver}+{code}")
+        else:
+            print(f"  ❌ settings_page.dart _appVersion 锚点命中 {n} 处（期望 1）",
+                  file=sys.stderr)
+            sys.exit(1)
+
     release_row = (
         f"| APK | [`{apk}`]({gitee_dl})<br>{size_fmt} 字节 · SHA-256 `{sha}` |\n"
     )

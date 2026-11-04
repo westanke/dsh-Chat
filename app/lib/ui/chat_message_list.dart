@@ -144,6 +144,15 @@ class _MessageListState extends State<_MessageList> {
   }
 
   void _followBottom() {
+    // 历史翻页 prepend（第二轮反馈 A）：点「加载更早消息」时用户意图是
+    // 向上看旧内容，不是贴底——此时 _wantsBottom 多半仍为 true（还站在
+    // 底部点的按钮），prepend 后 maxScrollExtent 暴涨会触发跳底，视觉上
+    // 「新消息把旧历史冲没了」。跳过一次跟随，让 Flutter 的 prepend 语义
+    // 自然保持 pixels（视口锚在原内容上，位置不动）。
+    if (widget.state.historyPageJustLoaded) {
+      widget.state.historyPageJustLoaded = false;
+      return;
+    }
     final hasItems =
         widget.state.messages.isNotEmpty || widget.state.streaming;
     if (!shouldAutoFollow(
@@ -252,15 +261,20 @@ class _MessageListState extends State<_MessageList> {
       children: [
         NotificationListener<ScrollNotification>(
           onNotification: _onScrollNotification,
-          child: ListView(
-            controller: _scroll,
-            padding: const EdgeInsets.fromLTRB(
-              DsSpacing.screenPad,
-              0,
-              DsSpacing.contentPadRight,
-              DsSpacing.hMarginBottom,
+          // SelectionArea（第二轮反馈 E）：长按可选字复制，assistant 的
+          // gpt_markdown 内部 SelectableAdapter 注册到最近的 SelectionContainer，
+          // 包在整表外一层即可让全部回复可圈选；按钮/双击手势不受影响。
+          child: SelectionArea(
+            child: ListView(
+              controller: _scroll,
+              padding: const EdgeInsets.fromLTRB(
+                DsSpacing.screenPad,
+                0,
+                DsSpacing.contentPadRight,
+                DsSpacing.hMarginBottom,
+              ),
+              children: children,
             ),
-            children: children,
           ),
         ),
         // 跳转最新 FAB：对照 companion ChatDetail.kt:691-717，

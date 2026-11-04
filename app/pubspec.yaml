@@ -33,6 +33,9 @@ dependencies:
     sdk: flutter
 
   cupertino_icons: ^1.0.8
+  # 中文本地化（真机反馈 2026-11-04 第二轮 D）：TextField 长按粘贴/选择菜单中文。
+  flutter_localizations:
+    sdk: flutter
 
   # Markdown 渲染（官方 flutter_markdown 已废弃，社区流式聊天首选）
   gpt_markdown: ^1.4.0

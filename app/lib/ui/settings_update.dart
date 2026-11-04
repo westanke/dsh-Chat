@@ -84,15 +84,51 @@ class _UpdateCheckRowState extends State<_UpdateCheckRow> {
     }
   }
 
-  /// 下载新版 APK（系统下载器，通知栏完成后点开即装）。
+  /// 下载新版 APK（系统下载器）+ 轮询进度 + 完成自动拉起安装
+  /// （第二轮反馈 C：之前只回「已加入下载」，无进度、装不装成功无从判断）。
   Future<void> _download(ReleaseInfo rel) async {
-    final ok = await DshPlatform.downloadApk(rel.apkUrl, rel.apkName);
+    final id = await DshPlatform.downloadApk(rel.apkUrl, rel.apkName);
     if (!mounted) return;
-    setState(() {
-      _result = ok
-          ? '已加入下载：${rel.apkName}（完成后点系统通知安装）'
-          : '下载任务创建失败';
-    });
+    if (id <= 0) {
+      setState(() => _result = '下载任务创建失败');
+      return;
+    }
+    setState(() => _result = '下载中… 0%');
+    // 轮询 DownloadManager 状态：1s 间隔，进度更新 subtitle；完成后自动安装。
+    // 不用 Timer.periodic 挂 dispose（测试断言无 pending timer），每轮 await
+    // 后检查 mounted，页面关掉轮询自然停止。
+    while (mounted) {
+      await Future<void>.delayed(const Duration(seconds: 1));
+      if (!mounted) return;
+      final st = await DshPlatform.downloadStatus(id);
+      if (!mounted) return;
+      if (st == null) {
+        setState(() => _result = '下载状态不可用（可在系统通知栏查看）');
+        return;
+      }
+      final status = st['status'] ?? 0;
+      if (status == 8) {
+        // STATUS_SUCCESSFUL → 拉起安装
+        final launched = await DshPlatform.installApk(id);
+        if (!mounted) return;
+        setState(() {
+          _result = launched
+              ? '下载完成，已拉起安装；若未弹出，点系统通知安装'
+              : '下载完成：${rel.apkName}（点系统通知安装）';
+        });
+        return;
+      }
+      if (status == 16) {
+        setState(() => _result = '下载失败（网络或存储）；可回设置重试');
+        return;
+      }
+      final total = st['total'] ?? 0;
+      final done = st['bytes'] ?? 0;
+      final pct = total > 0 ? (done * 100 ~/ total) : null;
+      setState(() {
+        _result = pct != null ? '下载中… $pct%' : '下载中… ${done ~/ 1024}KB';
+      });
+    }
   }
 
   @override

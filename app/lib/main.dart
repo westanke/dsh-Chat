@@ -6,6 +6,7 @@
 library;
 
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 
 import 'bridge/credentials.dart';
 import 'bridge/device.dart';
@@ -39,6 +40,15 @@ class DshChatApp extends StatelessWidget {
       builder: (context, _) => MaterialApp(
         title: 'DSH Chat',
         debugShowCheckedModeBanner: false,
+        // 中文本地化（真机反馈 2026-11-04 第二轮 D）：不配 delegate 时
+        // TextField 长按菜单（粘贴/选择）走默认英文。
+        localizationsDelegates: const [
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+        ],
+        supportedLocales: const [Locale('zh'), Locale('en')],
+        locale: const Locale('zh'),
         theme: _theme(DsColors(false)),
         darkTheme: _theme(DsColors(true)),
         themeMode: _toThemeMode(appSettings.themeMode),

@@ -91,13 +91,14 @@ class MainActivity : FlutterActivity() {
                     }
                     "downloadApk" -> {
                         // 系统下载器下载 APK（真机反馈 2026-11-04 第 9 项）。
-                        // DownloadManager 是系统服务，不需要任何运行时权限；
-                        // 下载完成在通知栏，用户点通知即可进入安装流程。
+                        // DownloadManager 是系统服务，不需要任何运行时权限。
+                        // 第二轮反馈 C：返回任务 id（-1 = 失败），Dart 侧轮询
+                        // downloadStatus 显示进度；完成后 installApk 拉起安装。
                         val args = call.arguments as? Map<*, *>
                         val url = args?.get("url") as? String
                         val name = args?.get("name") as? String
                         if (url.isNullOrBlank() || name.isNullOrBlank()) {
-                            result.success(false)
+                            result.success(-1L)
                         } else {
                             try {
                                 val req = DownloadManager.Request(Uri.parse(url))
@@ -113,8 +114,74 @@ class MainActivity : FlutterActivity() {
                                     .setAllowedOverMetered(true)
                                 val dm = getSystemService(DOWNLOAD_SERVICE)
                                     as DownloadManager
-                                dm.enqueue(req)
-                                result.success(true)
+                                result.success(dm.enqueue(req))
+                            } catch (e: Exception) {
+                                result.success(-1L)
+                            }
+                        }
+                    }
+                    "downloadStatus" -> {
+                        // 查询下载任务状态（第二轮反馈 C）：返回
+                        // {status, bytes, total}；status 为
+                        // STATUS_SUCCESSFUL(8) / STATUS_FAILED(16) / 运行中(1-4)。
+                        val args = call.arguments as? Map<*, *>
+                        val id = (args?.get("id") as? Number)?.toLong()
+                        val dm = getSystemService(DOWNLOAD_SERVICE) as DownloadManager
+                        if (id == null || id < 0) {
+                            result.success(null)
+                        } else {
+                            try {
+                                val q = DownloadManager.Query().setFilterById(id)
+                                dm.query(q)?.use { c ->
+                                    if (c.moveToFirst()) {
+                                        val si = c.getColumnIndex(
+                                            DownloadManager.COLUMN_STATUS)
+                                        val bi = c.getColumnIndex(
+                                            DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR)
+                                        val ti = c.getColumnIndex(
+                                            DownloadManager.COLUMN_TOTAL_SIZE_BYTES)
+                                        result.success(mapOf(
+                                            "status" to c.getInt(si),
+                                            "bytes" to c.getLong(bi),
+                                            "total" to c.getLong(ti)))
+                                    } else {
+                                        // 任务被系统清理/不存在
+                                        result.success(mapOf(
+                                            "status" to 16, "bytes" to 0L, "total" to 0L))
+                                    }
+                                } ?: result.success(mapOf(
+                                    "status" to 16, "bytes" to 0L, "total" to 0L))
+                            } catch (e: Exception) {
+                                result.success(mapOf(
+                                    "status" to 16, "bytes" to 0L, "total" to 0L))
+                            }
+                        }
+                    }
+                    "installApk" -> {
+                        // 拉起安装器（第二轮反馈 C）：下载完成后自动调用。
+                        // DownloadManager 的完成下载对当前 app（作为下载发起方）
+                        // 可直接读，不需要 FileProvider / REQUEST_INSTALL_PACKAGES
+                        // 声明——「安装未知应用」授权由系统安装器向用户索取。
+                        val args = call.arguments as? Map<*, *>
+                        val id = (args?.get("id") as? Number)?.toLong()
+                        val dm = getSystemService(DOWNLOAD_SERVICE) as DownloadManager
+                        if (id == null || id < 0) {
+                            result.success(false)
+                        } else {
+                            try {
+                                val uri = dm.getUriForDownloadedFile(id)
+                                if (uri == null) {
+                                    result.success(false)
+                                } else {
+                                    val intent = Intent(Intent.ACTION_VIEW)
+                                        .setDataAndType(
+                                            uri,
+                                            "application/vnd.android.package-archive")
+                                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or
+                                            Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                    startActivity(intent)
+                                    result.success(true)
+                                }
                             } catch (e: Exception) {
                                 result.success(false)
                             }

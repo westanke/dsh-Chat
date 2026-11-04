@@ -83,6 +83,7 @@ class _ComposerState extends State<Composer> {
   }
 
   bool get _hasText => _controller.text.trim().isNotEmpty;
+  bool get _hasImage => _pendingImage != null;
 
   // ---- 斜杠命令补全（真机反馈 2026-11-04 第 3 项）----
 
@@ -150,10 +151,11 @@ class _ComposerState extends State<Composer> {
   }
 
   /// 发送键三态（对照 companion ComposerSendPolicy.resolve）：
-  /// 有正文或待发图片=发送；运行中且两者皆无=停止；其余=占位（+ / 语音）。
+  /// 有正文或待发图片=发送；运行中且两者皆无=停止；其余=占位（语音键位）。
   /// 真机反馈 2026-11-04 第 2 项：单发图片（无文本）也要亮发送键。
+  /// 加图按钮已常驻（第二轮反馈 D），不再挤在 disabled 态里。
   _SendKeyState get _sendKeyState {
-    if (_hasText || _pendingImage != null) return _SendKeyState.send;
+    if (_hasText || _hasImage) return _SendKeyState.send;
     if (widget.streaming) return _SendKeyState.stop;
     return _SendKeyState.disabled;
   }
@@ -429,37 +431,36 @@ class _ComposerState extends State<Composer> {
                           visualDensity: VisualDensity.compact,
                         ),
                       ),
+                    // 加图按钮常驻（真机反馈 2026-11-04 第二轮 D）：
+                    // 之前只在 disabled 态渲染，先打字就找不到加图入口。
+                    // stop（执行中）不可加图；其余态都可。
+                    if (_sendKeyState != _SendKeyState.stop) ...[
+                      _RoundIconButton(
+                        colors: c,
+                        filled: false,
+                        icon: Icons.add,
+                        onPressed: widget.enabled ? _pickImage : null,
+                      ),
+                      const SizedBox(width: DsSpacing.composerButtonGap),
+                    ],
                     switch (_sendKeyState) {
-                      _SendKeyState.send => _RoundIconButton(
+                      _SendKeyState.send || _SendKeyState.disabled =>
+                        _RoundIconButton(
                           colors: c,
-                          filled: true,
-                          icon: Icons.arrow_upward,
-                          onPressed: widget.enabled ? _send : null,
+                          filled: _sendKeyState == _SendKeyState.send,
+                          icon: _sendKeyState == _SendKeyState.send
+                              ? Icons.arrow_upward
+                              : Icons.graphic_eq,
+                          onPressed: widget.enabled && _hasText ||
+                                  (_hasImage && widget.enabled)
+                              ? _send
+                              : null,
                         ),
                       _SendKeyState.stop => _RoundIconButton(
                           colors: c,
                           filled: true,
                           icon: Icons.stop,
                           onPressed: widget.enabled ? widget.onCancel : null,
-                        ),
-                      _SendKeyState.disabled => Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            _RoundIconButton(
-                              colors: c,
-                              filled: false,
-                              icon: Icons.add,
-                              onPressed:
-                                  widget.enabled ? _pickImage : null,
-                            ),
-                            const SizedBox(width: DsSpacing.composerButtonGap),
-                            _RoundIconButton(
-                              colors: c,
-                              filled: false,
-                              icon: Icons.graphic_eq,
-                              onPressed: null,
-                            ),
-                          ],
                         ),
                     },
                   ],
