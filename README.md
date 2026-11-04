@@ -41,9 +41,20 @@
 |---|---|
 | Android | **已装机验证**（vivo V2080A 真机）：配对、自动重连、流式对话、Markdown 全家福、工具折叠、抽屉、深色模式 |
 | iOS | **未验证**。`ios/Runner` 平台壳（IANA 时区通道、显示名、ATS 放行）已就位，但未在 iOS 设备或模拟器上构建运行过 |
-| 版本 | `app/pubspec.yaml` 为 `1.0.0+1`；尚无 tag 与正式 release 产物 |
+| 版本 | `app/pubspec.yaml` 为 `1.0.0+1`；tag `v1.0.0`，产物见下方「下载安装」 |
 
 未验证的功能不会被写成「已完成」。真机截图是唯一验收证据。
+
+## 下载安装
+
+正式产物随 tag 发布（Gitee 主站）：
+
+| 产物 | 说明 |
+|---|---|
+| APK | [`dsh-Chat-v1.0.0.apk`](https://gitee.com/westanke/dsh-Chat/releases/download/v1.0.0/dsh-Chat-v1.0.0.apk)<br>73,437,985 字节 · SHA-256 `94966bcf22cc157192cab19329afdf39c572be9c7d8417d664761976a5c00b06` |
+| 校验 | `sha256sum -c` 前先比对上方 SHA-256；tag `v1.0.0` 内的 `artifacts/SHA256SUMS.txt` 为权威值 |
+
+> 版本号以 [`app/pubspec.yaml`](app/pubspec.yaml) 的 `version` 为准（当前 `1.0.0+1`）。
 
 ## 怎么跑
 
@@ -75,7 +86,7 @@ Android 工具链在 `/media/wangke/OFFICE/workspace/android-toolchain/`（jdk17
 | 闸门 | 内容 |
 |---|---|
 | `docs-check` | `bash scripts/ci/docs-check.sh`：`app/lib/` 全部文件已登记进 `docs/STRUCTURE.md`、无死链、无旧仓名残留 |
-| `analyze + test` | `flutter pub get` → `flutter analyze` → `flutter test`（24 例），stable 通道 |
+| `analyze + test` | `flutter pub get` → `flutter analyze` → `flutter test`（100 例），stable 通道 |
 
 刻意**不**跑 `flutter build apk`：产物不入库，验收在本机真机（见 `ci.yml` 头注释）。
 GitHub 是本仓的镜像从站，日常推送目标在 Gitee（见 [AGENTS.md §10](AGENTS.md)）。
