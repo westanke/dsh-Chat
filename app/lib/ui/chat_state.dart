@@ -67,6 +67,14 @@ class ChatState extends ChangeNotifier {
     return 'DSH Bridge';
   }
 
+  /// 当前连接地址（抽屉底部绿点旁显示，真机反馈第三轮 3）：
+  /// baseUrl 去掉协议前缀，只留 host[:port]。
+  String get connectionLabel {
+    final raw = _gateway.baseUrl;
+    final stripped = raw.replaceFirst(RegExp(r'^https?://'), '');
+    return stripped.isEmpty ? raw : stripped;
+  }
+
   /// 会话分组：实现在 session_groups.dart（顶层纯函数，宪法 500 行拆分）。
   Map<String, List<DshSession>> get sessionGroups =>
       groupSessionsByWorkspace(sessions);

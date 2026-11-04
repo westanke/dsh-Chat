@@ -2,6 +2,11 @@
     <!-- 连自建 bridge 必需（release 构建不会自动获得该权限，debug 模板里才有）。 -->
     <uses-permission android:name="android.permission.INTERNET"/>
 
+    <!-- 应用内更新：下载完成自动拉起安装器（真机反馈第三轮 2）。
+         缺它时 startActivity(ACTION_VIEW apk) 被系统静默拒绝（v1.0.3 不弹安装的根因）；
+         「允许安装未知应用」的具体授权由系统安装器页面向用户索取。 -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"/>
+
     <!-- bridge 地址由用户自填（局域网 IP 或 adb reverse 的 127.0.0.1），走 ws:// 明文，
          主机名无法预先枚举，故在 application 上放行明文流量。 -->
     <application
@@ -46,6 +51,12 @@
         <intent>
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>
+        </intent>
+        <!-- Android 11+ 包可见性：能解析 apk 的安装器（拉起安装用，第三轮反馈 2）。
+             缺它 resolveActivity/getUriForDownloadedFile 消费方解析不到，静默失败。 -->
+        <intent>
+            <action android:name="android.intent.action.VIEW"/>
+            <data android:mimeType="application/vnd.android.package-archive"/>
         </intent>
     </queries>
 </manifest>

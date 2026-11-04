@@ -18,6 +18,24 @@ import sys
 import pathlib
 
 
+def sync_app_version(ver: str, code: str) -> None:
+    """把版本号写进设置页（必须在 flutter build 之前跑——版本是编译期常量，
+    打包后才改就烧不进 APK 了；v1.0.3 装机显示旧版本就是这个顺序踩的）。"""
+    settings = pathlib.Path("app/lib/ui/settings_page.dart")
+    stext = settings.read_text(encoding="utf-8")
+    sout, n = re.subn(
+        r"(const String _appVersion = ')[\d.]+\+\d+(';)",
+        rf"\g<1>{ver}+{code}\g<2>",
+        stext,
+    )
+    if n != 1:
+        print(f"  ❌ settings_page.dart _appVersion 锚点命中 {n} 处（期望 1）",
+              file=sys.stderr)
+        sys.exit(1)
+    settings.write_text(sout, encoding="utf-8")
+    print(f"  ✅ settings_page.dart _appVersion 已同步 {ver}+{code}")
+
+
 def backfill(text: str, ver: str, code: str, size: int, sha: str, apk: str) -> str:
     size_fmt = f"{size:,}"
     gitee_dl = f"https://gitee.com/westanke/dsh-Chat/releases/download/v{ver}/{apk}"
@@ -38,24 +56,15 @@ def backfill(text: str, ver: str, code: str, size: int, sha: str, apk: str) -> s
         if n != 1:
             print(f"  ⚠️ 锚点未命中（期望 1 处，实际 {n}）：{pat}", file=sys.stderr)
 
-    # 3) 设置页版本号（真机反馈 2026-11-04 第二轮 B：发版只 bump pubspec，
-    #    settings_page.dart 的 _appVersion 硬编码没人同步，App 里显示旧版本）。
-    #    锚点唯一：`const String _appVersion = '…';`
+    # 3) 设置页版本号兜底校验：阶段 A 打包前已由 sync_app_version 写好，
+    #    这里若仍不一致说明打包烧了旧值 —— 直接失败，不发坏包。
     settings = pathlib.Path("app/lib/ui/settings_page.dart")
-    if settings.exists():
-        stext = settings.read_text(encoding="utf-8")
-        sout, n = re.subn(
-            r"(const String _appVersion = ')[\d.]+\+\d+(';)",
-            rf"\g<1>{ver}+{code}\g<2>",
-            stext,
-        )
-        if n == 1:
-            settings.write_text(sout, encoding="utf-8")
-            print(f"  ✅ settings_page.dart _appVersion 已同步 {ver}+{code}")
-        else:
-            print(f"  ❌ settings_page.dart _appVersion 锚点命中 {n} 处（期望 1）",
-                  file=sys.stderr)
-            sys.exit(1)
+    if f"const String _appVersion = '{ver}+{code}';" not in settings.read_text(
+        encoding="utf-8"
+    ):
+        print("  ❌ settings_page.dart 版本与 pubspec 不一致（打包前没同步）",
+              file=sys.stderr)
+        sys.exit(1)
 
     release_row = (
         f"| APK | [`{apk}`]({gitee_dl})<br>{size_fmt} 字节 · SHA-256 `{sha}` |\n"

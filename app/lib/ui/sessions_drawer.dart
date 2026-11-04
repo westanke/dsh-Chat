@@ -154,6 +154,7 @@ class SessionsDrawerState extends State<SessionsDrawer> {
             SessionsDrawerFooter(
               colors: c,
               label: state.deviceLabel,
+              connectionLabel: state.connectionLabel,
               onOpenSettings: widget.onOpenSettings,
               onClose: widget.onClose,
             ),
@@ -202,18 +203,24 @@ class SessionsDrawerItem extends StatelessWidget {
   }
 }
 
-/// 底部账号栏：官方是头像 + 手机号 + 三点菜单（我们显示 bridge 设备名）。
+/// 底部账号栏（真机反馈第三轮 3）：设置按钮 + 绿点连接指示 + 连接地址。
+/// 原版是头像 + 设备名 + 三点菜单；改为「设置」圆钮为主操作，
+/// 下方绿点（连接成功即亮）+ host:port 小字，一眼看清当前连的是哪台机器。
 class SessionsDrawerFooter extends StatelessWidget {
   const SessionsDrawerFooter({
     super.key,
     required this.colors,
     required this.label,
+    required this.connectionLabel,
     required this.onOpenSettings,
     required this.onClose,
   });
 
   final DsColors colors;
   final String label;
+
+  /// 当前连接地址（host:port，来自 ChatState.connectionLabel）。
+  final String connectionLabel;
   final VoidCallback onOpenSettings;
 
   /// 推挤式抽屉关闭回调（见 SessionsDrawer.onClose 注释）。
@@ -228,25 +235,7 @@ class SessionsDrawerFooter extends StatelessWidget {
       ),
       child: Row(
         children: [
-          CircleAvatar(
-            radius: 16,
-            backgroundColor: colors.drawerSearchFill,
-            child: Icon(
-              Icons.person_outline,
-              size: 18,
-              color: colors.drawerGroupLabel,
-            ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: DsTypography.base.copyWith(color: colors.labelPrimary),
-            ),
-          ),
-          // 三点菜单：官方是纯展示图标，这里接成设置页入口（关闭抽屉后再推路由）。
+          // 设置按钮（替代原头像/三点菜单，真机反馈第三轮 3）。
           Tooltip(
             message: '设置',
             child: InkResponse(
@@ -254,12 +243,55 @@ class SessionsDrawerFooter extends StatelessWidget {
                 onClose();
                 onOpenSettings();
               },
-              radius: 20,
-              child: Icon(
-                Icons.more_horiz,
-                size: 20,
-                color: colors.drawerGroupLabel,
+              radius: 22,
+              child: CircleAvatar(
+                radius: 16,
+                backgroundColor: colors.drawerSearchFill,
+                child: Icon(
+                  Icons.settings_outlined,
+                  size: 18,
+                  color: colors.labelPrimary,
+                ),
               ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: DsTypography.base.copyWith(color: colors.labelPrimary),
+                ),
+                const SizedBox(height: 2),
+                Row(
+                  children: [
+                    Container(
+                      width: 7,
+                      height: 7,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        // 绿点 = 连接正常（抽屉只在已连接状态可达）。
+                        color: const Color(0xFF34C759),
+                      ),
+                    ),
+                    const SizedBox(width: 5),
+                    Expanded(
+                      child: Text(
+                        connectionLabel,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: DsTypography.caption
+                            .copyWith(color: colors.labelSecondary),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ),
           ),
         ],
