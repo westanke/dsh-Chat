@@ -1,0 +1,114 @@
+name: Release
+
+# GitHub 在线打包发版（2026-11-04 新增）：推 v* tag 自动构建 release APK
+# 并发布到 GitHub Release。为什么在云端构建：
+#   1) GitHub 从站的下载在国外可达，本地 Gitee Release 附件国内可达 —— 两站互补；
+#   2) 云端构建不占本机；runner 在 GitHub 云上，不受本机到 github.com:443 被墙影响
+#      （本仓日常推送仍走 Gitee，tag 由 mirror-sync workflow 自动同步到 GitHub）。
+#
+# 前置（一次性，GitHub 网页操作）：
+#   repo → Settings → Secrets and variables → Actions → New repository secret
+#   配 4 个 secret（值见仓库 scripts/release.sh 首跑时的控制台输出，或问维护者）：
+#     KEYSTORE_BASE64   signing/dshchat-release.jks 的 base64 全文
+#                       （base64 -w0 app/android/signing/dshchat-release.jks）
+#     KEYSTORE_PASSWORD keystore 密码（key.properties 的 storePassword）
+#     KEY_ALIAS         别名（key.properties 的 keyAlias）
+#     KEY_PASSWORD      key 密码（key.properties 的 keyPassword）
+#
+# 安全：keystore/密码绝不入库（宪法 §10）；workflow 只把 secret 解到 runner
+# 内存/临时文件，构建完即随 runner 销毁。
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: build apk + release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Flutter (stable, 中国镜像)
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.47.9
+      # runner 在境外，pub/flutter 镜像不必须；但保留开关方便切换。
+      # env:
+      #   PUB_HOSTED_URL: https://pub.flutter-io.cn
+      #   FLUTTER_STORAGE_BASE_URL: https://storage.flutter-io.cn
+
+      - name: Restore gradle cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ hashFiles('app/android/**/*.gradle*', 'app/pubspec.lock') }}
+          restore-keys: gradle-
+
+      - name: Restore pub cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.pub-cache
+          key: pub-${{ hashFiles('app/pubspec.lock') }}
+
+      - name: Restore keystore from secret
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "::warning::KEYSTORE_BASE64 未配置 —— 本包将用 debug 签名（CI 兜底口径与 build.gradle.kts 一致）"
+            exit 0
+          fi
+          mkdir -p app/android/signing
+          echo "$KEYSTORE_BASE64" | base64 -d > app/android/signing/dshchat-release.jks
+          cat > app/android/key.properties <<EOF
+          storePassword=${{ secrets.KEYSTORE_PASSWORD }}
+          keyPassword=${{ secrets.KEY_PASSWORD }}
+          keyAlias=${{ secrets.KEY_ALIAS }}
+          storeFile=signing/dshchat-release.jks
+          EOF
+
+      - name: Build release APK
+        working-directory: app
+        run: |
+          flutter pub get
+          flutter analyze --no-fatal-infos --no-fatal-warnings
+          flutter test
+          flutter build apk --release
+
+      - name: Collect artifact
+        run: |
+          mkdir -p artifacts
+          APK=app/build/app/outputs/flutter-apk/app-release.apk
+          [ -f "$APK" ] || APK=app/build/outputs/flutter-apk/app-release.apk
+          cp "$APK" "artifacts/dsh-Chat-${{ github.ref_name }}.apk"
+          sha256sum "artifacts/dsh-Chat-${{ github.ref_name }}.apk" > artifacts/SHA256SUMS.txt
+          cat artifacts/SHA256SUMS.txt
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            artifacts/dsh-Chat-*.apk
+            artifacts/SHA256SUMS.txt
+          body: |
+            正式产物随 tag 发布。国内下载走 [Gitee Release](https://gitee.com/westanke/dsh-Chat/releases)（同 tag 同产物，SHA-256 一致）。
+            协议要求 dsh-remote-bridge ≥ 2.10.0（hello.protocol=3）。
+          generate_release_notes: true
