@@ -155,7 +155,10 @@ say "1) 打 tag $TAG"
 if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
   ok "本地已有 $TAG，跳过"
 else
-  run git tag -a "$TAG" -m "dsh-Chat ${VER}+${CODE}"
+  # HOME 覆盖后 git 探测不到身份（tag 也要署名），显式沿用仓库 config。
+  TAG_NAME=$(git config user.name) TAG_EMAIL=$(git config user.email)
+  [ -n "$TAG_NAME" ] && [ -n "$TAG_EMAIL" ] || { bad "git 身份未配置（user.name/user.email）"; exit 1; }
+  run git -c user.name="$TAG_NAME" -c user.email="$TAG_EMAIL" tag -a "$TAG" -m "dsh-Chat ${VER}+${CODE}"
   [ "$DRY_RUN" = "1" ] || ok "已创建 $TAG"
 fi
 # tag 指向的树必须包含当前这份 SHA256SUMS.txt（防 tag 校验值与附件分叉，桥仓 v2.6.0 踩过）。
