@@ -21,6 +21,7 @@
 | `bridge/tool_call.dart` | ToolCallInfo + 工具措辞表 `toolPhrases` + 摘要 `toolSummary` + `RawToolCall` / `extractToolCalls`（从 models.dart 拆出，控行数） | ✅ 单测覆盖 |
 | `bridge/gateway.dart` | WS `/ws/mobile`：子协议 `dsh-mobile-v1`、hello.protocol=3、requestId（**data 内回显**）、退避重连 1→2→4→8→16s、心跳 25s；`cancelTurn()` 发 `session-cancel` 帧；`history()` 原样透传可选 `projections` | ✅ 装机验证 |
 | `bridge/credentials.dart` | shared_preferences 持久化 `{baseUrl, token}`，实现「一次配对，此后自动连接」 | ✅ |
+| `bridge/permissions.dart` | 权限档位目录 `PermissionCatalog`/`PermissionOption`（permission-options 应答收敛 + value→中文标签映射 + `parsePermissionCatalog`），档位以服务端清单为准不硬编码 | ✅ 单测覆盖 |
 | `bridge/device.dart` | MethodChannel `dsh/device#ianaZone` → IANA 时区（clientTimeZone 必需 `Area/Location`） | ✅ |
 | `bridge/platform.dart` | MethodChannel `dsh/platform`：系统 TTS 朗读（speak/stopSpeak）+ 系统分享（share），零第三方依赖；Android MainActivity 实现，iOS 留桩走「暂不可用」提示 | ✅ |
 | `bridge/dlog.dart` | 文件日志 `/data/data/<pkg>/files/dsh.log`（vivo 过滤 flutter 日志，只能落文件）；`enabled` 开关 + `read()` 供设置页诊断日志区 | ✅ |
@@ -34,7 +35,7 @@
 | `ui/settings_page.dart` | 设置页主文件：Scaffold + 分区骨架（`settings_sections.dart` / `settings_widgets.dart` 是同库 `part`，共享私有成员，宪法 §7 控行数） | ✅ 单测覆盖 |
 | `ui/settings_sections.dart` | 设置页分区：连接与设备信息（hello 只读）/ 界面风格三档 / 字号缩放与跟随系统 / 繁忙发送模式 / 诊断日志 / 关于 / 断开连接；不摆无授权的服务端开关 | ✅ 单测覆盖 |
 | `ui/settings_widgets.dart` | 设置页通用组件：`_Section` / `_InfoRow` / `_ActionRow` / `_SwitchRow` / `_SegmentedRow` / `_ScopeChip` / `_WarningBanner` | ✅ 单测覆盖 |
-| `ui/composer.dart` | 输入条：白浮层圆角容器 + 输入框 + 深度思考 / 智能搜索 chips + 发送键三态（发送/停止/占位，对照 companion ComposerSendPolicy）+ 底部免责提示 | ✅ 装机验证 |
+| `ui/composer.dart` | 输入条：白浮层圆角容器 + 输入框 + 权限档位 chip（permission-options 拉档位、permission 帧切换、danger-full-access 二次确认，真机反馈 2026-11-04）+ 发送键三态（发送/停止/占位）+ 底部免责提示 | ✅ 装机验证 |
 | `ui/connect_page.dart` | 配对页：bridge 地址 + 配对码 | ✅ 装机验证 |
 | `ui/md_view.dart` | GptMarkdown 定制：官方 token 全量映射、任务列表预处理、codeBuilder/tableBuilder 接线 | ✅ 装机验证 |
 | `ui/md_code_block.dart` | 自绘代码块：Atom One Light（ValTheme 自定义）+ banner「语言名 / 复制」 | ✅ 装机验证 |
@@ -83,9 +84,10 @@
   + `docs/project/API.md` §客户端→服务端帧。
 - 用到的帧：`ping/subscribe/unsubscribe/message/workspaces/sessions/history/hello`
   （`message.mode` 由本地偏好取 `queue` 或 `steer`，对照 companion 的繁忙发送策略；
-  `history` 首屏应答的可选 `projections.values.{todos,agentTeam,subagentCatalog}` 供
-  团队 / TODO 面板只读展示，轨迹面板则由 `events` 客户端本地分组）；
+  `history` 首屏应答的可选 `projections.values.{todos,agentTeam,subagentCatalog,permissions}` 供
+  团队 / TODO 面板与权限 chip 只读展示，轨迹面板则由 `events` 客户端本地分组）；
   `session-cancel`（停止当前回合，应答 `session-cancelled` 会回显 requestId，可 await）；
+  `permission-options`（权限档位清单）与 `permission`（切档位，内部走 `/permission` 斜杠命令）；
   推送：`event(chat.message.delta|chat.message.committed|chat.turn.failed)`、
   `connection-resync-required`、`question-requested`。
 

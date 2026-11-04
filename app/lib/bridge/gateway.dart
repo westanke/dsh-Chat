@@ -427,6 +427,30 @@ class GatewayClient {
     await request('session-cancel', {'sessionId': sessionId});
   }
 
+  /// 权限档位清单（真机反馈 2026-11-04：输入条「深度思考」chip 改权限档位）。
+  /// permission-options 不在排除表（ws-settings.ts:40-82），可 await；
+  /// 需要 chat.read scope，缺则回 error FORBIDDEN_SCOPE。
+  /// 注意：PermissionCatalog 定义在 permissions.dart（models 层单向依赖
+  /// gateway 的 RequestException，gateway 不能反向 import permissions），
+  /// 这里返回原始 data，由 permissions.dart 的 `parsePermissionCatalog` 收敛。
+  Future<Map<String, dynamic>> permissionOptionsRaw() =>
+      request('permission-options', const {});
+
+  /// 切换会话权限档位。内部执行内核斜杠命令 `/permission name`，
+  /// 不触发模型（ws-commands.ts:163-176）。result.kind == 'error' 是
+  /// 业务失败（传输成功），调用方要检查并展示 result.text。
+  Future<void> setPermission(String sessionId, String name) async {
+    final r = await request('permission', {
+      'sessionId': sessionId,
+      'name': name,
+    });
+    final result = r['result'];
+    if (result is Map && result['kind'] == 'error') {
+      final text = (result['text'] ?? '切换失败') as String;
+      throw RequestException('PERMISSION', text);
+    }
+  }
+
   /// 订阅会话推送。subscribed 帧在 bridge 的 REQUEST_ID_ECHO_EXCLUDED_KINDS
   /// 排除表里（不回显 requestId），不能走 request() 等应答——发出即成功，
   /// 与 kotlin-sdk MobileGatewayClient.subscribe() 一致。

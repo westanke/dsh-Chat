@@ -1,10 +1,13 @@
 /// 底部输入条：官方结构（ref/md-shot-2-lists.png 像素实测）——
-/// 白色浮层容器（圆角 26dp + 阴影）：输入框；下一行「深度思考」「智能搜索」
-/// 两个胶囊 chip + 右侧「+」「语音」两个圆形按钮；容器下方居中免责提示。
+/// 白色浮层容器（圆角 26dp + 阴影）：输入框；下一行权限档位 chip（真机反馈
+/// 2026-11-04：原「深度思考」占位 chip 改为权限档位，对照桥 permission-options）
+/// + 右侧「+」「语音」两个圆形按钮；容器下方居中免责提示。
 library;
 
 import 'package:flutter/material.dart';
 
+import '../bridge/gateway.dart';
+import '../bridge/permissions.dart';
 import '../design/tokens.dart';
 
 /// 发送键三态（对照 companion 的 ComposerSendPolicy）。
@@ -18,6 +21,9 @@ class Composer extends StatefulWidget {
     required this.onCancel,
     this.enabled = true,
     this.streaming = false,
+    this.sessionId,
+    this.gateway,
+    this.currentPermission,
   });
 
   final DsColors colors;
@@ -27,6 +33,11 @@ class Composer extends StatefulWidget {
   final bool enabled;
   /// 是否有回合在跑（对照 companion 的 ComposerSendPolicy 三态）。
   final bool streaming;
+  /// 权限档位 chip 需要：当前会话 id 与网关（拉 permission-options / 切档位）。
+  final String? sessionId;
+  final GatewayClient? gateway;
+  /// 当前档位 value（来自会话投影 values.permissions.currentValue；可空）。
+  final String? currentPermission;
 
   @override
   State<Composer> createState() => _ComposerState();
@@ -34,10 +45,16 @@ class Composer extends StatefulWidget {
 
 class _ComposerState extends State<Composer> {
   final _controller = TextEditingController();
-  bool _deepThink = false;
-  bool _smartSearch = true;
+  bool _loadingOptions = false;
 
   DsColors get c => widget.colors;
+
+  /// 权限 chip 的显示标签：有当前值显示其本地化标签，否则「权限」。
+  String get _permissionLabel {
+    final v = widget.currentPermission;
+    if (v == null || v.isEmpty) return '权限';
+    return permissionLabelOf(v);
+  }
 
   bool get _hasText => _controller.text.trim().isNotEmpty;
 
@@ -60,6 +77,120 @@ class _ComposerState extends State<Composer> {
     if (text.isEmpty) return;
     widget.onSend(text);
     setState(() => _controller.clear());
+  }
+
+  /// 拉取权限档位清单并弹出选择菜单（真机反馈 2026-11-04 第 4 项）。
+  /// 服务端是权威：options 里没有的档位不出现；失败给明确提示。
+  Future<void> _pickPermission() async {
+    final gw = widget.gateway;
+    if (gw == null || _loadingOptions) return;
+    setState(() => _loadingOptions = true);
+    List<PermissionOption> options;
+    try {
+      final raw = await gw.permissionOptionsRaw();
+      options = parsePermissionCatalog(raw).switchable;
+    } on RequestException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('权限档位获取失败：${e.message}')),
+        );
+      }
+      return;
+    } finally {
+      if (mounted) setState(() => _loadingOptions = false);
+    }
+    if (!mounted || options.isEmpty) return;
+    final current = widget.currentPermission;
+    final selected = await showModalBottomSheet<PermissionOption>(
+      context: context,
+      backgroundColor: c.bgLayer1,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(DsSpacing.settingsCardRadius),
+        ),
+      ),
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(DsSpacing.settingsCardPadH),
+              child: Text(
+                '会话权限档位',
+                style: DsTypography.baseStrong.copyWith(
+                  color: c.labelPrimary,
+                ),
+              ),
+            ),
+            for (final o in options)
+              ListTile(
+                leading: Icon(
+                  o.value == current ? Icons.check_circle : Icons.circle_outlined,
+                  size: 20,
+                  color: o.value == current ? c.brand : c.labelTertiary,
+                ),
+                title: Text(
+                  o.label,
+                  style: DsTypography.base.copyWith(color: c.labelPrimary),
+                ),
+                subtitle: o.descriptionLabel == null
+                    ? null
+                    : Text(
+                        o.descriptionLabel!,
+                        style: DsTypography.small.copyWith(
+                          color: c.labelTertiary,
+                        ),
+                      ),
+                onTap: () => Navigator.pop(context, o),
+              ),
+            const SizedBox(height: DsSpacing.settingsCardPadV),
+          ],
+        ),
+      ),
+    );
+    if (selected == null || !mounted) return;
+    final sid = widget.sessionId;
+    if (sid == null || sid.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('请先打开一个会话再切换权限档位')),
+      );
+      return;
+    }
+    if (selected.needsConfirm) {
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          backgroundColor: c.settingsSurface,
+          title: const Text('切换到完全权限？'),
+          content: const Text('该档位不受沙箱限制，代理可以直接执行任何操作。'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('取消'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('确认切换'),
+            ),
+          ],
+        ),
+      );
+      if (ok != true || !mounted) return;
+    }
+    try {
+      await widget.gateway!.setPermission(sid, selected.value);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('权限已切换为「${selected.label}」')),
+        );
+      }
+    } on RequestException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('切换失败：${e.message}')),
+        );
+      }
+    }
   }
 
   @override
@@ -122,19 +253,11 @@ class _ComposerState extends State<Composer> {
                 Row(
                   children: [
                     _Chip(
-                      icon: Icons.blur_on,
-                      label: '深度思考',
-                      active: _deepThink,
+                      icon: Icons.verified_user_outlined,
+                      label: _permissionLabel,
+                      active: (widget.currentPermission ?? '').isNotEmpty,
                       colors: c,
-                      onTap: () => setState(() => _deepThink = !_deepThink),
-                    ),
-                    const SizedBox(width: DsSpacing.chipGap),
-                    _Chip(
-                      icon: Icons.language,
-                      label: '智能搜索',
-                      active: _smartSearch,
-                      colors: c,
-                      onTap: () => setState(() => _smartSearch = !_smartSearch),
+                      onTap: _pickPermission,
                     ),
                     const Spacer(),
                     switch (_sendKeyState) {

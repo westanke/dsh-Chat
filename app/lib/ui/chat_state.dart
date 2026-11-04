@@ -37,6 +37,20 @@ class ChatState extends ChangeNotifier {
 
   GatewayState get connectionState => _gateway.currentState;
 
+  /// 权限档位 chip 需要：底层网关（发 permission-options / permission 帧）。
+  GatewayClient get gateway => _gateway;
+
+  /// 当前会话权限档位 value（projections.values.permissions.currentValue；
+  /// 投影缺席/没有该条时为 null，UI 显示「权限」并可拉 permission-options）。
+  String? get currentPermission {
+    final values = projections?['values'];
+    if (values is! Map) return null;
+    final p = values['permissions'];
+    if (p is! Map) return null;
+    final v = p['currentValue'];
+    return v is String && v.isNotEmpty ? v : null;
+  }
+
   /// 当前设备名（抽屉底部账号栏显示，官方是手机号；bridge 侧是设备档案）。
   String get deviceLabel {
     final d = _gateway.device;
