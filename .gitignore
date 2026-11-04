@@ -57,3 +57,5 @@ Thumbs.db
 .cm
 .mm
 .c3
+── Flutter 产物（真机联调时 gradle 在 app/android/build 落的中间产物，非源码）──
+app/android/build/
