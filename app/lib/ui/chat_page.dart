@@ -149,26 +149,51 @@ class _ChatPageState extends State<ChatPage>
         ),
       ),
     );
-    return Stack(
-      children: [
-        Positioned.fill(child: page),
-        // 抽屉关闭时给左缘留一条手势热区，可像官方一样从边缘拖出/点按呼出。
-        Positioned(
-          left: 0,
-          top: 0,
-          bottom: 0,
-          width: _drawerShift.value == 0 ? DsSpacing.drawerEdgeDragWidth : 0,
-          child: GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: _openDrawer,
-            child: const SizedBox.shrink(),
+    return PopScope(
+      // 退出 APP 二次确认（真机反馈第五轮勘误：上一版错装在设置页——
+      // 用户原意是「在主页按返回退出 APP 要两次且有提示」防误触）。
+      // 首次返回提示「再按一次退出 DSH」，2 秒内再按放行（系统默认退到桌面）。
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        final now = DateTime.now().millisecondsSinceEpoch;
+        if (_lastExitAt != null && now - _lastExitAt! < 2000) {
+          // 第二次按返回：不拦截，让系统路由正常出栈/退出。
+          SystemNavigator.pop();
+          return;
+        }
+        _lastExitAt = now;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('再按一次退出 DSH'),
+            duration: Duration(seconds: 2),
           ),
-        ),
-        scrim,
-        drawer,
-      ],
+        );
+      },
+      child: Stack(
+        children: [
+          Positioned.fill(child: page),
+          // 抽屉关闭时给左缘留一条手势热区，可像官方一样从边缘拖出/点按呼出。
+          Positioned(
+            left: 0,
+            top: 0,
+            bottom: 0,
+            width: _drawerShift.value == 0 ? DsSpacing.drawerEdgeDragWidth : 0,
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: _openDrawer,
+              child: const SizedBox.shrink(),
+            ),
+          ),
+          scrim,
+          drawer,
+        ],
+      ),
     );
   }
+
+  /// 退出 APP 双击确认的时间窗（主页 PopScope 回调读写）。
+  int? _lastExitAt;
 
   Widget _buildChatScaffold(BuildContext context) {
     return Scaffold(

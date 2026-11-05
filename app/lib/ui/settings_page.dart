@@ -54,26 +54,7 @@ class SettingsPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = colors;
-    return PopScope(
-      // 防误触退出（第四轮反馈 4）：首次返回提示「再按一次退出设置」，
-      // 2 秒内再按才真正返回。系统返回手势与 AppBar 返回钮同样生效。
-      canPop: false,
-      onPopInvokedWithResult: (didPop, _) {
-        if (didPop) return;
-        final now = DateTime.now().millisecondsSinceEpoch;
-        if (_lastBackAt != null && now - _lastBackAt! < 2000) {
-          Navigator.of(context).pop();
-          return;
-        }
-        _lastBackAt = now;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('再按一次退出设置'),
-            duration: Duration(seconds: 2),
-          ),
-        );
-      },
-      child: Scaffold(
+    return Scaffold(
       backgroundColor: c.bgBase,
       appBar: AppBar(
         backgroundColor: c.bgBase,
@@ -127,10 +108,6 @@ class SettingsPage extends StatelessWidget {
           ),
         ),
       ),
-      ),
     );
   }
 }
-
-/// 双击退出的时间窗（PopScope 回调里读写，页面级共享）。
-int? _lastBackAt;
