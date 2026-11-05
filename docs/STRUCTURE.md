@@ -62,7 +62,7 @@
 | `ui/message_actions.dart` | 助手消息操作条：复制 / 喜欢 / 朗读（系统 TTS）/ 分享（系统分享面板，**尾部附「—— 发送于 yyyy-MM-dd HH:mm」，第四轮反馈 7**）+ 右侧重新生成接线；平台不支持时明确提示（点踩按真机反馈 2026-11-04 移除） | ✅ 装机验证 |
 | `ui/process_group.dart` | 工具调用折叠组：折叠一行「执行了命令，读取了图片…」，点开展开逐条明细，再点单条看完整详情（bash 命令按 BASH 代码块 `DsCodeBlock` 语法高亮展示、其余工具纯文本参数 / 输出 / 耗时 / 错误，真机反馈第 6 项） | ✅ 装机验证 |
 | `ui/model_sheet.dart` | 模型选择面板：models 帧拉分组清单，**按供应商分组可折叠（默认只展开当前供应商，折叠组若含当前选中模型显示一行提示）**→ select-model 帧确认切换 → 重拉 history；routable=false / failures 有值时显式提示（真机反馈第 4 项） | ✅ 单测覆盖 |
-| `ui/sessions_drawer.dart` | 侧边会话抽屉：胶囊搜索框 + 分组列表（组名来自 `session_groups.dart`：工作区置顶分组）+ 纯文字条目 + 底部栏（设置圆钮 + 设备名 + 绿点连接指示 + `connectionLabel` 地址，真机反馈第三轮 3） | ✅ 装机验证 |
+| `ui/sessions_drawer.dart` | 侧边会话抽屉：胶囊搜索框 + 分组列表（组名来自 `session_groups.dart`：工作区置顶分组）+ 纯文字条目 + 底部栏（**整行可点开设置** + 设置圆钮 + 「设置」文字 + 设备名 + 连接状态点：绿=桥正常/红=未连接（GatewayState.ready 判别）+ `connectionLabel` 地址，真机反馈第三轮 3 + 第五轮） | ✅ 装机验证 |
 | `ui/chat_message_list.dart` | `part of chat_page.dart`：消息列表 + 跳转最新 FAB + **列表头「加载更早消息」按钮（`historyHasMore` 控制，翻页中转圈；翻页 prepend 后经 `historyPageJustLoaded` 跳过一次贴底跟随，保住阅读位置，第二轮反馈 A）** + **整表 `SelectionArea` 包裹（长按可选字复制，第二轮反馈 E）** + 滚动冻结 / 贴底跟随；判据在 `scroll_follow.dart` | ✅ 单测覆盖 |
 | `ui/brand_mark.dart` | 空态品牌标记 DsBrandMark（`_WhalePainter` 原创 Path 绘制：圆身 + 双瓣尾鳍 + 月牙腹部 + 眼睛），不引用官方素材 | ✅ 装机验证 |
 

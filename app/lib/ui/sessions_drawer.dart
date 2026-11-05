@@ -4,6 +4,7 @@ library;
 
 import 'package:flutter/material.dart';
 
+import '../bridge/gateway.dart';
 import '../bridge/models.dart';
 import '../design/tokens.dart';
 import 'chat_state.dart';
@@ -155,6 +156,7 @@ class SessionsDrawerState extends State<SessionsDrawer> {
               colors: c,
               label: state.deviceLabel,
               connectionLabel: state.connectionLabel,
+              connected: state.connectionState == GatewayState.ready,
               onOpenSettings: widget.onOpenSettings,
               onClose: widget.onClose,
             ),
@@ -203,15 +205,17 @@ class SessionsDrawerItem extends StatelessWidget {
   }
 }
 
-/// 底部账号栏（真机反馈第三轮 3）：设置按钮 + 绿点连接指示 + 连接地址。
-/// 原版是头像 + 设备名 + 三点菜单；改为「设置」圆钮为主操作，
-/// 下方绿点（连接成功即亮）+ host:port 小字，一眼看清当前连的是哪台机器。
+/// 底部账号栏（真机反馈第三轮 3 + 第五轮）：设置钮+「设置」文字 + 设备名 +
+/// 连接状态点 + host:port 地址。整行可点开设置。
+/// 点色语义（真机反馈第五轮）：绿点 = 桥连接正常（GatewayState.ready），
+/// 红点 = 未连接（connecting/closed/authFailed 等一切非 ready 态）。
 class SessionsDrawerFooter extends StatelessWidget {
   const SessionsDrawerFooter({
     super.key,
     required this.colors,
     required this.label,
     required this.connectionLabel,
+    required this.connected,
     required this.onOpenSettings,
     required this.onClose,
   });
@@ -221,6 +225,9 @@ class SessionsDrawerFooter extends StatelessWidget {
 
   /// 当前连接地址（host:port，来自 ChatState.connectionLabel）。
   final String connectionLabel;
+
+  /// 桥是否连接正常（GatewayState.ready）；false 显示红点。
+  final bool connected;
   final VoidCallback onOpenSettings;
 
   /// 推挤式抽屉关闭回调（见 SessionsDrawer.onClose 注释）。
@@ -233,40 +240,45 @@ class SessionsDrawerFooter extends StatelessWidget {
         horizontal: DsSpacing.drawerFooterPadH,
         vertical: DsSpacing.drawerItemPadV,
       ),
-      child: Row(
-        children: [
-          // 设置按钮（替代原头像/三点菜单，真机反馈第三轮 3）。
-          Tooltip(
-            message: '设置',
-            child: InkResponse(
-              onTap: () {
-                onClose();
-                onOpenSettings();
-              },
-              radius: 22,
-              child: CircleAvatar(
-                radius: 16,
-                backgroundColor: colors.drawerSearchFill,
-                child: Icon(
-                  Icons.settings_outlined,
-                  size: 18,
-                  color: colors.labelPrimary,
-                ),
+      // 整行可点（真机反馈第五轮：点红色区域任何位置都打开设置）；
+      // 图标 + 「设置」文字 + 设备名/连接地址同属一个点按目标。
+      child: InkWell(
+        onTap: () {
+          onClose();
+          onOpenSettings();
+        },
+        borderRadius: BorderRadius.circular(10),
+        child: Row(
+          children: [
+            // 设置按钮（替代原头像/三点菜单，真机反馈第三轮 3）。
+            CircleAvatar(
+              radius: 16,
+              backgroundColor: colors.drawerSearchFill,
+              child: Icon(
+                Icons.settings_outlined,
+                size: 18,
+                color: colors.labelPrimary,
               ),
             ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: DsTypography.base.copyWith(color: colors.labelPrimary),
-                ),
+            const SizedBox(width: 10),
+            Text(
+              '设置',
+              style: DsTypography.base.copyWith(color: colors.labelPrimary),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: DsTypography.base.copyWith(
+                      color: colors.labelPrimary,
+                    ),
+                  ),
                 const SizedBox(height: 2),
                 Row(
                   children: [
@@ -275,8 +287,10 @@ class SessionsDrawerFooter extends StatelessWidget {
                       height: 7,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        // 绿点 = 连接正常（抽屉只在已连接状态可达）。
-                        color: const Color(0xFF34C759),
+                        // 绿点 = 桥连接正常，红点 = 未连接（真机反馈第五轮）。
+                        color: connected
+                            ? const Color(0xFF34C759)
+                            : const Color(0xFFFF3B30),
                       ),
                     ),
                     const SizedBox(width: 5),
@@ -295,6 +309,7 @@ class SessionsDrawerFooter extends StatelessWidget {
             ),
           ),
         ],
+        ),
       ),
     );
   }
