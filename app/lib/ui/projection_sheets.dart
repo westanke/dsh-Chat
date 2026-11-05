@@ -15,6 +15,7 @@ import '../bridge/gateway.dart';
 import '../bridge/projections.dart';
 import '../design/tokens.dart';
 import 'chat_state.dart';
+import 'subagent_history_page.dart';
 
 // ---------- 公共骨架 ----------
 
@@ -288,8 +289,29 @@ class _TeamSheet extends StatelessWidget {
         children.add(_emptyHint(c, '暂无子会话。'));
       } else {
         for (final s in team.subagents) {
-          children.add(_row(c, s.label.isEmpty ? s.id : s.label,
-              s.mode.isEmpty ? 'subagent' : s.mode));
+          children.add(InkWell(
+            // 子会话详情（第四轮反馈 3）：REST 只读窄口拉取后整页查看。
+            onTap: () {
+              final gateway = state.gateway;
+              final leadId = state.sessionId;
+              if (leadId == null || leadId.isEmpty) return;
+              Navigator.pop(context); // 先收起底部面板再进历史页
+              Navigator.push(
+                context,
+                MaterialPageRoute<void>(
+                  builder: (_) => SubagentHistoryPage(
+                    gateway: gateway,
+                    leadSessionId: leadId,
+                    subagent: s,
+                    colors: c,
+                  ),
+                ),
+              );
+            },
+            borderRadius: BorderRadius.circular(8),
+            child: _row(c, s.label.isEmpty ? s.id : s.label,
+                s.mode.isEmpty ? 'subagent' : s.mode),
+          ));
         }
       }
       // 底部三枚指挥话术：对照 companion TeamPanelSheet 的 CommandChips。

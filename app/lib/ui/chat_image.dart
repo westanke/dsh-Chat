@@ -14,6 +14,7 @@ import 'package:flutter/material.dart';
 import '../bridge/content.dart';
 import '../bridge/gateway.dart';
 import '../design/tokens.dart';
+import 'image_viewer.dart';
 
 /// 进程内字节缓存（immutable 资源，不淘汰）。
 final Map<String, Uint8List> _bytesCache = {};
@@ -111,14 +112,19 @@ class _DsChatImageState extends State<DsChatImage> {
   Widget build(BuildContext context) {
     final c = widget.colors;
     if (_bytes != null) {
-      return ClipRRect(
+      // 点按放大（第四轮反馈 1）：字节已在缓存，全屏预览零额外请求。
+      return InkWell(
+        onTap: () => openImageViewer(context, bytes: _bytes!),
         borderRadius: BorderRadius.circular(DsSpacing.codeBlockRadius),
-        child: ConstrainedBox(
-          constraints: BoxConstraints(maxWidth: widget.maxWidth),
-          child: Image.memory(
-            _bytes!,
-            fit: BoxFit.cover,
-            gaplessPlayback: true,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(DsSpacing.codeBlockRadius),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: widget.maxWidth),
+            child: Image.memory(
+              _bytes!,
+              fit: BoxFit.cover,
+              gaplessPlayback: true,
+            ),
           ),
         ),
       );

@@ -5,6 +5,7 @@ library;
 
 import 'package:flutter/material.dart';
 import 'package:gpt_markdown/gpt_markdown.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../design/tokens.dart';
 import 'md_code_block.dart';
@@ -148,6 +149,17 @@ class DsMarkdownView extends StatelessWidget {
         style: base,
         isStreaming: streaming,
         useDollarSignsForLatex: true,
+        // 链接可点（真机反馈第四轮 5）：外接浏览器打开，失败静默
+        // （desktop/无法处理 scheme 时 launchUrl 抛异常，不打断聊天）。
+        onLinkTap: (url, _) async {
+          final uri = Uri.tryParse(url);
+          if (uri == null) return;
+          try {
+            await launchUrl(uri, mode: LaunchMode.externalApplication);
+          } on Exception {
+            // 无浏览器/不支持的 scheme：忽略（链接本来就是可选跳转）。
+          }
+        },
         // 代码块自绘：官方是灰底 + 「python … 复制」纯文字 banner + 分隔线，
         // 内置 CodeField 的语言标签是 surfaceContainerHighest 粉色 pill，
         // 高亮主题也写死成 val_highlight 默认色，与官方 Atom One Light 不符。

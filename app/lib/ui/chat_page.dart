@@ -9,6 +9,7 @@ import 'package:flutter/services.dart';
 
 import '../bridge/gateway.dart';
 import '../bridge/models.dart';
+import '../bridge/platform.dart';
 import '../design/tokens.dart';
 import 'brand_mark.dart';
 import 'chat_image.dart';

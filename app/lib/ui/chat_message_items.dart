@@ -38,6 +38,10 @@ class _MessageItem extends StatelessWidget {
     if (message.isProcess) {
       return DsProcessGroup(group: message, colors: colors);
     }
+    // 文件卡（第四轮反馈 6）：present 工具交付的文件列表。
+    if (message.role == 'files') {
+      return _DeliverablesCard(files: message.files, colors: colors);
+    }
     // 一轮 turn 失败（模型限流 / 额度 / 网关报错）：官方是红色错误提示，
     // 这里同样用 danger 色块呈现，而不是静默什么都不显示。
     if (message.isError) {
@@ -117,6 +121,7 @@ class _MessageItem extends StatelessWidget {
                 DsMessageActions(
                   colors: colors,
                   text: message.text,
+                  sentAt: message.startedAt,
                   onRegenerate: () => state.regenerateAt(index),
                 ),
               ],
@@ -209,6 +214,95 @@ class _ThinkBlockState extends State<_ThinkBlock> {
             Padding(
               padding: const EdgeInsets.only(left: DsSpacing.thinkHMargin),
               child: DsMarkdownView(text: widget.text, colors: c, small: true),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+// ---------- 文件卡（第四轮反馈 6：deliverables/presented） ----------
+
+/// 交付文件卡：图标 + 文件名 + 描述，点击调系统分享（与官方 App 观感一致；
+/// 本机无文件管理器集成，share 是最稳的出口——可另存/发给自己）。
+class _DeliverablesCard extends StatelessWidget {
+  const _DeliverablesCard({required this.files, required this.colors});
+
+  final List<DeliverableFile> files;
+  final DsColors colors;
+
+  Future<void> _share(BuildContext context, DeliverableFile f) async {
+    final ok = await DshPlatform.share(f.path);
+    if (!context.mounted) return;
+    if (!ok) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('分享暂不可用')),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(top: DsSpacing.blockGap),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      decoration: BoxDecoration(
+        color: colors.bgLayer1,
+        borderRadius: BorderRadius.circular(DsSpacing.bubbleRadius),
+        border: Border.all(color: colors.borderL2),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          for (final f in files)
+            InkWell(
+              onTap: () => _share(context, f),
+              borderRadius: BorderRadius.circular(8),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.insert_drive_file_outlined,
+                      size: 22,
+                      color: colors.brand,
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            f.name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: DsTypography.base.copyWith(
+                              color: colors.labelPrimary,
+                            ),
+                          ),
+                          if (f.description != null && f.description!.isNotEmpty)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 2),
+                              child: Text(
+                                f.description!,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: DsTypography.small.copyWith(
+                                  color: colors.labelTertiary,
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                    Icon(
+                      Icons.ios_share,
+                      size: 16,
+                      color: colors.labelTertiary,
+                    ),
+                  ],
+                ),
+              ),
             ),
         ],
       ),

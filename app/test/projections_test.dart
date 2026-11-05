@@ -231,4 +231,70 @@ void main() {
       expect(page.rawEvents.length, 1);
     });
   });
+
+  group('HistoryPage deliverables/presented（第四轮反馈 6 文件卡）', () {
+    test('REST 外包装事件 → role=files 消息，files 原样透传', () {
+      final page = HistoryPage.fromEvents(<dynamic>[
+        {
+          'event': {
+            'type': 'deliverables/presented',
+            'seq': 7,
+            'time': 1000,
+            'data': {
+              'files': [
+                {'path': '/home/u/report.md', 'description': '周报'},
+                {'path': '/home/u/data.json'},
+              ],
+            },
+          },
+        },
+      ]);
+      expect(page.items.length, 1);
+      final m = page.items.single;
+      expect(m.role, 'files');
+      expect(m.files.length, 2);
+      expect(m.files[0].path, '/home/u/report.md');
+      expect(m.files[0].description, '周报');
+      expect(m.files[0].name, 'report.md');
+      expect(m.files[1].description, isNull);
+      expect(m.files[1].name, 'data.json');
+      expect(m.startedAt, 1000);
+    });
+
+    test('files 缺失 / 非数组 / 全空 path 不产消息', () {
+      for (final data in [
+        <String, dynamic>{},
+        {'files': 'nope'},
+        {'files': <dynamic>[]},
+        {'files': [{'path': ''}]},
+      ]) {
+        final page = HistoryPage.fromEvents(<dynamic>[
+          {'type': 'deliverables/presented', 'seq': 1, 'time': 1, 'data': data},
+        ]);
+        expect(page.items.where((m) => m.role == 'files'), isEmpty);
+      }
+    });
+
+    test('文件卡夹在工具过程组中间时正确 flush 顺序', () {
+      final page = HistoryPage.fromEvents(<dynamic>[
+        {
+          'type': 'tool/call',
+          'seq': 1,
+          'time': 1,
+          'data': {'callId': 'c1', 'name': 'present', 'arguments': '{}'},
+        },
+        {
+          'type': 'deliverables/presented',
+          'seq': 2,
+          'time': 2,
+          'data': {'files': [
+            {'path': '/a.txt'},
+          ]},
+        },
+      ]);
+      // process 组先 flush，文件卡随后。
+      expect(page.items[0].isProcess, isTrue);
+      expect(page.items[1].role, 'files');
+    });
+  });
 }

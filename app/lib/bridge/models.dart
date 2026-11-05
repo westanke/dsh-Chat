@@ -37,6 +37,24 @@ class SessionEvent {
 /// ContentParts / ContentImageRef / PromptPart 已拆到 content.dart
 /// （宪法 §7 单文件 ≤500 行），经上方 export 继续暴露。
 
+/// 文件卡（第四轮反馈 6）：`deliverables/presented` 事件的 files 项。
+/// 协议（asyncapi.yaml:391-410 / chat-adapter.ts:1575-1591）原样透传
+/// path/description，无 size/mime。
+class DeliverableFile {
+  DeliverableFile({required this.path, this.description});
+
+  factory DeliverableFile.fromJson(Map<String, dynamic> j) => DeliverableFile(
+        path: (j['path'] ?? '') as String,
+        description: j['description'] as String?,
+      );
+
+  final String path;
+  final String? description;
+
+  /// 文件名（路径最后一段），UI 主标题。
+  String get name => path.split('/').last;
+}
+
 /// 聊天 UI 消息（由历史事件或实时流装配）。
 class ChatMessage {
   ChatMessage({
@@ -44,6 +62,7 @@ class ChatMessage {
     required this.text,
     this.reasoning = '',
     this.images = const [],
+    this.files = const [],
     this.seq = -1,
     this.streaming = false,
     this.toolCalls = const [],
@@ -51,13 +70,16 @@ class ChatMessage {
     this.finishedAt,
   });
 
-  final String role; // 'user' | 'assistant' | 'process' | 'error'
+  final String role; // 'user' | 'assistant' | 'process' | 'error' | 'files'
   String text;
   String reasoning;
 
   /// content 里的图片引用（历史形状：attachment 引用，无字节；真机反馈
   /// 2026-11-04 第 1 项：手机端要显示历史图片）。
   final List<ContentImageRef> images;
+
+  /// role == 'files' 时：本组交付文件（文件卡，第四轮反馈 6）。
+  final List<DeliverableFile> files;
   int seq; // -1 = 尚未 committed（流式中的临时消息）
   bool streaming;
 
@@ -419,6 +441,30 @@ class HistoryPage {
           );
           groupCalls[idx] = info;
           groupEnd = event.time;
+
+        case 'deliverables/presented':
+          // 文件卡（第四轮反馈 6）：内核 present 工具交付的文件。
+          // files 原样透传 [{path, description}]；连续多个事件不合并，
+          // 一事件一卡组（与官方 App 一致）。
+          final rawFiles = event.data['files'];
+          if (rawFiles is! List || rawFiles.isEmpty) break;
+          final files = rawFiles
+              .whereType<Map>()
+              .map((f) => DeliverableFile.fromJson(
+                  Map<String, dynamic>.from(f)))
+              .where((f) => f.path.isNotEmpty)
+              .toList();
+          if (files.isEmpty) break;
+          flushGroup();
+          items.add(
+            ChatMessage(
+              role: 'files',
+              text: '',
+              files: List<DeliverableFile>.unmodifiable(files),
+              seq: event.seq,
+              startedAt: event.time,
+            ),
+          );
 
         case 'turn/end':
           // 一轮 turn 失败（如模型限流 / 额度耗尽）：内核只在 turn/end 的

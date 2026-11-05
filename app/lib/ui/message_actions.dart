@@ -19,11 +19,16 @@ class DsMessageActions extends StatefulWidget {
     super.key,
     required this.colors,
     required this.text,
+    this.sentAt,
     this.onRegenerate,
   });
 
   final DsColors colors;
   final String text;
+
+  /// 消息发送时间（epochMs，第四轮反馈 7）：分享文本尾部附加，
+  /// 让分享出去的内容带时间戳。null 不加。
+  final int? sentAt;
   final VoidCallback? onRegenerate;
 
   @override
@@ -55,9 +60,14 @@ class _DsMessageActionsState extends State<DsMessageActions> {
   }
 
   /// 分享：调系统分享面板（Android Intent.createChooser）。
+  /// 文本尾部附发送时间（第四轮反馈 7）：「—— 发送于 2026-11-05 10:06」。
   Future<void> _share(BuildContext context) async {
     final messenger = ScaffoldMessenger.of(context);
-    final ok = await DshPlatform.share(widget.text);
+    final at = widget.sentAt;
+    final body = at == null
+        ? widget.text
+        : '${widget.text}\n\n—— 发送于 ${formatSentTime(at)}';
+    final ok = await DshPlatform.share(body);
     if (!messenger.mounted) return;
     if (!ok) {
       messenger.showSnackBar(
@@ -108,6 +118,17 @@ class _DsMessageActionsState extends State<DsMessageActions> {
       ),
     );
   }
+}
+
+/// 发送时间格式化（第四轮反馈 7，无 intl 依赖）：
+/// epochMs → 'yyyy-MM-dd HH:mm'（本地时区）。
+String formatSentTime(int epochMs) {
+  final d = DateTime.fromMillisecondsSinceEpoch(epochMs);
+  final mm = d.month.toString().padLeft(2, '0');
+  final dd = d.day.toString().padLeft(2, '0');
+  final hh = d.hour.toString().padLeft(2, '0');
+  final mi = d.minute.toString().padLeft(2, '0');
+  return '${d.year}-$mm-$dd $hh:$mi';
 }
 
 class _ActionIcon extends StatelessWidget {

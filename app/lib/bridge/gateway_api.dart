@@ -110,6 +110,27 @@ extension GatewayApi on GatewayClient {
     );
   }
 
+  /// 子会话（团队成员）历史 —— 只读窄口 REST
+  /// GET /chat/sessions/{leadSessionId}/subagents/{subagentId}/messages
+  /// （openapi.yaml:992-1050，第四轮反馈 3）。授权：Lead 可见 + 内核投影
+  /// 背书成员关系；成员猜 id 不通（404）。应答形状同 history（events/hasMore）。
+  Future<HistoryPage> subagentHistory(
+    String leadSessionId,
+    String subagentId, {
+    int? maxMessages,
+    int? beforeSeq,
+  }) async {
+    final q = <String>[
+      if (maxMessages != null) 'maxMessages=$maxMessages',
+      if (beforeSeq != null) 'beforeSeq=$beforeSeq',
+    ];
+    final path = '/api/v1/chat/sessions/$leadSessionId/subagents/'
+        '$subagentId/messages${q.isEmpty ? '' : '?${q.join('&')}'}';
+    final r = await gatewayHttpJson(this, path);
+    final events = r['events'] as List? ?? const [];
+    return HistoryPage.fromEvents(events, hasMore: r['hasMore'] == true);
+  }
+
   /// 发消息。sessionId 省略则服务端自动建会话（响应携带新 sessionId）。
   /// contentParts 为空时发纯文本；带图时传 PromptPart.image（base64 裸串，
   /// mediaType 白名单 png/jpeg/webp/gif，REST 请求体上限 12 MiB）。
