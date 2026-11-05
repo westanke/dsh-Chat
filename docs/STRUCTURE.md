@@ -36,7 +36,7 @@
 | `bridge/dlog.dart` | 文件日志 `/data/data/<pkg>/files/dsh.log`（vivo 过滤 flutter 日志，只能落文件）；`enabled` 开关 + `read()` 供设置页诊断日志区 | ✅ |
 | `ui/chat_page.dart` | 聊天主页：顶栏（会话名 + 新对话加号接 `newChat` + ⋯ 溢出菜单） / 空态问候 / 设置页入口；消息列表与消息项拆成同库 `part`（宪法 §7 控行数）；**主页 PopScope 退出 APP 二次确认——首次返回提示「再按一次退出 DSH」，2s 内再按 SystemNavigator.pop 真退出（第五轮勘误，替代上一版错装在设置页的双击退出）** | ✅ 装机验证 |
 | `ui/chat_message_list.dart` | `part of chat_page.dart`：消息列表 + 跳转最新 FAB + 滚动冻结 / 贴底跟随（`wantsBottom` 粘性意图、80ms 解冻、140ms 渐显）；判据在 `scroll_follow.dart` | ✅ 单测覆盖 |
-| `ui/chat_message_items.dart` | `part of chat_page.dart`：消息项（双击复制整条；用户气泡内嵌历史图片 `DsChatImage`；助手消息 image-handoff 占位转图；**deliverables/presented → `_DeliverablesCard` 文件卡：.md 点开全屏渲染（MdViewerPage），其他类型系统打开（openFile），失败回退分享——m03452 改进，第四轮反馈 6**）/ 流式项 / 思考块折叠 / 消息操作条（重新生成接线） | ✅ 装机验证 |
+| `ui/chat_message_items.dart` | `part of chat_page.dart`：消息项（双击复制整条；用户气泡内嵌历史图片 `DsChatImage`；助手消息 image-handoff 占位转图；**deliverables/presented → `_DeliverablesCard` 文件卡：.md 点开全屏渲染（MdViewerPage），其他类型系统打开（openFile），失败回退分享——m03452 改进，第四轮反馈 6**）/ 流式项 / 思考块（流式默认展开「深度思考中…」并随思考流滚动；历史消息折叠「已深度思考」——m03759 反馈） / 消息操作条（重新生成接线） | ✅ 装机验证 |
 | `ui/chat_image.dart` | 历史图片组件 `DsChatImage`：attachment / image-handoff 双通道自动下载（`gatewayImageFetcher(gateway, sessionId)` 注入，attachments 接口必填 sessionId query，随会话切换刷新）+ 进程内字节缓存 + 失败占位可点重试（真机反馈 2026-11-04 第 1 项） | ✅ 装机验证 |
 | `ui/scroll_follow.dart` | 滚动跟随纯函数：`shouldAutoFollow` / `shouldShowFab` / `computeAtBottom` / `freezeSnapshot` / `isUserScrollGesture`（只认 dragDetails），对照 companion 三处滚动实现 | ✅ 单测覆盖 |
 | `ui/chat_state.dart` | ChangeNotifier：会话列表 / 打开会话 / 发送（纯文本与带图；新会话先经 `ensureMobileWorkspace` 预建到「手机会话」工作区）/ 斜杠命令 `runCommand()`（command-execute）/ `cancelTurn()` / `regenerateAt()` / `retryLast()` / 历史翻页 `loadOlder()`（beforeSeq + seq 去重）/ 流式累积 / 推送分发（含 HITL 问答/审批事件转发到 `HitlState`）/ HITL 动作 `answerQuestion()`/`cancelQuestion()`/`decideApproval()`；分组 getter 委托 `session_groups.dart` | ✅ 装机验证 |
@@ -51,7 +51,7 @@
 | `ui/settings_sections.dart` | 设置页分区：连接与设备信息（hello 只读）/ 界面风格三档 / 字号缩放与跟随系统 / 繁忙发送模式 / 诊断日志 / 关于（含检查更新行）/ 断开连接；不摆无授权的服务端开关 | ✅ 单测覆盖 |
 | `ui/settings_update.dart` | `part of settings_page.dart`：`_UpdateCheckRow` 检查新版本（1.5s 静默检查有新版才提示；手动检查三态：发现新版本→点按下载 / 已是最新 / 两站都连不上；下载轮询进度百分比 + STATUS_SUCCESSFUL 后 installApk 自动拉起安装，第二轮反馈 C；`Timer` 必须 dispose 取消，测试断言无 pending timer） | ✅ 单测覆盖 |
 | `ui/settings_widgets.dart` | 设置页通用组件：`_Section` / `_InfoRow` / `_ActionRow` / `_SwitchRow` / `_SegmentedRow` / `_ScopeChip` / `_WarningBanner` | ✅ 单测覆盖 |
-| `ui/composer.dart` | 输入条：白浮层圆角容器 + 输入框 + 权限档位 chip + 图片附件 chip 与发送（8MiB 上限；单发图片也亮发送键）+ **「/」斜杠命令面板**（`parseSlashDraft` 检测草稿 → commands 帧清单前缀过滤 → 浮层建议 → 点选回填；发送优先走 `onCommand`）+ 发送键三态 + **加图按钮常驻（先打字也能加图，第二轮反馈 D）** + 底部免责提示（命令面板组件拆 `composer_widgets.dart`） | ✅ 装机验证 |
+| `ui/composer.dart` | 输入条：白浮层圆角容器 + 输入框 + 权限档位 chip + 图片附件 chip 与发送（8MiB 上限；单发图片也亮发送键）+ **「/」斜杠命令面板**（`parseSlashDraft` 检测草稿 → commands 帧清单前缀过滤 → 浮层建议 → 点选回填；发送优先走 `onCommand`）+ 发送键三态 + **加图按钮常驻（先打字也能加图，第二轮反馈 D）** + 底部免责提示（**流式思考期间隐藏，无思考时显示——m03759 反馈**；命令面板组件拆 `composer_widgets.dart`） | ✅ 装机验证 |
 | `ui/composer_widgets.dart` | `part of composer.dart`：`_Chip` / `_RoundIconButton` / `_CommandPanel`（斜杠命令建议浮层，最多 6 条） | ✅ |
 | `ui/connect_page.dart` | 连接页三级路径：历史主机点击直连（DshHosts，有 token 才显示、失败显式报错）+ DSH1 配置文本导入（decodeDsh1，有 token 直连/无 token 填表）+ 手动配对（bridge 地址 + 配对码）；成功都 upsert 主机记录 | ✅ 装机验证 |
 | `ui/md_view.dart` | GptMarkdown 定制：官方 token 全量映射、任务列表预处理、codeBuilder/tableBuilder 接线、**链接可点外跳浏览器（url_launcher onLinkTap，第四轮反馈 5）** | ✅ 装机验证 |

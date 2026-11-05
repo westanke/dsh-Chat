@@ -469,10 +469,14 @@ class _ComposerState extends State<Composer> {
             ),
           ),
           const SizedBox(height: DsSpacing.composerHintGap),
-          Text(
-            '回答由 AI 生成，仅供参考',
-            style: DsTypography.caption.copyWith(color: c.inputHintText),
-          ),
+          // 免责声明（真机反馈第五轮）：流式思考进行中不显示——
+          // 思考块已在消息流里滚动展示，底部小字会跟着抢注意力；
+          // 无思考（空闲 / 普通回答中）时照常显示。
+          if (!widget.streaming)
+            Text(
+              '回答由 AI 生成，仅供参考',
+              style: DsTypography.caption.copyWith(color: c.inputHintText),
+            ),
           const SizedBox(height: 10),
         ],
       ),

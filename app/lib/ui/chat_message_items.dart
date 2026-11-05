@@ -152,7 +152,11 @@ class _StreamingItem extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           if (state.streamReasoning.isNotEmpty)
-            _ThinkBlock(text: state.streamReasoning, colors: colors),
+            _ThinkBlock(
+              text: state.streamReasoning,
+              colors: colors,
+              streaming: true,
+            ),
           DsMarkdownView(
             text: state.streamText,
             colors: colors,
@@ -165,18 +169,21 @@ class _StreamingItem extends StatelessWidget {
 }
 
 /// 思考流：官方「已深度思考」可折叠小字块。
+/// [streaming] 为 true 时默认展开并显示「深度思考中…」（真机反馈第五轮
+/// m03759：有思考时流式展示思考过程，而非折叠藏起来）；历史消息保持折叠。
 class _ThinkBlock extends StatefulWidget {
-  const _ThinkBlock({required this.text, required this.colors});
+  const _ThinkBlock({required this.text, required this.colors, this.streaming = false});
 
   final String text;
   final DsColors colors;
+  final bool streaming;
 
   @override
   State<_ThinkBlock> createState() => _ThinkBlockState();
 }
 
 class _ThinkBlockState extends State<_ThinkBlock> {
-  bool _expanded = false;
+  late bool _expanded = widget.streaming;
 
   @override
   Widget build(BuildContext context) {
@@ -200,7 +207,11 @@ class _ThinkBlockState extends State<_ThinkBlock> {
                   ),
                   const SizedBox(width: 4),
                   Text(
-                    _expanded ? '收起深度思考' : '已深度思考',
+                    _expanded
+                        ? '收起深度思考'
+                        : widget.streaming
+                            ? '深度思考中…'
+                            : '已深度思考',
                     style: DsTypography.smallStrong.copyWith(
                       color: c.labelSecondary,
                     ),
