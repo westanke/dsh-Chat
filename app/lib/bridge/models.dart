@@ -70,7 +70,7 @@ class ChatMessage {
     this.finishedAt,
   });
 
-  final String role; // 'user' | 'assistant' | 'process' | 'error' | 'files'
+  final String role; // 'user' | 'assistant' | 'process' | 'error' | 'files' | 'command'
   String text;
   String reasoning;
 

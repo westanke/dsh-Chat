@@ -46,6 +46,56 @@ class _MessageItem extends StatelessWidget {
         gateway: state.gateway,
       );
     }
+    // 命令卡（第六轮反馈 m03878）：斜杠命令执行的本地回执——
+    /// 首行命令行（terminal 图标），次行 ✓/✗ 结果。仅本机内存，不入历史。
+    if (message.role == 'command') {
+      final lines = message.text.split('\n');
+      final failed = message.text.contains('\n✗');
+      return Container(
+        margin: const EdgeInsets.only(top: DsSpacing.blockGap),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: colors.bgLayer1,
+          borderRadius: BorderRadius.circular(DsSpacing.codeBlockRadius),
+          border: Border.all(color: colors.inputBorder),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(
+              Icons.terminal,
+              size: 15,
+              color: failed ? colors.danger : colors.chipSelectedFg,
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    lines.first,
+                    style: DsTypography.small.copyWith(
+                      color: colors.labelPrimary,
+                      fontFamily: 'monospace',
+                    ),
+                  ),
+                  if (lines.length > 1)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 2),
+                      child: Text(
+                        lines.skip(1).join('\n'),
+                        style: DsTypography.small.copyWith(
+                          color: failed ? colors.danger : colors.labelTertiary,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
     // 一轮 turn 失败（模型限流 / 额度 / 网关报错）：官方是红色错误提示，
     // 这里同样用 danger 色块呈现，而不是静默什么都不显示。
     if (message.isError) {

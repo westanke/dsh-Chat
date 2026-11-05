@@ -8,6 +8,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../bridge/content.dart';
 import '../bridge/gateway.dart';
@@ -59,7 +60,64 @@ class Composer extends StatefulWidget {
 
 class _ComposerState extends State<Composer> {
   final _controller = TextEditingController();
+  final _focus = FocusNode();
   bool _loadingOptions = false;
+
+  /// 候选面板当前高亮行（键盘上下键移动；-1=无高亮）。
+  int _panelHighlight = -1;
+
+  /// 面板条目总数（命令或 @ 文件，随面板类型切换重置高亮）。
+  int get _panelCount {
+    final at = _atDraft;
+    if (at != null && _slashMatches.isEmpty) {
+      final q = at.query.toLowerCase();
+      final visible = _atMatches
+          .where((e) => q.isEmpty || e.name.toLowerCase().contains(q))
+          .toList();
+      return visible.length;
+    }
+    return _slashMatches.length;
+  }
+
+  /// 键盘事件：面板可见时上下键移动高亮、回车选中；否则交还输入框。
+  KeyEventResult _onKey(FocusNode node, KeyEvent event) {
+    if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
+      return KeyEventResult.ignored;
+    }
+    final count = _panelCount;
+    if (count == 0) return KeyEventResult.ignored;
+    final at = _atDraft;
+    final panelOpen = _slashMatches.isNotEmpty || at != null;
+    if (!panelOpen) return KeyEventResult.ignored;
+    if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
+      setState(() => _panelHighlight = (_panelHighlight + 1).clamp(0, count - 1));
+      return KeyEventResult.handled;
+    }
+    if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
+      setState(() => _panelHighlight = (_panelHighlight - 1).clamp(0, count - 1));
+      return KeyEventResult.handled;
+    }
+    if (event.logicalKey == LogicalKeyboardKey.enter ||
+        event.logicalKey == LogicalKeyboardKey.numpadEnter) {
+      if (_panelHighlight < 0 || _panelHighlight >= count) {
+        return KeyEventResult.ignored;
+      }
+      if (at != null && _slashMatches.isEmpty) {
+        final q = at.query.toLowerCase();
+        final visible = _atMatches
+            .where((e) => q.isEmpty || e.name.toLowerCase().contains(q))
+            .toList();
+        if (_panelHighlight < visible.length) {
+          _applyAtEntry(visible[_panelHighlight]);
+          return KeyEventResult.handled;
+        }
+      } else if (_panelHighlight < _slashMatches.length) {
+        _applyCommand(_slashMatches[_panelHighlight]);
+        return KeyEventResult.handled;
+      }
+    }
+    return KeyEventResult.ignored;
+  }
 
   /// 待发送图片（选图后暂存，随下一条消息一起发；真机反馈 2026-11-04 第 2 项）。
   ({String path, String name, String mediaType, String base64})? _pendingImage;
@@ -135,6 +193,76 @@ class _ComposerState extends State<Composer> {
     setState(() {});
   }
 
+  // ---- @ 文件补全（第六轮反馈 m03878）----
+
+  /// 当前 @ 草稿（光标前有未完结的 `@片段` 才有）。
+  ({String query, int start, int end})? get _atDraft {
+    if (!widget.enabled) return null;
+    return parseAtMentionDraft(_controller.text, _controller.selection.baseOffset);
+  }
+
+  /// @ 面板条目：目录 + 文件混合列表（懒加载一次根列表，随后按目录翻页）。
+  List<GatewayEntry> _atMatches = const [];
+  List<GatewayRoot> _atRoots = const [];
+  String? _atLoadedDir; // 已加载条目对应的 WirePath（''=根）
+  bool _atLoading = false;
+
+  /// 拉取 [dir]（WirePath，''=根）的目录页；query 过滤交给面板渲染侧。
+  Future<void> _ensureAtEntries(String dir) async {
+    final gw = widget.gateway;
+    if (gw == null || _atLoading) return;
+    if (_atLoadedDir == dir) return;
+    _atLoading = true;
+    try {
+      if (_atRoots.isEmpty) {
+        _atRoots = await gatewayListRoots(gw);
+      }
+      // 多根时先用第一个根（手机场景几乎都是单 workspace 根）。
+      final root = _atRoots.isEmpty ? null : _atRoots.first;
+      final entries = root == null
+          ? const <GatewayEntry>[]
+          : await gatewayListEntries(gw, root.id, dir.isEmpty ? '' : dir);
+      if (mounted) {
+        setState(() {
+          _atMatches = entries;
+          _atLoadedDir = dir;
+        });
+      }
+    } on RequestException {
+      if (mounted) setState(() => _atMatches = const []);
+    } finally {
+      _atLoading = false;
+    }
+  }
+
+  /// 点选 @ 条目：目录→追加 `/` 继续下钻；文件→整段替换为 `@path `。
+  void _applyAtEntry(GatewayEntry e) {
+    final draft = _atDraft;
+    if (draft == null) return;
+    if (e.isDirectory) {
+      final next = '${_atLoadedDir ?? ''}${e.name}/';
+      _controller.text =
+          '${_controller.text.substring(0, draft.start)}@$next';
+      _controller.selection = TextSelection.collapsed(
+        offset: _controller.text.length,
+      );
+      _atLoadedDir = null; // 触发重新拉取
+      setState(() {});
+      return;
+    }
+    // 文件：替换 @片段 为完整相对路径。多根时补根标签前缀便于辨认。
+    final root = _atRoots.isEmpty ? null : _atRoots.first;
+    final display = root == null || root.label.isEmpty
+        ? e.path
+        : '${root.label}/${e.path}';
+    _controller.text =
+        '${_controller.text.substring(0, draft.start)}@$display ${_controller.text.substring(draft.end)}';
+    _controller.selection = TextSelection.collapsed(
+      offset: draft.start + display.length + 2,
+    );
+    setState(() {});
+  }
+
   /// 发送时若整行是 `/xxx ...`（且没挂图片）→ 走命令执行而非聊天发送。
   bool _trySendCommand() {
     final sid = widget.sessionId;
@@ -163,6 +291,7 @@ class _ComposerState extends State<Composer> {
   @override
   void dispose() {
     _controller.dispose();
+    _focus.dispose();
     super.dispose();
   }
 
@@ -334,6 +463,8 @@ class _ComposerState extends State<Composer> {
 
   @override
   Widget build(BuildContext context) {
+    final at = _atDraft;
+    final slashMatches = _slashMatches;
     return Padding(
       padding: const EdgeInsets.fromLTRB(
         DsSpacing.composerMargin,
@@ -344,11 +475,24 @@ class _ComposerState extends State<Composer> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (_slashMatches.isNotEmpty)
+          if (at != null && slashMatches.isEmpty)
+            _AtFilePanel(
+              colors: c,
+              entries: _atMatches,
+              query: at.query,
+              rootLabel: _atRoots.isEmpty ? '' : _atRoots.first.label,
+              loading: _atLoading,
+              highlighted: _panelHighlight,
+              onPick: _applyAtEntry,
+              onHighlightChanged: (i) => setState(() => _panelHighlight = i),
+            )
+          else if (slashMatches.isNotEmpty)
             _CommandPanel(
               colors: c,
-              matches: _slashMatches,
+              matches: slashMatches,
+              highlighted: _panelHighlight,
               onPick: _applyCommand,
+              onHighlightChanged: (i) => setState(() => _panelHighlight = i),
             ),
           Container(
             decoration: BoxDecoration(
@@ -375,27 +519,37 @@ class _ComposerState extends State<Composer> {
                   padding: const EdgeInsets.symmetric(
                     horizontal: DsSpacing.composerTextInset,
                   ),
-                  child: TextField(
-                    controller: _controller,
-                    enabled: widget.enabled,
-                    minLines: 1,
-                    maxLines: 5,
-                    style: DsTypography.base.copyWith(color: c.labelPrimary),
-                    cursorColor: c.brand,
-                    decoration: InputDecoration(
-                      hintText: widget.enabled ? '发消息或按住说话' : '未连接到 bridge',
-                      hintStyle: DsTypography.inputPlaceholder.copyWith(
-                        color: c.inputHintText,
+                  // 键盘上下/回车驱动候选面板（外接键盘 / 物理键盘）。
+                  child: Focus(
+                    onKeyEvent: _onKey,
+                    child: TextField(
+                      controller: _controller,
+                      focusNode: _focus,
+                      enabled: widget.enabled,
+                      minLines: 1,
+                      maxLines: 5,
+                      style: DsTypography.base.copyWith(color: c.labelPrimary),
+                      cursorColor: c.brand,
+                      decoration: InputDecoration(
+                        hintText: widget.enabled ? '发消息或按住说话' : '未连接到 bridge',
+                        hintStyle: DsTypography.inputPlaceholder.copyWith(
+                          color: c.inputHintText,
+                        ),
+                        border: InputBorder.none,
+                        isDense: true,
+                        contentPadding: EdgeInsets.zero,
                       ),
-                      border: InputBorder.none,
-                      isDense: true,
-                      contentPadding: EdgeInsets.zero,
+                      onChanged: (_) {
+                        setState(() {});
+                        // 进入 `/` 草稿态时按需拉命令清单（每会话一次）。
+                        if (_slashDraft != null) _ensureCommands();
+                        // 进入 `@` 草稿态时按需拉目录页（@ 面板数据）。
+                        final at = _atDraft;
+                        if (at != null) {
+                          _ensureAtEntries(_atLoadedDir ?? '');
+                        }
+                      },
                     ),
-                    onChanged: (_) {
-                      setState(() {});
-                      // 进入 `/` 草稿态时按需拉命令清单（每会话一次）。
-                      if (_slashDraft != null) _ensureCommands();
-                    },
                   ),
                 ),
                 const SizedBox(height: 10),

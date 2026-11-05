@@ -160,6 +160,123 @@ class ResolvedFile {
   final String? contentType;
 }
 
+/// REST GET /api/v1/roots（listRoots，openapi.yaml:135-149，files.read
+/// scope）：本设备授权根清单。Root{id,label,createdAt}，绝对路径不下发。
+/// @ 文件补全用：先拿根，再对各根列目录。
+Future<List<GatewayRoot>> gatewayListRoots(GatewayClient gateway) async {
+  final token = gateway.token;
+  if (token == null || token.isEmpty) {
+    throw RequestException('NO_TOKEN', '尚未配对');
+  }
+  final base = gateway.baseUrl.replaceAll(RegExp(r'/+$'), '');
+  final uri = Uri.parse('$base/api/v1/roots');
+  final client = http.Client();
+  try {
+    final resp = await client
+        .get(uri, headers: {'Authorization': 'Bearer $token'})
+        .timeout(const Duration(seconds: 30));
+    if (resp.statusCode != 200) {
+      throw RequestException('HTTP_${resp.statusCode}', '授权根列表拉取失败');
+    }
+    final j = jsonDecode(resp.body);
+    final items = j is Map ? j['items'] : null;
+    if (items is! List) return const [];
+    return [
+      for (final it in items)
+        if (it is Map)
+          GatewayRoot(
+            id: (it['id'] ?? '') as String,
+            label: (it['label'] ?? '') as String,
+          ),
+    ];
+  } on TimeoutException {
+    throw RequestException('TIMEOUT', '授权根列表超时');
+  } finally {
+    client.close();
+  }
+}
+
+/// listRoots 应答项（openapi.yaml:1862-1870，只取客户端要用的字段）。
+class GatewayRoot {
+  const GatewayRoot({required this.id, required this.label});
+
+  final String id;
+  final String label;
+}
+
+/// REST GET /api/v1/roots/{rootId}/entries?path=`<WirePath>`
+/// （listEntries，openapi.yaml:177-200，files.read scope）：懒分页目录页。
+/// [wirePath] 传根内相对路径（'' = 根，path-policy.ts:55 空段合法）；返回按
+/// 目录优先、名称升序排好的条目（只保留 file/directory，symlink/other 不进
+/// @ 补全）。403=无权访问该目录。
+Future<List<GatewayEntry>> gatewayListEntries(
+  GatewayClient gateway,
+  String rootId,
+  String wirePath,
+) async {
+  final token = gateway.token;
+  if (token == null || token.isEmpty) {
+    throw RequestException('NO_TOKEN', '尚未配对');
+  }
+  final base = gateway.baseUrl.replaceAll(RegExp(r'/+$'), '');
+  final uri = Uri.parse(
+    '$base/api/v1/roots/${Uri.encodeComponent(rootId)}/entries'
+    '?path=${Uri.encodeComponent(wirePath)}&limit=500',
+  );
+  final client = http.Client();
+  try {
+    final resp = await client
+        .get(uri, headers: {'Authorization': 'Bearer $token'})
+        .timeout(const Duration(seconds: 30));
+    if (resp.statusCode != 200) {
+      throw RequestException(
+        resp.statusCode == 403 ? 'DIR_403' : 'HTTP_${resp.statusCode}',
+        resp.statusCode == 403 ? '目录不可访问' : '目录列表拉取失败',
+      );
+    }
+    final j = jsonDecode(resp.body);
+    final entries = j is Map ? j['entries'] : null;
+    if (entries is! List) return const [];
+    final out = <GatewayEntry>[];
+    for (final e in entries) {
+      if (e is! Map) continue;
+      final kind = (e['kind'] ?? '') as String;
+      if (kind != 'file' && kind != 'directory') continue;
+      out.add(
+        GatewayEntry(
+          name: (e['name'] ?? '') as String,
+          path: (e['path'] ?? '') as String,
+          kind: kind,
+        ),
+      );
+    }
+    out.sort((a, b) {
+      if (a.isDirectory != b.isDirectory) return a.isDirectory ? -1 : 1;
+      return a.name.toLowerCase().compareTo(b.name.toLowerCase());
+    });
+    return out;
+  } on TimeoutException {
+    throw RequestException('TIMEOUT', '目录列表超时');
+  } finally {
+    client.close();
+  }
+}
+
+/// listEntries 应答项（FileEntry，openapi.yaml:1872-1881，裁剪字段）。
+class GatewayEntry {
+  const GatewayEntry({
+    required this.name,
+    required this.path,
+    required this.kind,
+  });
+
+  final String name;
+  final String path;
+  final String kind;
+
+  bool get isDirectory => kind == 'directory';
+}
+
 /// REST GET /api/v1/roots/{rootId}/content?path=`<WirePath>`
 /// （openapi.yaml:243-286，readContent；files.read scope）：取文件原始字节。
 Future<List<int>> gatewayReadFileBytes(

@@ -192,6 +192,12 @@ class ChatState extends ChangeNotifier {
       messages = page.items;
       rawEvents = page.rawEvents;
       historyHasMore = page.hasMore;
+      // 命令卡保留（第六轮反馈 m03878）：reloadHistory 重建 messages，
+      // 本地命令卡（role=='command'，seq=-1）会被冲掉——重灌回列表尾部。
+      final cards = messages.where((m) => m.role == 'command').toList();
+      if (cards.isNotEmpty) {
+        messages = [...messages, ...cards.where((m) => m.seq < 0)];
+      }
       // 翻页/刷新时 projections 可能缺席：保留上一份（同会话），避免面板闪空。
       // 切会话时 newChat()/openSession() 会先清空，不会串台。
       projections = page.projections ?? projections;
@@ -336,10 +342,20 @@ class ChatState extends ChangeNotifier {
 
   /// 执行斜杠命令（真机反馈 2026-11-04 第 3 项）：`/xxx args` 整行走
   /// command-execute 帧，不出现在用户气泡里（bridge 端命令不入 chat 历史）。
+  /// 第六轮反馈 m03878：执行回执以本地「命令卡」消息注入会话流——
+  /// 成功显示命令行 + 结果摘要（kind），失败显示错误文本；重拉历史后
+  /// 本地卡保留（seq=-1 不参与去重/排序），直到下次 reloadHistory 重建。
   Future<void> runCommand(String line) async {
     final id = sessionId;
     if (id == null || id.isEmpty) return;
     lastError = null;
+    final card = ChatMessage(
+      role: 'command',
+      text: line,
+      startedAt: DateTime.now().millisecondsSinceEpoch,
+    );
+    messages = [...messages, card];
+    notifyListeners();
     try {
       final r = await _gateway.executeCommand(sessionId: id, line: line);
       final result = r['result'];
@@ -348,14 +364,23 @@ class ChatState extends ChangeNotifier {
         final text = result is Map && result['text'] is String
             ? result['text'] as String
             : '命令执行失败';
+        card.text = '$line\n✗ $text';
         lastError = text;
         notifyListeners();
         return;
       }
+      final detail = result is Map && result['text'] is String
+          ? (result['text'] as String).trim()
+          : '';
+      card.text = detail.isEmpty
+          ? '$line\n✓ 已执行'
+          : '$line\n✓ $detail';
       // 成功的命令大多自带落盘事件（如 /model 走 session 事件）；保险起见
       // 重拉一次历史，把命令效果落到 UI。
       await reloadHistory();
+      notifyListeners();
     } on RequestException catch (e) {
+      card.text = '$line\n✗ ${e.message}';
       lastError = '命令执行失败：${e.message}';
       notifyListeners();
     }

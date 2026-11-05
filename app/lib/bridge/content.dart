@@ -186,3 +186,26 @@ class SlashCommandList {
   }
   return (nameFragment: m.group(1) ?? '', args: m.group(3) ?? '');
 }
+
+/// 输入框 @ 文件引用解析（第六轮反馈 m03878）：光标前最近的 `@路径片段`。
+/// 返回 null = 当前没有 @ 草稿；否则返回（查询片段, 替换区间 start/end——
+/// 含 @，替换时整段换成补全结果）。@ 后到光标之间不允许出现空白（出现即
+/// 视为上一个引用已结束）。
+({String query, int start, int end})? parseAtMentionDraft(String text, int cursor) {
+  if (cursor < 0 || cursor > text.length) return null;
+  final head = text.substring(0, cursor);
+  final at = head.lastIndexOf('@');
+  if (at < 0) return null;
+  final fragment = head.substring(at + 1);
+  // @ 紧贴非路径字符（如 `a@b` 中间无空白也允许）——但 @ 前若是词字符则
+  // 多半是邮箱/普通文本，保守不触发，避免误弹面板。
+  if (at > 0 && !_atBoundary(head, at)) return null;
+  if (fragment.contains(RegExp(r'[\s]'))) return null;
+  return (query: fragment, start: at, end: cursor);
+}
+
+/// @ 触发边界：@ 前必须是行首或空白/常用开括号，避免邮箱误触。
+bool _atBoundary(String head, int at) {
+  final prev = head[at - 1];
+  return prev == ' ' || prev == '\n' || prev == '\t' || '（(【[「'.contains(prev);
+}
