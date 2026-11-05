@@ -64,3 +64,4 @@ app/android/build/
 artifacts/*.apk
 artifacts/.verify-*
 ref/dsh1-*.txt
+scripts/__pycache__/
