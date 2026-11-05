@@ -7,7 +7,7 @@
 </p>
 
 <p align="center">
-  <img alt="Version" src="https://img.shields.io/badge/version-1.0.6-087f8c">
+  <img alt="Version" src="https://img.shields.io/badge/version-1.0.7-087f8c">
   <img alt="License" src="https://img.shields.io/badge/license-AGPL--3.0-2da44e">
   <img alt="Platforms" src="https://img.shields.io/badge/platform-Android%20%7C%20iOS-586069">
   <img alt="Built with Flutter" src="https://img.shields.io/badge/built%20with-Flutter-02569B">
@@ -39,6 +39,7 @@
 
 | 平台 | 状态 |
 |---|---|
+| APK | [`dsh-Chat-v1.0.7.apk`](https://gitee.com/westanke/dsh-Chat/releases/download/v1.0.7/dsh-Chat-v1.0.7.apk)<br>26,574,196 字节 · SHA-256 `e469f1e1845fd6f7146195dfbd6594af08132f753cdfc9b1d49082aac1c013e4` |
 | APK | [`dsh-Chat-v1.0.6.apk`](https://gitee.com/westanke/dsh-Chat/releases/download/v1.0.6/dsh-Chat-v1.0.6.apk)<br>26,573,644 字节 · SHA-256 `1afefe0e5b47f3a86ac3f02a3dc766dead92f0244aabba78870f2469a21e8430` |
 | APK | [`dsh-Chat-v1.0.5.apk`](https://gitee.com/westanke/dsh-Chat/releases/download/v1.0.5/dsh-Chat-v1.0.5.apk)<br>26,505,619 字节 · SHA-256 `f7a1c0dd7e734cc4dfa4f3fc1b91d7cc06700715b0a4b52070a330483953ead0` |
 | APK | [`dsh-Chat-v1.0.4.apk`](https://gitee.com/westanke/dsh-Chat/releases/download/v1.0.4/dsh-Chat-v1.0.4.apk)<br>75,568,821 字节 · SHA-256 `b720d607d016f9aeb0a4314538323cbcecf82f4423ce0243352f74d2eba9ffed` |
