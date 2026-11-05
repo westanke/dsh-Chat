@@ -33,7 +33,7 @@ part 'settings_update.dart';
 
 /// 与 app/pubspec.yaml 的 version 保持一致（Flutter 无 BuildConfig，
 /// 不引入 package_info_plus，避免为一个展示字符串增加依赖，宪法 §8）。
-const String _appVersion = '1.0.10+11';
+const String _appVersion = '1.0.11+12';
 
 /// 子协议与握手协议版本：常量锚点在 bridge/gateway.dart，此处只读展示。
 const String _subprotocol = 'dsh-mobile-v1';
