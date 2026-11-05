@@ -7,6 +7,7 @@ import android.net.Uri
 import android.os.Environment
 import android.provider.OpenableColumns
 import android.speech.tts.TextToSpeech
+import androidx.core.content.FileProvider
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
@@ -182,6 +183,45 @@ class MainActivity : FlutterActivity() {
                                     startActivity(intent)
                                     result.success(true)
                                 }
+                            } catch (e: Exception) {
+                                result.success(false)
+                            }
+                        }
+                    }
+                    "openFile" -> {
+                        // 系统打开文件（文件卡第四轮反馈 6 改进：非 md 文件
+                        // 走系统「打开方式」）。参数 {name, mime, bytes}：
+                        // 桥端把文件字节取回后写进应用缓存目录，再用
+                        // FileProvider + ACTION_VIEW 交给系统。应用内缓存
+                        // 目录本 app 可读，不需要存储权限。
+                        val args = call.arguments as? Map<*, *>
+                        val name = args?.get("name") as? String
+                        val mime = args?.get("mime") as? String
+                        val bytes = args?.get("bytes") as? ByteArray
+                        if (name.isNullOrBlank() || bytes == null) {
+                            result.success(false)
+                        } else {
+                            try {
+                                val dir = File(cacheDir, "open")
+                                dir.mkdirs()
+                                // 文件名做路径净化（只保留最后一段 + 白名单字符）。
+                                val safe = name.substringAfterLast('/')
+                                    .replace(Regex("[^A-Za-z0-9._\\-\\u4e00-\\u9fa5]"), "_")
+                                val f = File(dir, safe)
+                                f.writeBytes(bytes)
+                                val uri = FileProvider.getUriForFile(
+                                    this, "com.dsh.dshchat.fileprovider", f)
+                                val view = Intent(Intent.ACTION_VIEW).apply {
+                                    setDataAndType(uri,
+                                        mime?.takeIf { it.isNotBlank() }
+                                            ?: "application/octet-stream")
+                                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or
+                                        Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                }
+                                val hasTarget =
+                                    view.resolveActivity(packageManager) != null
+                                if (hasTarget) startActivity(view)
+                                result.success(hasTarget)
                             } catch (e: Exception) {
                                 result.success(false)
                             }

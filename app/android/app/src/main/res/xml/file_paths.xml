@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- FileProvider 共享路径（文件卡「系统打开」，第四轮反馈 6 改进）：
+     只暴露 cache-dir/open 子目录（openFile 写入临时文件的地方），
+     不暴露任何其他应用数据。 -->
+<paths>
+    <cache-path
+        name="open"
+        path="open/"/>
+</paths>

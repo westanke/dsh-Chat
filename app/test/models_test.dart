@@ -487,4 +487,13 @@ void main() {
     expect(page.items[1].isError, isTrue);
     expect(page.items[1].text, '模型限流中');
   });
+
+  test('DeliverableFile.name 取路径最后一段（md 渲染页标题用）', () {
+    final f = DeliverableFile.fromJson({
+      'path': '/home/u/reports/周报 2026.md',
+      'description': '含中文与空格',
+    });
+    expect(f.name, '周报 2026.md');
+    expect(f.description, '含中文与空格');
+  });
 }

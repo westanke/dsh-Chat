@@ -97,3 +97,78 @@ Future<Object?> _restJson(
     client.close();
   }
 }
+
+/// REST GET /api/v1/roots/resolve?path=<绝对路径>（openapi.yaml:151-177，
+/// resolveAbsolutePath；files.read scope）：把 deliverables 事件里的服务器
+/// 绝对路径映射进授权根。应答 ResolvedPath{rootId, path(WirePath), kind,
+/// size, modifiedAt, contentType}；404=不在授权根（FILE_404）。
+Future<ResolvedFile> gatewayResolvePath(
+  GatewayClient gateway,
+  String absolutePath,
+) async {
+  final token = gateway.token;
+  if (token == null || token.isEmpty) {
+    throw RequestException('NO_TOKEN', '尚未配对');
+  }
+  final base = gateway.baseUrl.replaceAll(RegExp(r'/+$'), '');
+  final uri = Uri.parse(
+    '$base/api/v1/roots/resolve?path=${Uri.encodeComponent(absolutePath)}',
+  );
+  final client = http.Client();
+  try {
+    final resp = await client
+        .get(uri, headers: {'Authorization': 'Bearer $token'})
+        .timeout(const Duration(seconds: 30));
+    if (resp.statusCode != 200) {
+      throw RequestException(
+        resp.statusCode == 404 ? 'FILE_404' : 'HTTP_${resp.statusCode}',
+        resp.statusCode == 404 ? '文件不在授权目录内' : '路径解析失败（HTTP ${resp.statusCode}）',
+      );
+    }
+    final j = jsonDecode(resp.body) as Map<String, dynamic>;
+    final kind = j['kind'];
+    if (kind != 'file') {
+      throw RequestException('NOT_FILE', '目标不是文件');
+    }
+    return ResolvedFile(
+      rootId: (j['rootId'] ?? '') as String,
+      path: (j['path'] ?? '') as String,
+      size: j['size'] as int?,
+      contentType: j['contentType'] as String?,
+    );
+  } on TimeoutException {
+    throw RequestException('TIMEOUT', '路径解析超时');
+  } finally {
+    client.close();
+  }
+}
+
+/// resolveAbsolutePath 的应答（openapi.yaml:1820-1831，只取客户端要用的字段）。
+class ResolvedFile {
+  const ResolvedFile({
+    required this.rootId,
+    required this.path,
+    this.size,
+    this.contentType,
+  });
+
+  final String rootId;
+
+  /// 授权根内相对路径（WirePath）——传回 content 端点用。
+  final String path;
+  final int? size;
+  final String? contentType;
+}
+
+/// REST GET /api/v1/roots/{rootId}/content?path=`<WirePath>`
+/// （openapi.yaml:243-286，readContent；files.read scope）：取文件原始字节。
+Future<List<int>> gatewayReadFileBytes(
+  GatewayClient gateway,
+  String rootId,
+  String wirePath,
+) {
+  return gatewayHttpBytes(
+    gateway,
+    '/api/v1/roots/$rootId/content?path=${Uri.encodeComponent(wirePath)}',
+  );
+}

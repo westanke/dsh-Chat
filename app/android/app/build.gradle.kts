@@ -72,3 +72,9 @@ kotlin {
 flutter {
     source = "../.."
 }
+
+// FileProvider（文件卡「系统打开」，第四轮反馈 6 改进）来自 androidx.core。
+// Flutter 传递依赖里已有 androidx.core（embedding 引入），显式声明保证版本。
+dependencies {
+    implementation("androidx.core:core-ktx:1.13.1")
+}

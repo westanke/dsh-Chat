@@ -16,6 +16,7 @@ import 'chat_image.dart';
 import 'chat_state.dart';
 import 'composer.dart';
 import 'md_view.dart';
+import 'md_viewer.dart';
 import 'message_actions.dart';
 import 'model_sheet.dart';
 import 'process_group.dart';

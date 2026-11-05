@@ -117,4 +117,27 @@ class DshPlatform {
       return false;
     }
   }
+
+  /// 用系统「打开方式」打开文件字节（文件卡第四轮反馈 6 改进：
+  /// 非 md 文件交给系统查看器）。字节写入应用缓存目录后经 FileProvider
+  /// 共享——Android ACTION_VIEW，无存储权限。返回是否成功调起。
+  static Future<bool> openFile({
+    required String name,
+    required List<int> bytes,
+    String? mime,
+  }) async {
+    if (name.trim().isEmpty || bytes.isEmpty) return false;
+    try {
+      return await _channel.invokeMethod<bool>('openFile', {
+            'name': name,
+            'mime': mime ?? '',
+            'bytes': Uint8List.fromList(bytes),
+          }) ??
+          false;
+    } on PlatformException {
+      return false;
+    } on MissingPluginException {
+      return false;
+    }
+  }
 }

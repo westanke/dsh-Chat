@@ -40,7 +40,11 @@ class _MessageItem extends StatelessWidget {
     }
     // 文件卡（第四轮反馈 6）：present 工具交付的文件列表。
     if (message.role == 'files') {
-      return _DeliverablesCard(files: message.files, colors: colors);
+      return _DeliverablesCard(
+        files: message.files,
+        colors: colors,
+        gateway: state.gateway,
+      );
     }
     // 一轮 turn 失败（模型限流 / 额度 / 网关报错）：官方是红色错误提示，
     // 这里同样用 danger 色块呈现，而不是静默什么都不显示。
@@ -223,19 +227,87 @@ class _ThinkBlockState extends State<_ThinkBlock> {
 
 // ---------- 文件卡（第四轮反馈 6：deliverables/presented） ----------
 
-/// 交付文件卡：图标 + 文件名 + 描述，点击调系统分享（与官方 App 观感一致；
-/// 本机无文件管理器集成，share 是最稳的出口——可另存/发给自己）。
+/// 交付文件卡：图标 + 文件名 + 描述（第四轮反馈 6 + m03452 改进）。
+/// 点击：.md/.markdown → 全屏 Markdown 渲染页（resolve + readContent 取字节）；
+/// 其他类型 → 系统打开（openFile，FileProvider + ACTION_VIEW）；
+/// 都失败回退系统分享。md 渲染页需要 gateway（长文档滚动可读）。
 class _DeliverablesCard extends StatelessWidget {
-  const _DeliverablesCard({required this.files, required this.colors});
+  const _DeliverablesCard({
+    required this.files,
+    required this.colors,
+    required this.gateway,
+  });
 
   final List<DeliverableFile> files;
   final DsColors colors;
 
-  Future<void> _share(BuildContext context, DeliverableFile f) async {
-    final ok = await DshPlatform.share(f.path);
-    if (!context.mounted) return;
+  /// 当前会话的 gateway（resolve/readContent/openFile 都要走 REST）。
+  final GatewayClient gateway;
+
+  bool _isMarkdown(String path) {
+    final lower = path.toLowerCase();
+    return lower.endsWith('.md') || lower.endsWith('.markdown');
+  }
+
+  void _open(BuildContext context, DeliverableFile f) {
+    if (_isMarkdown(f.path)) {
+      Navigator.push(
+        context,
+        MaterialPageRoute<void>(
+          builder: (_) => MdViewerPage(
+            gateway: gateway,
+            absolutePath: f.path,
+            title: f.name,
+            colors: colors,
+          ),
+        ),
+      );
+      return;
+    }
+    _openWithSystem(context, f);
+  }
+
+  /// 非 md：先 resolve 确认可读，取字节交给系统「打开方式」；
+  /// 失败回退系统分享（体验兜底，不留死交互）。
+  Future<void> _openWithSystem(BuildContext context, DeliverableFile f) async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final resolved =
+          await gatewayResolvePath(gateway, f.path);
+      final bytes =
+          await gatewayReadFileBytes(gateway, resolved.rootId, resolved.path);
+      final ok = await DshPlatform.openFile(
+        name: f.name,
+        bytes: bytes,
+        mime: resolved.contentType,
+      );
+      if (!messenger.mounted) return;
+      if (!ok) {
+        messenger.showSnackBar(
+          const SnackBar(content: Text('没有可打开此文件的应用，改为分享')),
+        );
+        await DshPlatform.share(f.path);
+      }
+    } on RequestException {
+      _fallbackShare(messenger, '文件读取失败，改为分享');
+    } on Exception {
+      _fallbackShare(messenger, '打开失败，改为分享');
+    }
+  }
+
+  Future<void> _fallbackShare(
+    ScaffoldMessengerState messenger,
+    String tip,
+  ) async {
+    // 注意：这里分享的是路径文本（老行为），不是文件字节——字节分享需要
+    // 临时文件 + FileProvider，作为纯兜底不值得引入。
+    final ok = await DshPlatform.share(
+      files.where((f) => f.path.isNotEmpty).map((f) => f.path).join('\n'),
+    );
+    if (!messenger.mounted) return;
+    messenger.showSnackBar(SnackBar(content: Text(tip)));
     if (!ok) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      messenger.showSnackBar(
         const SnackBar(content: Text('分享暂不可用')),
       );
     }
@@ -256,7 +328,7 @@ class _DeliverablesCard extends StatelessWidget {
         children: [
           for (final f in files)
             InkWell(
-              onTap: () => _share(context, f),
+              onTap: () => _open(context, f),
               borderRadius: BorderRadius.circular(8),
               child: Padding(
                 padding: const EdgeInsets.symmetric(vertical: 8),
@@ -296,7 +368,7 @@ class _DeliverablesCard extends StatelessWidget {
                       ),
                     ),
                     Icon(
-                      Icons.ios_share,
+                      Icons.ios_share,  // md 卡片也用它（点开即预览）
                       size: 16,
                       color: colors.labelTertiary,
                     ),
