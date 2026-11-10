@@ -2,7 +2,8 @@
 
 > 2026-11-10。反馈来源：用户 (m00001)「@dsh-Chat/ 华为手机无法上传图片」，
 > 后续收窄 (m00156)「主要是HEIC传不了」。
-> 本仓工程宪法 `AGENTS.md` §9：未装机验证过的功能不许写「已完成」；本报告的验证边界见 §7。
+> 本仓工程宪法 `AGENTS.md` §9：未装机验证过的功能不许写「已完成」；
+> 初版验证边界见 §7，**2026-11-10 发版后经用户真机回归补记，见 §7 / §8 的「后续补记」**。
 
 ---
 
@@ -22,7 +23,7 @@
 
 - **无华为真机**：`adb devices` 仅一台 vivo V2080A（Android 11 / sdk30，未装 dsh-Chat），无华为/荣耀设备、无华为日志/崩溃记录。本结论是**代码 + 协议 + 兼容性调研**定位，不是真机复现。
 - **环境变化（调查中途）**：调研阶段 `/dev/sda` 一度以 `ro` 挂载、`sudo` 因 nosuid 失效，原仓无法写；因此在 `/media/wangke/OFFICE/workspace/.dsh-mobile/dsh-Chat`（工作树快照，含 `composer.dart` 已有的 `_slashMatches` take(6)→全量未提交修正）中完成修改与验证。实施尾声挂载恢复 `rw`，**修复已直接同步回原仓 `/media/wangke/OFFICE/workspace/dsh-Chat` 并在原仓复验通过**（§7）。副本仅作验证沙箱，不再是交付物。
-- **工具链**：Flutter 3.47.9 / Dart 3.13.7，`minSdk=24 / compileSdk=36`（`FlutterExtension.kt:23,26,34`）。原 SDK 启动器首跑会写 `engine.stamp.tmp`/`engine.realm`、遥测会删 `.dart-tool/*.log`，只读盘均失败；已把 SDK（2.3G）与 `dsh-home`（含 pub-cache，369M）复制到可写区后打通，原仓复验复用该工具链。Kotlin 侧**无 kotlinc / gradle 命令**，只能人工核对 + 照搬 companion 已验证代码，**无法编译验证**（见 §7）。
+- **工具链**：Flutter 3.47.9 / Dart 3.13.7，`minSdk=24 / compileSdk=36`（`FlutterExtension.kt:23,26,34`）。原 SDK 启动器首跑会写 `engine.stamp.tmp`/`engine.realm`、遥测会删 `.dart-tool/*.log`，只读盘均失败；已把 SDK（2.3G）与 `dsh-home`（含 pub-cache，369M）复制到可写区后打通，原仓复验复用该工具链。调查阶段 Kotlin 侧**无 kotlinc / gradle 命令**，只能人工核对 + 照搬 companion 已验证代码；**发版阶段 A 的 `flutter build apk` 已真实编译通过**（见 §7 后续补记），初版「无法编译验证」的结论已被后续进展推翻。
 
 ---
 
@@ -148,22 +149,22 @@ Composer「+」(composer.dart:351 _pickImage)
 | 项 | 结果 |
 |---|---|
 | `bash scripts/ci/docs-check.sh` | ✅ 通过（原仓，文档契约三检全绿：lib/ 全登记 / 无死链 / 无旧仓名） |
-| `flutter pub get` | ✅ 通过（原仓，复用可写区 SDK + HOME） |
+| `flutter pub get` | ✅ 通过（原仓） |
 | `flutter analyze` | ✅ **No issues found!**（原仓；宪法 §7 warning/info 零积压） |
-| `flutter test` | ✅ **125 项全过**（原仓，含新增 `image_media_type_test.dart` 的魔数嗅探/白名单/边界单测） |
-| Kotlin 编译 | **未验证**：本机无 kotlinc/gradle 命令，只人工核对 + 照搬 companion 已装机验证过的实现 |
-| 真机（华为/荣耀）上传 HEIC | **未验证**：无华为真机，需装机后由用户回归 |
-| vivo 回归（JPEG 仍可发、无回退） | **未验证**：需装机回归 |
+| `flutter test` | ✅ **125 项全过**（原仓，含新增 `image_media_type_test.dart` 的魔数嗅探/白名单/边界单测；发版阶段 A 全仓门禁复跑为 **129 项全过**，含连接页删除功能 4 项） |
+| Kotlin 编译 | ✅ **已验证**：发版阶段 A `flutter build apk --release`（arm64）首次真正编译 `MainActivity.kt` + `ImagePickHelper.kt`，Gradle `assembleRelease` 172.6s 成功，产出 26,639,908 字节 APK（初版报告标注「无法编译验证」，此处更正） |
+| 真机（华为/荣耀）上传 HEIC | ✅ **已通过**：用户 2026-11-10 装机后回报「选 HEIC 能发图 通过」（宪法 §9 的装机验收证据） |
+| vivo 回归（JPEG 仍可发、无回退） | ⚠️ 未单独回报：用户本次只回报 HEIC 发图与删除按钮两项；普通 JPEG 无回退仍属代码级保证，未单独装机验证 |
 
-> 因此本修复的表述为「代码级修复 + Dart 侧自动验证全绿」，**不是「已装机验证完成」**。
+> **后续补记（2026-11-10 发版 + 真机回归后）**：初版结论「代码级修复 + Dart 侧自动验证全绿，不是已装机验证完成」已随两项进展更新 —— ① Kotlin 编译在阶段 A 真实通过；② 用户装机确认「选 HEIC 能发图 通过」。按宪法 §9，此处有了真机验收证据，可如实表述该主症状「已装机验证通过」；普通 JPEG 无回退等未单独回报的回归项仍不写「已完成」。发布动作本身（见 §8）已完成并回读无误。
 
 ---
 
 ## 8. 落地状态与回归指引
 
-- 修复已**直接写入原仓** `/media/wangke/OFFICE/workspace/dsh-Chat`（挂载恢复 `rw` 后同步 9 个文件），并在原仓跑通四步复验（§7）。当前 `git status --short`：5 个修改 + 4 个新文件（`MainActivity.kt` / `ImagePickHelper.kt` / `platform.dart` / `image_media_type.dart` / `composer.dart` / `composer_widgets.dart` / `image_media_type_test.dart` / `STRUCTURE.md` / `huawei-heic-upload-report.md`），**未提交、未推送**。
-- 按宪法 §10，**不 push / 不 release / 不 tag / 不上传产物**未经用户明确同意；本地 commit 可由用户决定（提交信息建议 `fix(image): 华为 HEIC 上传按字节魔数判类型并客户端转码`）。
-- 真机回归（需用户）：① 华为/荣耀「高效照片」HEIC 选图能转码并发出；② 华为图库返回无扩展名/纯数字 DISPLAY_NAME 的 JPEG 仍能发；③ vivo 常规 JPEG 无回退；④ 转码大图不 OOM、不撞 8MiB；⑤ 读 URI 失败时弹明确中文提示而非静默。
+- 修复已**直接写入原仓** `/media/wangke/OFFICE/workspace/dsh-Chat`（挂载恢复 `rw` 后同步 9 个文件），并在原仓跑通四步复验（§7）。**后续状态变更**：这 9 项与「连接页历史主机删除」等改动按用户要求「所有改动一次提交」合并为提交 `e30fdc7 feat(release): 修复 HEIC 上传、新增历史主机删除并发布 1.0.13+14`；版本 bump 到 `1.0.13+14`，阶段 A 打包成功（Kotlin 首次真编译）、阶段 B 打 tag `v1.0.13` → 双推 Gitee+AtomGit → 两站 Release → 上传 APK/SHA256SUMS → 回读下载 SHA 一致，**发版完成**（用户 (m01013)「推+发」明确授权，解除宪法 §10 限制）。因此「未提交、未推送」为初版状态，现已失效。
+- 用户真机回归（2026-11-10，装机后口述）：「选 HEIC 能发图 通过」「卡片删除按钮点得动 通过」（后者属 `connect-host-remove-report.md`，此处一并记录）。按宪法 §9 这两项已有装机验收证据。
+- 其余回归项（未单独回报，仍不写「已完成」）：① 华为图库返回无扩展名/纯数字 DISPLAY_NAME 的 JPEG 仍能发；② vivo 常规 JPEG 无回退；③ 转码大图不 OOM、不撞 8MiB；④ 读 URI 失败时弹明确中文提示而非静默。若发现异常，改完再走一次 bump 发新版本即可。
 - 构建产物不入库（`app/build/` 等已在 `.gitignore`）；`ref/mark-preview.png` / `ref/md-preview.png` 是 `flutter test` 渲染测试生成的派生产物，按需清理。
 
 ---
