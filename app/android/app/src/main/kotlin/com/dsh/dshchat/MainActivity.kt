@@ -82,6 +82,9 @@ class MainActivity : FlutterActivity() {
                         val intent = Intent(Intent.ACTION_GET_CONTENT).apply {
                             type = "image/*"
                             addCategory(Intent.CATEGORY_OPENABLE)
+                            // 部分 DocumentsProvider / 华为图库实现下补临时读授权更稳妥
+                            // （docs/huawei-heic-upload-report.md §4.5）。
+                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                         }
                         try {
                             startActivityForResult(intent, pickImageRequest)
@@ -251,16 +254,35 @@ class MainActivity : FlutterActivity() {
             // 复制进应用缓存目录（content:// URI 跨进程读取不稳定）。
             val bytes = contentResolver.openInputStream(uri)?.use { it.readBytes() }
             if (bytes == null) {
-                result.success(null)
+                result.success(mapOf("error" to "读取图片失败，请重新选择"))
                 return
             }
-            val name = queryDisplayName(uri) ?: "image"
-            val cacheFile = File(cacheDir, "pick-$name")
-            cacheDir.mkdirs()
-            cacheFile.writeBytes(bytes)
-            result.success(mapOf("path" to cacheFile.absolutePath, "name" to name))
+            // 按字节魔数定真实类型：不信 DISPLAY_NAME（华为常无扩展名/纯数字），
+            // 也不直接发 image/heic（内核内联 prompt 只收 4 种，见
+            // docs/huawei-heic-upload-report.md §3/§4.3）。内核不收的格式在
+            // 客户端转码成 JPEG/PNG 后再回传。
+            when (val prepared = ImagePickHelper.prepare(bytes)) {
+                is ImagePickHelper.Prepared.Failure -> {
+                    result.success(mapOf("error" to prepared.message))
+                    return
+                }
+                is ImagePickHelper.Prepared.Success -> {
+                    val cacheFile = File(cacheDir, ImagePickHelper.cacheFileName(prepared.extension))
+                    cacheDir.mkdirs()
+                    cacheFile.writeBytes(prepared.bytes)
+                    val name = ImagePickHelper.displayName(queryDisplayName(uri), prepared.mediaType)
+                    result.success(
+                        mapOf(
+                            "path" to cacheFile.absolutePath,
+                            "name" to name,
+                            "mediaType" to prepared.mediaType,
+                        )
+                    )
+                }
+            }
         } catch (e: Exception) {
-            result.success(null)
+            // 不再静默吞掉：把可读原因回传，由 Dart 侧弹 SnackBar。
+            result.success(mapOf("error" to "读取图片失败：${e.message ?: "未知错误"}"))
         }
     }
 

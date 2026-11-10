@@ -8,6 +8,9 @@
 |---|---|
 | `design-tokens.md` | 设计基准（官方 Web token + App 实测像素），token 单一事实来源 |
 | `STRUCTURE.md` | 本文件 |
+| `feedback-2026-11-04-report.md` | 真机反馈 8 条调查报告（模板） |
+| `huawei-heic-upload-report.md` | 华为手机 HEIC 图片无法上传调查报告（根因 / 内核 4 种白名单一手证据 / 魔数嗅探+转码修法 / 验证边界 / 外部来源索引） |
+| `connect-host-remove-report.md` | 连接页历史主机无删除功能调查报告（记录库缺单条删除 / 卡片删除按钮+二次确认 / 失效记录入口 / 凭证清理 / 验证边界与回归项） |
 
 ## app/lib/
 
@@ -27,11 +30,12 @@
 | `bridge/gateway_rest.dart` | REST JSON 顶层函数：`gatewayCreateWorkspace()`（POST /chat/workspaces，path=根内相对路径）/ `gatewayRenameWorkspace()`（PATCH，落「手机会话」组名）/ **`gatewayResolvePath()`（GET /roots/resolve 解析 deliverables 绝对路径 → ResolvedFile{rootId,path,size,contentType}）+ `gatewayReadFileBytes()`（GET /roots/{rootId}/content 取文件字节，m03452 文件卡打开用）** + **`gatewayListRoots()`（GET /roots 授权根清单 → GatewayRoot）/ `gatewayListEntries()`（GET /roots/{rootId}/entries 目录懒分页 → GatewayEntry，目录优先排序——m03878 @ 文件补全用）** | ✅ |
 | `bridge/questions.dart` | HITL 模型：`UserQuestion`/`UserQuestionOption`/`PendingQuestion`（userQuestions/requested 收敛，callId 去重键）/ `PendingApproval`（approval.requested）/ `QuestionAnswerItem`（question-answer 载荷，custom 空省略） | ✅ 单测覆盖 |
 | `bridge/credentials.dart` | shared_preferences 持久化 `{baseUrl, token}`，实现「一次配对，此后自动连接」 | ✅ |
-| `bridge/hosts.dart` | 主机记录库 `DshHosts`（shared_preferences 单键 `dsh.hosts` JSON 数组，FNV-1a 幂等 id）+ DSH1 配置文本宽容解码 `decodeDsh1`（companion ConnectionShare 口径：前缀任意位置/双字母表/补填充/失败返回 null） | ✅ 单测覆盖 |
+| `bridge/hosts.dart` | 主机记录库 `DshHosts`（shared_preferences 单键 `dsh.hosts` JSON 数组，FNV-1a 幂等 id；`load/upsert/remove/clear`，remove 按 baseUrl 优先+非空 id 兜底、删空写 `[]`）+ DSH1 配置文本宽容解码 `decodeDsh1`（companion ConnectionShare 口径：前缀任意位置/双字母表/补填充/失败返回 null） | ✅ 单测覆盖 |
 | `bridge/permissions.dart` | 权限档位目录 `PermissionCatalog`/`PermissionOption`（permission-options 应答收敛 + value→中文标签映射 + `parsePermissionCatalog`），档位以服务端清单为准不硬编码 | ✅ 单测覆盖 |
 | `bridge/models_view.dart` | 会话模型视图 `SessionModels`/`ModelProviderGroup`/`ModelView`/`ModelSelection`（models 应答收敛 + `parseSelectModelReply` 按 `data.type` 判别 sent + `reasoningEffortLabel`），effort 枚举以服务端 efforts 为准 | ✅ 单测覆盖 |
 | `bridge/device.dart` | MethodChannel `dsh/device#ianaZone` → IANA 时区（clientTimeZone 必需 `Area/Location`） | ✅ |
-| `bridge/platform.dart` | MethodChannel `dsh/platform`：系统 TTS 朗读（speak/stopSpeak）+ 系统分享（share）+ 系统选图器（pickImage→缓存路径）+ **系统打开文件（openFile：字节写缓存目录 FileProvider + ACTION_VIEW，m03452 文件卡用）**+ **系统下载器下载 APK（downloadApk 返回任务 id + downloadStatus 轮询进度 + installApk 拉起安装，第二轮反馈 C）**，零第三方依赖；Android MainActivity 实现，iOS 留桩走「暂不可用」提示 | ✅ |
+| `bridge/platform.dart` | MethodChannel `dsh/platform`：系统 TTS 朗读（speak/stopSpeak）+ 系统分享（share）+ 系统选图器（pickImage→缓存路径 **+ 真实 mediaType；失败回 {error: 中文原因} 不再静默 null，华为 HEIC 修复**）+ **系统打开文件（openFile：字节写缓存目录 FileProvider + ACTION_VIEW，m03452 文件卡用）**+ **系统下载器下载 APK（downloadApk 返回任务 id + downloadStatus 轮询进度 + installApk 拉起安装，第二轮反馈 C）**，零第三方依赖；Android MainActivity 实现，iOS 留桩走「暂不可用」提示 | ✅ |
+| `bridge/image_media_type.dart` | 图片真实类型纯 Dart 判据（华为 HEIC 修复）：`supportedImageMediaTypes`（内核内联 prompt 只收 4 种，源自 dsh-attachment-local `imageLimits.mediaTypes`）/ `isSupportedImageMediaType` / `mediaTypeExtension` / `sniffImageMediaType`（字节魔数嗅探，与 bridge `image-handoff.ts` 的 `sniffMediaType` 同表：PNG/JPEG/GIF/WEBP/BMP/HEIC/AVIF）；供 composer 兜底核对原生回传，平台无关 | ✅ 单测覆盖 |
 | `bridge/release_check.dart` | 新版本检测：`fetchLatestRelease()` 先 Gitee 后 GitHub 拉 releases/latest（8s 超时各一次），`ReleaseInfo` 挑 `dsh-Chat-*.apk` 资产，`isNewerVersion` 语义化三段比较（真机反馈第 9 项） | ✅ 单测覆盖 |
 | `bridge/dlog.dart` | 文件日志 `/data/data/<pkg>/files/dsh.log`（vivo 过滤 flutter 日志，只能落文件）；`enabled` 开关 + `read()` 供设置页诊断日志区 | ✅ |
 | `ui/chat_page.dart` | 聊天主页：顶栏（会话名 + 新对话加号接 `newChat` + ⋯ 溢出菜单） / 空态问候 / 设置页入口；消息列表与消息项拆成同库 `part`（宪法 §7 控行数）；**主页 PopScope 退出 APP 二次确认——首次返回提示「再按一次退出 DSH」，2s 内再按 SystemNavigator.pop 真退出（第五轮勘误，替代上一版错装在设置页的双击退出）** | ✅ 装机验证 |
@@ -51,11 +55,11 @@
 | `ui/settings_sections.dart` | 设置页分区：连接与设备信息（hello 只读）/ 界面风格三档 / 字号缩放与跟随系统 / 繁忙发送模式 / 诊断日志 / 关于（含检查更新行）/ 断开连接；不摆无授权的服务端开关 | ✅ 单测覆盖 |
 | `ui/settings_update.dart` | `part of settings_page.dart`：`_UpdateCheckRow` 检查新版本（1.5s 静默检查有新版才提示；手动检查三态：发现新版本→点按下载 / 已是最新 / 两站都连不上；下载轮询进度百分比 + STATUS_SUCCESSFUL 后 installApk 自动拉起安装，第二轮反馈 C；`Timer` 必须 dispose 取消，测试断言无 pending timer） | ✅ 单测覆盖 |
 | `ui/settings_widgets.dart` | 设置页通用组件：`_Section` / `_InfoRow` / `_ActionRow` / `_SwitchRow` / `_SegmentedRow` / `_ScopeChip` / `_WarningBanner` | ✅ 单测覆盖 |
-| `ui/composer.dart` | 输入条：白浮层圆角容器 + 输入框 + 权限档位 chip + 图片附件 chip 与发送（8MiB 上限；单发图片也亮发送键）+ **「/」斜杠命令面板**（`parseSlashDraft` 检测草稿 → commands 帧清单前缀过滤 → 浮层建议（**可滚动 + 键盘上下高亮、回车选中——m03878**）→ 点选回填；发送优先走 `onCommand`；**拉取失败不落缓存、下次输入自动重试——m04149**）+ **「@」文件引用面板**（`parseAtMentionDraft` 草稿检测 → gatewayListRoots+gatewayListEntries **多根逐根拉取合并**（空根不挡非空根——m04149）→ 目录点选继续进子目录、文件回填 `@label/path `——m03878）+ 发送键三态 + **加图按钮常驻（先打字也能加图，第二轮反馈 D）** + 底部免责提示（**流式思考期间隐藏，无思考时显示——m03759 反馈**；命令面板组件拆 `composer_widgets.dart`） | ✅ 装机验证 |
-| `ui/composer_widgets.dart` | `part of composer.dart`：基础件 `_Chip`（胶囊 chip）/ `_RoundIconButton`（圆形按钮）+ `pickComposerImage`（选图白名单校验→base64，m03878 拆入） | ✅ |
+| `ui/composer.dart` | 输入条：白浮层圆角容器 + 输入框 + 权限档位 chip + 图片附件 chip 与发送（8MiB 上限；单发图片也亮发送键）+ **「/」斜杠命令面板**（`parseSlashDraft` 检测草稿 → commands 帧清单前缀过滤 → 浮层建议（**可滚动 + 键盘上下高亮、回车选中——m03878**）→ 点选回填；发送优先走 `onCommand`；**拉取失败不落缓存、下次输入自动重试——m04149**）+ **「@」文件引用面板**（`parseAtMentionDraft` 草稿检测 → gatewayListRoots+gatewayListEntries **多根逐根拉取合并**（空根不挡非空根——m04149）→ 目录点选继续进子目录、文件回填 `@label/path `——m03878）+ 发送键三态 + **加图按钮常驻（先打字也能加图，第二轮反馈 D）** + 底部免责提示（**流式思考期间隐藏，无思考时显示——m03759 反馈**；命令面板组件拆 `composer_widgets.dart`）+ **选图不再按文件名扩展名猜类型：用原生回传的真实 mediaType（缺失时读缓存字节魔数兜底）+ 内核 4 种白名单核对，失败原因显式弹提示（华为 HEIC 修复）** | ✅ 装机验证 |
+| `ui/composer_widgets.dart` | `part of composer.dart`：基础件 `_Chip`（胶囊 chip）/ `_RoundIconButton`（圆形按钮）+ `pickComposerImage`（读选图缓存字节→base64；mediaType 由调用方按魔数/原生回传传入，不再按扩展名判——华为 HEIC 修复，m03878 拆入） | ✅ |
 | `ui/composer_panels.dart` | `part of composer.dart`：`_CommandPanel`（斜杠命令建议浮层，可滚动+高亮——m03878）/ `_AtFilePanel`（@ 文件引用浮层，目录/文件图标区分，可滚动+高亮——m03878；**失败态错误行+点按重试——m04149**）+ `fetchAtEntries`（**多根逐根拉取合并**，空根不挡非空根——m04149） | ✅ |
 | `ui/composer_bar.dart` | `part of composer.dart`：`_ComposerBar`（输入容器：输入框+权限 chip+图片 chip+加图/发送圆钮）/ `_PermissionSheet`（权限档位底部弹层）/ `confirmFullPermission`（完全权限二次确认） | ✅ |
-| `ui/connect_page.dart` | 连接页三级路径：历史主机点击直连（DshHosts，有 token 才显示、失败显式报错）+ DSH1 配置文本导入（decodeDsh1，有 token 直连/无 token 填表）+ 手动配对（bridge 地址 + 配对码）；成功都 upsert 主机记录 | ✅ 装机验证 |
+| `ui/connect_page.dart` | 连接页三级路径：历史主机点击直连（DshHosts，有 token 才显示、失败显式报错）+ DSH1 配置文本导入（decodeDsh1，有 token 直连/无 token 填表）+ 手动配对（bridge 地址 + 配对码）；成功都 upsert 主机记录；**历史主机卡片删除按钮 + AlertDialog 二次确认 + 直连失败「删除这条失效记录」入口（DshHosts.remove，命中当前凭证顺手 DshCredentials.clear）** | ✅ 装机验证 |
 | `ui/md_view.dart` | GptMarkdown 定制：官方 token 全量映射、任务列表预处理、codeBuilder/tableBuilder 接线、**链接可点外跳浏览器（url_launcher onLinkTap，第四轮反馈 5）** | ✅ 装机验证 |
 | `ui/md_viewer.dart` | 全屏 Markdown 文档查看页 `MdViewerPage`：.md 文件卡点开 → `gatewayResolvePath` + `gatewayReadFileBytes` 取字节 → utf8 → `DsMarkdownView` 滚动渲染；顶栏文件名 + 体积，失败给重试（文件卡 m03452 改进） | ✅ 单测覆盖 |
 | `ui/image_viewer.dart` | 全屏图片查看器 `openImageViewer()`：黑底 InteractiveViewer 双指缩放/拖移、单击关闭、双击 1x/2.5x 变焦；聊天图片（chat_image.dart）点按进入，字节走进程内缓存零请求（第四轮反馈 1） | ✅ 装机验证 |
@@ -72,7 +76,8 @@
 
 | 文件 | 用途 |
 |---|---|
-| `app/android/app/src/main/kotlin/.../MainActivity.kt` | MethodChannel `dsh/device#ianaZone`（Android IANA 时区）+ `dsh/platform`（系统 TTS speak/stopSpeak + 系统分享 share + 系统选图器 pickImage→缓存复制 + **DownloadManager：downloadApk 返回任务 id / downloadStatus 查询进度 / installApk 经 getUriForDownloadedFile 拉起安装器（FLAG_GRANT_READ_URI_PERMISSION），第二轮反馈 C**，TextToSpeech 惰性初始化、onDestroy shutdown） |
+| `app/android/app/src/main/kotlin/.../MainActivity.kt` | MethodChannel `dsh/device#ianaZone`（Android IANA 时区）+ `dsh/platform`（系统 TTS speak/stopSpeak + 系统分享 share + **系统选图器 pickImage：ACTION_GET_CONTENT + FLAG_GRANT_READ_URI_PERMISSION → 读字节 → `ImagePickHelper.prepare` 按魔数定真实类型 / 把 HEIC 等转码成 JPEG/PNG → 安全缓存名 → 回 {path, name, mediaType}，失败回 {error} 不静默（华为 HEIC 修复）** + **DownloadManager：downloadApk 返回任务 id / downloadStatus 查询进度 / installApk 经 getUriForDownloadedFile 拉起安装器（FLAG_GRANT_READ_URI_PERMISSION），第二轮反馈 C**，TextToSpeech 惰性初始化、onDestroy shutdown） |
+| `app/android/app/src/main/kotlin/.../ImagePickHelper.kt` | 选图字节处理（华为 HEIC 修复，从 MainActivity 拆出控行数）：`sniffMediaType`（与 bridge `image-handoff.ts` 同魔数表）/ `supportedMediaTypes`（内核 4 种）/ `prepare`（内核不收的格式走 `BitmapFactory` 解码 → JPEG/PNG 重编码，带 alpha 编 PNG，8MiB 上限，超大图仅降采样防 OOM）/ `cacheFileName`（不拼 DISPLAY_NAME）/ `displayName`（净化 + 真实扩展名）；对齐 dsh-companion `ImageTranscoder.kt` | |
 | `app/android/app/src/main/AndroidManifest.xml` | `INTERNET` 权限 + `REQUEST_INSTALL_PACKAGES`（应用内更新拉起安装器，第三轮反馈 2）+ `usesCleartextTraffic`（bridge 走 ws:// 明文）+ queries 包可见性（PROCESS_TEXT + apk mime 的 ACTION_VIEW） |
 | `app/ios/Runner/AppDelegate.swift` | 同款 `dsh/device#ianaZone` 通道（iOS `TimeZone.current.identifier`） |
 | `app/ios/Runner/Info.plist` | 显示名 DSH Chat + ATS 放行明文 + 本地网络用途说明 |
@@ -84,9 +89,10 @@
 | `app_settings_test.dart` | `normalizeFontScale`（NaN/Inf/越界夹取）、`AppFontScaler` 与系统字号相乘、`AppSettings` 默认值与 `effectiveFontScale` |
 | `settings_page_test.dart` | 设置页渲染：界面风格三档 / 繁忙发送模式两档 / 字号滑块与跟随系统 / 诊断日志开关均真实生效 |
 | `chat_actions_test.dart` | `chatStatsOf()` 本地统计、`Composer` 发送键三态、`ChatState.regenerateAt/retryLast` 重发用户消息 |
+| `image_media_type_test.dart` | 图片类型纯函数：`sniffImageMediaType` 魔数表（PNG/JPEG/GIF/WEBP/BMP/HEIC(hei/hev/mif)/AVIF + 短数组截断）/ `isSupportedImageMediaType` 内核 4 种白名单 / `mediaTypeExtension` 映射（华为 HEIC 修复） |
 | `scroll_follow_test.dart` | `shouldAutoFollow` 粘性意图自锁回归、`shouldShowFab` / `computeAtBottom` / `freezeSnapshot` 空表 / `isUserScrollGesture` 程序滚动不算手势 |
 | `projections_test.dart` | `trajectoryOf()` 按 turn 分组 / 组内 seq 排序 / 丢弃过程细节 / 未知轮次垫底；`todoItems()` 只认 `{content,status}`；`agentTeamProjectionOf()` 缺省回退与空壳 null；`HistoryPage` 保留原始事件与投影 |
-| `hosts_test.dart` | `DshHost` stableId 幂等 / round-trip（token 缺省不发键）；`decodeDsh1` 宽容解码（前缀前说明文字/换行/结尾标点/大小写不敏感）与垃圾输入一律 null |
+| `hosts_test.dart` | `DshHost` stableId 幂等 / round-trip（token 缺省不发键）；`decodeDsh1` 宽容解码（前缀前说明文字/换行/结尾标点/大小写不敏感）与垃圾输入一律 null；**`DshHosts.remove` 存储层：删存在→true/落盘同步、删不存在→false、按非空 id 兜底匹配、删空写 `[]`** |
 | `permissions_test.dart` | 权限档位：`PermissionOption`/`PermissionCatalog` 解析与中文标签（未知回退）、`custom` 过滤、round-trip；`SessionModels`/`parseSelectModelReply`（sent 按 `data.type` 判别）/`reasoningEffortLabel` |
 | `models_test.dart` | 协议模型 round-trip、`data.message.content` 提取、注入上下文过滤（`source.kind != user`）、displayTitle 兜底、工具调用措辞表（含 read_image 等中文名）/ 摘要 / `toolResultText` / 过程组合并去重与耗时（result 正文进 `ToolCallInfo.resultText`）/ `turn/end` 失败 → `role=error` |
 | `md_view_test.dart` | MD 全家福 / 超长表格**不溢出**（360dp 宽，断言 `takeException() == null`） |

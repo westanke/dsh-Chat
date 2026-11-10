@@ -85,23 +85,40 @@ class _RoundIconButton extends StatelessWidget {
   }
 }
 
-/// 协议白名单（chat-adapter.ts:26-29；其它类型在选图时直接拒绝）。
-const _composerImageWhitelist = {
-  'png': 'image/png',
-  'jpg': 'image/jpeg',
-  'jpeg': 'image/jpeg',
-  'webp': 'image/webp',
-  'gif': 'image/gif',
-};
+/// 解析选图回传：失败原因优先，其次核对真实 mediaType。
+/// 原生侧已按字节魔数定类型并把 HEIC 等转码；旧版通道没回 mediaType 时
+/// 读缓存字节自己嗅探（华为 DISPLAY_NAME 常无扩展名，不能按文件名猜，
+/// 见 docs/huawei-heic-upload-report.md §4.2）。
+Future<({String? error, String? mediaType})> resolvePickedImage(
+  Map<String, String> picked,
+) async {
+  final error = picked['error'];
+  if (error != null && error.isNotEmpty) {
+    return (error: error, mediaType: null);
+  }
+  var mediaType = picked['mediaType'] ?? '';
+  if (mediaType.isEmpty) {
+    try {
+      final bytes = await File(picked['path']!).readAsBytes();
+      mediaType = sniffImageMediaType(bytes) ?? '';
+    } on Object {
+      mediaType = '';
+    }
+  }
+  if (!isSupportedImageMediaType(mediaType)) {
+    return (
+      error: '无法识别的图片格式，请换一张 PNG/JPEG 图片',
+      mediaType: null,
+    );
+  }
+  return (error: null, mediaType: mediaType);
+}
 
-/// 白名单校验后的选图结果 → 读字节 → base64 暂存。
-/// [picked] 是 DshPlatform.pickImage() 的结果（白名单校验在调用方 _pickImage，
-/// 那里有 context 可以弹「仅支持 PNG/JPEG/WebP/GIF」提示）。
+/// 选图结果 → 读字节 → base64 暂存。
+/// [picked] 是 DshPlatform.pickImage() 的结果；mediaType 由原生侧按字节魔数
+/// 判定并回传（内核不收的格式已转码），这里直接透传，不再按文件名扩展名猜。
 Future<({String path, String name, String mediaType, String base64})?>
-pickComposerImage(Map<String, String> picked) async {
-  final ext = picked['name']!.split('.').last.toLowerCase();
-  final mediaType = _composerImageWhitelist[ext];
-  if (mediaType == null) return null;
+pickComposerImage(Map<String, String> picked, String mediaType) async {
   final bytes = await File(picked['path']!).readAsBytes();
   return (
     path: picked['path']!,

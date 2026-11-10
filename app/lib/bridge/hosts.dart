@@ -115,6 +115,25 @@ class DshHosts {
     );
   }
 
+  /// 删除单条主机记录（连接页「移除过期/失效记录」）。
+  /// 按 baseUrl 优先、id 兜底匹配（兼容早期 id 缺失的历史数据）。
+  /// 返回是否命中；缓存与 shared_preferences 同步更新，删空写 `[]`。
+  static Future<bool> remove(DshHost host) async {
+    final hosts = [...await load()];
+    final before = hosts.length;
+    hosts.removeWhere((h) =>
+        h.baseUrl == host.baseUrl ||
+        (host.id.isNotEmpty && h.id == host.id));
+    if (hosts.length == before) return false;
+    _cache = hosts;
+    final sp = await SharedPreferences.getInstance();
+    await sp.setString(
+      _key,
+      jsonEncode(hosts.map((h) => h.toJson()).toList()),
+    );
+    return true;
+  }
+
   static Future<void> clear() async {
     _cache = const [];
     final sp = await SharedPreferences.getInstance();

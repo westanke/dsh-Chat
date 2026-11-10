@@ -10,6 +10,7 @@ import 'package:flutter/services.dart';
 
 import '../bridge/content.dart';
 import '../bridge/gateway.dart';
+import '../bridge/image_media_type.dart';
 import '../bridge/models.dart';
 import '../bridge/permissions.dart';
 import '../bridge/platform.dart';
@@ -125,15 +126,6 @@ class _ComposerState extends State<Composer> {
   /// 待发送图片（选图后暂存，随下一条消息一起发；真机反馈 2026-11-04 第 2 项）。
   ({String path, String name, String mediaType, String base64})? _pendingImage;
 
-  /// 协议白名单（chat-adapter.ts:26-29；其它类型在选图时直接拒绝）。
-  static const _imageWhitelist = {
-    'png': 'image/png',
-    'jpg': 'image/jpeg',
-    'jpeg': 'image/jpeg',
-    'webp': 'image/webp',
-    'gif': 'image/gif',
-  };
-
   DsColors get c => widget.colors;
 
   /// 权限 chip 的显示标签：有当前值显示其本地化标签，否则「权限」。
@@ -169,13 +161,15 @@ class _ComposerState extends State<Composer> {
     return parseSlashDraft(_controller.text);
   }
 
-  /// 命令面板数据：草稿态 + 命令清单就绪时给出前缀过滤结果（最多 6 条）。
+  /// 命令面板数据：草稿态 + 命令清单就绪时给出前缀过滤结果（全量）。
   List<SlashCommand> get _slashMatches {
     final draft = _slashDraft;
     final cmds = _commands;
     if (draft == null || cmds == null) return const [];
-    final matches = cmds.where((c) => c.matchesQuery(draft.nameFragment));
-    return matches.take(6).toList();
+    // 前缀过滤后全量返回（v1.0.11 曾 take(6) 截断：命令按字母序返回，
+    // t/z 开头的命令在 `/` 空草稿时被截掉、`/t` 过滤后才出现——m04949）。
+    // 面板本身可滚动（maxHeight 320），高亮计数随长度自适应。
+    return cmds.where((c) => c.matchesQuery(draft.nameFragment)).toList();
   }
 
   Future<void> _ensureCommands() async {
@@ -346,19 +340,22 @@ class _ComposerState extends State<Composer> {
     });
   }
 
-  /// 调系统选择器选图 → 白名单校验 → base64 暂存。
-  /// 字节读取/编码在 composer_widgets.dart 的 pickComposerImage（同库顶层函数）。
+  /// 调系统选择器选图 → 核对真实 mediaType → base64 暂存。
+  /// 真实类型由原生侧按字节魔数判定并回传（HEIC 等已转码），这里不再按文件名
+  /// 扩展名猜类型（华为 DISPLAY_NAME 常无扩展名，见 huawei-heic-upload-report.md）。
+  /// 解析逻辑在 composer_widgets.dart 的 resolvePickedImage（同库顶层函数）。
   Future<void> _pickImage() async {
     final picked = await DshPlatform.pickImage();
     if (picked == null || !mounted) return;
-    final ext = picked['name']!.split('.').last.toLowerCase();
-    if (!_imageWhitelist.containsKey(ext)) {
+    final resolved = await resolvePickedImage(picked);
+    if (!mounted) return;
+    if (resolved.error != null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('仅支持 PNG/JPEG/WebP/GIF 图片')),
+        SnackBar(content: Text(resolved.error!)),
       );
       return;
     }
-    final img = await pickComposerImage(picked);
+    final img = await pickComposerImage(picked, resolved.mediaType!);
     if (img == null || !mounted) return;
     setState(() => _pendingImage = img);
   }

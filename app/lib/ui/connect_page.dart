@@ -30,6 +30,7 @@ class _ConnectPageState extends State<ConnectPage> {
   bool _busy = false;
   bool _showImport = false;
   String? _error;
+  DshHost? _failedHost; // 直连失败的主机，供「删除这条失效记录」定位
   List<DshHost> _hosts = const [];
 
   DsColors get c => widget.colors;
@@ -80,6 +81,7 @@ class _ConnectPageState extends State<ConnectPage> {
     setState(() {
       _busy = true;
       _error = null;
+      _failedHost = null;
     });
     final gateway = GatewayClient(baseUrl: host);
     try {
@@ -90,31 +92,73 @@ class _ConnectPageState extends State<ConnectPage> {
       );
       await _enterWith(gateway, host);
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _busy = false;
+        _failedHost = null;
         _error = '配对失败：$e';
       });
     }
   }
 
   /// 历史主机直连（有 token 才显示；失败给显式反馈——手动点击
-  /// 不同于静默自动连接）。
+  /// 不同于静默自动连接）。失败时记下该主机，供「删除失效记录」入口。
   Future<void> _connectHost(DshHost host) async {
     if (host.token == null || host.token!.isEmpty) return;
     setState(() {
       _busy = true;
       _error = null;
+      _failedHost = null;
     });
     final gateway = GatewayClient(baseUrl: host.baseUrl)..token = host.token;
     try {
       await gateway.connect();
       await _enterWith(gateway, host.baseUrl, token: host.token);
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _busy = false;
+        _failedHost = host;
         _error = '直连失败：$e（可重新配对）';
       });
     }
+  }
+
+  /// 删除单条历史主机（二次确认，避免误触）。刷新内存列表与错误提示。
+  Future<void> _confirmRemove(DshHost host) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('删除这条主机记录？'),
+        content: Text('${host.displayName}\n${host.baseUrl}'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('取消'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('删除'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    await DshHosts.remove(host);
+    // 删掉的若正是「一次配对，此后自动连接」当前凭证，顺手清掉，
+    // 避免下次启动仍拿过期 token 静默直连失败。
+    if (DshCredentials.baseUrl == host.baseUrl) {
+      await DshCredentials.clear();
+    }
+    final hosts = await DshHosts.load();
+    if (!mounted) return;
+    setState(() {
+      _hosts = hosts;
+      if (_failedHost?.baseUrl == host.baseUrl) {
+        _failedHost = null;
+        _error = null;
+      }
+    });
   }
 
   /// 导入 DSH1 配置文本；成功直接连（有 token）或填表。
@@ -184,6 +228,7 @@ class _ConnectPageState extends State<ConnectPage> {
                     colors: c,
                     busy: _busy,
                     onTap: () => _connectHost(h),
+                    onRemove: () => _confirmRemove(h),
                   ),
                 const SizedBox(height: 20),
               ],
@@ -266,6 +311,19 @@ class _ConnectPageState extends State<ConnectPage> {
                   _error!,
                   style: DsTypography.small.copyWith(color: c.danger),
                 ),
+                if (_failedHost != null)
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton.icon(
+                      onPressed: () => _confirmRemove(_failedHost!),
+                      icon: Icon(Icons.delete_outline,
+                          size: 16, color: c.danger),
+                      label: Text(
+                        '删除这条失效记录',
+                        style: DsTypography.small.copyWith(color: c.danger),
+                      ),
+                    ),
+                  ),
               ],
               const SizedBox(height: 20),
               FilledButton(
@@ -303,58 +361,84 @@ class _ConnectPageState extends State<ConnectPage> {
   }
 }
 
-/// 历史主机卡片：显示名 + 地址，点击直连。
+/// 历史主机卡片：显示名 + 地址，点击直连；右侧独立删除按钮可移除过期/失效记录。
 class _HostCard extends StatelessWidget {
   const _HostCard({
     required this.host,
     required this.colors,
     required this.busy,
     required this.onTap,
+    required this.onRemove,
   });
 
   final DshHost host;
   final DsColors colors;
   final bool busy;
   final VoidCallback onTap;
+  final VoidCallback onRemove;
 
   @override
   Widget build(BuildContext context) {
     final c = colors;
-    return InkWell(
-      onTap: busy ? null : onTap,
-      borderRadius: BorderRadius.circular(12),
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 8),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        decoration: BoxDecoration(
-          color: c.inputFill,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: c.borderL2),
-        ),
-        child: Row(
-          children: [
-            Icon(Icons.computer_outlined, size: 20, color: c.brand),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    host.displayName,
-                    style: DsTypography.base.copyWith(color: c.labelPrimary),
-                  ),
-                  Text(
-                    host.baseUrl,
-                    style: DsTypography.small.copyWith(
-                      color: c.labelTertiary,
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      decoration: BoxDecoration(
+        color: c.inputFill,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: c.borderL2),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: InkWell(
+              onTap: busy ? null : onTap,
+              borderRadius: const BorderRadius.horizontal(
+                left: Radius.circular(12),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.computer_outlined, size: 20, color: c.brand),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            host.displayName,
+                            style: DsTypography.base.copyWith(
+                              color: c.labelPrimary,
+                            ),
+                          ),
+                          Text(
+                            host.baseUrl,
+                            style: DsTypography.small.copyWith(
+                              color: c.labelTertiary,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                ],
+                    Icon(Icons.chevron_right, size: 20, color: c.labelTertiary),
+                  ],
+                ),
               ),
             ),
-            Icon(Icons.chevron_right, size: 20, color: c.labelTertiary),
-          ],
-        ),
+          ),
+          // 删除按钮独立命中区，不与「点击直连」争夺 onTap（避免误连）。
+          IconButton(
+            onPressed: busy ? null : onRemove,
+            icon: Icon(Icons.delete_outline, size: 20, color: c.labelTertiary),
+            tooltip: '删除这条主机记录',
+            visualDensity: VisualDensity.compact,
+            padding: const EdgeInsets.only(right: 8),
+            constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+          ),
+        ],
       ),
     );
   }

@@ -234,6 +234,21 @@ App 实测墨迹高（density 3.0）：H1 71px、H2 61px、H3 57px、正文 45px
 
 数据契约约束（bridge `API.md:165,167,766`）：`projections` 可选、内核没给基线时整个字段缺席（不是空对象）、只在 `history` 首屏应答带、翻页不带。三个面板对 null/缺席一律显示「本会话暂无数据」空态，**不把「读不到投影」当成「没有这个功能」**（v2.2.44 真机踩过）。纯函数 `trajectoryOf/todoItems/agentTeamProjectionOf/prettyJson` 在 `bridge/projections.dart`，零 Flutter 依赖，单测覆盖。
 
+## 4.8 连接页历史主机删除入口（本工程自定义，复用既有 token）
+
+连接页「历史主机」卡片右侧删除按钮 + 二次确认对话框 + 直连失败后的「删除这条失效记录」入口，全部**复用 §4 既有语义 token，无新增色值/字号/间距**（宪法 §4 单一来源）：
+
+| 元素 | token | 取值 | 依据 |
+|---|---|---|---|
+| 卡片底色 / 描边 | `DsColors.inputFill` / `borderL2` | 语义别名 | 沿用原 `_HostCard`，无裸色 |
+| 删除图标 / 失效记录按钮图标 | `Icons.delete_outline` + `DsColors.labelTertiary` / `danger` | 语义别名 | 常规危险/弱化操作色 |
+| 失效记录文字按钮 | `DsTypography.small` + `DsColors.danger` | 语义别名 | 与错误文本同色同字号 |
+| 卡片显示名 / 地址 | `DsTypography.base` / `small` + `DsColors.labelPrimary` / `labelTertiary` | 语义别名 | 沿用原卡片 |
+| 按钮 / 卡片内距 | `EdgeInsets.symmetric(horizontal:16, vertical:12)` 等 | 常规尺寸 | 沿用原卡片，未新增 DsSpacing 常量 |
+| 删除确认 | `AlertDialog` + `TextButton('取消'/'删除')` | Material 默认 | 系统组件，未自定义样式 |
+
+命中区约束：删除按钮是卡片 `Row` 里独立的 `IconButton`（`minWidth/minHeight:40`），`InkWell` 只包左侧 `Expanded` 区域，**两者不重叠**——点删除不会触发「点击直连」（避免误连）。删除若命中 `DshCredentials.baseUrl`，顺手 `DshCredentials.clear()`，避免下次启动拿过期 token 静默直连失败。
+
 ## 5. 截图资产（ref/）
 - official-login-page.png 登录页（+86 152 1388 0002 / 验证码输入 / 发送验证码按钮）
 - official-welcome.png 欢迎引导页（开启对话主按钮）

@@ -48,16 +48,29 @@ class DshPlatform {
 
   /// 调起系统相册/文件选择器选一张图（真机反馈 2026-11-04 第 2 项，
   /// 零依赖方案：Android ACTION_GET_CONTENT，vivo 拦应用内注入但不拦系统选择器）。
-  /// 返回 {path, name}（复制进应用缓存目录后返回路径）；取消返回 null。
+  ///
+  /// 返回 {path, name, mediaType}（原生侧已按字节魔数定类型，并把内核不收的
+  /// HEIC/HEIF/BMP/AVIF 转码成 JPEG/PNG 后复制进应用缓存目录）；
+  /// 失败返回 {error: 中文原因}（不再静默吞掉，docs/huawei-heic-upload-report.md
+  /// §4.4）；用户取消返回 null。
   static Future<Map<String, String>?> pickImage() async {
     try {
       final r = await _channel
           .invokeMethod<Map<Object?, Object?>>('pickImage');
       if (r == null) return null;
+      final error = r['error'] as String?;
+      if (error != null && error.isNotEmpty) {
+        return {'error': error};
+      }
       final path = r['path'] as String?;
       final name = r['name'] as String?;
+      final mediaType = r['mediaType'] as String?;
       if (path == null || path.isEmpty) return null;
-      return {'path': path, 'name': name ?? ''};
+      return {
+        'path': path,
+        'name': name ?? '',
+        'mediaType': mediaType ?? '',
+      };
     } on PlatformException {
       return null;
     } on MissingPluginException {
