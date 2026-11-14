@@ -274,6 +274,18 @@ class GatewayClient {
             (payload['approvalId'] ?? '') as String,
           ),
         );
+      case 'chat.deliverables.presented':
+        // 内核 present 成功的实时帧（bridge chat-adapter.ts:1575 把
+        // deliverables/presented 转成本帧，不再走 chat.session.event）。
+        // 帧里只有 files+seq，没有过程组上下文 —— 不就地插卡，转成会话事件
+        // 触发防抖重拉 history，由 projector 按轮尾统一落位。
+        DshLog.w('gw deliverables.presented sid=${payload['sessionId']}');
+        _eventCtrl.add(
+          SessionEventReceived(
+            (payload['sessionId'] ?? '') as String,
+            'deliverables/presented',
+          ),
+        );
       default:
         break; // 其余事件忽略（goal/task 等低频帧暂不消费）
     }

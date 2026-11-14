@@ -296,5 +296,178 @@ void main() {
       expect(page.items[0].isProcess, isTrue);
       expect(page.items[1].role, 'files');
     });
+
+    // ---- 落位（2026-11-14 反馈）：卡片挂轮尾，不按事件序内联 ----
+
+    test('present 后还有收尾正文：卡挂在正文之后（不内联）', () {
+      final page = HistoryPage.fromEvents(<dynamic>[
+        {
+          'type': 'user/message',
+          'seq': 1,
+          'time': 1,
+          'data': {'content': 'hi'},
+        },
+        {
+          'type': 'deliverables/presented',
+          'seq': 2,
+          'time': 2,
+          'data': {'files': [
+            {'path': '/a.md', 'description': '报告'},
+          ]},
+        },
+        {
+          'type': 'assistant/message',
+          'seq': 3,
+          'time': 3,
+          'data': {
+            'message': {
+              'content': [
+                {'type': 'text', 'text': '写完了，见附件'},
+              ],
+            },
+          },
+        },
+        {'type': 'turn/end', 'seq': 4, 'time': 4, 'data': {}},
+      ]);
+      expect(
+        page.items.map((m) => m.role).toList(),
+        ['user', 'assistant', 'files'],
+      );
+    });
+
+    test('turn/end 收口：卡挂上一轮流尾，跨轮不漂移', () {
+      final page = HistoryPage.fromEvents(<dynamic>[
+        {
+          'type': 'user/message',
+          'seq': 1,
+          'time': 1,
+          'data': {'content': '第一轮'},
+        },
+        {
+          'type': 'deliverables/presented',
+          'seq': 2,
+          'time': 2,
+          'data': {'files': [
+            {'path': '/a.md'},
+          ]},
+        },
+        {
+          'type': 'assistant/message',
+          'seq': 3,
+          'time': 3,
+          'data': {
+            'message': {
+              'content': [
+                {'type': 'text', 'text': '第一轮完成'},
+              ],
+            },
+          },
+        },
+        {
+          'type': 'turn/end',
+          'seq': 4,
+          'time': 4,
+          'data': {'reason': {'kind': 'ok'}},
+        },
+        {
+          'type': 'user/message',
+          'seq': 5,
+          'time': 5,
+          'data': {'content': '第二轮'},
+        },
+        {
+          'type': 'assistant/message',
+          'seq': 6,
+          'time': 6,
+          'data': {
+            'message': {
+              'content': [
+                {'type': 'text', 'text': '第二轮回复'},
+              ],
+            },
+          },
+        },
+        {
+          'type': 'turn/end',
+          'seq': 7,
+          'time': 7,
+          'data': {'reason': {'kind': 'ok'}},
+        },
+      ]);
+      // 卡片在第一轮流尾（assistant1 之后），不漂到第二轮。
+      expect(
+        page.items.map((m) => m.role).toList(),
+        ['user', 'assistant', 'files', 'user', 'assistant'],
+      );
+    });
+
+    test('目标续跑轮（两轮之间没有 user/message）：turn/end 也要收口', () {
+      final page = HistoryPage.fromEvents(<dynamic>[
+        {
+          'type': 'deliverables/presented',
+          'seq': 1,
+          'time': 1,
+          'data': {'files': [
+            {'path': '/a.md'},
+          ]},
+        },
+        {
+          'type': 'turn/end',
+          'seq': 2,
+          'time': 2,
+          'data': {'reason': {'kind': 'ok'}},
+        },
+        {
+          'type': 'assistant/message',
+          'seq': 3,
+          'time': 3,
+          'data': {
+            'message': {
+              'content': [
+                {'type': 'text', 'text': '续跑轮回复'},
+              ],
+            },
+          },
+        },
+      ]);
+      expect(
+        page.items.map((m) => m.role).toList(),
+        ['files', 'assistant'],
+      );
+    });
+
+    test('失败轮：文件卡挂在错误卡之前', () {
+      final page = HistoryPage.fromEvents(<dynamic>[
+        {
+          'type': 'user/message',
+          'seq': 1,
+          'time': 1,
+          'data': {'content': 'hi'},
+        },
+        {
+          'type': 'deliverables/presented',
+          'seq': 2,
+          'time': 2,
+          'data': {'files': [
+            {'path': '/a.md'},
+          ]},
+        },
+        {
+          'type': 'turn/end',
+          'seq': 3,
+          'time': 3,
+          'data': {
+            'reason': {
+              'kind': 'error',
+              'error': {'message': '额度用尽'},
+            },
+          },
+        },
+      ]);
+      expect(
+        page.items.map((m) => m.role).toList(),
+        ['user', 'files', 'error'],
+      );
+    });
   });
 }
