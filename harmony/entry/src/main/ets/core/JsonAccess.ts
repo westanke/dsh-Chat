@@ -30,8 +30,8 @@ export class JsonAccess {
     if (value === null || value === undefined) {
       return null;
     }
-    if (typeof value !== 'object') {
-      return null;
+    if (typeof value !== 'object' || Array.isArray(value)) {
+      return null; // 数组不是 JSON 对象（姊妹仓同口径）。
     }
     return value as JsonMap;
   }
@@ -76,6 +76,19 @@ export class JsonAccess {
   }
 
   /** 取子对象字段；非对象返回 null。 */
+  /** 取对象数组；非对象项过滤掉，缺键/类型不符回空数组（姊妹仓同款）。 */
+  static objArr(map: JsonMap | null, key: string): JsonMap[] {
+    const raw: Object[] = JsonAccess.arr(map, key);
+    const out: JsonMap[] = [];
+    for (let i = 0; i < raw.length; i++) {
+      const item: JsonMap | null = JsonAccess.asMap(raw[i]);
+      if (item !== null) {
+        out.push(item);
+      }
+    }
+    return out;
+  }
+
   static obj(map: JsonMap | null, key: string): JsonMap | null {
     return JsonAccess.asMap(JsonAccess.raw(map, key));
   }

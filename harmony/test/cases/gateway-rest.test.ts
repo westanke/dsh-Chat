@@ -1,0 +1,104 @@
+/**
+ * GatewayApi REST 端点测试 —— FakeHttp 回放，验证 URL 拼装/头/错误映射。
+ */
+
+import test from 'node:test';
+import assert from 'node:assert/strict';
+
+import { GatewayClient } from '../../entry/src/main/ets/core/GatewayClient.ts';
+import { GatewayApi } from '../../entry/src/main/ets/core/GatewayApi.ts';
+import { RequestException } from '../../entry/src/main/ets/core/GatewayEvents.ts';
+import { FakeTimers, FakeSocket, FakeHttp } from '../helpers/fake-ws.ts';
+
+async function makeApi(http: FakeHttp | null): Promise<GatewayApi> {
+  const socket: FakeSocket = new FakeSocket();
+  const timers: FakeTimers = new FakeTimers();
+  const c: GatewayClient = new GatewayClient('http://192.168.1.10:8765',
+    { ws: socket, timers, timeZoneId: (): string => 'Asia/Shanghai' } as never);
+  c.setToken('tok-9', 'harmony');
+  const p: Promise<void> = c.connect();
+  socket.serverOpen();
+  socket.serverHello();
+  await p;
+  return new GatewayApi(c, http);
+}
+
+test('pairViaRest: POST /api/v1/pairings/exchange，body 带 code/deviceName', async () => {
+  const http: FakeHttp = new FakeHttp();
+  http.push(200, '{"token":"t1","device":{"id":"d1"}}');
+  const api: GatewayApi = await makeApi(http);
+  const resp: Record<string, Object> = await api.pairViaRest(' 123456 ', ' HarmonyOS 手机 ') as Record<string, Object>;
+  const req = http.requests[0];
+  assert.equal(req.method, 'POST');
+  assert.equal(req.url, 'http://192.168.1.10:8765/api/v1/pairings/exchange');
+  assert.equal(req.headers.get('content-type'), 'application/json');
+  assert.equal(req.headers.get('authorization'), 'Bearer tok-9');
+  const body: Record<string, unknown> = JSON.parse(req.body as string) as Record<string, unknown>;
+  assert.equal(body['code'], ' 123456 ');
+  assert.equal(body['deviceName'], ' HarmonyOS 手机 ');
+  assert.equal(resp['token'], 't1');
+});
+
+test('REST 非 2xx → HTTP_<code> reject', async () => {
+  const http: FakeHttp = new FakeHttp();
+  http.push(404, 'not found');
+  const api: GatewayApi = await makeApi(http);
+  await assert.rejects(api.pairViaRest('x', 'y'), (e: Error): boolean =>
+    (e as RequestException).code === 'HTTP_404');
+});
+
+test('REST 应答非 JSON 对象 → BAD_REPLY', async () => {
+  const http: FakeHttp = new FakeHttp();
+  http.push(200, '[1,2,3]');
+  const api: GatewayApi = await makeApi(http);
+  await assert.rejects(api.pairViaRest('x', 'y'), (e: Error): boolean =>
+    (e as RequestException).code === 'BAD_REPLY');
+});
+
+test('REST 空 body → 空对象', async () => {
+  const http: FakeHttp = new FakeHttp();
+  http.push(201, '');
+  const api: GatewayApi = await makeApi(http);
+  const resp: Record<string, Object> = await api.pairViaRest('x', 'y') as Record<string, Object>;
+  assert.deepEqual(resp, {});
+});
+
+test('fetchAttachment: sha256 冒号 percent-encode + sessionId 必带', async () => {
+  const http: FakeHttp = new FakeHttp();
+  http.push(200, 'base64bytes');
+  const api: GatewayApi = await makeApi(http);
+  const data: string = await api.fetchAttachment('sha256:abc123', 's/1?x');
+  const req = http.requests[0];
+  assert.equal(req.method, 'GET');
+  assert.equal(req.url,
+    'http://192.168.1.10:8765/api/v1/attachments/sha256%3Aabc123?sessionId=s%2F1%3Fx');
+  assert.equal(data, 'base64bytes');
+});
+
+test('fetchAttachment 非 200 → HTTP_<code>', async () => {
+  const http: FakeHttp = new FakeHttp();
+  http.push(400, '');
+  const api: GatewayApi = await makeApi(http);
+  await assert.rejects(api.fetchAttachment('sha256:abc', 's1'), (e: Error): boolean =>
+    (e as RequestException).code === 'HTTP_400');
+});
+
+test('fetchImageHandoff: name encode', async () => {
+  const http: FakeHttp = new FakeHttp();
+  http.push(200, 'imgbytes');
+  const api: GatewayApi = await makeApi(http);
+  const data: string = await api.fetchImageHandoff('abc.png?raw=1');
+  assert.equal(http.requests[0].url,
+    'http://192.168.1.10:8765/api/v1/image-handoff?name=abc.png%3Fraw%3D1');
+  assert.equal(data, 'imgbytes');
+});
+
+test('http 未注入 → NO_TRANSPORT（不发请求）', async () => {
+  const api: GatewayApi = await makeApi(null);
+  await assert.rejects(api.pairViaRest('x', 'y'), (e: Error): boolean =>
+    (e as RequestException).code === 'NO_TRANSPORT');
+  await assert.rejects(api.fetchAttachment('a', 'b'), (e: Error): boolean =>
+    (e as RequestException).code === 'NO_TRANSPORT');
+  await assert.rejects(api.fetchImageHandoff('a'), (e: Error): boolean =>
+    (e as RequestException).code === 'NO_TRANSPORT');
+});

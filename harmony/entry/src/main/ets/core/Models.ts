@@ -50,6 +50,14 @@ export class DshSession {
     return new DshSession(JsonAccess.asMap(value));
   }
 
+  static listFrom(values: Object[]): DshSession[] {
+    const out: DshSession[] = [];
+    for (let i = 0; i < values.length; i++) {
+      out.push(new DshSession(JsonAccess.asMap(values[i])));
+    }
+    return out;
+  }
+
   /** 抽屉/页头显示标题：title 非空用 title，否则 blank=新对话 / 会话 <id>。 */
   get displayTitle(): string {
     const t = this.title;
@@ -76,6 +84,14 @@ export class DshWorkspace {
 
   static fromJson(value: Object | null): DshWorkspace {
     return new DshWorkspace(JsonAccess.asMap(value));
+  }
+
+  static listFrom(values: Object[]): DshWorkspace[] {
+    const out: DshWorkspace[] = [];
+    for (let i = 0; i < values.length; i++) {
+      out.push(new DshWorkspace(JsonAccess.asMap(values[i])));
+    }
+    return out;
   }
 }
 

@@ -5,7 +5,7 @@
 | 阶段 | 内容 | 状态 |
 |---|---|---|
 | 0 | 工程骨架：ArkTS 空工程 + 未签名 HAP 构建通 + node 测试骨架 + 门禁/文档同步 + 首提交 | ✅ 2026-11-15 |
-| 1 | core 协议层：全部帧模型 + gateway 状态机 + REST 封装 + node 用例全绿 | ◐ 首批 5 文件+48 用例已落，gateway/REST 待写 |
+| 1 | core 协议层：全部帧模型 + gateway 状态机 + REST 封装 + node 用例全绿 | ◐ WS 层 6 文件+91 用例全绿；HistoryPage/tool_call 等待补 |
 | 2 | 连接页三路径 + 聊天页骨架 + 流式对话 + 历史翻页 + 发送 | ☐ |
 | 3 | Markdown 全家福（含**首版轻量 LaTeX**，用户拍板）+ 工具折叠 + 命令卡 + 文件卡 + 图片 | ☐ |
 | 4 | 抽屉 / 设置 / HITL / 投影 / 子会话 / 统计 / 平台 7 通道 / 深色 / 字号 / 检查更新改口径 | ☐ |
@@ -32,3 +32,15 @@
 - ArkTS 兼容化改写（hvigorw assembleHap 全过）：PromptPart 判别联合→扁平类+type 分派；
   builtinTokens Record→Map；import 去 type 修饰符；可选捕获组正则拆必组；`?? {}`→显式空表。
 - 文档同步：AGENTS.md（§3 目录树/§7 分层+ArkTS 条目）、PORT-MAP 对照表、STRUCTURE harmony 章。
+
+## 阶段 1 WS 层（2026-11-15）
+
+- core 新增 6 文件：Transport.ts（传输抽象+协议时序常量）/ GatewayEvents.ts / Questions.ts /
+  GatewayClient.ts（状态机）/ GatewayApi.ts（WS 17 端点 + REST 3 端点）/ Models.ts 补 listFrom。
+- 测试：fake-ws.ts（FakeTimers/FakeSocket/FakeHttp）+ gateway-client 15 用例 + questions 9 +
+  gateway-api 13 + gateway-rest 8；npm test **91/91 绿**；hvigorw assembleHap BUILD SUCCESSFUL。
+- 关键实现口径：响应帧 `kind`/请求帧 `type`；requestId 在 data（顶层双兜底）；Bearer 头+单子协议
+  'dsh-mobile-v1'（@ohos 配不了 dsh-auth 双子协议，配对走 REST pairings/exchange）；
+  连接代数 attempt 防迟到 catch 覆盖；READY 掉线才退避（1,2,4,8,16,30 封顶），hello 归零 index。
+- 偏差记录：Android 的 authFailed 态是死字段未实现；onDone 不看状态一律重连较粗糙，鸿蒙版
+  改为语义清晰版（重连中掉线 CLOSED 终止），PORT-MAP 已记。

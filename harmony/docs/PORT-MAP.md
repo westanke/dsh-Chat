@@ -21,8 +21,16 @@
 | bridge/models.dart（协议帧模型） | ets/core/Models.ts + test/cases/models.test.ts | 1 | ◐ core 首批已落 |
 | bridge/content.dart（内容部件/命令/@草稿） | ets/core/Content.ts + test/cases/content.test.ts | 1 | ✅ 2026-11-15 |
 | bridge/image_media_type.dart（图片魔数/白名单） | ets/core/ImageMediaType.ts + test/cases | 1 | ✅ 2026-11-15 |
-| bridge/gateway.dart（WS 状态机） | ets/core/GatewayClient.ts | 1 | ☐ 计划 |
+| bridge/gateway.dart（WS 状态机） | ets/core/GatewayClient.ts + Transport.ts（注入分层） | 1 | ✅ 2026-11-15 |
+| bridge/gateway_events.dart（事件/状态枚举） | ets/core/GatewayEvents.ts | 1 | ✅ 2026-11-15 |
+| bridge/questions.dart（HITL 模型） | ets/core/Questions.ts | 1 | ✅ 2026-11-15 |
+| bridge/gateway_api.dart（WS 端点 17 个） | ets/core/GatewayApi.ts（history/subagentHistory 待 HistoryPage 落后补） | 1 | ◐ 2026-11-15 |
+| bridge/gateway_rest.dart + gateway_http.dart | ets/core/GatewayApi.ts restJson/fetchAttachment/fetchImageHandoff（配对走 REST，不走 dsh-pair 子协议——@ohos 配不了双子协议，姊妹仓口径） | 1 | ◐ roots/content 端点待补 |
 | bridge/credentials.dart / device.dart | ets/core/Credentials.ts ✅ / platform/（阶段 4） | 1 / 4 | ◐ credentials 已落 |
+
+> **WS 帧口径（实测抓包对齐）**：响应帧字段是 `kind`、请求帧才是 `type`；requestId 在 data 里
+>（应答 `{kind,data:{requestId,…}}`，安卓顶层/data 双兜底同款）；连接代数 attempt 防迟到
+> catch 覆盖新连接状态（微任务时序实证）；READY 掉线才退避重连，hello 成功归零 index。
 
 > ⚠️ **core 落位（2026-11-15 定案）**：core 物理放在 `entry/src/main/ets/core/`（entry 模块内），
 > 不是工程根 `harmony/core/` —— ArkTS 禁跨模块相对 import（Error00309001 实证），

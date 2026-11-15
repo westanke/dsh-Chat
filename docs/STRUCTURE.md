@@ -150,6 +150,11 @@
 | `ets/core/Content.ts` | 消息内容部件：ContentParts 拼接规则、图片引用、交接占位正则、PromptPart（ArkTS 扁平类 + type 分派）、SlashCommand/别名过滤、斜杠/@ 草稿解析 |
 | `ets/core/Credentials.ts` | 凭据数据形状（键 'dsh.credentials'，baseUrl+token）；持久化留 entry 层（preferences） |
 | `ets/core/ImageMediaType.ts` | 图片白名单 4 种 + 魔数嗅探（PNG/JPEG/GIF/WEBP/BMP/AVIF/HEIC）+ 扩展名映射 |
+| `ets/core/Transport.ts` | 传输抽象：HttpRequest/HttpResponse/HttpTransport、WebSocketTransport.open→EventSocketHandle、TimerBridge；WS/请求/心跳/退避常量（协议时序唯一出处） |
+| `ets/core/GatewayEvents.ts` | GatewayState 枚举 + 扁平 GatewayEvent（十种事件 type 分派）+ RequestException（稳定错误码） |
+| `ets/core/Questions.ts` | HITL 模型：UserQuestion/UserQuestionOption/PendingQuestion/PendingApproval/QuestionAnswerItem（custom 空省略，与安卓 questions.dart 对齐） |
+| `ets/core/GatewayClient.ts` | WS 状态机：connect/hello 8s/心跳 25s/退避重连（1→30s，attempt 代数防迟到回调）、requestWithTimeout 配对、十一种事件分发、subscribe、dispose |
+| `ets/core/GatewayApi.ts` | WS 端点 17 个（session-create/file-list/message/session-wait/permission/models/commands/question-answer/approval-response 等）+ REST（pairing exchange/attachment/image-handoff）|
 
 ### harmony/test/（node 单测，与 ets/core 同款模式）
 
@@ -161,6 +166,11 @@
 | `harmony/test/cases/content.test.ts` | ContentParts 拼接/图片引用/交接正则/PromptPart 编码键省略/命令过滤/@草稿 |
 | `harmony/test/cases/credentials.test.ts` | 凭据 encode/decode/坏 JSON 清空 |
 | `harmony/test/cases/image-media-type.test.ts` | 魔数嗅探全表 + 白名单 + 扩展名映射 |
+| `harmony/test/cases/gateway-client.test.ts` | WS 状态机 15 用例：NO_TOKEN/组帧/PROTOCOL/hello 超时/退避序列/请求配对/超时/心跳/事件分发/resync/dispose/迟到回调防护 |
+| `harmony/test/cases/questions.test.ts` | HITL 模型宽容解析 + custom 空省略 + JSON 往返 |
+| `harmony/test/cases/gateway-api.test.ts` | WS 端点 13 用例：帧形状（键名对齐安卓）/requestId 配对/错误映射（BAD_REPLY/PERMISSION/QUESTION_REJECTED/APPROVAL_REJECTED） |
+| `harmony/test/cases/gateway-rest.test.ts` | REST 8 用例：URL 拼装/头/HTTP_40x/BAD_REPLY/空 body/encode/NO_TRANSPORT |
+| `harmony/test/helpers/fake-ws.ts` | FakeTimers（手动 advance）/FakeSocket（服务端扮演 + lastRequestId）/FakeHttp（队列式应答） |
 | `harmony/test/package.json` / `tsconfig.json` | node:test + tsx 跑 `cases/*.test.ts`，strict TS |
 
 ### harmony/scripts/
