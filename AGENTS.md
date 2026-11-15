@@ -175,6 +175,32 @@ bash scripts/push-all.sh        # 推 Gitee 主 + AtomGit 备（**须用户同�
 
 刻意不跑 `flutter build apk`：产物不入库，验收在本机真机，CI 构建没人用（理由见 ci.yml 头注释）。
 
+**发版全流程（两段式，v1.0.17 实测定稿，照做不出错）**：
+
+- 阶段 A（本机 APK）：版本 bump（pubspec versionName+versionCode，版本号构建期注入）
+  → analyze/test/docs-check 全绿 → `SKIP_CHECK=1 bash scripts/release.sh`
+  （产出 `artifacts/dsh-Chat-v<ver>.apk` + README/SHA256SUMS 回填 + commit）。
+- 阶段 B（双站 Release）：`SKIP_CHECK=1 bash scripts/release.sh --publish`
+  （PUSH_TAGS=1 推分支+tag；建 Gitee Release 传 APK/SHA256SUMS；AtomGit Release 正文链 Gitee；
+  回读下载验证 SHA 一致）。**推送须用户明确同意**（见上）。
+- 阶段 C（iOS IPA，两段式：本机 Linux 打不了 iOS，产物只在 GitHub Actions macOS）：
+  1. API 触发镜像立即同步（别等 3h cron）：
+     `POST https://api.github.com/repos/westanke/dsh-Chat/actions/workflows/mirror-sync.yml/dispatches -d '{"ref":"main"}'`
+  2. 等 main 就位（约 45s；GitHub main HEAD == 本地 HEAD 才继续）→ tag 随 mirror 上去后
+     release.yml（on: push tags v*）自动跑：macos-15 打未签名 IPA + ubuntu 打 APK → workflow artifact。
+  3. `bash scripts/sync-gitee-release.sh v<ver> <run-id> ios-ipa` 把 IPA 传上 Gitee Release。
+  4. ⚠️ 该脚本会删 Gitee release 旧附件再传——APK/SHA256SUMS 会被删，须用
+     `POST /repos/westanke/dsh-Chat/releases/<id>/attach_files -F file=@…` 重传。
+- 阶段 D（GitHub Release + CI 绿检查）：GitHub Release 对象**不随 mirror**，必须 API 补建：
+  `POST /releases -d '{"tag_name":"v<ver>",…}'`；附件 APK/SHA 从 artifacts/ 上传、IPA 从 Gitee
+  Release 下载后上传（uploads.github.com）。最后查 Actions 全绿（ci.yml 门禁 + release.yml 双 job）。
+  release.yml Android job 曾因 runner 走阿里云 maven 镜像超时失败——gradle 仓库段已改为
+  `CI=true`（GitHub Actions 自动注入）时跳过国内镜像直连官方源（settings.gradle.kts / build.gradle.kts）。
+- token 口径：GitHub API 用 `~/.git-credentials` 里的 token（`tokens.conf` 的 github 行已 401 失效勿用）；
+  Gitee/AtomGit 用 `~/.config/dsh-git/tokens.conf`。api.github.com 可达，github.com:443 被阻断。
+- 错位 tag 修法：`DELETE /git/refs/tags/<tag>` 后再 `POST /git/refs`（annotated tag 的
+  object.sha 是 tag 对象非 commit，核对时看 workflow head_sha）。
+
 ---
 
 ## 11. 坑位索引（名字 = 触发词；新坑加这里）

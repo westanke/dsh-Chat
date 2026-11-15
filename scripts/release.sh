@@ -11,6 +11,10 @@
 #   git add … && git commit …               # 人工提交（README 数字已填好）
 #   bash scripts/release.sh --publish       # 阶段 B：tag → 双推 → 两站 Release → 回读
 #
+# 本脚本止于阶段 B（APK + 双站 Release）。iOS IPA 与 GitHub Release 走阶段 C/D
+# （两段式：GitHub Actions macOS 打 IPA → sync-gitee-release.sh 传 Gitee →
+# GitHub API 补建 Release）——完整清单见 AGENTS.md §10「发版全流程」，照做不出错。
+#
 # ## 从姊妹仓抄来的教训（全部已内建为闸门）
 #
 # - README 双站漂移：阶段 A 回填后自检版本号唯一性。
