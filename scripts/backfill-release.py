@@ -21,24 +21,6 @@ import sys
 import pathlib
 
 
-def sync_app_version(ver: str, code: str) -> None:
-    """把版本号写进设置页（必须在 flutter build 之前跑——版本是编译期常量，
-    打包后才改就烧不进 APK 了；v1.0.3 装机显示旧版本就是这个顺序踩的）。"""
-    settings = pathlib.Path("app/lib/ui/settings_page.dart")
-    stext = settings.read_text(encoding="utf-8")
-    sout, n = re.subn(
-        r"(const String _appVersion = ')[\d.]+\+\d+(';)",
-        rf"\g<1>{ver}+{code}\g<2>",
-        stext,
-    )
-    if n != 1:
-        print(f"  ❌ settings_page.dart _appVersion 锚点命中 {n} 处（期望 1）",
-              file=sys.stderr)
-        sys.exit(1)
-    settings.write_text(sout, encoding="utf-8")
-    print(f"  ✅ settings_page.dart _appVersion 已同步 {ver}+{code}")
-
-
 def backfill(text: str, ver: str, code: str, size: int, sha: str, apk: str) -> str:
     size_fmt = f"{size:,}"
     gitee_dl = f"https://gitee.com/westanke/dsh-Chat/releases/download/v{ver}/{apk}"
@@ -81,15 +63,9 @@ def backfill(text: str, ver: str, code: str, size: int, sha: str, apk: str) -> s
         label="当前状态版本行",
     )
 
-    # 4) 设置页版本号兜底校验：阶段 A 打包前已由 sync_app_version 写好，
-    #    这里若仍不一致说明打包烧了旧值 —— 直接失败，不发坏包。
-    settings = pathlib.Path("app/lib/ui/settings_page.dart")
-    if f"const String _appVersion = '{ver}+{code}';" not in settings.read_text(
-        encoding="utf-8"
-    ):
-        print("  ❌ settings_page.dart 版本与 pubspec 不一致（打包前没同步）",
-              file=sys.stderr)
-        sys.exit(1)
+    # 4)（已删）设置页版本号兜底校验：版本号 2026-11-15 起由 Flutter
+    #    构建系统从 pubspec.yaml 注入（44ff478），Dart 侧不再有 _appVersion
+    #    常量可写/可校验。
 
     # 5)「下载安装」小节：只在该小节范围内更新产物行/校验行 tag/脚注版本，
     #    分段隔离，绝不碰「当前状态」表的历史 APK 行。

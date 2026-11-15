@@ -74,19 +74,8 @@ if [ "$MODE" = "prepare" ]; then
   say ""
 
   say "2) 打包 flutter build apk --release（arm64 单 ABI，APK 瘦身 75→26.5MB）"
-  # 版本号是编译期常量：必须先把 settings_page.dart 同步好再 build，
-  # 否则 APK 烧的是旧值（v1.0.3 装机显示 1.0.2 就是这个顺序踩的）。
-  if [ "$DRY_RUN" != "1" ]; then
-    python3 - <<PYEOF
-import importlib.util, sys
-spec = importlib.util.spec_from_file_location(
-    "backfill_release", "scripts/backfill-release.py")
-m = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(m)
-m.sync_app_version("$VER", "$CODE")
-PYEOF
-    ok "设置页版本已预同步 $VER+$CODE（打包前）"
-  fi
+  # 版本号无需 Dart 侧预同步：2026-11-15（44ff478）起 Flutter 构建系统
+  # 自动从 pubspec.yaml 注入 versionName/versionCode，设置页运行时读取。
   # 只打 arm64-v8a（真机反馈 2026-11-05：70+MB 瘦身）：三 ABI 全打时
   # libapp/libflutter/libdartjni 各带三份 ≈74MB；x86_64 只有模拟器用，
   # armeabi-v7a 是 32 位兼容（2019 后真机基本都 arm64）。装机验证过的
