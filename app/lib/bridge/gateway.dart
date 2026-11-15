@@ -286,6 +286,15 @@ class GatewayClient {
             'deliverables/presented',
           ),
         );
+      case 'chat.models.updated':
+        // 模型目录更新推送（桥 v2.11.0，issue #1）：provider 侧模型清单
+        // 可能变化。模型面板打开时必重拉 models 帧，这里仅上抛事件留扩展点。
+        DshLog.w('gw models.updated provider=${payload['provider']}');
+        _eventCtrl.add(
+          ModelsUpdatedEvent(
+            payload['provider'] is String ? payload['provider'] as String : null,
+          ),
+        );
       default:
         break; // 其余事件忽略（goal/task 等低频帧暂不消费）
     }
@@ -347,9 +356,12 @@ class GatewayClient {
   }
 
   /// request/response：发 {type, ...payload, requestId}，等回显 requestId 的帧。
-  Future<Map<String, dynamic>> request(
+  /// request 的可自定义超时版（session-wait 等长轮询帧用：请求超时要随
+  /// wait 时长走，固定 30s 会在应答回来前先到——桥侧 RPC 超时同样放宽）。
+  Future<Map<String, dynamic>> requestWithTimeout(
     String type,
     Map<String, dynamic> payload,
+    Duration timeout,
   ) async {
     final requestId =
         'r${++_requestSeq}-${DateTime.now().millisecondsSinceEpoch}';
@@ -362,13 +374,19 @@ class GatewayClient {
       throw RequestException('NOT_CONNECTED', '连接未建立，发送失败');
     }
     return completer.future.timeout(
-      const Duration(seconds: 30),
+      timeout,
       onTimeout: () {
         _pending.remove(requestId);
         throw RequestException('TIMEOUT', '请求 $type 超时');
       },
     );
   }
+
+  /// 常规请求：30s 超时（协议请求帧的缺省口径）。
+  Future<Map<String, dynamic>> request(
+    String type,
+    Map<String, dynamic> payload,
+  ) => requestWithTimeout(type, payload, const Duration(seconds: 30));
 
   // ---- 业务封装（实现在 gateway_api.dart 的 extension GatewayApi）----
 

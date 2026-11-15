@@ -200,6 +200,37 @@ extension GatewayApi on GatewayClient {
     await request('session-cancel', {'sessionId': sessionId});
   }
 
+  /// 长轮询会话状态（session-wait 帧；DSH 0.2.2 session/wait，桥 API.md:791
+  /// 与 openapi §waitChatSession；issue #1 适配）。阻塞直到会话静止（idle）/
+  /// 有待输入（input-required）/ 超时（timeout）。
+  /// bridge 把 [timeoutMs] 钳 1–120000（缺省 30000）、[maxMessages] 钳 1–200；
+  /// [afterSeq] 只等该事件序号之后的变化。桥侧 RPC 超时随 wait 时长放宽，
+  /// 本端请求超时 = timeoutMs + 5s 余量（App 常规 30s 会先到）。
+  /// 应答 session-waited 不在 REQUEST_ID_ECHO_EXCLUDED_KINDS 排除表，
+  /// data={sessionId, wait:{reason,state,output}} 原样透传内核结果。
+  /// 消费面说明：App 是推送型客户端（WS 订阅即实时、离线变化靠 resync 重拉），
+  /// 本帧供「打开会话时对齐状态 / 无推送环境的兜底轮询」按需调用，UI 暂无
+  /// 刚需页面——先落协议封装与 round-trip 测试（桥 issue 建议的优先接入项）。
+  Future<SessionWaitResult> sessionWait(
+    String sessionId, {
+    int timeoutMs = 30000,
+    int? afterSeq,
+    int? maxMessages,
+  }) async {
+    final ms = timeoutMs.clamp(1, 120000);
+    final r = await requestWithTimeout('session-wait', {
+      'sessionId': sessionId,
+      'timeoutMs': ms,
+      'afterSeq': ?afterSeq,
+      'maxMessages': ?maxMessages,
+    }, Duration(milliseconds: ms + 5000));
+    final wait = r['wait'];
+    if (wait is! Map) {
+      throw RequestException('BAD_REPLY', 'session-waited 应答缺 wait');
+    }
+    return SessionWaitResult.fromJson(Map<String, dynamic>.from(wait));
+  }
+
   /// 权限档位清单（真机反馈 2026-11-04：输入条「深度思考」chip 改权限档位）。
   /// permission-options 不在排除表（ws-settings.ts:40-82），可 await；
   /// 需要 chat.read scope，缺则回 error FORBIDDEN_SCOPE。

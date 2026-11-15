@@ -496,4 +496,76 @@ void main() {
     expect(f.name, '周报 2026.md');
     expect(f.description, '含中文与空格');
   });
+
+  // ---- 桥 v2.11.0 适配（issue #1）----
+
+  test('SessionWaitResult round-trip（session/wait，reason 三枚举原样保留）', () {
+    final w = SessionWaitResult(
+      reason: 'input-required',
+      state: {'cursor': 42, 'running': true, 'queue': null, 'pendingInput': 'approval'},
+      output: {'records': <Map<String, dynamic>>[], 'truncated': false},
+    );
+    final json = w.toJson();
+    final rebuilt = SessionWaitResult.fromJson(json);
+    expect(rebuilt.reason, 'input-required');
+    expect(rebuilt.state['cursor'], 42);
+    expect(rebuilt.state['pendingInput'], 'approval');
+    expect((rebuilt.output['records'] as List).isEmpty, true);
+    expect(rebuilt.toJson(), json);
+  });
+
+  test('SessionWaitResult.from 宽容解析（缺 state/output 回空表）', () {
+    final w = SessionWaitResult.fromJson({'reason': 'timeout'});
+    expect(w.reason, 'timeout');
+    expect(w.state.isEmpty, true);
+    expect(w.output.isEmpty, true);
+  });
+
+  test('SlashCommand.from 解析 definitionId/builtin（v2.11.0 新字段）', () {
+    final c = SlashCommand.from({
+      'name': '/goal',
+      'description': '设定目标',
+      'definitionId': 'dsh.goal',
+      'builtin': true,
+    });
+    expect(c.name, 'goal');
+    expect(c.definitionId, 'dsh.goal');
+    expect(c.builtin, true);
+    // 旧桥缺省：宽容回 null/false
+    final legacy = SlashCommand.from({'name': 'model', 'description': ''});
+    expect(legacy.definitionId, isNull);
+    expect(legacy.builtin, false);
+  });
+
+  test('SlashCommandList builtinTokens + matching 中文过滤（命令面板本地化）', () {
+    final list = SlashCommandList.from({
+      'commands': [
+        {'name': 'goal', 'description': 'd', 'builtin': true},
+        {'name': 'model', 'description': 'd'},
+        {'name': 'compact', 'description': 'd', 'builtin': true},
+      ],
+      'builtinTokens': {
+        'goal': {'en': 'goal', 'zh': '目标'},
+        'plan': {'en': 'plan', 'zh': '计划'},
+        'compact': {'en': 'compact', 'zh': '压缩'},
+      },
+    });
+    expect(list.builtinTokens['goal']?.zh, '目标');
+    // zh 别名前缀过滤：敲「目」命中 /goal，不命中其它
+    expect(list.matching('目').map((c) => c.name), ['goal']);
+    expect(list.matching('压缩').map((c) => c.name), ['compact']);
+    // en 别名照旧
+    expect(list.matching('com').map((c) => c.name), ['compact']);
+    // 裸名前缀照旧
+    expect(list.matching('mo').map((c) => c.name), ['model']);
+    // 空片段回全量（不截断）
+    expect(list.matching('').length, 3);
+    // 无 builtinTokens 的旧桥：matching 退化为仅前缀，不炸
+    final legacy = SlashCommandList.from({
+      'commands': [
+        {'name': 'goal', 'description': 'd'},
+      ],
+    });
+    expect(legacy.matching('目'), isEmpty);
+  });
 }

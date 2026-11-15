@@ -112,7 +112,7 @@ App 实测墨迹高（density 3.0）：H1 71px、H2 61px、H3 57px、正文 45px
 ## 4. 聊天页 App 实测布局（1080x2400 / 3.0x → dp = px/3）
 - 顶栏：侧边栏按钮 x24dp y52dp 高 44dp；标题居中 16sp；右侧自动朗读 + 新对话。
 - 消息区左右 padding：MD 内容左起 x68px = **22.7dp**（`screenPad = 22`）；右侧因用户气泡右缘到屏右仅 **15dp**（`contentPadRight = 15`）。
-- 用户气泡：右对齐，bg #edf3fe，radius 约 16dp（视觉），文字 #0f0f0f→1000。
+- 用户气泡：右对齐，bg #edf3fe，radius 约 16dp（视觉），文字 #0f0f0f→1000；宽度 = 可见内容区 × **0.864**（`userBubbleMaxFraction`，官方 279dp ÷ 内容区 323dp，360dp 屏 ≈ 279dp；宽屏/平板分栏随可见宽度自适应，不再固定 280dp）。
 - 底部输入条（终版实测）：白浮层圆角容器（左右外边距 12dp、圆角 26dp、顶部 10dp、底部 0）+ 纯白底 + 柔和投影；占位文字 16sp（墨高 44px vs 官方 43px）、相对 chip 行再内缩 5dp（首墨 x83 vs 官方 82）；chip 高 29dp、chip 行左缘 x100px vs 官方 101px；选中 chip 淡蓝底 #edf3fe + 前景 #426efe；右侧加号/语音圆按钮 24dp、间距 17dp；容器下方「回答由 AI 生成，仅供参考」caption + c400。
 - 底部提示「回答由 AI 生成，仅供参考」11-12sp tertiary 居中。
 - 空态（`ref/official-chat-home.png` vs `ref/app-empty-final.png`）：品牌标记墨 116x88px（我们 115x87）、居中 cx538.5（我们 530.5，差 2.7dp）、纯色 #426efe；标记底到问候语顶 **22dp**（`brandMarkGap`）；问候语 **18sp** 墨宽 524px（我们 522px）。
@@ -157,7 +157,7 @@ App 实测墨迹高（density 3.0）：H1 71px、H2 61px、H3 57px、正文 45px
 |---|---|---|
 | 空态（品牌标记 + 问候语） | 逐像素对齐（标记 ±1px、问候语墨宽 ±2px、中心 ±2.7dp） | official-chat-home.png / app-empty-final.png |
 | 顶栏（汉堡 / 标题 16sp / 静音 / 加圈） | 对齐（标题墨高 32px、图标位置一致） | md-shot-1-headings.png / app-md-1.png |
-| 用户气泡（#edf3fe / 右缘 15dp / 行高 24dp） | 对齐（宽 280dp vs 官方 279dp） | md-shot-1-headings.png / app-md-1.png |
+| 用户气泡（#edf3fe / 右缘 15dp / 行高 24dp） | 对齐（宽 = 内容区 × 0.864 自适应，360dp 屏 ≈ 279dp，官方 279dp） | md-shot-1-headings.png / app-md-1.png |
 | 助手消息 / 思考折叠条 | 对齐（`已深度思考` 可展开，14sp c400） | app-md-1.png |
 | 代码块（#fafafa / banner 语言名 + 复制 / Atom One Light） | 对齐（分隔线 #ebebeb、padding 15/10） | md-shot-3-code.png / app-md-H.png |
 | 表格（整块 #fafafa、表头通栏、列线仅数据行、线 #dcdcdc） | 对齐（自绘 `DsTable`，banner「表格 + 复制/下载/展开」） | md-shot-4-table.png / app-md-H.png |

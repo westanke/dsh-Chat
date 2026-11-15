@@ -12,6 +12,7 @@ import '../bridge/models.dart';
 import '../design/app_settings.dart';
 import 'hitl_state.dart';
 import 'chat_history_actions.dart';
+import 'chat_hitl_actions.dart';
 import 'mobile_workspace.dart';
 import 'session_groups.dart';
 
@@ -432,46 +433,25 @@ class ChatState extends ChangeNotifier {
       case ApprovalResolvedEvent(:final sessionId, :final approvalId):
         DshLog.w('ui approval resolved id=$approvalId sid=$sessionId');
         hitl.onApprovalResolved(approvalId);
+      case ModelsUpdatedEvent():
+        // 模型目录推送（桥 v2.11.0，issue #1）：模型面板打开时必重拉
+        // models 帧，这里无需处理；显式 case 保 switch 穷尽并留扩展点。
+        break;
     }
   }
 
-  // ---- HITL 动作（问答 / 审批；失败落 lastError）----
+  // ---- HITL 动作（问答 / 审批；实现见 chat_hitl_actions.dart）----
 
-  /// 提交一套答案（question-answer 帧）。成功即本地摘卡。
   Future<void> answerQuestion(
     PendingQuestion question,
     List<QuestionAnswerItem> answers,
-  ) async {
-    lastError = null;
-    try {
-      await hitl.answerQuestion(_gateway, question, answers);
-    } on RequestException catch (e) {
-      lastError = '提交回答失败：${e.message}';
-    }
-    notifyListeners();
-  }
+  ) => submitChatAnswer(this, question, answers);
 
-  /// 放弃一条提问（question-cancel）；continued 态取消不了会提示。
-  Future<void> cancelQuestion(PendingQuestion question) async {
-    lastError = null;
-    try {
-      await hitl.cancelQuestion(_gateway, question);
-    } on RequestException catch (e) {
-      lastError = '无法跳过该提问：${e.message}';
-    }
-    notifyListeners();
-  }
+  Future<void> cancelQuestion(PendingQuestion question) =>
+      skipChatQuestion(this, question);
 
-  /// 审批决定（allowed-once / rejected）。成功即本地摘卡。
-  Future<void> decideApproval(PendingApproval approval, bool allow) async {
-    lastError = null;
-    try {
-      await hitl.decideApproval(_gateway, approval, allow);
-    } on RequestException catch (e) {
-      lastError = '审批操作失败：${e.message}';
-    }
-    notifyListeners();
-  }
+  Future<void> decideApproval(PendingApproval approval, bool allow) =>
+      decideChatApproval(this, approval, allow);
 
   Timer? _toolRefreshTimer;
 

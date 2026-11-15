@@ -206,3 +206,39 @@ class DshDirectoryPage {
       );
 }
 
+/// session-waited 应答的 wait 体（DSH 0.2.2 session/wait，桥 API.md:791 /
+/// openapi §waitChatSession；issue #1 适配）。
+/// REST 与 WS 两通道的 wait 结构同构：
+/// `{reason, state, output}` —— reason ∈ idle|input-required|timeout；
+/// state 为唤醒时会话状态（cursor/active/queue/pendingInput）；
+/// output 为等待期间观察到的事件（records/truncated）。
+class SessionWaitResult {
+  const SessionWaitResult({
+    required this.reason,
+    required this.state,
+    required this.output,
+  });
+
+  /// 结束原因：'idle'（静止）|'input-required'（有待输入）|'timeout'。
+  final String reason;
+
+  /// 唤醒时的会话状态（cursor / active / queue / pendingInput，字段随
+  /// 协议演进，宽容保留原始 map）。
+  final Map<String, dynamic> state;
+
+  /// 等待期间观察到的事件（records 事件帧数组，老→新；truncated 窗口截断）。
+  final Map<String, dynamic> output;
+
+  factory SessionWaitResult.fromJson(Map<String, dynamic> j) =>
+      SessionWaitResult(
+        reason: (j['reason'] ?? 'idle') as String,
+        state: Map<String, dynamic>.from(j['state'] as Map? ?? const {}),
+        output: Map<String, dynamic>.from(j['output'] as Map? ?? const {}),
+      );
+
+  Map<String, dynamic> toJson() => {
+    'reason': reason,
+    'state': state,
+    'output': output,
+  };
+}

@@ -113,8 +113,15 @@ class _MessageItem extends StatelessWidget {
       );
     }
     // 双击复制：包在气泡/正文外，不挂 onLongPress（否则选词手柄出不来）。
+    // 用户气泡宽度随可见页面宽度缩放（issue #1：固定 280dp 不随屏宽走）。
+    // LayoutBuilder 取父级可用宽 × userBubbleMaxFraction，自动涵盖列表
+    // padding 与平板分栏；360dp 屏 ≈ 279dp 与官方基准一致。
     final bubble = message.role == 'user'
-        ? Align(
+        ? LayoutBuilder(
+            builder: (context, box) {
+              final page = MediaQuery.sizeOf(context).width;
+              final avail = box.maxWidth.isFinite ? box.maxWidth : page;
+              return Align(
             alignment: Alignment.centerRight,
             child: Container(
               margin: const EdgeInsets.only(
@@ -122,7 +129,9 @@ class _MessageItem extends StatelessWidget {
                 left: DsSpacing.hMargin,
               ),
               padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 12),
-              constraints: const BoxConstraints(maxWidth: 280),
+              constraints: BoxConstraints(
+                maxWidth: avail * DsSpacing.userBubbleMaxFraction,
+              ),
               decoration: BoxDecoration(
                 color: colors.userBubble,
                 borderRadius: BorderRadius.circular(DsSpacing.bubbleRadius),
@@ -152,7 +161,9 @@ class _MessageItem extends StatelessWidget {
                 ],
               ),
             ),
-          )
+           ); // Align（气泡容器，return 结束）
+           },
+         )
         : Padding(
             padding: const EdgeInsets.only(top: DsSpacing.blockGap),
             child: Column(

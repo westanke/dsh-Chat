@@ -260,25 +260,35 @@ class _SubagentMessageItem extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (m.isUser)
-            Align(
-              alignment: Alignment.centerRight,
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                constraints: const BoxConstraints(maxWidth: 280),
-                decoration: BoxDecoration(
-                  color: c.userBubble,
-                  borderRadius:
-                      BorderRadius.circular(DsSpacing.bubbleRadius),
-                ),
-                child: Text(
-                  m.text,
-                  style: DsTypography.base.copyWith(
-                    color: c.userBubbleText,
-                    height: 24 / 16,
+            // 用户气泡宽度随可见页面宽度缩放（issue #1）：LayoutBuilder 取
+            // 父级可用宽 × userBubbleMaxFraction，不再固定 280dp。
+            LayoutBuilder(
+              builder: (context, box) {
+                final page = MediaQuery.sizeOf(context).width;
+                final avail = box.maxWidth.isFinite ? box.maxWidth : page;
+                return Align(
+                  alignment: Alignment.centerRight,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 14, vertical: 10),
+                    constraints: BoxConstraints(
+                      maxWidth: avail * DsSpacing.userBubbleMaxFraction,
+                    ),
+                    decoration: BoxDecoration(
+                      color: c.userBubble,
+                      borderRadius:
+                          BorderRadius.circular(DsSpacing.bubbleRadius),
+                    ),
+                    child: Text(
+                      m.text,
+                      style: DsTypography.base.copyWith(
+                        color: c.userBubbleText,
+                        height: 24 / 16,
+                      ),
+                    ),
                   ),
-                ),
-              ),
+                );
+              },
             )
           else ...[
             DsMarkdownView(text: m.text, colors: c),

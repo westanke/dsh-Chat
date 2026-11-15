@@ -254,6 +254,11 @@ class DsSpacing {
   static const inlineCodeRadius = 6.0;
   static const inlineCodePadH = 5.0;
   static const bubbleRadius = 16.0;
+
+  /// 用户气泡 maxWidth = 可见内容区宽 × 0.864（官方基准 279dp ÷ 内容区
+  /// 323dp；360dp 屏 ≈ 279dp 与官方一致，宽屏/平板分栏随可见宽度自适应，
+  /// 不再固定 280dp——issue #1 会话气泡宽度反馈）。
+  static const userBubbleMaxFraction = 0.864;
   static const topBarHeight = 44.0;
   static const thinkHMargin = 12.0; // 思考流内 h* margin
 

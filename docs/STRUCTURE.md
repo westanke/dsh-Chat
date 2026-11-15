@@ -49,6 +49,7 @@
 | `ui/question_card.dart` | `HitlPanel`：提问卡（每题 FilterChip 单/多选 + 自定义回答输入 + 提交键，提交走 question-answer）与审批卡（允许一次 / 拒绝，approval-response） | ✅ 单测覆盖 |
 | `ui/session_groups.dart` | 会话抽屉分组纯函数 `groupSessionsByWorkspace()`：顶层按工作区分（「手机会话」置顶、其余用 workspace title、无工作区「未分组」），组内按今天/昨天/更早；单工作区单日期退化为纯日期（真机反馈第 7 项） | ✅ 单测覆盖 |
 | `ui/chat_history_actions.dart` | 从 chat_state.dart 拆出（宪法 §7 控行数）顶层函数：`reloadChatHistory(state)` / `loadOlderMessages(state)` / `oldestSeqOf(state)`——chat_state 薄转发保 UI 调用点 | ✅ 单测覆盖 |
+| `ui/chat_hitl_actions.dart` | 从 chat_state.dart 拆出（宪法 §7 控行数）顶层函数：`submitChatAnswer` / `skipChatQuestion` / `decideChatApproval(state,…)`——HITL 动作落 lastError 后 notifyUi；chat_state 薄转发保 UI 调用点 | ✅ analyze |
 | `ui/session_location_sheet.dart` | 新建会话目录选择 sheet（2026-11-15 可选工作目录）：默认项「手机会话（默认）」+ 已选高亮（「点此恢复默认」）+ 「最近使用」按历史会话 (rootId,cwd) 去重（cwdAbsolute 副标题）+ 浏览页（面包屑 + 只列目录 + 加载更多 + 「在此目录新建会话」回传 `SessionLocation`）；`DirectoryLister` 注入点供测试 | ✅ 单测覆盖 |
 | `ui/mobile_workspace.dart` | 「手机会话」工作区准备 `ensureMobileWorkspace()`：title 含「手机」的既有工作区 → 建目录 `.dsh-mobile`（directory-create，409 幂等）→ REST 登记工作区 → PATCH 改名「手机会话」；失败回 null 不阻断发送（真机反馈第 7 项） | ✅ |
 | `ui/stats_sheet.dart` | 会话统计 Sheet：`chatStatsOf()` 由已加载消息本地计算（消息/工具/思考/错误数），零网络请求；对照 companion ChatStatsSheet | ✅ 单测覆盖 |

@@ -127,24 +127,38 @@ class PromptPart {
 
 /// 斜杠命令（真机反馈 2026-11-04 第 3 项）。
 /// bridge `commands` 帧应答 data.commands：`{name, description, input?}`；
-/// name 已含前导斜杠还是裸名——ws-commands.ts 的 listCommands 直接透传内核
-/// ChatCommandDescriptor，companion 里命令面板按裸名展示、发送时拼 `/`。
+/// 桥 v2.11.0 起条目另带可选 `definitionId` / `builtin`（issue #1 适配，
+/// 宽容解析：旧桥缺省 null/false）。name 已含前导斜杠还是裸名——
+/// ws-commands.ts 的 listCommands 直接透传内核 ChatCommandDescriptor，
+/// companion 里命令面板按裸名展示、发送时拼 `/`。
 /// （listCommands 在会话激活不了时回 []，不报错——chat-adapter.ts:1190-1200。）
 class SlashCommand {
   const SlashCommand({
     required this.name,
     required this.description,
     this.inputHint,
+    this.definitionId,
+    this.builtin = false,
   });
 
   final String name; // 裸名，如 'model'
   final String description;
   final String? inputHint; // 需要参数时的提示
 
+  /// 内核命令定义 id（桥 v2.11.0 commands 帧新增）。
+  final String? definitionId;
+
+  /// 是否内置命令（桥 v2.11.0 commands 帧新增）。
+  final bool builtin;
+
   factory SlashCommand.from(Map<String, dynamic> j) => SlashCommand(
     name: ((j['name'] ?? '') as String).replaceAll(RegExp(r'^/'), ''),
     description: (j['description'] ?? '') as String,
     inputHint: j['input'] is String ? j['input'] as String : null,
+    definitionId: j['definitionId'] is String
+        ? j['definitionId'] as String
+        : null,
+    builtin: j['builtin'] == true,
   );
 
   /// 输入框里从 `/abc` 过滤本命令：前缀匹配。
@@ -152,11 +166,33 @@ class SlashCommand {
       q.isEmpty || name.toLowerCase().startsWith(q.toLowerCase());
 }
 
+/// 内置命令的 en/zh 别名（桥 v2.11.0 commands 帧 `builtinTokens`，帧级；
+/// chat-adapter.ts:219 BUILTIN_COMMAND_TOKENS：goal→目标、plan→计划、
+/// feedback→反馈、compact→压缩、permission→权限、export→导出）。
+class BuiltinCommandTokens {
+  const BuiltinCommandTokens({required this.en, required this.zh});
+
+  final String en;
+  final String zh;
+
+  factory BuiltinCommandTokens.from(Map<String, dynamic> j) =>
+      BuiltinCommandTokens(
+        en: j['en'] is String ? j['en'] as String : '',
+        zh: j['zh'] is String ? j['zh'] as String : '',
+      );
+}
+
 /// `commands` 帧应答收敛。
 class SlashCommandList {
-  const SlashCommandList({required this.commands});
+  const SlashCommandList({required this.commands, this.builtinTokens = const {}});
+
+  /// 全命令清单为空的面板占位（拉取失败路径复用，m04149 语义：不报错）。
+  static const SlashCommandList empty = SlashCommandList(commands: []);
 
   final List<SlashCommand> commands;
+
+  /// 键 = 命令裸名（goal/plan/...）。旧桥无此帧级字段 → 空表，中文过滤退化为仅前缀。
+  final Map<String, BuiltinCommandTokens> builtinTokens;
 
   static SlashCommandList from(Map<String, dynamic> data) {
     final raw = data['commands'];
@@ -170,7 +206,34 @@ class SlashCommandList {
         }
       }
     }
-    return SlashCommandList(commands: list);
+    final tokens = <String, BuiltinCommandTokens>{};
+    final tokensRaw = data['builtinTokens'];
+    if (tokensRaw is Map) {
+      for (final e in tokensRaw.entries) {
+        if (e.value is Map) {
+          tokens[e.key as String] = BuiltinCommandTokens.from(
+            Map<String, dynamic>.from(e.value as Map),
+          );
+        }
+      }
+    }
+    return SlashCommandList(commands: list, builtinTokens: tokens);
+  }
+
+  /// 输入片段过滤命令（issue #1 命令面板本地化）：裸名前缀之外，内置命令
+  /// 再按 zh 别名前缀匹配（敲「目标」能过滤出 /goal）；en 别名同时参与
+  /// （敲中文输入法残留英文也命中）。空片段回全量（v1.0.11 教训：不截断）。
+  List<SlashCommand> matching(String q) {
+    final t = q.trim();
+    if (t.isEmpty) return List.of(commands);
+    final lower = t.toLowerCase();
+    return [
+      for (final c in commands)
+        if (c.matchesQuery(t) ||
+            builtinTokens[c.name]?.zh.startsWith(t) == true ||
+            builtinTokens[c.name]?.en.toLowerCase().startsWith(lower) == true)
+          c,
+    ];
   }
 }
 

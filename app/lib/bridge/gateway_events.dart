@@ -69,6 +69,15 @@ class ApprovalResolvedEvent extends GatewayEvent {
   final String approvalId;
 }
 
+/// 模型目录更新推送（chat.models.updated，桥 v2.11.0 新增，issue #1 适配；
+/// data={provider}，插在 chat.agent-preset.selected 事件族后）。
+/// App 的模型面板每次打开都重拉 models 帧（数据天然新鲜），本事件目前仅
+/// 上抛到事件流留扩展点，不改变 UI 行为。
+class ModelsUpdatedEvent extends GatewayEvent {
+  ModelsUpdatedEvent(this.provider);
+  final String? provider;
+}
+
 /// WS 请求 / REST 通道共用的错误（code 是稳定的错误名，如 HTTP_404/TIMEOUT）。
 class RequestException implements Exception {
   RequestException(this.code, this.message);

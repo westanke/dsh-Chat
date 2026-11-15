@@ -152,7 +152,7 @@ class _ComposerState extends State<Composer> {
   // ---- 斜杠命令补全（真机反馈 2026-11-04 第 3 项）----
 
   /// 会话可用命令（进入命令草稿态时拉一次并缓存；切会话由 _commandsSid 失效）。
-  List<SlashCommand>? _commands;
+  SlashCommandList? _commands; // 整个清单收敛体（builtinTokens 随行，中文过滤用）
   String? _commandsSid;
 
   /// 当前命令草稿（`/` 开头才有）：（命令名片段, 已敲参数）。
@@ -166,10 +166,11 @@ class _ComposerState extends State<Composer> {
     final draft = _slashDraft;
     final cmds = _commands;
     if (draft == null || cmds == null) return const [];
-    // 前缀过滤后全量返回（v1.0.11 曾 take(6) 截断：命令按字母序返回，
-    // t/z 开头的命令在 `/` 空草稿时被截掉、`/t` 过滤后才出现——m04949）。
-    // 面板本身可滚动（maxHeight 320），高亮计数随长度自适应。
-    return cmds.where((c) => c.matchesQuery(draft.nameFragment)).toList();
+    // matching()：前缀过滤后全量返回（v1.0.11 曾 take(6) 截断：命令按字母序
+    // 返回，t/z 开头的命令在 `/` 空草稿时被截掉、`/t` 过滤后才出现——m04949）。
+    // 面板本身可滚动（maxHeight 320），高亮计数随长度自适应；内置命令的
+    // zh 别名（目标/计划/…）也参与过滤——桥 v2.11.0 builtinTokens，issue #1。
+    return cmds.matching(draft.nameFragment);
   }
 
   Future<void> _ensureCommands() async {
@@ -182,11 +183,11 @@ class _ComposerState extends State<Composer> {
     try {
       final raw = await gw.listCommands(sid);
       final list = SlashCommandList.from(raw);
-      if (mounted) setState(() => _commands = list.commands);
+      if (mounted) setState(() => _commands = list);
     } on RequestException {
       // 命令清单拉不到就不给面板（发送路径仍可整行 execute，服务端会报错）。
       // 失败不落缓存（_commandsSid 不置），下次 onChanged 还会重试——m04149。
-      if (mounted) setState(() => _commands = const []);
+      if (mounted) setState(() => _commands = SlashCommandList.empty);
     } finally {
       _commandsLoading = false;
     }
