@@ -259,6 +259,10 @@ class DsSpacing {
   /// 323dp；360dp 屏 ≈ 279dp 与官方一致，宽屏/平板分栏随可见宽度自适应，
   /// 不再固定 280dp——issue #1 会话气泡宽度反馈）。
   static const userBubbleMaxFraction = 0.864;
+
+  /// HITL 挂起卡面板（提问/审批）最大高度占屏比；超出面板内滚动。
+  /// （无官方基准，App 自定；2026-11-15 用户反馈提交按钮被推出屏幕。）
+  static const hitlPanelMaxFraction = 0.5;
   static const topBarHeight = 44.0;
   static const thinkHMargin = 12.0; // 思考流内 h* margin
 

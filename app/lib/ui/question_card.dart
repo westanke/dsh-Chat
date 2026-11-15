@@ -35,18 +35,27 @@ class HitlPanel extends StatelessWidget {
     final questions = state.pendingQuestions.values.toList();
     final approvals = state.pendingApprovals.values.toList();
     if (questions.isEmpty && approvals.isEmpty) return const SizedBox.shrink();
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        for (final a in approvals)
-          _ApprovalCard(
-            approval: a,
-            colors: colors,
-            onDecide: onDecide,
-          ),
-        for (final q in questions)
-          _QuestionCard(question: q, colors: colors, onAnswer: onAnswer),
-      ],
+    // 限高 + 整面板滚动：题目/选项过多时提交按钮会被撑出屏幕外
+    // （2026-11-15 用户反馈），故面板最大占屏高一半，超出可上下滑动。
+    final maxH =
+        MediaQuery.sizeOf(context).height * DsSpacing.hitlPanelMaxFraction;
+    return ConstrainedBox(
+      constraints: BoxConstraints(maxHeight: maxH),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (final a in approvals)
+              _ApprovalCard(
+                approval: a,
+                colors: colors,
+                onDecide: onDecide,
+              ),
+            for (final q in questions)
+              _QuestionCard(question: q, colors: colors, onAnswer: onAnswer),
+          ],
+        ),
+      ),
     );
   }
 }

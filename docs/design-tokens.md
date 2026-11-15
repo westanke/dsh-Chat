@@ -115,6 +115,7 @@ App 实测墨迹高（density 3.0）：H1 71px、H2 61px、H3 57px、正文 45px
 - 用户气泡：右对齐，bg #edf3fe，radius 约 16dp（视觉），文字 #0f0f0f→1000；宽度 = 可见内容区 × **0.864**（`userBubbleMaxFraction`，官方 279dp ÷ 内容区 323dp，360dp 屏 ≈ 279dp；宽屏/平板分栏随可见宽度自适应，不再固定 280dp）。
 - 底部输入条（终版实测）：白浮层圆角容器（左右外边距 12dp、圆角 26dp、顶部 10dp、底部 0）+ 纯白底 + 柔和投影；占位文字 16sp（墨高 44px vs 官方 43px）、相对 chip 行再内缩 5dp（首墨 x83 vs 官方 82）；chip 高 29dp、chip 行左缘 x100px vs 官方 101px；选中 chip 淡蓝底 #edf3fe + 前景 #426efe；右侧加号/语音圆按钮 24dp、间距 17dp；容器下方「回答由 AI 生成，仅供参考」caption + c400。
 - 底部提示「回答由 AI 生成，仅供参考」11-12sp tertiary 居中。
+- HITL 挂起卡面板（提问/审批，无官方基准，App 自定）：整面板最大高度 = 屏高 × **0.5**（`hitlPanelMaxFraction`），超高部分面板内上下滚动（2026-11-15 用户反馈：题目/选项过多时提交按钮被推出屏幕不可见）。
 - 空态（`ref/official-chat-home.png` vs `ref/app-empty-final.png`）：品牌标记墨 116x88px（我们 115x87）、居中 cx538.5（我们 530.5，差 2.7dp）、纯色 #426efe；标记底到问候语顶 **22dp**（`brandMarkGap`）；问候语 **18sp** 墨宽 524px（我们 522px）。
 - 消息底部操作条：复制/喜欢/不喜欢/朗读/分享/重新生成 图标 40dp 间隔 20dp，颜色 tertiary。
 
