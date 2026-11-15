@@ -50,11 +50,15 @@ jobs:
       # 版本口径：pubspec.lock 尾部要求 dart >=3.13.7 / flutter >=3.47.0，
       # 本机开发用的 stable 是 3.47.9。**必须 pin 到本机同一版**：
       # 2026-11-15 教训 —— stable 跟最新导致 CI 拿到 3.50.0（本机 3.47.9），
-      # 新 analyzer 规则把本机 0 issue 的代码在 CI 判挂（run #10）。本机
-      # 升 SDK 时同步改这里，两处永远同版。
+      # 3.50 把 package:flutter/material.dart 标记 deprecated（拆包迁移
+      # material_ui），34 个文件的 import 全部报 deprecated_member_use，
+      # 本机 0 issue 的代码在 CI 判挂 33 issues（run #10/#11）。
+      # 注意 flutter-action@v2 的参数名是 **flutter-version**（不是 version，
+      # 写错会静默忽略继续装 latest —— run #11 教训）。本机升 SDK 时同步
+      # 改这里，两处永远同版；material_ui 迁移单独做，不混日常提交。
       - uses: subosito/flutter-action@v2
         with:
-          version: 3.47.9
+          flutter-version: 3.47.9
           channel: stable
           cache: true
 
