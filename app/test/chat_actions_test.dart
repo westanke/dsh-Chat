@@ -1,4 +1,5 @@
 // 聊天页提交 B 单测：本地统计 / 发送键三态 / 重新生成选中的用户消息。
+import 'package:dshchat/bridge/gateway.dart'; // GatewayClient（openSession 回归用）
 import 'package:dshchat/bridge/models.dart'; // re-export tool_call.dart
 import 'package:dshchat/design/app_settings.dart';
 import 'package:dshchat/design/tokens.dart';
@@ -160,6 +161,32 @@ void main() {
       expect(find.byIcon(Icons.add), findsOneWidget);
       expect(find.byIcon(Icons.graphic_eq), findsOneWidget);
       expect(find.byIcon(Icons.arrow_upward), findsNothing);
+    });
+  });
+
+  group('openSession 切会话清流式缓冲（2026-11-15 反馈）', () {
+    test('A 会话执行中切到 B：streaming/reasoning/text 不残留到 B 页', () async {
+      final gw = GatewayClient(baseUrl: 'http://127.0.0.1:1'); // 不连接
+      final state = ChatState(gw);
+      // 模拟会话 A 流式中的残留状态。
+      state.streamText = 'A 的正文';
+      state.streamReasoning = 'A 的深度思考';
+      state.streaming = true;
+      await state.openSession(
+        const DshSession(
+          id: 'b',
+          rootId: 'b',
+          updatedAt: 0,
+          running: false,
+          blank: false,
+        ),
+      );
+      expect(state.sessionId, 'b');
+      expect(state.streaming, isFalse);
+      expect(state.streamText, isEmpty);
+      expect(state.streamReasoning, isEmpty);
+      state.dispose();
+      gw.dispose();
     });
   });
 }
