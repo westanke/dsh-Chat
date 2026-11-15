@@ -112,6 +112,51 @@
 | `tool/verify_groups.dart` | 宿主侧校验脚本：读 `ref/hist-demo.json` 跑 `HistoryPage.fromEvents`，打印用户/过程组/助手三段结构 |
 | `tool/verify_err.dart` | 宿主侧校验脚本：读 `ref/hist-err.json`，确认 `turn/end` 失败被解析成 `role=error` 消息 |
 
+## harmony/（鸿蒙版，ArkUI 原生重写）
+
+> 安卓版全功能的鸿蒙移植，工程根 `harmony/`，阶段与规程见 `harmony/docs/{PORT-MAP,RELEASE,STATUS}.md`。
+> ets 源码按 `ets/` 内相对路径登记（`scripts/ci/docs-check.sh` 第 1b 条机检）。
+
+### 工程配置
+
+| 文件 | 用途 |
+|---|---|
+| `harmony/build-profile.json5` | 工程级：compatibleSdkVersion 5.1.0(18)、signingConfigs 留空（签名走 hap-sign-tool，见 RELEASE.md） |
+| `harmony/oh-package.json5` / `harmony/package.json` | 工程元信息（1.0.0 起独立版本线）+ node ESM 标记 |
+| `harmony/hvigorfile.ts` / `harmony/hvigor/hvigor-config.json5` | hvigor 构建入口（appTasks，modelVersion 5.0.0） |
+| `harmony/AppScope/app.json5` | bundleName `com.dsh.dshchat`（与安卓 applicationId 对齐）、versionCode 1000000 / versionName 1.0.0、分层图标 |
+| `harmony/AppScope/resources/**` | 应用名 DSH Chat（base/en_US）+ 1024 分层图标（前景/背景/启动图，自安卓自绘图标放大，矢量精绘待真机阶段） |
+
+### entry/src/main
+
+| 文件 | 用途 |
+|---|---|
+| `harmony/entry/src/main/module.json5` | entry 模块清单：EntryAbility + 仅 INTERNET 权限（剪贴板受限权限教训见 PORT-MAP） |
+| `harmony/entry/build-profile.json5`、`hvigorfile.ts`、`oh-package.json5`、`obfuscation-rules.txt` | 模块级构建配置（混淆暂不启用） |
+| `harmony/entry/src/main/resources/**` | 文案/颜色资源（base + dark 深色档 + en_US 预留）+ 模块侧分层图标 + main_pages |
+
+### ets 源码（阶段推进时逐行补）
+
+| 文件 | 用途 |
+|---|---|
+| `ets/entryability/EntryAbility.ets` | 唯一 Ability：loadContent + 深浅色显式跟随系统（COLOR_MODE_NOT_SET，后台切色不丢） |
+| `ets/pages/Index.ets` | 骨架占位页（阶段 2 由连接页替换；颜色/文案全走资源引用） |
+
+### harmony/test/（node 单测，与 ets/core 同款模式）
+
+| 文件 | 覆盖 |
+|---|---|
+| `harmony/test/cases/version-contract.test.ts` | AppScope versionName/Code 与 entry/oh-package 版本一致性机检（防 AGC 拒收同 versionCode 重复包） |
+| `harmony/test/package.json` / `tsconfig.json` | node:test + tsx 跑 `cases/*.test.ts`，strict TS |
+
+### harmony/scripts/
+
+| 文件 | 用途 |
+|---|---|
+| `harmony/scripts/package.sh` | 双闸门打包：node 单测 + hvigorw assembleHap（未签名）→ dist/ + SHA256SUMS |
+| `harmony/scripts/toolchain-env.sh` | 工具链环境（ROOT 可用 `DSH_HARMONY_TOOLCHAIN_ROOT` 覆盖，缺省共享 _toolchain） |
+| `harmony/scripts/install-harmony-toolchain.sh` | 工具链国内源部署脚本（可重放，分钟级） |
+
 ## bridge 协议引用
 
 - 消费对象：`dsh-remote-bridge` v2.10.0，协议 `dsh-mobile-v1`，hello.protocol=3。

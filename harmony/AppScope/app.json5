@@ -1,0 +1,21 @@
+{
+  "app": {
+    // bundleName 与安卓版 applicationId `com.dsh.dshchat` 对齐（AGENTS.md §2 法律红线：
+    // 产物标识符零 DeepSeek；姊妹仓 dsh-companion-harmony 因含 DeepSeek 字样被 AGC
+    // 驳回过一次，本名直接合规）。将来 AGC 签发的 Profile 里 bundle-name 必须与
+    // 这里一致，不一致 hap-sign-tool 直接签名失败。
+    "bundleName": "com.dsh.dshchat",
+    "vendor": "westanke",
+    // 鸿蒙版独立版本线，从 1.0.0 起（方案报告 §4.1）；versionCode 递增序列 1000000 起，
+    // 与姊妹仓 1000004 的序列隔开，不混用。
+    "versionCode": 1000000,
+    "versionName": "1.0.0",
+    // 应用图标必须是 1024×1024 分层资源（前景 + 背景，背景不许含透明像素）——
+    // AGC 对单层小图驳回过的教训见姊妹仓 docs/PORT-MAP.md。命名刻意与 entry 侧不同
+    // （entry 用 `layered_image`）：两边同名时 entry 资源会被 AppScope 同名资源覆盖
+    // （官方文档「配置图标后不生效」条目）。前景/背景由本工程安卓自绘图标放大生成，
+    // 1024 矢量精绘在真机阶段前补（见 harmony/docs/PORT-MAP.md 坑位索引）。
+    "icon": "$media:app_layered_image",
+    "label": "$string:app_name"
+  }
+}

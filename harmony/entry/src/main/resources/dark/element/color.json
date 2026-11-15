@@ -1,0 +1,10 @@
+{
+  "color": [
+    { "name": "page_bg", "value": "#111318" },
+    { "name": "text_primary", "value": "#E2E3E7" },
+    { "name": "text_secondary", "value": "#9AA0A6" },
+    { "name": "brand_primary", "value": "#7B93FF" },
+    { "name": "badge_bg", "value": "#232A45" },
+    { "name": "start_window_background", "value": "#111318" }
+  ]
+}

@@ -76,3 +76,23 @@ jobs:
 
       - name: 单元测试
         run: flutter test
+
+  # ── 鸿蒙版门禁：纯逻辑层 node 单测（harmony/test，无 SDK 依赖）──────────
+  # hvigorw 构建不上 CI：runner 没有鸿蒙 SDK（与安卓「构建产物本地验收」同口径，
+  # 见文件头注释）。arkts 代码的纯逻辑全部拆在 core/（.ts），node:test + tsx 直跑。
+  harmony-test:
+    name: harmony core test
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: harmony/test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: 依赖还原
+        run: npm ci
+      - name: 单元测试
+        run: npm test

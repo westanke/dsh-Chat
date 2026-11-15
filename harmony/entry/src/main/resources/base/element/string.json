@@ -1,0 +1,11 @@
+{
+  "string": [
+    { "name": "module_desc", "value": "DSH Chat 鸿蒙版主模块" },
+    { "name": "EntryAbility_desc", "value": "DSH Chat —— dsh-remote-bridge 的鸿蒙客户端" },
+    { "name": "EntryAbility_label", "value": "DSH Chat" },
+    { "name": "reason_internet", "value": "连接本机 dsh-remote-bridge 服务进行对话" },
+    { "name": "skeleton_title", "value": "DSH Chat 鸿蒙版" },
+    { "name": "skeleton_badge", "value": "工程骨架 · 阶段 0" },
+    { "name": "skeleton_body", "value": "ArkUI 原生重写进行中。连接页与对话界面将在阶段 2 落地。" }
+  ]
+}

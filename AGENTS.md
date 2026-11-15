@@ -2,7 +2,9 @@
 
 > 本文件是每次会话**必然读到**的那份约定。本工程由 AI 自主开发，规矩写在前面，
 > 谁（包括未来的 AI 会话）动手前先读完这条。与 `dsh-remote-bridge` / `dsh-companion`
-> 的宪法同源同制度，按 Flutter 客户端特色裁剪——**三边职责不同，不要互相照抄**。
+> 的宪法同源同制度，按客户端特色裁剪——**各边职责不同，不要互相照抄**。
+> 本仓现含双客户端：`app/`（Flutter，Android+iOS，Android 已发版）与
+> `harmony/`（ArkUI 原生鸿蒙版，2026-11-15 起步，规程见 `harmony/docs/PORT-MAP.md`）。
 
 ---
 
@@ -18,16 +20,18 @@
 
 ## 1. 本项目是什么（边界）
 
-- **一句话**：Flutter 一套代码（Android + iOS）复刻官方 DeepSeek App 的**界面**，
+- **一句话**：本仓承载 DSH Chat 双客户端——`app/`（Flutter 一套代码，Android + iOS）
+  与 `harmony/`（ArkUI 原生鸿蒙版），各自复刻官方 DeepSeek App 的**界面**，
   对话内容由本机的 `dsh-remote-bridge`（REST `/api/v1` + WS `/ws/mobile`）提供。
 - **上游依赖**：`dsh-remote-bridge` ≥ 2.10.0（协议 v3）。本仓**只消费协议**，不改协议。
 - **不是什么**：不是官方客户端的分支；不接官方服务器；不逆向官方 APK 的代码/资源。
 
 ## 2. 法律红线（用户 2026-11-02 定，起步就不得违犯）
 
-1. **产物标识符零 DeepSeek**：applicationId / bundle id / 类名 / 资源名 / 应用显示名 /
-   About 文案，一律不含 `deepseek`（不区分大小写）。当前注册名：
-   `com.dsh.dshchat`，显示名 `DSH Chat`。改包名须先改本条再动 `build.gradle.kts`。
+1. **产物标识符零 DeepSeek**：applicationId / bundle id / bundleName / 类名 / 资源名 /
+   应用显示名 / About 文案，一律不含 `deepseek`（不区分大小写）。当前注册名：
+   `com.dsh.dshchat`，显示名 `DSH Chat`（Android applicationId 与鸿蒙 bundleName 同名同源，
+   改包名两平台一起改，先改本条再动 `app/android`、`harmony/AppScope/app.json5`）。
 2. **不复用官方资产**：官方 APK 里的图标、字体、so、混淆资源一个都不拷贝；
    图标自绘或用开源图标集（Material Symbols / 自绘 path）。
 3. **仿界面不冒品牌**：布局、间距、配色对齐官方是工程要求；但启动页 logo、
@@ -44,7 +48,7 @@ dsh-Chat/
   AGENTS.md            ← 本文件（工程根 = 宪法所在）
   docs/                ← design-tokens.md / STRUCTURE.md（平铺，不加子目录）
   ref/                 ← 官方基准材料（css/apk/截图），只读，不参与构建
-  app/                 ← flutter 工程根
+  app/                 ← flutter 工程根（Android+iOS，Android 已发版）
     lib/
       design/          ← tokens.dart（设计 token 单一来源）
       bridge/          ← gateway.dart（WS）/ models.dart（协议模型）/ credentials.dart / device.dart / dlog.dart
@@ -52,12 +56,23 @@ dsh-Chat/
                          md_code_block / md_table / message_actions / process_group /
                          sessions_drawer / brand_mark
     android/ ios/      ← 平台壳（改动要在提交说明里点名）
+  harmony/             ← 鸿蒙工程根（ArkUI 原生，与 app/ 平级互不引用）
+    AppScope/          ← 应用级配置 app.json5 + 分层图标（bundleName=com.dsh.dshchat）
+    entry/src/main/    ← ets 业务代码（ability/pages/components）+ module.json5 + 资源
+    core/              ← 纯逻辑层（协议/模型，.ts，node 直测，不 import 任何 ets）
+    test/              ← node:test + tsx 纯逻辑测试（CI 跑这里，无鸿蒙 SDK 依赖）
+    docs/              ← PORT-MAP.md（移植对照）/ RELEASE.md（签名发版）/ STATUS.md（进度台账）
+    scripts/           ← package.sh（构建发版）/ toolchain-env.sh（工具链 env）
 ```
 
 铁律：
-- **目录嵌套 ≤ 3 层**（用户长期规矩）；`lib/` 下子目录只许 `design/`、`bridge/`、`ui/` 三个。
-- 严禁 `/tmp`（用户长期规矩）；临时文件进 `app/build/` 或用户家目录。
-- `ref/` 只进参考材料，**绝不**被 `app/` 的 Dart/gradle 引用。
+- **目录嵌套 ≤ 3 层**（用户长期规矩）；`lib/` 下子目录只许 `design/`、`bridge/`、`ui/` 三个；
+  `harmony/entry/src/main/ets/` 下同口径（`pages/`、`components/` 等按功能平铺，不叠壳）。
+- **平台豁免（用户已批，2026-11-15）**：`harmony/` 的 ArkTS 工程结构
+  （`AppScope/`、`entry/src/main/`、`hvigor/` 等）由 DevEco/hvigor 约定死，豁免嵌套限制；
+  `harmony/core/`、`harmony/test/`、`harmony/docs/`、`harmony/scripts/` 照旧严格执行。
+- 严禁 `/tmp`（用户长期规矩）；临时文件进 `app/build/`、`harmony/build/` 或用户家目录。
+- `ref/` 只进参考材料，**绝不**被 `app/` 的 Dart/gradle 或 `harmony/` 的 ets/hvigor 引用。
 
 ## 4. 设计 token 纪律（「严格对称」怎么落地）
 
@@ -103,6 +118,24 @@ bash scripts/push-all.sh        # 推 Gitee 主 + AtomGit 备（**须用户同�
 - 真机：vivo V2080A（serial 9540718532001JR），`adb` 在
   `…/android-toolchain/sdk/platform-tools/adb`。vivo 装机拦截页需勾风险确认再点继续安装。
 
+**鸿蒙（`harmony/`，2026-11-15 起口径，全部实跑验证过）**：
+
+```sh
+# 工具链一次性引入（hvigorw/ohpm/hdc 都是工具链可执行文件，不在工程内）
+source /media/wangke/OFFICE/TRae_work/_toolchain/env.sh   # 或 bash harmony/scripts/toolchain-env.sh
+cd harmony
+npm --prefix test install      # 依赖变更后（test/，npmmirror）
+npm --prefix test test         # 纯逻辑单测，提交前必绿（CI 同口径）
+hvigorw assembleHap --no-daemon   # 构建未签名 hap（产物 entry/build/*.hap，不入库）
+bash scripts/package.sh           # 双闸门（测试+构建）一键发版前检查，详见 harmony/docs/RELEASE.md
+```
+
+- 鸿蒙工具链根：`/media/wangke/OFFICE/TRae_work/_toolchain/`（command-line-tools 5.1.0.840 +
+  SDK API18 + JDK17 + Node20；`install-harmony-toolchain.sh` 可重放安装；
+  `DSH_HARMONY_TOOLCHAIN_ROOT` 可覆盖路径）。签名与 AGC 上架材料清单见 `harmony/docs/RELEASE.md`。
+- 真机：HarmonyOS 6.0 手机（`hdc list targets`），装机/调试 Profile 用
+  `harmony/signing/` 下的材料（**绝不入库**，.gitignore 已拉黑）。
+
 ## 7. 代码纪律
 
 - **单文件 ≤ 500 行**（Dart 心智负担高于 TS？低于 Kotlin，折中取 500）。超了拆文件，不许 `// ignore` 糊弄。
@@ -111,11 +144,23 @@ bash scripts/push-all.sh        # 推 Gitee 主 + AtomGit 备（**须用户同�
 - 样式值必须有 token 依据（§4）；新 UI 元素先在 `design-tokens.md` 登记。
 - `flutter analyze` 的 warning 不许积压；info 级要注释理由才能留着。
 
+**ArkTS（`harmony/`）追加条目**：
+
+- **分层铁律**：`harmony/core/` 只写纯逻辑（协议/模型/状态机，.ts 文件），**不 import
+  任何 `@kit`/ets/UI**，保证 `harmony/test/` 用 node 直测（CI 无鸿蒙 SDK 也能跑）。UI 层
+  （entry/src/main/ets）只做渲染与事件转发，业务逻辑下沉 core。
+- ArkTS 不是 TypeScript：禁 `any`/`unknown` 满天飞、禁结构化破坏性赋值、禁运行时修改对象
+  shape；协议模型显式定义 interface + `fromJson`，同 Dart 口径（§5 round-trip 测试同样适用）。
+- 单文件 ≤ 500 行对 ets/.ts 同样生效；禁 `print`（鸿蒙用 `hilog`，封装在 core/debug）。
+- 鸿蒙工程配置（build-profile.json5 / hvigorfile.ts / module.json5）改动要在提交说明里点名；
+  `compatibleSdkVersion` 升级需在 `harmony/docs/PORT-MAP.md` 记录原因。
+
 ## 8. 文档同步（同提交）
 
 | 改动 | 同一提交内必须同步 |
 |---|---|
 | 新增/移动/删除 `lib/` 下文件 | `docs/STRUCTURE.md` 的清单表 |
+| 新增/移动/删除 `harmony/` 下 ets/ts 文件 | `docs/STRUCTURE.md` 的 harmony 清单表（docs-check 机检） |
 | 新增/修改设计 token | `docs/design-tokens.md` + `lib/design/tokens.dart` 一起 |
 | 协议用法变更（新增帧/字段） | 在 `docs/STRUCTURE.md` 的 bridge 章节登记引用的协议版本 |
 | 依赖变更 | pubspec 注释说明用途；新增重量级依赖（>10 传递依赖）先在本文件登记 |
@@ -125,7 +170,8 @@ bash scripts/push-all.sh        # 推 Gitee 主 + AtomGit 备（**须用户同�
 ## 9. 对外表述纪律（同源三仓共守）
 
 - 「仿官方界面」表述只用于工程内部沟通；对外（README、release notes）写
-  「DSH Chat — Flutter client for dsh-remote-bridge」，不写「DeepSeek 克隆」。
+  「DSH Chat — client for dsh-remote-bridge（Android / iOS / HarmonyOS）」，
+  不写「DeepSeek 克隆」。
 - 未装机验证过的功能不许写「已完成」；真机截图是验收证据。
 - 推送/发布类远端动作未经用户明确同意不做（同源规矩）。
 
@@ -166,14 +212,17 @@ bash scripts/push-all.sh        # 推 Gitee 主 + AtomGit 备（**须用户同�
 - **绝不提交凭证**：`ref/probe-token.json`、`ref/pairing.json`、`ref/math-session.txt`
   含真实 token/配对码/会话 id，已在 `.gitignore` 拉黑。往 git 历史里塞一次就得改写历史。
 
-**CI 口径**（`.github/workflows/ci.yml`，两道闸门）：
+**CI 口径**（`.github/workflows/ci.yml`，三道闸门）：
 
 | 闸门 | 命令 | 说明 |
 |---|---|---|
-| 文档 | `bash scripts/ci/docs-check.sh` | STRUCTURE.md 覆盖全部 lib/ 文件、无死链、无旧仓名 |
-| 代码 | `flutter analyze` → `flutter test` | 在 `app/` 下跑；跟 stable 通道的 Flutter |
+| 文档 | `bash scripts/ci/docs-check.sh` | STRUCTURE.md 覆盖全部 lib/ 与 harmony ets/ts 文件、无死链、无旧仓名 |
+| 代码（Android/iOS） | `flutter analyze` → `flutter test` | 在 `app/` 下跑；跟 stable 通道的 Flutter |
+| 代码（鸿蒙） | `npm ci && npm test`（`harmony/test`） | 纯逻辑 node:test，无鸿蒙 SDK 依赖，ubuntu runner 直跑 |
 
-刻意不跑 `flutter build apk`：产物不入库，验收在本机真机，CI 构建没人用（理由见 ci.yml 头注释）。
+刻意不跑 `flutter build apk` 与 `hvigorw assembleHap`：产物不入库，验收在本机真机，
+CI 构建没人用（理由见 ci.yml 头注释）；鸿蒙构建需 DevEco 工具链，runner 上没有
+（发版口径见 `harmony/docs/RELEASE.md`）。
 
 **发版全流程（两段式，v1.0.17 实测定稿，照做不出错）**：
 
@@ -217,3 +266,11 @@ bash scripts/push-all.sh        # 推 Gitee 主 + AtomGit 备（**须用户同�
 - `gpt_markdown 任务列表溢出` —— 1.4.0 把 Material Checkbox 塞进 WidgetSpan，中文行高算出 ~10 万像素宽 → RenderFlex 溢出（debug 红底黄黑斜纹）：必须传 `checkboxBuilder` 自绘。
 - `gpt_markdown 任务列表圆点` —— 源码 `- [x] foo` 会先被 listMarker 吃掉成无序列表项：渲染前用 `normalizeTaskLists()` 去掉列表符号。
 - `外部写入不刷新` —— bridge 只在 `chat.session.event` 推 eventType（无事件体），且 `committed role=user` 分支容易漏：所有 session event 都要防抖重拉 history。
+
+**鸿蒙坑位（详表见 `harmony/docs/PORT-MAP.md`，此处只留触发词）**：
+
+- `hvigorw 不在工程内` —— hvigorw/ohpm/hdc 是工具链可执行文件：先 `source /media/wangke/OFFICE/TRae_work/_toolchain/env.sh`，别找工程内 wrapper。
+- `hvigor 拒明文口令` —— 签名口令不能写在 build-profile.json5，走环境变量或手动 hap-sign-tool（见 harmony/docs/RELEASE.md）。
+- `分层图标覆盖` —— AppScope 与 entry 的图标资源名必须不同，否则后者覆盖前者。
+- `AGC 图标 1024` —— AGC 上架审核拒收非 1024×1024 应用图标（姊妹仓实踩）。
+- `npm ci 无 lock` —— harmony/test 要提交 package-lock.json，否则 CI `npm ci` 直接失败。

@@ -1,0 +1,22 @@
+{
+  "apiType": "stageMode",
+  "buildOption": {},
+  "buildOptionSet": [
+    {
+      "name": "release",
+      "arkOptions": {
+        // 混淆暂不启用（骨架阶段，与姊妹仓口径一致）；
+        // ruleOptions.files 指向的规则文件保留占位，启用时只改 enable。
+        "obfuscation": {
+          "ruleOptions": {
+            "enable": false,
+            "files": [ "./obfuscation-rules.txt" ]
+          }
+        }
+      }
+    }
+  ],
+  "targets": [
+    { "name": "default" }
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "name": "entry",
+  "version": "1.0.0",
+  "description": "DSH Chat 鸿蒙版主模块",
+  "main": "",
+  "author": "westanke",
+  "license": "AGPL-3.0",
+  "dependencies": {}
+}
