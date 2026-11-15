@@ -206,3 +206,31 @@ macOS runner 计费约 ×10（私有仓库），一次 iOS 构建 20-30 分钟�
 - 本地 arm64 APK：25.9MB，`aapt dump badging` 显示
   versionCode='15' versionName='1.0.14'，包内无 armeabi-v7a/x86_64。
 - ci.yml 头注释同步更新（发版构建指向 release.yml）。
+
+## 续编：版本号漂移与更新链路修复（1.0.15+16）
+
+用户在设置页截图反馈：「版本 1.0.13+14」写死没跟发版走，检查更新报
+「远端 v1.0.13」（实际已发 v1.0.14）。两处独立根因：
+
+1. **版本展示与比较基准写死**：settings_page.dart 顶层常量
+   `_appVersion = '1.0.13+14'`（当时注释的理由是「不引入
+   package_info_plus 避免加依赖」）。发版流水线上线后版本号会变，写死即漂移。
+   修复：`dsh/platform` 通道新增 `appVersion`（Android 读 gradle
+   versionName/longVersionCode、iOS 读 CFBundleShortVersionString/
+   CFBundleVersion——Flutter 工具链自动从 pubspec version 注入这两个字段，
+   零新依赖、零配置）；Dart 侧 `DshPlatform.appVersion()` 成功缓存、失败
+   回 null 降级（About 显示占位、更新检查跳过比较，不拿 0.0.0 误报）。
+2. **远端 release 附件识别不到**：release_check.dart 资产过滤只认
+   `dsh-Chat-` 前缀，而 sync-gitee-release.sh 发的是 `dshchat-*`（无连
+   字符），远端 v1.0.14 的 APK 被跳过 → 回退 GitHub 也没有 → 报旧版本。
+   修复：小写化后 `dsh-chat-` / `dshchat-` 两前缀都放行（注意两者字面
+   不同，须显式双匹配）。
+
+配套：`fetchLatestRelease({http.Client? client})` 加注入点供测试；
+测试 +6（两套命名 / Gitee→GitHub 回退 / 双站失败 / isNewerVersion 边界
+/ 设置页版本行 mock 平台通道），全量 149 绿、analyze 0 issue。
+
+发版闭环验证：修复以 v1.0.15+16 发布（tag↔pubspec 一致性核对在 CI），
+GitHub 构建完成后跑 `scripts/sync-gitee-release.sh v1.0.15 <run-id>`
+同步 gitee；用户手机 1.0.14 点检查更新应发现 v1.0.15 → 下载（gitee
+附件直链）→ 安装后版本行与「已是最新」口径全部对齐。
