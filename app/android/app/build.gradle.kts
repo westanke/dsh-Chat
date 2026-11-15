@@ -38,6 +38,12 @@ android {
         // flag during build.
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        // 只保留手机端/平板端（ARM64）：砍掉 armeabi-v7a（32 位）与 x86_64
+        // （模拟器），universal APK 从 ~75MB 降到 ~25MB。2026 年 Android
+        // 手机与平板已全面 arm64，老 32 位设备不再投入兼容成本。
+        ndk {
+            abiFilters += listOf("arm64-v8a")
+        }
     }
 
     signingConfigs {

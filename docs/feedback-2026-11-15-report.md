@@ -159,3 +159,50 @@ SDK，改为 pub 包 `material_ui` / `cupertino_ui` 发布；`flutter/widgets` �
 - Flutter 镜像下载路径必须含 `stable/linux/` 前缀，漏了会 404 存下错误页。
 - `docs/ecosystem/material_ui`（SDK 内）是 monorepo 内部 M3E 迁移清单，
   与应用层无关；应用层迁移就是 import + delegate 两件事。
+
+# 发版流水线：版本号、ABI 精简、iOS 在线打包（2026-11-15）
+
+## 1. 发版必须升级版本号
+
+版本单一来源 `app/pubspec.yaml` 的 `version: <versionName>+<versionCode>`
+（Android versionCode/versionName 与 iOS CFBundleVersion 都由 Flutter 自动
+注入，iOS Info.plist 用 `$(FLUTTER_BUILD_NAME)/$(FLUTTER_BUILD_NUMBER)` 引用，
+无需手改）。本次 `1.0.13+14 → 1.0.14+15`。
+
+release.yml 加了**版本核对步骤**：打 tag（约定 `v<versionName>`，如 v1.0.14）
+时校验 tag 与 pubspec 版本一致，不一致直接红——防止「忘升版本就发版」。
+
+## 2. 只留手机端/平板端：ABI 精简
+
+universal APK 74.8MB 的构成：libapp.so ×3 ABI（~41MB）+ libflutter.so ×3
+（~36MB）。手机与平板 2026 年已全面 ARM64，砍 armeabi-v7a（32 位）与
+x86_64（模拟器）→ **25.9MB（-65%）**。
+
+实现有一个坑：Flutter 3.50 的 FlutterPlugin 在无 splits 时会
+`abiFilters.clear(); abiFilters.addAll(全量 3 ABI)`（FlutterPlugin.kt:444，
+「Google Play 兼容设备列表」的默认行为），build.gradle.kts 里写的
+`ndk { abiFilters }` 会被覆盖。官方开关是 Gradle 属性
+**`disable-abi-filtering=true`**（FlutterPluginUtils.kt:318）：
+app/android/gradle.properties 设上后，项目自己的
+`abiFilters += listOf("arm64-v8a")` 才是唯一来源。
+
+## 3. iOS 在线打包（本机无苹果环境）
+
+新工作流 `.github/workflows/release.yml`（tag `v*` 或手动触发）：
+
+- **android job**（ubuntu）：flutter 3.50.0 构建 arm64 APK → artifact
+  `android-apk`。
+- **ios job**（macos-15）：`flutter build ios --release --no-codesign` 出
+  未签名 Runner.app → 手工打 Payload zip → 未签名 IPA → artifact `ios-ipa`。
+  未签名 IPA 不能 Xcode 直接分发，用侧载工具（Sideloadly / AltStore /
+  爱思助手）签名安装。
+
+两个 job 都带版本核对；artifact 在私有仓库 Actions 页登录后下载。
+macOS runner 计费约 ×10（私有仓库），一次 iOS 构建 20-30 分钟约 200-300
+计费分钟，发版频率低时免费额度够用。
+
+## 验证
+
+- 本地 arm64 APK：25.9MB，`aapt dump badging` 显示
+  versionCode='15' versionName='1.0.14'，包内无 armeabi-v7a/x86_64。
+- ci.yml 头注释同步更新（发版构建指向 release.yml）。

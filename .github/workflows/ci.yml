@@ -5,10 +5,11 @@ name: CI
 #   - dsh-remote-bridge 的 `pnpm check` = typecheck → test → docs:check → build
 #   - 本仓的等价物 = `flutter analyze` → `flutter test` → docs/STRUCTURE.md 契约检查
 #
-# 刻意**不**在 CI 里 `flutter build apk`：
+# 刻意**不**在 CI 里 `flutter build apk`（发版构建走 release.yml：tag 触发，
+# 顺带出 iOS 未签名 IPA——本机无苹果环境）：
 #   1) 真机构建需要 Android SDK + JDK17 + gradle 缓存，冷启动要十几分钟，
-#      而这个仓库的验收动作是在本机真机（vivo V2080A）上装机，CI 里构建产出没人用；
-#   2) 构建产物不入库，发版走本地 `flutter build apk` + 手工上传 Release。
+#      而门禁的验收动作是 analyze/test/docs-check，构建产出没人用；
+#   2) 构建产物不入库，发版走 release.yml + artifact 下载。
 #   真要加构建任务时，照 dsh-companion 的 android.yml 抄 setup-java/setup-android 三段。
 
 on:
