@@ -39,6 +39,17 @@ export class DsPalette {
   static readonly chipSelectedDark: string = '#283142';
   static readonly chipSelectedFgDark: string = '#679EFE';
   static readonly chipSelectedFgLight: string = '#426EFE';
+  // Atom One Light 语法高亮（安卓 tokens.dart 51-56 同源）
+  static readonly synKeyword: string = '#A626A4';
+  static readonly synString: string = '#50A14F';
+  static readonly synFunction: string = '#E45649';
+  static readonly synNumber: string = '#4078F2';
+  static readonly synComment: string = '#A0A1A7';
+  static readonly synPlain: string = '#383A42';
+  static readonly codeTextDark: string = '#E3EAF2';
+  // App 实测 blockquote 竖线 / 表格边框
+  static readonly quoteBarLight: string = '#E5E5E5';
+  static readonly tableBorderLight: string = '#DCDCDC';
 }
 
 /// 语义别名（亮/暗两套，官方 alias 表）。
@@ -111,7 +122,28 @@ export class DsColors {
   }
 
   get mdCodeBlockText(): string {
-    return this.dark ? '#E3EAF2' : '#383A42';
+    return this.dark ? DsPalette.codeTextDark : DsPalette.synPlain;
+  }
+
+  /// banner 与代码之间的分隔线（官方实测 #ebebeb）。
+  get mdCodeBlockDivider(): string {
+    return this.dark ? DsPalette.c800 : DsPalette.c150;
+  }
+
+  get mdCitationBg(): string {
+    return this.dark ? DsPalette.c800 : DsPalette.c100;
+  }
+
+  get quoteBar(): string {
+    return this.dark ? DsPalette.c600 : DsPalette.quoteBarLight;
+  }
+
+  get tableBorder(): string {
+    return this.dark ? '#29FFFFFF' : DsPalette.tableBorderLight;
+  }
+
+  get listMarker(): string {
+    return this.dark ? DsPalette.c300 : DsPalette.c700;
   }
 
   /// 输入条容器底色：官方浅色为纯白浮层，深色为 #242424。
@@ -181,6 +213,8 @@ export class DsColors {
 
 /// 字号（官方 token，fp；行高换算）。
 export class DsTypography {
+  static readonly h1: Font = { size: 24, weight: FontWeight.Bold };
+  static readonly h2: Font = { size: 22, weight: FontWeight.Bold };
   static readonly h3: Font = { size: 20, weight: FontWeight.Bold };
   static readonly h4: Font = { size: 16, weight: FontWeight.Medium };
   static readonly base: Font = { size: 16, weight: FontWeight.Normal };
@@ -190,6 +224,8 @@ export class DsTypography {
   static readonly inlineCode: Font = { size: 14, weight: FontWeight.Normal };
   static readonly codeBlock: Font = { size: 13, weight: FontWeight.Normal };
   static readonly codeBlockLabel: Font = { size: 13, weight: FontWeight.Normal };
+  static readonly table: Font = { size: 15, weight: FontWeight.Normal };
+  static readonly tableHead: Font = { size: 15, weight: FontWeight.Medium };
   static readonly inputPlaceholder: Font = { size: 16, weight: FontWeight.Normal };
   static readonly pageTitle: Font = { size: 16, weight: FontWeight.Medium };
   static readonly caption: Font = { size: 12, weight: FontWeight.Normal };
@@ -210,6 +246,14 @@ export class DsSpacing {
   static readonly codeBlockPad: number = 12;
   static readonly codeBlockPadH: number = 15;
   static readonly codeBlockPadV: number = 10;
+  static readonly codeBlockBannerPadV: number = 8;
+  static readonly cellPadV: number = 10;
+  static readonly cellPadH: number = 16;
+  static readonly cellMinWidth: number = 100;
+  static readonly quotePadLeft: number = 14;
+  static readonly quoteBarWidth: number = 2;
+  static readonly inlineCodeRadius: number = 6;
+  static readonly inlineCodePadH: number = 5;
   static readonly processRowHeight: number = 28;
   static readonly processIconSize: number = 15;
   static readonly processIconGap: number = 6;

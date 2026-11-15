@@ -47,16 +47,18 @@
 | ui/connect_page.dart | pages/ConnectView.ets（历史主机/DSH1 导入/手动配对；删主机清凭据） | 2 | ✅ 2026-11-15 |
 | ui/chat_state.dart + chat_history_actions.dart | ets/core/ChatStore.ts（node 18 用例） | 2 | ✅ 2026-11-15 |
 | ui/mobile_workspace.dart | ets/core/ChatStore.ts ensureMobileWorkspace | 2 | ✅ 2026-11-15 |
-| ui/chat_page.dart + chat_message_items/list | pages/ChatView.ets + components/MessageList.ets（气泡/流式/错误条；Markdown 富渲染阶段 3） | 2/3 | ◐ 2026-11-15 |
+| ui/chat_page.dart + chat_message_items/list | pages/ChatView.ets + components/MessageList.ets（气泡/流式/错误条 + **MdView 富渲染接入**） | 2/3 | ✅ 2026-11-16 |
 | ui/composer.dart + composer_bar/widgets | components/Composer.ets（输入+发送/停止；命令面板/图片/@引用阶段 4） | 2/4 | ◐ 2026-11-15 |
 | ui/sessions_drawer.dart + session_groups.dart | components/SessionsDrawer.ets（分组列表/新建/高亮；搜索/删除/推挤动画阶段 4） | 2/4 | ◐ 2026-11-15 |
 | ui/brand_mark.dart（品牌标） | ChatView 空态文字占位（自绘 path 阶段 4） | 2/4 | ◐ 2026-11-15 |
-| ui/md_view 系（Markdown 全家福） | components/MarkdownView.ets + InlineText.ets 等 | 3 | ☐ 计划 |
-| **公式渲染（行内/块级）** | components/LaTeX（轻量渲染，自研子集，首版就上不降级——用户拍板） | 3 | ☐ 计划 |
-| ui/md_code_block.dart | components/CodeBlock.ets（Atom One Light 同款配色） | 3 | ☐ 计划 |
-| ui/md_table.dart | components/DataTable.ets | 3 | ☐ 计划 |
+| ui/md_view 系（Markdown 全家福） | components/md/MdView.ets（块级循环+行内混排 Span）+ core/{MdParser,MdInline}.ts（node 22 用例） | 3 | ✅ 2026-11-16 |
+| **公式渲染（行内/块级）** | core/LatexLite.ts + components/md/MdLatex.ets（自研子集，首版就上不降级——用户拍板） | 3 | ✅ 2026-11-16 |
+| ui/md_code_block.dart | components/md/MdCodeBlock.ets + core/SimpleHighlight.ts（Atom One Light 配色；高亮仅 str/num/comment/kw 四类简化） | 3 | ✅ 2026-11-16 |
+| ui/md_table.dart | components/md/MdTable.ets（复制；下载/展开延后阶段 4） | 3 | ✅ 2026-11-16 |
 | ui/process_group.dart（工具折叠组） | components/ToolBlockBody.ets | 3 | ☐ 计划 |
 | ui/message_actions.dart | ui/MessageActions.ets | 4 | ☐ 计划 |
+**阶段 3 已记偏差（2026-11-16）**：①代码高亮四类 token（kw/str/num/comment）+ 五语言关键词表，非 Atom One 全量 scope；②流式渲染无闪烁光标（安卓 GptMarkdown isStreaming 有）；③表格下载/展开按钮延后阶段 4；④任务列表勾选框用 Unicode ☑/☐ 字符非自绘 Checkbox；⑤HTML 内联块纯文本化不渲染。
+
 | HITL（question/approval 卡） | ui/HitlCards.ets | 4 | ☐ 计划 |
 | 投影面板（轨迹/团队/待办） | ui/ProjectionPanels.ets | 4 | ☐ 计划 |
 | 7 个 MethodChannel | platform/（i18n 时区、Core Speech TTS、systemShare、photoViewPicker、startAbility 打开文件、request.agent 下载、bundleManager 版本） | 4 | ☐ 计划 |

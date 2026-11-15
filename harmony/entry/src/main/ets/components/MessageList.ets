@@ -1,7 +1,7 @@
 /**
  * 消息列表 —— 对照安卓 chat_message_items.dart / chat_message_list.dart 的
- * 阶段 2 基础版：用户气泡 / 助手平铺文本 / 过程组短语行 / 错误条 / 流式块。
- * Markdown 富渲染（代码块/表格/任务列表/LaTeX）是阶段 3（PORT-MAP ◐）。
+ * 阶段 2/3 基础版：用户气泡 / 助手平铺 + Markdown 富渲染（MdView）/ 过程组
+ * 短语行 / 错误条 / 流式块。
  * 布局 token：docs/design-tokens.md（msgPad 30 / bubbleRadius 16 / user 气泡
  * 最大宽 86.4%）。
  */
@@ -9,6 +9,7 @@
 import { ChatStore } from '../core/ChatStore';
 import { ChatMessage } from '../core/HistoryPage';
 import { DsColors, DsTypography, DsSpacing } from '../ui/theme';
+import { MdView } from './md/MdView';
 
 @Component
 export struct MessageList {
@@ -101,11 +102,15 @@ export struct MessageList {
           .width('100%')
           .padding({ bottom: 6 })
       }
-      Text(m.text === '' ? ' ' : m.text)
-        .fontSize(16)
-        .fontColor(this.c().labelPrimary)
-        .lineHeight(24)
-        .width('100%')
+      if (m.text === '') {
+        Text(' ')
+          .fontSize(16)
+          .fontColor(this.c().labelPrimary)
+          .lineHeight(24)
+          .width('100%')
+      } else {
+        MdView({ text: m.text })
+      }
     }
     .width('100%')
     .alignItems(HorizontalAlign.Start)

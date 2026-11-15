@@ -100,3 +100,24 @@
   assembleHap BUILD SUCCESSFUL；docs-check 全绿。
 - 教训：FakeHttp 同步出队——REST 请求发出前必须先 push 应答；防抖计数要把 READY
   心跳 timer 算进基线。
+
+## 阶段 3：Markdown 渲染 + 轻量 LaTeX（2026-11-16）
+
+**交付**（用户拍板：公式首版就上不降级）：
+
+- core 四件（node 直测，md-parser.test.ts 22 用例）：
+  `MdParser.ts`（块级：围栏/#/hr/引用/列表+任务项 normalizeTaskLists 口径/表格对齐行/块公式/段落）
+  `MdInline.ts`（行内：code/bold/italic/strike/link/裸 URL 最早匹配优先，snake_case 不误判）
+  `LatexLite.ts`（递归下降 \frac/\sqrt/^/_/\text + SYMBOLS ~90 项；splitLatex 切 $..$/$$..$$）
+  `SimpleHighlight.ts`（PY/JS/GO/SQL/BASH 关键词 + str/num/comment/kw 四类 token）。
+- UI 五件：`components/md/{MdView,MdCodeBlock,MdTable,MdLatex}.ets` + theme.ets 补 syn*/md* token；
+  MessageList.ets 助手正文接 MdView（空文本仍走占位 Text 防 ForEach 高度塌陷）。
+- 链接外跳：openExternal → Want action viewData startAbility，失败静默（安卓 externalApplication 同口径）。
+
+**回归**：npm test 170/170；hvigorw assembleHap BUILD SUCCESSFUL；package.sh 双闸门通（dist 804KB unsigned）。
+
+**偏差**（PORT-MAP 已记）：高亮四类简化/流式光标不闪烁/表格下载展开延后/☑☐ Unicode/HTML 纯文本化。
+
+**编译坑**（ArkTS 严格）：theme 缺 h1/h2 定义；SimpleHighlight LANG_KW Map 泛型 string→string[]；
+MdTable 属性名 align 撞框架 `.align()` → aligns；Font.size 是 Length 联合类型，算术要 `as number`；
+Flex 链式 .alignItems 不存在（构造参数里传）。
