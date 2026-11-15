@@ -6,8 +6,8 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
-// 正式签名（2026-11-04 起）：key.properties + signing/dshchat-release.jks 均被
-// .gitignore 拉黑（宪法 §10 绝不提交凭证）。两文件齐备走 release 签名，
+// 正式签名（2026-11-04 起）：key.properties（app/android/）指向的 keystore
+// 与 storeFile 指向的 .jks 均被 .gitignore 拉黑（宪法 §10 绝不提交凭证）。
 // 缺一（如 CI/他人克隆）自动回落 debug 签名——保持「克隆即可构建」。
 val keystoreProperties = Properties().apply {
     val f = rootProject.file("key.properties")

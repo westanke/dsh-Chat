@@ -49,6 +49,28 @@ jobs:
       - run: flutter pub get
         working-directory: app
 
+      - name: 配置发布签名（仓库 Secrets 注入，签名不一致修复 2026-11-15）
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            printf '%s' "$KEYSTORE_BASE64" | base64 -d > app/android/dshchat-release.jks
+            cat > app/android/key.properties <<EOF2
+            storeFile=dshchat-release.jks
+            storePassword=$KEYSTORE_PASSWORD
+            keyAlias=$KEY_ALIAS
+            keyPassword=$KEY_PASSWORD
+            EOF2
+            # heredoc 会在每行前保留缩进——去缩进重写，Properties 解析最稳。
+            sed -i 's/^            //' app/android/key.properties
+            echo "release keystore 已注入"
+          else
+            echo "::warning::未配置 KEYSTORE_BASE64 等 Secrets，回落 debug 签名"
+          fi
+
       - run: flutter build apk --release
         working-directory: app
 
