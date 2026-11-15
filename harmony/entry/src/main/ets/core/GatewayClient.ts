@@ -70,6 +70,7 @@ export class GatewayClient {
   private helloReject: ((err: Error) => void) | null = null;
 
   private listener: ((event: GatewayEvent) => void) | null = null;
+  private stateListener: ((state: GatewayState) => void) | null = null;
 
   constructor(baseUrl: string, deps: GatewayDeps) {
     this.baseUrl = baseUrl;
@@ -79,6 +80,18 @@ export class GatewayClient {
   /** 设置事件监听（UI 层订阅 delta/committed/提问/审批等）。 */
   setEventListener(listener: (event: GatewayEvent) => void): void {
     this.listener = listener;
+  }
+
+  /** 设置连接状态监听（READY 触发 UI 重拉会话/历史）。 */
+  setStateListener(listener: (state: GatewayState) => void): void {
+    this.stateListener = listener;
+  }
+
+  private applyState(next: GatewayState): void {
+    this.state = next;
+    if (this.stateListener !== null) {
+      this.stateListener(next);
+    }
   }
 
   getState(): GatewayState {
@@ -114,7 +127,7 @@ export class GatewayClient {
         reject(new RequestException('DISPOSED', '客户端已关闭'));
         return;
       }
-      this.state = GatewayState.CONNECTING;
+      this.applyState(GatewayState.CONNECTING);
       this.helloSettled = false;
       this.helloResolve = resolve;
       this.helloReject = reject;
@@ -150,7 +163,7 @@ export class GatewayClient {
   dispose(): void {
     this.disposed = true;
     this.teardown();
-    this.state = GatewayState.CLOSED;
+    this.applyState(GatewayState.CLOSED);
   }
 
   // ------------------------------------------------------------------
@@ -309,7 +322,7 @@ export class GatewayClient {
     }
     this.serverDevice = data !== null ? JsonAccess.obj(data, 'device') : null;
     this.backoffIndex = 0;
-    this.state = GatewayState.READY;
+    this.applyState(GatewayState.READY);
     this.cancelHelloTimer();
     this.scheduleHeartbeat();
     this.settleHello(null);
@@ -389,13 +402,13 @@ export class GatewayClient {
 
     if (this.disposed || !wasReady) {
       // 未 READY 过（初连失败）：不自动重连，报给调用方（Android 同口径）。
-      this.state = GatewayState.CLOSED;
+      this.applyState(GatewayState.CLOSED);
       return;
     }
     // READY 过的连接掉线：自动重连，退避 1,2,4,8,16,30,30…（index 封顶 5）。
     const delay: number = Math.min(1 << this.backoffIndex, MAX_BACKOFF_SECONDS);
     this.backoffIndex = Math.min(this.backoffIndex + 1, MAX_BACKOFF_INDEX);
-    this.state = GatewayState.CONNECTING;
+    this.applyState(GatewayState.CONNECTING);
     const self: GatewayClient = this;
     const failedAttempt: number = this.attempt;
     this.reconnectTimer = this.deps.timers.schedule(delay * 1000, (): void => {

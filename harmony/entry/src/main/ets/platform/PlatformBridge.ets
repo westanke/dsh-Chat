@@ -1,0 +1,96 @@
+/**
+ * 平台桥 —— core/Transport.ts TimerBridge 与存储/时区的平台实现。
+ * - TimerBridge：ArkTS 全局 setTimeout/clearTimeout（返回 number）。
+ * - timeZoneId：IANA 时区名，取不到回 'UTC'（与安卓 device.dart 同口径）。
+ * - PrefsStore：@ohos.data.preferences 封装，供 Credentials/Hosts 持久化。
+ */
+
+import { preferences } from '@kit.ArkData';
+import { common } from '@kit.AbilityKit';
+import { BusinessError } from '@kit.BasicServicesKit';
+import type { TimerBridge } from '../core/Transport';
+
+export class ArkTimers implements TimerBridge {
+  schedule(delayMs: number, action: () => void): number {
+    return setTimeout(action, delayMs) as number;
+  }
+
+  cancel(handle: number): void {
+    clearTimeout(handle);
+  }
+}
+
+/**
+ * 时区名。@ohos i18n 无直读 IANA 名的稳定 API，走系统 Date 降级链：
+ * Intl resolvedOptions → 'UTC'。安卓侧失败同样回退 'UTC'（bridge/platform.dart）。
+ */
+export function timeZoneId(): string {
+  try {
+    const fmt = new Intl.DateTimeFormat();
+    const zone: string | undefined = fmt.resolvedOptions().timeZone;
+    if (zone !== undefined && zone !== '') {
+      return zone;
+    }
+  } catch (e) {
+    // 继续走回退。
+  }
+  return 'UTC';
+}
+
+/// 设备标识（安装期生成一次并持久化；安卓口径 dsh-chat-<ms36>）。
+export class DeviceIdentity {
+  static deviceId(): string {
+    const now = Date.now();
+    return 'dsh-chat-' + now.toString(36);
+  }
+}
+
+/**
+ * Preferences 存取封装（应用级单例，EntryAbility 启动时 init）。
+ * 键空间：dsh.credentials / dsh.hosts（core/Credentials.ts、core/Hosts.ts 的
+ * STORAGE_KEY 常量）。
+ */
+export class PrefsStore {
+  private static store: preferences.Preferences | null = null;
+
+  static init(context: common.UIAbilityContext): void {
+    if (PrefsStore.store === null) {
+      const options: preferences.Options = { name: 'dsh' };
+      preferences.getPreferences(context, options).then((pref: preferences.Preferences): void => {
+        PrefsStore.store = pref;
+      }).catch((e: BusinessError | Error): void => {
+        // 初始化失败保持 null，读写侧降级为空数据。
+      });
+    }
+  }
+
+  static async getString(key: string): Promise<string | null> {
+    const pref = PrefsStore.store;
+    if (pref === null) {
+      return null;
+    }
+    const value: preferences.ValueType = await pref.get(key, '');
+    if (typeof value !== 'string' || value === '') {
+      return null;
+    }
+    return value;
+  }
+
+  static async putString(key: string, value: string): Promise<void> {
+    const pref = PrefsStore.store;
+    if (pref === null) {
+      return;
+    }
+    await pref.put(key, value);
+    await pref.flush();
+  }
+
+  static async removeKey(key: string): Promise<void> {
+    const pref = PrefsStore.store;
+    if (pref === null) {
+      return;
+    }
+    await pref.delete(key);
+    await pref.flush();
+  }
+}

@@ -34,8 +34,8 @@
 | bridge/projections.dart（轨迹/团队投影） | ets/core/Projections.ts | 1 | ✅ 2026-11-15 |
 | bridge/release_check.dart（新版检测） | ets/core/ReleaseCheck.ts（纯解析；HTTP/下载安装留 entry——鸿蒙不自安装 APK，只引导 Gitee/AGC） | 1/4 | ◐ 2026-11-15 |
 | bridge/platform.dart（TTS/分享/选图/下载） | entry/src/main/ets/platform/（@ohos 能力） | 4 | ☐ 阶段 4 |
-| bridge/dlog.dart（文件日志） | entry/src/main/ets/debug.ets（hilog 封装；core 不 import @kit） | 4 | ☐ 阶段 4 |
-| bridge/credentials.dart / device.dart | ets/core/Credentials.ts ✅ / platform/（阶段 4） | 1 / 4 | ◐ credentials 已落 |
+| bridge/dlog.dart（文件日志） | entry/src/main/ets/platform/Dlog.ets（hilog 封装；core 不 import @kit，实现只在 platform） | 2/4 | ✅ 骨架 2026-11-15 |
+| bridge/credentials.dart / device.dart | ets/core/Credentials.ts + platform/PlatformBridge.ets（PrefsStore 持久化 / timeZoneId） | 1 / 2 | ✅ 2026-11-15 |
 
 > **WS 帧口径（实测抓包对齐）**：响应帧字段是 `kind`、请求帧才是 `type`；requestId 在 data 里
 >（应答 `{kind,data:{requestId,…}}`，安卓顶层/data 双兜底同款）；连接代数 attempt 防迟到
@@ -44,14 +44,18 @@
 > ⚠️ **core 落位（2026-11-15 定案）**：core 物理放在 `entry/src/main/ets/core/`（entry 模块内），
 > 不是工程根 `harmony/core/` —— ArkTS 禁跨模块相对 import（Error00309001 实证），
 > 与姊妹仓 dsh-companion-harmony 同款结构（90+ core .ts 全在模块内，已过真机+AGC）。
-| ui/connect_page.dart | ui/ConnectScreen.ets | 2 | ☐ 计划 |
-| ui/chat_page.dart + composer | pages/ + ui/ChatScreen.ets | 2 | ☐ 计划 |
-| ui/md_view 系（Markdown 全家福） | ui/MarkdownView.ets + InlineText.ets 等 | 3 | ☐ 计划 |
-| **公式渲染（行内/块级）** | ui/LaTeX（轻量渲染，自研子集） | 3 | ☐ 计划 |
-| ui/md_code_block.dart | ui/CodeBlock.ets（Atom One Light 同款配色） | 3 | ☐ 计划 |
-| ui/md_table.dart | ui/DataTable.ets | 3 | ☐ 计划 |
-| ui/process_group.dart（工具折叠组） | ui/ToolBlockBody.ets | 3 | ☐ 计划 |
-| ui/sessions_drawer.dart | ui/SessionsDrawer.ets | 4 | ☐ 计划 |
+| ui/connect_page.dart | pages/ConnectView.ets（历史主机/DSH1 导入/手动配对；删主机清凭据） | 2 | ✅ 2026-11-15 |
+| ui/chat_state.dart + chat_history_actions.dart | ets/core/ChatStore.ts（node 18 用例） | 2 | ✅ 2026-11-15 |
+| ui/mobile_workspace.dart | ets/core/ChatStore.ts ensureMobileWorkspace | 2 | ✅ 2026-11-15 |
+| ui/chat_page.dart + chat_message_items/list | pages/ChatView.ets + components/MessageList.ets（气泡/流式/错误条；Markdown 富渲染阶段 3） | 2/3 | ◐ 2026-11-15 |
+| ui/composer.dart + composer_bar/widgets | components/Composer.ets（输入+发送/停止；命令面板/图片/@引用阶段 4） | 2/4 | ◐ 2026-11-15 |
+| ui/sessions_drawer.dart + session_groups.dart | components/SessionsDrawer.ets（分组列表/新建/高亮；搜索/删除/推挤动画阶段 4） | 2/4 | ◐ 2026-11-15 |
+| ui/brand_mark.dart（品牌标） | ChatView 空态文字占位（自绘 path 阶段 4） | 2/4 | ◐ 2026-11-15 |
+| ui/md_view 系（Markdown 全家福） | components/MarkdownView.ets + InlineText.ets 等 | 3 | ☐ 计划 |
+| **公式渲染（行内/块级）** | components/LaTeX（轻量渲染，自研子集，首版就上不降级——用户拍板） | 3 | ☐ 计划 |
+| ui/md_code_block.dart | components/CodeBlock.ets（Atom One Light 同款配色） | 3 | ☐ 计划 |
+| ui/md_table.dart | components/DataTable.ets | 3 | ☐ 计划 |
+| ui/process_group.dart（工具折叠组） | components/ToolBlockBody.ets | 3 | ☐ 计划 |
 | ui/message_actions.dart | ui/MessageActions.ets | 4 | ☐ 计划 |
 | HITL（question/approval 卡） | ui/HitlCards.ets | 4 | ☐ 计划 |
 | 投影面板（轨迹/团队/待办） | ui/ProjectionPanels.ets | 4 | ☐ 计划 |

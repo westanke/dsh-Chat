@@ -68,3 +68,35 @@
   npm test **123/123 绿**；hvigorw assembleHap BUILD SUCCESSFUL。
 - 教训：trajectoryOf 断言踩「垫底=排最后」（安卓 `aUnknown ? 1 : -1`）与
   other 类事件收录（turn 99 组存在）两处期望写反；raw 是普通对象非 Map。
+
+## 阶段 2 平台层 + 连接流（2026-11-15）
+
+- platform/*.ets 四件：WsTransport（@ohos websocket；header 小写 + protocol 单值 +
+  settled 防竞态）、HttpTransport（@ohos http；响应头小写；PATCH 枚举缺失字符串透传
+  待真机验证）、PlatformBridge（ArkTimers/timeZoneId/PrefsStore preferences 单例）、
+  Dlog（hilog；core 层禁 import @kit，AGENTS.md §7 那句「封装在 ets/core/debug」
+  已随本提交修正为 platform/Dlog）。
+- ui/theme.ets：design-tokens.md 全量翻译（DsPalette/DsColors 语义别名/DsTypography/
+  DsSpacing），补 msgPad=30。
+- EntryAbility：PrefsStore.init + 深浅色（mediaquery 官方口径，ApplicationContext 无
+  getColorMode 实测）；pages/ConnectView.ets 连接页三级路径全功能；pages/Index.ets
+  根路由 boot（自动连接）→ connect → chat。
+- 编译修复 10 错（BusinessError 导入/mediaquery 方案/WsTransport 签名对齐 core 接口/
+  Scroll 外包/http 无 PATCH 成员/header Object 收敛/TextDecoder 解 ArrayBuffer）。
+
+## 阶段 2 对话页（2026-11-15）
+
+- core/ChatStore.ts：chat_state.dart 全语义（send 乐观上屏 + ensureMobileWorkspace
+  预建手机工作区、流式收束、committed assistant/user 分支防抖重拉 800ms、loadOlder
+  翻页去重 + justLoaded 标记、isCurrent 空态防串台）；GatewayClient 补 getState()/
+  applyState 统一状态出口；GatewayApi 补 createWorkspaceRest/renameWorkspaceRest。
+- pages/ChatView.ets + components/{MessageList,Composer,SessionsDrawer}.ets：
+  顶栏/空态问候/消息气泡（86.4% 宽）/流式文本/过程组短语行/错误条/输入发送停止/
+  分组会话抽屉（覆盖式简化，推挤动画阶段 4）。ChatStore.changed() 递增 version
+  驱动重渲染。
+- 测试：chat-store.test.ts 18 用例（时序铁律固化进文件头：先发起动作→注入应答帧
+  （respond 自动读 lastRequestId）→await；`new DshSession()` 无参会把 undefined
+  传进构造器炸 'in' operator，必须 null）；npm test **141/141 绿**；hvigorw
+  assembleHap BUILD SUCCESSFUL；docs-check 全绿。
+- 教训：FakeHttp 同步出队——REST 请求发出前必须先 push 应答；防抖计数要把 READY
+  心跳 timer 算进基线。

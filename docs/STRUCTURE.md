@@ -143,7 +143,18 @@
 | 文件 | 用途 |
 |---|---|
 | `ets/entryability/EntryAbility.ets` | 唯一 Ability：loadContent + 深浅色显式跟随系统（COLOR_MODE_NOT_SET，后台切色不丢） |
-| `ets/pages/Index.ets` | 骨架占位页（阶段 2 由连接页替换；颜色/文案全走资源引用） |
+| `ets/pages/Index.ets` | 根路由 boot（自动连接）→ connect（连接页）→ chat（对话页）；深浅色 mediaquery 监听写 AppStorage('dshDark')；ChatStore 单例随连接存活 |
+| `ets/pages/ConnectView.ets` | 连接页三级路径：历史主机直连（失败记失效记录可删）/ DSH1 文本导入 / 手动地址+配对码（pairViaRest）；删除当前主机顺带清凭据 |
+| `ets/pages/ChatView.ets` | 对话页骨架（阶段 2）：顶栏（菜单/标题/连接点/新建）+ 空态问候 + 消息列表 + 输入条 + 会话抽屉覆盖式开关；ChatStore.changed() 递增 version 驱动重渲染 |
+| `ets/components/MessageList.ets` | 消息列表（阶段 2 基础版）：用户气泡（86.4% 宽）/ 助手平铺文本 + 过程组短语行 + reasoning 灰字 / 错误条；Markdown 富渲染阶段 3 |
+| `ets/components/Composer.ets` | 输入条（阶段 2）：多行输入 + 发送钮（流式中变停止）；lastError 红字条；命令面板/图片/@引用阶段 4 |
+| `ets/components/SessionsDrawer.ets` | 会话抽屉（阶段 2）：主机标识 + 新对话钮 + 工作区分组列表（未分组垫底）+ 当前会话高亮；搜索/删除阶段 4 |
+| `ets/ui/theme.ets` | design-tokens.md 的鸿蒙翻译：DsPalette/DsColors（dark 构造语义别名）/DsTypography/DsSpacing；改样式先改 token 文档再改这里 |
+| `ets/platform/WsTransport.ets` | @ohos.web.websocket 实现 WebSocketTransport：header 小写键 + protocol 单值，connectTimeoutMs settled 防竞态 |
+| `ets/platform/HttpTransport.ets` | @ohos.net.http 实现 HttpTransport：响应头键小写收敛；PATCH 枚举缺失走字符串透传（真机待验） |
+| `ets/platform/PlatformBridge.ets` | ArkTimers（setTimeout/clearTimeout）+ timeZoneId（Intl→UTC 兜底）+ PrefsStore（preferences 单例，getString/putString/removeKey） |
+| `ets/platform/Dlog.ets` | hilog 封装（DOMAIN 0xD5C0，info/warn/error）——core 层禁 import @kit，日志实现只在 platform |
+| `ets/core/ChatStore.ts` | 会话状态机（chat_state.dart 全语义）：send 乐观上屏+手机工作区预建（ensureMobileWorkspace）、流式收束、committed assistant/user 分支、防抖重拉 800ms、loadOlder 翻页去重、isCurrent 空态防串台 |
 | `ets/core/JsonAccess.ts` | JSON 宽容守卫（入站侧）：缺键/null/类型不符→null 或默认，绝不抛异常；strOr/numOr/boolOr 便捷默认版 |
 | `ets/core/Wire.ts` | WireBuilder 出站编码（null 一律省略键，encodeDefaults=false 语义，姊妹仓同源） |
 | `ets/core/Models.ts` | 协议帧模型 8 类：DshSession/DshWorkspace/MessageDelta/MessageCommitted/SessionLocation/DshFileEntry/DshDirectoryPage/SessionWaitResult（缺键全默认值） |

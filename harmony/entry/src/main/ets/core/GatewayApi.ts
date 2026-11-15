@@ -363,6 +363,39 @@ export class GatewayApi {
     return this.restJson('POST', '/api/v1/pairings/exchange', JSON.stringify(b.buildMap()), [200, 201]);
   }
 
+  /** 建工作区（POST /api/v1/chat/workspaces；「手机会话」准备用）。 */
+  createWorkspaceRest(rootId: string, path: string): Promise<string> {
+    const b: WireBuilder = new WireBuilder();
+    b.put('rootId', rootId);
+    b.put('path', path);
+    return this.restJson('POST', '/api/v1/chat/workspaces',
+      JSON.stringify(b.buildMap()), [200, 201]).then((resp: JsonMap): string => {
+      const workspace: JsonMap | null = JsonAccess.obj(resp, 'workspace');
+      if (workspace !== null) {
+        const id: string = JsonAccess.strOr(workspace, 'workspaceId', '');
+        if (id !== '') {
+          return id;
+        }
+      }
+      const topId: string = JsonAccess.strOr(resp, 'id', '');
+      if (topId !== '') {
+        return topId;
+      }
+      throw new RequestException('BAD_REPLY', '建工作区响应缺少 id');
+    });
+  }
+
+  /** 工作区改名（PATCH /api/v1/chat/workspaces/{id}；鸿蒙 http PATCH 为字符串透传）。 */
+  renameWorkspaceRest(workspaceId: string, title: string): Promise<void> {
+    const b: WireBuilder = new WireBuilder();
+    b.put('title', title);
+    const path: string = '/api/v1/chat/workspaces/' + GatewayApi.encodePath(workspaceId);
+    return this.restJson('PATCH', path, JSON.stringify(b.buildMap()), [200])
+      .then((): void => {
+        return;
+      });
+  }
+
   /** 取附件字节（base64 由调用方从 data 解码；缺 sessionId 会 400 BODY_INVALID）。 */
   fetchAttachment(attachmentId: string, sessionId: string): Promise<string> {
     const path: string = '/api/v1/attachments/' + GatewayApi.encodePath(attachmentId)
