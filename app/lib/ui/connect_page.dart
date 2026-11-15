@@ -275,9 +275,11 @@ class _ConnectPageState extends State<ConnectPage> {
                     ),
                     filled: true,
                     fillColor: c.inputFill,
+                    // 输入区描边（2026-11-15 反馈）：配置码粘贴框与配对码框
+                    // 需要可见边界，复用 DsColors.inputBorder（同命令卡描边）。
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide.none,
+                      borderSide: BorderSide(color: c.inputBorder),
                     ),
                     contentPadding: const EdgeInsets.all(14),
                   ),
@@ -304,6 +306,7 @@ class _ConnectPageState extends State<ConnectPage> {
                 controller: _code,
                 hint: '配对码（dsh 终端显示，10 分钟有效）',
                 colors: c,
+                bordered: true,
               ),
               if (_error != null) ...[
                 const SizedBox(height: 12),
@@ -449,11 +452,16 @@ class _Field extends StatelessWidget {
     required this.controller,
     required this.hint,
     required this.colors,
+    this.bordered = false,
   });
 
   final TextEditingController controller;
   final String hint;
   final DsColors colors;
+
+  /// 带可见描边（2026-11-15 反馈：配对码输入位置要显边界；
+  /// bridge 地址框保持原无边框样式）。
+  final bool bordered;
 
   @override
   Widget build(BuildContext context) {
@@ -470,7 +478,9 @@ class _Field extends StatelessWidget {
         fillColor: colors.inputFill,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide.none,
+          borderSide: bordered
+              ? BorderSide(color: colors.inputBorder)
+              : BorderSide.none,
         ),
         contentPadding: const EdgeInsets.symmetric(
           horizontal: 16,
