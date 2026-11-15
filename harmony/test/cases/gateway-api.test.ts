@@ -10,7 +10,8 @@ import { GatewayApi } from '../../entry/src/main/ets/core/GatewayApi.ts';
 import { RequestException } from '../../entry/src/main/ets/core/GatewayEvents.ts';
 import { PromptPart } from '../../entry/src/main/ets/core/Content.ts';
 import { QuestionAnswerItem } from '../../entry/src/main/ets/core/Questions.ts';
-import { FakeTimers, FakeSocket } from '../helpers/fake-ws.ts';
+import { HistoryPage } from '../../entry/src/main/ets/core/HistoryPage.ts';
+import { FakeTimers, FakeSocket, FakeHttp } from '../helpers/fake-ws.ts';
 
 async function makeApi(): Promise<[GatewayApi, FakeSocket, FakeTimers]> {
   const socket: FakeSocket = new FakeSocket();
@@ -230,4 +231,58 @@ test('selectModel / executeCommand / listCommands / sessionModels 帧形状', as
     + socket.lastRequestId() + '","current":"v3"}}');
   const r4: Record<string, Object> = await p4;
   assert.equal(r4['current'], 'v3');
+});
+
+test('history: history 帧 → HistoryPage 装配（events/hasMore/projections）', async () => {
+  const [api, socket] = await makeApi();
+  const p: Promise<HistoryPage> = api.history('s1', 50, 1200);
+  const sent: Record<string, Object> = socket.lastSent() as Record<string, Object>;
+  assert.equal(sent['type'], 'history');
+  assert.equal(sent['sessionId'], 's1');
+  assert.equal(sent['maxMessages'], 50);
+  assert.equal(sent['beforeSeq'], 1200);
+  socket.serverFrame('{"kind":"history","data":{"requestId":"'
+    + socket.lastRequestId() + '","events":['
+    + '{"type":"user/message","seq":1,"time":100,"data":{"content":"你好","source":{"kind":"user"}}},'
+    + '{"type":"assistant/message","seq":2,"time":110,"data":{"message":{"content":"回复"}}}'
+    + '],"hasMore":true,"projections":{"asOfSeq":9,"values":{}}}}');
+  const page: HistoryPage = await p;
+  assert.equal(page.items.length, 2);
+  assert.equal(page.items[0].text, '你好');
+  assert.equal(page.hasMore, true);
+  assert.notEqual(page.projections, null);
+});
+
+test('history: 翻页参数 0 不上帧；subagentHistory 走 REST', async () => {
+  const [api, socket] = await makeApi();
+  const p1: Promise<HistoryPage> = api.history('s1');
+  const sent: Record<string, Object> = socket.lastSent() as Record<string, Object>;
+  assert.equal('maxMessages' in sent, false);
+  assert.equal('beforeSeq' in sent, false);
+  socket.serverFrame('{"kind":"history","data":{"requestId":"'
+    + socket.lastRequestId() + '","events":[],"hasMore":false}}');
+  const page1: HistoryPage = await p1;
+  assert.equal(page1.items.length, 0);
+  assert.equal(page1.projections, null);
+
+  const http: FakeHttp = new FakeHttp();
+  http.push(200, '{"events":[{"type":"user/message","seq":1,"time":10,'
+    + '"data":{"content":"子会话内容"}}],"hasMore":true}');
+  const socket2: FakeSocket = new FakeSocket();
+  const timers2: FakeTimers = new FakeTimers();
+  const c2: GatewayClient = new GatewayClient('http://192.168.1.10:8765',
+    { ws: socket2, timers: timers2, timeZoneId: (): string => 'UTC' } as never);
+  c2.setToken('tok-2', 'harmony');
+  const cp: Promise<void> = c2.connect();
+  socket2.serverOpen();
+  socket2.serverHello();
+  await cp;
+  const api2: GatewayApi = new GatewayApi(c2, http);
+  const page2: HistoryPage = await api2.subagentHistory('lead-1', 'sub-1', 30);
+  assert.equal(http.requests[0].url,
+    'http://192.168.1.10:8765/api/v1/chat/sessions/lead-1/subagents/sub-1/messages?maxMessages=30');
+  assert.equal(http.requests[0].headers.get('authorization'), 'Bearer tok-2');
+  assert.equal(page2.items.length, 1);
+  assert.equal(page2.items[0].text, '子会话内容');
+  assert.equal(page2.hasMore, true);
 });

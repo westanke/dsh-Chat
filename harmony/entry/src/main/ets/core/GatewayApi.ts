@@ -16,6 +16,7 @@ import { JsonAccess, JsonMap } from './JsonAccess';
 import { WireBuilder } from './Wire';
 import { DshSession, DshWorkspace, DshDirectoryPage, SessionWaitResult } from './Models';
 import { QuestionAnswerItem } from './Questions';
+import { HistoryPage } from './HistoryPage';
 import { RequestException } from './GatewayEvents';
 import { GatewayClient } from './GatewayClient';
 import { HttpRequest, HttpResponse, HttpTransport, HTTP_TIMEOUT_MS } from './Transport';
@@ -97,6 +98,41 @@ export class GatewayApi {
   // ------------------------------------------------------------------
   // 消息与会话推进
   // ------------------------------------------------------------------
+
+  /** 会话历史（history 帧，支持 beforeSeq 翻页）。projections 只在首屏应答带。 */
+  history(sessionId: string, maxMessages: number = 0,
+          beforeSeq: number = 0): Promise<HistoryPage> {
+    const b: WireBuilder = new WireBuilder();
+    b.put('sessionId', sessionId);
+    b.putIf(maxMessages > 0, 'maxMessages', maxMessages);
+    b.putIf(beforeSeq > 0, 'beforeSeq', beforeSeq);
+    return this.client.request('history', b.buildMap()).then((data: JsonMap): HistoryPage => {
+      const events: Object[] = JsonAccess.arr(data, 'events');
+      const projections: JsonMap | null = JsonAccess.obj(data, 'projections');
+      const hasMore: boolean = JsonAccess.boolOr(data, 'hasMore', false);
+      return HistoryPage.fromEvents(events, projections, hasMore);
+    });
+  }
+
+  /** 子会话（团队成员）历史 —— 只读窄口 REST（openapi.yaml:992-1050）。 */
+  subagentHistory(leadSessionId: string, subagentId: string,
+                  maxMessages: number = 0, beforeSeq: number = 0): Promise<HistoryPage> {
+    const q: string[] = [];
+    if (maxMessages > 0) {
+      q.push('maxMessages=' + maxMessages.toString());
+    }
+    if (beforeSeq > 0) {
+      q.push('beforeSeq=' + beforeSeq.toString());
+    }
+    const path: string = '/api/v1/chat/sessions/' + leadSessionId
+      + '/subagents/' + subagentId + '/messages'
+      + (q.length === 0 ? '' : '?' + q.join('&'));
+    return this.restJson('GET', path, null, [200]).then((data: JsonMap): HistoryPage => {
+      const events: Object[] = JsonAccess.arr(data, 'events');
+      const hasMore: boolean = JsonAccess.boolOr(data, 'hasMore', false);
+      return HistoryPage.fromEvents(events, null, hasMore);
+    });
+  }
 
   /**
    * 发送文本消息（message 帧）。content = text 部分 + 可选图片/文件部分；

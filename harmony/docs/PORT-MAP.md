@@ -24,8 +24,10 @@
 | bridge/gateway.dart（WS 状态机） | ets/core/GatewayClient.ts + Transport.ts（注入分层） | 1 | ✅ 2026-11-15 |
 | bridge/gateway_events.dart（事件/状态枚举） | ets/core/GatewayEvents.ts | 1 | ✅ 2026-11-15 |
 | bridge/questions.dart（HITL 模型） | ets/core/Questions.ts | 1 | ✅ 2026-11-15 |
-| bridge/gateway_api.dart（WS 端点 17 个） | ets/core/GatewayApi.ts（history/subagentHistory 待 HistoryPage 落后补） | 1 | ◐ 2026-11-15 |
+| bridge/gateway_api.dart（WS 端点 19 个） | ets/core/GatewayApi.ts（含 history/subagentHistory） | 1 | ✅ 2026-11-15 |
 | bridge/gateway_rest.dart + gateway_http.dart | ets/core/GatewayApi.ts restJson/fetchAttachment/fetchImageHandoff（配对走 REST，不走 dsh-pair 子协议——@ohos 配不了双子协议，姊妹仓口径） | 1 | ◐ roots/content 端点待补 |
+| bridge/history_page.dart（历史装配） | ets/core/HistoryPage.ts（fromEvents 分组语义 + 文件卡轮尾 + 错误卡） | 1 | ✅ 2026-11-15 |
+| bridge/tool_call.dart（工具措辞/合并） | ets/core/ToolCall.ts（短语表/摘要/结果正文） | 1 | ✅ 2026-11-15 |
 | bridge/credentials.dart / device.dart | ets/core/Credentials.ts ✅ / platform/（阶段 4） | 1 / 4 | ◐ credentials 已落 |
 
 > **WS 帧口径（实测抓包对齐）**：响应帧字段是 `kind`、请求帧才是 `type`；requestId 在 data 里
