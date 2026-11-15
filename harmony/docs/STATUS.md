@@ -5,7 +5,7 @@
 | 阶段 | 内容 | 状态 |
 |---|---|---|
 | 0 | 工程骨架：ArkTS 空工程 + 未签名 HAP 构建通 + node 测试骨架 + 门禁/文档同步 + 首提交 | ✅ 2026-11-15 |
-| 1 | core 协议层：全部帧模型 + gateway 状态机 + REST 封装 + node 用例全绿 | ◐ 历史/工具层已落（104 用例）；hosts/models_view/permissions 等待补 |
+| 1 | core 协议层：全部帧模型 + gateway 状态机 + REST 封装 + node 用例全绿 | ◐ 123 用例全绿；仅剩 platform/dlog（阶段 4 entry 层）|
 | 2 | 连接页三路径 + 聊天页骨架 + 流式对话 + 历史翻页 + 发送 | ☐ |
 | 3 | Markdown 全家福（含**首版轻量 LaTeX**，用户拍板）+ 工具折叠 + 命令卡 + 文件卡 + 图片 | ☐ |
 | 4 | 抽屉 / 设置 / HITL / 投影 / 子会话 / 统计 / 平台 7 通道 / 深色 / 字号 / 检查更新改口径 | ☐ |
@@ -56,3 +56,15 @@
 - 真 bug 修复：flushGroup 曾把 items 持有的同一数组引用 length=0 清空（安卓是
   List.unmodifiable 拷贝），鸿蒙版改 slice() 拷贝——历史分组全空只剩首条会话的场景。
 - run_code 短语顺序：INNER_TOOL_ACTIONS 表序 bash 先于 grep（安卓元组表同序），测试期望已对齐。
+
+## 阶段 1 收尾批次（2026-11-15）：hosts/models_view/permissions/projections/release_check
+
+- core 新增 6 文件：Hosts.ts（FNV-1a BigInt 64 位 + DSH1 宽容解码 + 列表纯操作）、
+  ModelsView.ts、Permissions.ts、Projections.ts（轨迹分组 + 服务端投影）、
+  ReleaseCheck.ts（纯解析，HTTP 留 entry）。
+- platform.dart/dlog.dart 无 core 对应物（MethodChannel/文件日志 → 阶段 4 entry 层
+  platform/*.ets + debug.ets（hilog）），PORT-MAP 已标 ☐。
+- 测试：hosts-models-permissions.test.ts 12 用例 + projections-release.test.ts 8 用例；
+  npm test **123/123 绿**；hvigorw assembleHap BUILD SUCCESSFUL。
+- 教训：trajectoryOf 断言踩「垫底=排最后」（安卓 `aUnknown ? 1 : -1`）与
+  other 类事件收录（turn 99 组存在）两处期望写反；raw 是普通对象非 Map。

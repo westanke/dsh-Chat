@@ -28,6 +28,13 @@
 | bridge/gateway_rest.dart + gateway_http.dart | ets/core/GatewayApi.ts restJson/fetchAttachment/fetchImageHandoff（配对走 REST，不走 dsh-pair 子协议——@ohos 配不了双子协议，姊妹仓口径） | 1 | ◐ roots/content 端点待补 |
 | bridge/history_page.dart（历史装配） | ets/core/HistoryPage.ts（fromEvents 分组语义 + 文件卡轮尾 + 错误卡） | 1 | ✅ 2026-11-15 |
 | bridge/tool_call.dart（工具措辞/合并） | ets/core/ToolCall.ts（短语表/摘要/结果正文） | 1 | ✅ 2026-11-15 |
+| bridge/hosts.dart（DSH1 导入/主机库） | ets/core/Hosts.ts（纯逻辑；preferences 落库留 entry 层） | 1/4 | ✅ 2026-11-15 |
+| bridge/models_view.dart（models 收敛） | ets/core/ModelsView.ts | 1 | ✅ 2026-11-15 |
+| bridge/permissions.dart（权限目录） | ets/core/Permissions.ts | 1 | ✅ 2026-11-15 |
+| bridge/projections.dart（轨迹/团队投影） | ets/core/Projections.ts | 1 | ✅ 2026-11-15 |
+| bridge/release_check.dart（新版检测） | ets/core/ReleaseCheck.ts（纯解析；HTTP/下载安装留 entry——鸿蒙不自安装 APK，只引导 Gitee/AGC） | 1/4 | ◐ 2026-11-15 |
+| bridge/platform.dart（TTS/分享/选图/下载） | entry/src/main/ets/platform/（@ohos 能力） | 4 | ☐ 阶段 4 |
+| bridge/dlog.dart（文件日志） | entry/src/main/ets/debug.ets（hilog 封装；core 不 import @kit） | 4 | ☐ 阶段 4 |
 | bridge/credentials.dart / device.dart | ets/core/Credentials.ts ✅ / platform/（阶段 4） | 1 / 4 | ◐ credentials 已落 |
 
 > **WS 帧口径（实测抓包对齐）**：响应帧字段是 `kind`、请求帧才是 `type`；requestId 在 data 里
