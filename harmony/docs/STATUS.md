@@ -5,7 +5,7 @@
 | 阶段 | 内容 | 状态 |
 |---|---|---|
 | 0 | 工程骨架：ArkTS 空工程 + 未签名 HAP 构建通 + node 测试骨架 + 门禁/文档同步 + 首提交 | ✅ 2026-11-15 |
-| 1 | core 协议层：全部帧模型 + gateway 状态机 + REST 封装 + node 用例全绿 | ☐ |
+| 1 | core 协议层：全部帧模型 + gateway 状态机 + REST 封装 + node 用例全绿 | ◐ 首批 5 文件+48 用例已落，gateway/REST 待写 |
 | 2 | 连接页三路径 + 聊天页骨架 + 流式对话 + 历史翻页 + 发送 | ☐ |
 | 3 | Markdown 全家福（含**首版轻量 LaTeX**，用户拍板）+ 工具折叠 + 命令卡 + 文件卡 + 图片 | ☐ |
 | 4 | 抽屉 / 设置 / HITL / 投影 / 子会话 / 统计 / 平台 7 通道 / 深色 / 字号 / 检查更新改口径 | ☐ |
@@ -21,3 +21,14 @@
 - 根仓同步：STRUCTURE.md 增 harmony 章、AGENTS.md 双平台化、docs-check.sh 扩展 ets 登记、
   CI 增 harmony-test job、.gitignore 增 harmony 段。
 - 首提交（不推送）。
+
+## 阶段 1 首批（2026-11-15）
+
+- core 首批 5 文件 + WireBuilder（`entry/src/main/ets/core/`）：JsonAccess / Wire / Models /
+  Content / Credentials / ImageMediaType；node 用例 48 个全绿（npm test）。
+- **core 落位定案**：物理在 entry 模块内——ArkTS 禁跨模块相对 import（Index.ets 引
+  `../../..../core/Models` 实测 Error00309001 BUILD FAILED），放工程根 harmony/core/ 方案否决；
+  与姊妹仓（90+ core .ts 在 entry/src/main/ets/core/，已过真机+AGC）同款。
+- ArkTS 兼容化改写（hvigorw assembleHap 全过）：PromptPart 判别联合→扁平类+type 分派；
+  builtinTokens Record→Map；import 去 type 修饰符；可选捕获组正则拆必组；`?? {}`→显式空表。
+- 文档同步：AGENTS.md（§3 目录树/§7 分层+ArkTS 条目）、PORT-MAP 对照表、STRUCTURE harmony 章。

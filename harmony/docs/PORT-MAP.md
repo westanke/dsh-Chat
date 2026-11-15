@@ -18,9 +18,15 @@
 | 安卓版（app/lib/…） | 鸿蒙版（entry/src/main/ets/…） | 阶段 | 状态 |
 |---|---|---|---|
 | design/tokens.dart | resources color/string + ui/tokens（阶段 3 登记） | 3 | ☐ 计划 |
-| bridge/models.dart（协议帧模型） | core/*Models.ts + test/cases | 1 | ☐ 计划 |
-| bridge/gateway.dart（WS 状态机） | core/GatewayClient.ts | 1 | ☐ 计划 |
-| bridge/credentials.dart / device.dart | core/ + platform/ | 1 / 4 | ☐ 计划 |
+| bridge/models.dart（协议帧模型） | ets/core/Models.ts + test/cases/models.test.ts | 1 | ◐ core 首批已落 |
+| bridge/content.dart（内容部件/命令/@草稿） | ets/core/Content.ts + test/cases/content.test.ts | 1 | ✅ 2026-11-15 |
+| bridge/image_media_type.dart（图片魔数/白名单） | ets/core/ImageMediaType.ts + test/cases | 1 | ✅ 2026-11-15 |
+| bridge/gateway.dart（WS 状态机） | ets/core/GatewayClient.ts | 1 | ☐ 计划 |
+| bridge/credentials.dart / device.dart | ets/core/Credentials.ts ✅ / platform/（阶段 4） | 1 / 4 | ◐ credentials 已落 |
+
+> ⚠️ **core 落位（2026-11-15 定案）**：core 物理放在 `entry/src/main/ets/core/`（entry 模块内），
+> 不是工程根 `harmony/core/` —— ArkTS 禁跨模块相对 import（Error00309001 实证），
+> 与姊妹仓 dsh-companion-harmony 同款结构（90+ core .ts 全在模块内，已过真机+AGC）。
 | ui/connect_page.dart | ui/ConnectScreen.ets | 2 | ☐ 计划 |
 | ui/chat_page.dart + composer | pages/ + ui/ChatScreen.ets | 2 | ☐ 计划 |
 | ui/md_view 系（Markdown 全家福） | ui/MarkdownView.ets + InlineText.ets 等 | 3 | ☐ 计划 |

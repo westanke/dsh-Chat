@@ -137,16 +137,30 @@
 
 ### ets 源码（阶段推进时逐行补）
 
+> core 层物理在 entry 模块内（ArkTS 禁跨模块相对 import，Error00309001 实证）；
+> 纯逻辑 .ts 全部 node 直测，不 import 任何 `@kit`/ets/UI。
+
 | 文件 | 用途 |
 |---|---|
 | `ets/entryability/EntryAbility.ets` | 唯一 Ability：loadContent + 深浅色显式跟随系统（COLOR_MODE_NOT_SET，后台切色不丢） |
 | `ets/pages/Index.ets` | 骨架占位页（阶段 2 由连接页替换；颜色/文案全走资源引用） |
+| `ets/core/JsonAccess.ts` | JSON 宽容守卫（入站侧）：缺键/null/类型不符→null 或默认，绝不抛异常；strOr/numOr/boolOr 便捷默认版 |
+| `ets/core/Wire.ts` | WireBuilder 出站编码（null 一律省略键，encodeDefaults=false 语义，姊妹仓同源） |
+| `ets/core/Models.ts` | 协议帧模型 8 类：DshSession/DshWorkspace/MessageDelta/MessageCommitted/SessionLocation/DshFileEntry/DshDirectoryPage/SessionWaitResult（缺键全默认值） |
+| `ets/core/Content.ts` | 消息内容部件：ContentParts 拼接规则、图片引用、交接占位正则、PromptPart（ArkTS 扁平类 + type 分派）、SlashCommand/别名过滤、斜杠/@ 草稿解析 |
+| `ets/core/Credentials.ts` | 凭据数据形状（键 'dsh.credentials'，baseUrl+token）；持久化留 entry 层（preferences） |
+| `ets/core/ImageMediaType.ts` | 图片白名单 4 种 + 魔数嗅探（PNG/JPEG/GIF/WEBP/BMP/AVIF/HEIC）+ 扩展名映射 |
 
 ### harmony/test/（node 单测，与 ets/core 同款模式）
 
 | 文件 | 覆盖 |
 |---|---|
 | `harmony/test/cases/version-contract.test.ts` | AppScope versionName/Code 与 entry/oh-package 版本一致性机检（防 AGC 拒收同 versionCode 重复包） |
+| `harmony/test/cases/json-access.test.ts` | JsonAccess 宽容守卫矩阵（坏形状不抛） |
+| `harmony/test/cases/models.test.ts` | 8 类帧模型缺键默认值 + round-trip |
+| `harmony/test/cases/content.test.ts` | ContentParts 拼接/图片引用/交接正则/PromptPart 编码键省略/命令过滤/@草稿 |
+| `harmony/test/cases/credentials.test.ts` | 凭据 encode/decode/坏 JSON 清空 |
+| `harmony/test/cases/image-media-type.test.ts` | 魔数嗅探全表 + 白名单 + 扩展名映射 |
 | `harmony/test/package.json` / `tsconfig.json` | node:test + tsx 跑 `cases/*.test.ts`，strict TS |
 
 ### harmony/scripts/

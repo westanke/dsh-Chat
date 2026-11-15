@@ -1,0 +1,226 @@
+/**
+ * bridge 协议模型（鸿蒙版）—— 移植自安卓版 app/lib/bridge/models.dart。
+ * 形状依据 dsh-remote-bridge v2.10.0：docs/api/openapi.yaml、asyncapi.yaml、
+ * docs/project/API.md 与姊妹仓 dsh-companion 的历史事件映射。
+ *
+ * 解析口径与安卓版的差异（PORT-MAP.md 决策 D1）：
+ * 安卓版 `fromJson` 缺键给默认值、类型不符抛异常；这里沿用姊妹仓
+ * 「宽容解析」口径——缺键 / 显式 null / 类型不符 → 一律退化默认值，绝不抛
+ * （历史教训：协议文档标 required 的字段旧桥可能不下发）。所有字段都有默认值。
+ *
+ * 历史装配四件套（SessionEvent / DeliverableFile / ChatMessage / HistoryPage）
+ * 在 History.ts（对应安卓 history_page.dart），消息内容块在 Content.ts。
+ */
+
+import { JsonAccess, JsonMap } from './JsonAccess';
+
+/** ChatSession（openapi §ChatSession）。 */
+export class DshSession {
+  readonly id: string;
+  readonly rootId: string;
+  readonly updatedAt: number;
+  readonly running: boolean;
+  readonly blank: boolean;
+  readonly title: string | null;
+  readonly workspaceId: string | null;
+
+  /** 所属工作区名（抽屉按它分组），空 = 「未分组」。 */
+  readonly workspaceTitle: string | null;
+
+  /** 会话工作目录绝对路径（手机端拼 @绝对路径 用）。 */
+  readonly cwdAbsolute: string | null;
+
+  /** 会话工作目录，授权根内相对路径；'' = 会话目录就是授权根本身。 */
+  readonly cwd: string;
+
+  constructor(j: JsonMap | null) {
+    this.id = JsonAccess.strOr(j, 'id', '');
+    this.rootId = JsonAccess.strOr(j, 'rootId', '');
+    this.updatedAt = JsonAccess.numOr(j, 'updatedAt', 0);
+    this.running = JsonAccess.boolOr(j, 'running', false);
+    this.blank = JsonAccess.boolOr(j, 'blank', false);
+    this.title = JsonAccess.str(j, 'title');
+    this.workspaceId = JsonAccess.str(j, 'workspaceId');
+    this.workspaceTitle = JsonAccess.str(j, 'workspaceTitle');
+    this.cwdAbsolute = JsonAccess.str(j, 'cwdAbsolute');
+    this.cwd = JsonAccess.strOr(j, 'cwd', '');
+  }
+
+  static fromJson(value: Object | null): DshSession {
+    return new DshSession(JsonAccess.asMap(value));
+  }
+
+  /** 抽屉/页头显示标题：title 非空用 title，否则 blank=新对话 / 会话 <id>。 */
+  get displayTitle(): string {
+    const t = this.title;
+    if (t !== null && t.length > 0) {
+      return t;
+    }
+    return this.blank ? '新对话' : `会话 ${this.id}`;
+  }
+}
+
+/** ChatWorkspace（openapi §ChatWorkspace）。 */
+export class DshWorkspace {
+  readonly id: string;
+  readonly title: string;
+  readonly rootId: string;
+  readonly path: string;
+
+  constructor(j: JsonMap | null) {
+    this.id = JsonAccess.strOr(j, 'id', '');
+    this.title = JsonAccess.strOr(j, 'title', '');
+    this.rootId = JsonAccess.strOr(j, 'rootId', '');
+    this.path = JsonAccess.strOr(j, 'path', '');
+  }
+
+  static fromJson(value: Object | null): DshWorkspace {
+    return new DshWorkspace(JsonAccess.asMap(value));
+  }
+}
+
+/** 实时推送 chat.message.delta（asyncapi §ChatMessageDelta）。 */
+export class MessageDelta {
+  readonly sessionId: string;
+  readonly turn: number;
+  readonly step: number;
+  readonly index: number;
+  /** 'text' | 'reasoning'。 */
+  readonly kind: string;
+  readonly text: string;
+
+  constructor(d: JsonMap | null) {
+    this.sessionId = JsonAccess.strOr(d, 'sessionId', '');
+    this.turn = JsonAccess.numOr(d, 'turn', 0);
+    this.step = JsonAccess.numOr(d, 'step', 0);
+    this.index = JsonAccess.numOr(d, 'index', 0);
+    this.kind = JsonAccess.strOr(d, 'kind', 'text');
+    this.text = JsonAccess.strOr(d, 'text', '');
+  }
+
+  static fromJson(value: Object | null): MessageDelta {
+    return new MessageDelta(JsonAccess.asMap(value));
+  }
+}
+
+/** 实时推送 chat.message.committed（asyncapi §ChatMessageCommitted）。 */
+export class MessageCommitted {
+  readonly sessionId: string;
+  /** 'user' | 'assistant'。 */
+  readonly role: string;
+  readonly seq: number;
+  readonly turn: number;
+  readonly step: number;
+
+  constructor(d: JsonMap | null) {
+    this.sessionId = JsonAccess.strOr(d, 'sessionId', '');
+    this.role = JsonAccess.strOr(d, 'role', 'assistant');
+    this.seq = JsonAccess.numOr(d, 'seq', 0);
+    this.turn = JsonAccess.numOr(d, 'turn', 0);
+    this.step = JsonAccess.numOr(d, 'step', 0);
+  }
+
+  static fromJson(value: Object | null): MessageCommitted {
+    return new MessageCommitted(JsonAccess.asMap(value));
+  }
+}
+
+/**
+ * 新建会话的待定工作目录（2026-11-15 反馈「新建会话可选工作目录」）。
+ * 发送首条消息前可选；rootId 空 = 首个授权根（session-create 语义），
+ * cwd 是授权根内相对路径（WirePath），'' = 会话目录就是根。
+ * label 仅 UI 显示（sheet 候选组装），协议层不解释。
+ */
+export class SessionLocation {
+  readonly rootId: string | null;
+  readonly cwd: string;
+  readonly label: string;
+
+  constructor(rootId: string | null, cwd: string, label: string) {
+    this.rootId = rootId;
+    this.cwd = cwd;
+    this.label = label;
+  }
+}
+
+/** file-list 应答条目（ws-files.ts handleFileList；openapi §FileEntry）。
+ *  kind ∈ file|directory|symlink|other；目录选择浏览器只消费 directory。 */
+export class DshFileEntry {
+  readonly name: string;
+  readonly path: string;
+  readonly kind: string;
+
+  constructor(j: JsonMap | null) {
+    this.name = JsonAccess.strOr(j, 'name', '');
+    this.path = JsonAccess.strOr(j, 'path', '');
+    this.kind = JsonAccess.strOr(j, 'kind', 'file');
+  }
+
+  static fromJson(value: Object | null): DshFileEntry {
+    return new DshFileEntry(JsonAccess.asMap(value));
+  }
+
+  static listFrom(values: Object[]): DshFileEntry[] {
+    const out: DshFileEntry[] = [];
+    for (let i = 0; i < values.length; i++) {
+      out.push(new DshFileEntry(JsonAccess.asMap(values[i])));
+    }
+    return out;
+  }
+}
+
+/** file-list 应答页（ws-files.ts 应答 data{rootId,...page}；openapi §DirectoryPage）。 */
+export class DshDirectoryPage {
+  readonly rootId: string;
+  readonly path: string;
+  readonly entries: DshFileEntry[];
+  readonly nextCursor: string | null;
+
+  constructor(j: JsonMap | null) {
+    this.rootId = JsonAccess.strOr(j, 'rootId', '');
+    this.path = JsonAccess.strOr(j, 'path', '');
+    this.nextCursor = JsonAccess.str(j, 'nextCursor');
+    this.entries = DshFileEntry.listFrom(JsonAccess.arr(j, 'entries'));
+  }
+
+  static fromJson(value: Object | null): DshDirectoryPage {
+    return new DshDirectoryPage(JsonAccess.asMap(value));
+  }
+}
+
+/**
+ * session-waited 应答的 wait 体（DSH 0.2.2 session/wait，桥 API.md:791 /
+ * openapi §waitChatSession；issue #1 适配）。REST 与 WS 两通道同构：
+ * `{reason, state, output}` —— reason ∈ idle|input-required|timeout；
+ * state 为唤醒时会话状态（cursor/active/queue/pendingInput）；
+ * output 为等待期间观察到的事件（records/truncated）。
+ */
+export class SessionWaitResult {
+  /** 结束原因：'idle'（静止）|'input-required'（有待输入）|'timeout'。 */
+  readonly reason: string;
+
+  /** 唤醒时的会话状态（字段随协议演进，宽容保留原始 map）。 */
+  readonly state: JsonMap;
+
+  /** 等待期间观察到的事件（records 事件帧数组，老→新；truncated 窗口截断）。 */
+  readonly output: JsonMap;
+
+  constructor(j: JsonMap | null) {
+    this.reason = JsonAccess.strOr(j, 'reason', 'idle');
+    // ArkTS 口径：不用 `?? {}`（无类型字面量），先声明空表再兜底（姊妹仓同款）。
+    const emptyState: JsonMap = {};
+    const emptyOutput: JsonMap = {};
+    const stateMap: JsonMap | null = JsonAccess.obj(j, 'state');
+    const outputMap: JsonMap | null = JsonAccess.obj(j, 'output');
+    this.state = stateMap !== null ? stateMap : emptyState;
+    this.output = outputMap !== null ? outputMap : emptyOutput;
+  }
+
+  static fromJson(value: Object | null): SessionWaitResult {
+    return new SessionWaitResult(JsonAccess.asMap(value));
+  }
+
+  toJson(): JsonMap {
+    return { reason: this.reason, state: this.state, output: this.output };
+  }
+}

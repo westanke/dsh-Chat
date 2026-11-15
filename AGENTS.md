@@ -59,7 +59,8 @@ dsh-Chat/
   harmony/             ← 鸿蒙工程根（ArkUI 原生，与 app/ 平级互不引用）
     AppScope/          ← 应用级配置 app.json5 + 分层图标（bundleName=com.dsh.dshchat）
     entry/src/main/    ← ets 业务代码（ability/pages/components）+ module.json5 + 资源
-    core/              ← 纯逻辑层（协议/模型，.ts，node 直测，不 import 任何 ets）
+      core/            ← 纯逻辑层（协议/模型，.ts，node 直测，不 import 任何 ets；
+                           在 entry 模块内，ArkTS 禁跨模块相对 import，见 §7 分层铁律）
     test/              ← node:test + tsx 纯逻辑测试（CI 跑这里，无鸿蒙 SDK 依赖）
     docs/              ← PORT-MAP.md（移植对照）/ RELEASE.md（签名发版）/ STATUS.md（进度台账）
     scripts/           ← package.sh（构建发版）/ toolchain-env.sh（工具链 env）
@@ -70,7 +71,7 @@ dsh-Chat/
   `harmony/entry/src/main/ets/` 下同口径（`pages/`、`components/` 等按功能平铺，不叠壳）。
 - **平台豁免（用户已批，2026-11-15）**：`harmony/` 的 ArkTS 工程结构
   （`AppScope/`、`entry/src/main/`、`hvigor/` 等）由 DevEco/hvigor 约定死，豁免嵌套限制；
-  `harmony/core/`、`harmony/test/`、`harmony/docs/`、`harmony/scripts/` 照旧严格执行。
+  `harmony/entry/src/main/ets/core/`、`harmony/test/`、`harmony/docs/`、`harmony/scripts/` 照旧严格执行。
 - 严禁 `/tmp`（用户长期规矩）；临时文件进 `app/build/`、`harmony/build/` 或用户家目录。
 - `ref/` 只进参考材料，**绝不**被 `app/` 的 Dart/gradle 或 `harmony/` 的 ets/hvigor 引用。
 
@@ -146,12 +147,17 @@ bash scripts/package.sh           # 双闸门（测试+构建）一键发版前�
 
 **ArkTS（`harmony/`）追加条目**：
 
-- **分层铁律**：`harmony/core/` 只写纯逻辑（协议/模型/状态机，.ts 文件），**不 import
-  任何 `@kit`/ets/UI**，保证 `harmony/test/` 用 node 直测（CI 无鸿蒙 SDK 也能跑）。UI 层
-  （entry/src/main/ets）只做渲染与事件转发，业务逻辑下沉 core。
+- **分层铁律**：`harmony/entry/src/main/ets/core/` 只写纯逻辑（协议/模型/状态机，.ts 文件），
+  **不 import 任何 `@kit`/ets/UI**，保证 `harmony/test/` 用 node 直测（CI 无鸿蒙 SDK 也能跑）。
+  UI 层（entry/src/main/ets 非 core 部分）只做渲染与事件转发，业务逻辑下沉 core。
+  core 必须在 entry 模块**内部**：ArkTS 禁跨模块相对 import（Error00309001 实证），
+  放工程根 harmony/core/ 的方案已否决（2026-11-15）。
 - ArkTS 不是 TypeScript：禁 `any`/`unknown` 满天飞、禁结构化破坏性赋值、禁运行时修改对象
-  shape；协议模型显式定义 interface + `fromJson`，同 Dart 口径（§5 round-trip 测试同样适用）。
-- 单文件 ≤ 500 行对 ets/.ts 同样生效；禁 `print`（鸿蒙用 `hilog`，封装在 core/debug）。
+  shape、禁「对象 interface 联合 type」判别联合（→ 扁平类 + type 字段分派）、禁可选捕获组的
+  `m[n] === undefined`（拆必组正则）；动态键值映射用 `Map<string,T>`（姊妹仓无
+  `Record<string,类>` 先例）；import 不带 `type` 修饰符。协议模型显式定义 class + `fromJson`，
+  同 Dart 口径（§5 round-trip 测试同样适用）。
+- 单文件 ≤ 500 行对 ets/.ts 同样生效；禁 `print`（鸿蒙用 `hilog`，封装在 ets/core/debug）。
 - 鸿蒙工程配置（build-profile.json5 / hvigorfile.ts / module.json5）改动要在提交说明里点名；
   `compatibleSdkVersion` 升级需在 `harmony/docs/PORT-MAP.md` 记录原因。
 
