@@ -11,6 +11,34 @@ class DshPlatform {
 
   static const MethodChannel _channel = MethodChannel('dsh/platform');
 
+  /// 本机安装版本（"versionName+versionCode"，如 1.0.14+15）。
+  ///
+  /// Android 读 gradle versionName/longVersionCode、iOS 读
+  /// CFBundleShortVersionString/CFBundleVersion——两者都由 Flutter 工具链从
+  /// app/pubspec.yaml 的 version 自动注入，随发版自动同步（2026-11-15
+  /// 发版号漂移修复：不再在 Dart 侧写死版本字符串）。
+  /// 成功结果缓存（整包生命周期版本不变）；失败（含测试环境无 handler）
+  /// 返回 null，调用方降级展示并跳过更新比较。
+  static String? _cachedVersion;
+
+  static Future<String?> appVersion() async {
+    if (_cachedVersion != null) return _cachedVersion;
+    try {
+      final r =
+          await _channel.invokeMethod<Map<Object?, Object?>>('appVersion');
+      final v = r?['version'] as String?;
+      final c = r?['code'] as num?;
+      if (v != null && v.isNotEmpty && c != null) {
+        _cachedVersion = '$v+$c';
+      }
+    } on PlatformException {
+      // 原生侧异常：落 null 降级。
+    } on MissingPluginException {
+      // iOS 未实现 / 测试环境无 handler：落 null 降级。
+    }
+    return _cachedVersion;
+  }
+
   /// 用系统 TTS 朗读一段文本。返回是否成功启动（TTS 初始化失败返回 false）。
   static Future<bool> speak(String text) async {
     if (text.trim().isEmpty) return false;

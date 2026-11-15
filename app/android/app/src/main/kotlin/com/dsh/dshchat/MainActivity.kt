@@ -93,6 +93,18 @@ class MainActivity : FlutterActivity() {
                             result.success(null)
                         }
                     }
+                    "appVersion" -> {
+                        // 版本随发版自动同步：Flutter 工具链把 pubspec 的 version
+                        // 写进 gradle 的 versionName/versionCode，这里原样上抛，
+                        // Dart 侧不再写死字符串（2026-11-15 发版号漂移修复）。
+                        val pi = packageManager.getPackageInfo(packageName, 0)
+                        result.success(
+                            mapOf(
+                                "version" to (pi.versionName ?: ""),
+                                "code" to pi.longVersionCode
+                            )
+                        )
+                    }
                     "downloadApk" -> {
                         // 系统下载器下载 APK（真机反馈 2026-11-04 第 9 项）。
                         // DownloadManager 是系统服务，不需要任何运行时权限。

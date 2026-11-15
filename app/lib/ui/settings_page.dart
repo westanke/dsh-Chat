@@ -31,9 +31,11 @@ part 'settings_sections.dart';
 part 'settings_widgets.dart';
 part 'settings_update.dart';
 
-/// 与 app/pubspec.yaml 的 version 保持一致（Flutter 无 BuildConfig，
-/// 不引入 package_info_plus，避免为一个展示字符串增加依赖，宪法 §8）。
-const String _appVersion = '1.0.13+14';
+/// 版本展示与更新检查的基准：运行时经 DshPlatform.appVersion() 读构建系统
+/// 注入的 versionName+versionCode（Flutter 工具链自动从 app/pubspec.yaml 的
+/// version 同步），不再在 Dart 侧写死字符串——2026-11-15 发版号漂移修复
+/// （1.0.13+14 写死后实际发到 1.0.14+15 时「关于」页仍是旧号）。
+/// 拉不到时 UI 降级显示占位并跳过更新比较，见 settings_update.dart。
 
 /// 子协议与握手协议版本：常量锚点在 bridge/gateway.dart，此处只读展示。
 const String _subprotocol = 'dsh-mobile-v1';

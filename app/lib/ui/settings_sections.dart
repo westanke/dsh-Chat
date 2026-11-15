@@ -283,14 +283,32 @@ class _DiagnosticsSection extends StatelessWidget {
 
 // ---------- 关于 ----------
 
-class _AboutSection extends StatelessWidget {
+class _AboutSection extends StatefulWidget {
   const _AboutSection({required this.colors});
 
   final DsColors colors;
 
   @override
+  State<_AboutSection> createState() => _AboutSectionState();
+}
+
+class _AboutSectionState extends State<_AboutSection> {
+  String? _version; // 运行时读取；null = 还没回来或读取失败（显示占位）
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final v = await DshPlatform.appVersion();
+    if (mounted && v != null) setState(() => _version = v);
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final c = colors;
+    final c = widget.colors;
     return _Section(
       colors: c,
       title: '关于',
@@ -304,8 +322,8 @@ class _AboutSection extends StatelessWidget {
         _InfoRow(
           colors: c,
           icon: Icons.tag_outlined,
-          title: '版本 $_appVersion',
-          subtitle: '与 app/pubspec.yaml 的 version 保持一致',
+          title: '版本 ${_version ?? '…'}',
+          subtitle: '自动读取构建注入的 app/pubspec.yaml version',
         ),
         _UpdateCheckRow(colors: c),        _InfoRow(
           colors: c,

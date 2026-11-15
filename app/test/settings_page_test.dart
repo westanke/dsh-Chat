@@ -4,6 +4,7 @@ import 'package:dshchat/design/app_settings.dart';
 import 'package:dshchat/design/tokens.dart';
 import 'package:dshchat/ui/settings_page.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:flutter/services.dart' show MethodChannel;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -168,6 +169,25 @@ void main() {
     expect(calls, 1);
     // 确认后弹回上一页，设置页消失。
     expect(find.text('go'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('关于页版本行读平台注入值（不写死，随发版同步）',
+      (tester) async {
+    // mock dsh/platform appVersion（与 platform.dart 同一通道名）。
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(
+      const MethodChannel('dsh/platform'),
+      (method) => method.method == 'appVersion'
+          ? Future.value(<String, Object>{'version': '1.0.14', 'code': 15})
+          : null,
+    );
+    await pump(tester);
+    await tester.pump();
+    expect(find.text('版本 1.0.14+15'), findsOneWidget);
+    // 拉不到版本时占位，不显示写死的旧号。
+    await pump(tester);
+    expect(find.textContaining('版本 1.0.13'), findsNothing);
     expect(tester.takeException(), isNull);
   });
 }

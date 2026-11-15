@@ -16,13 +16,20 @@ class _UpdateCheckRowState extends State<_UpdateCheckRow> {
   bool _checking = false;
   String? _result; // 展示在 subtitle 的结果行
   ReleaseInfo? _latest; // 最近一次检查拿到的远端发布信息（有新版时用于下载）
+  String? _version; // 本机版本（运行时读构建注入，与「关于」页同源）
   Timer? _silentTimer; // 静默检查延迟；dispose 时取消（测试断言无 pending timer）
 
   @override
   void initState() {
     super.initState();
+    _loadVersion();
     // 静默检查一次：只在「有新版」时打扰（应用打开后 1.5s）。
     _silentTimer = Timer(const Duration(milliseconds: 1500), _silentCheck);
+  }
+
+  Future<void> _loadVersion() async {
+    final v = await DshPlatform.appVersion();
+    if (mounted && v != null) setState(() => _version = v);
   }
 
   @override
@@ -33,16 +40,21 @@ class _UpdateCheckRowState extends State<_UpdateCheckRow> {
 
   Future<void> _silentCheck() async {
     if (!mounted || _checking) return;
+    final cur = _currentVersionParts;
+    if (cur == null) return; // 版本没读到，不比较也不打扰
     final rel = await _fetchQuiet();
     if (!mounted || rel == null) return;
-    if (isNewerVersion(rel.versionParts, _currentVersionParts)) {
+    if (isNewerVersion(rel.versionParts, cur)) {
       setState(() => _result = '发现新版本 ${rel.tag}');
     }
   }
 
-  List<int> get _currentVersionParts {
-    final v = _appVersion.split('+').first;
-    final parts = v.split('.');
+  /// 本机语义化版本三段；版本未读到（读取失败/还没回来）返回 null，
+  /// 更新检查跳过比较（不拿 0.0.0 误报「发现新版本」）。
+  List<int>? get _currentVersionParts {
+    final v = _version;
+    if (v == null) return null;
+    final parts = v.split('+').first.split('.');
     return [
       for (var i = 0; i < 3; i++)
         i < parts.length ? int.tryParse(parts[i]) ?? 0 : 0,
@@ -68,7 +80,10 @@ class _UpdateCheckRowState extends State<_UpdateCheckRow> {
     try {
       final rel = await fetchLatestRelease();
       if (!mounted) return;
-      if (isNewerVersion(rel.versionParts, _currentVersionParts)) {
+      final cur = _currentVersionParts;
+      if (cur == null) {
+        setState(() => _result = '本机版本读取失败，无法比较');
+      } else if (isNewerVersion(rel.versionParts, cur)) {
         setState(() {
           _latest = rel;
           _result = '发现新版本 ${rel.tag}，点此下载';
@@ -147,7 +162,7 @@ class _UpdateCheckRowState extends State<_UpdateCheckRow> {
       title: hasNew ? result : '检查更新',
       subtitle: _checking
           ? '正在检查（Gitee → GitHub）…'
-          : result ?? '当前 $_appVersion · 国内走 Gitee、国外走 GitHub',
+          : result ?? '当前 ${_version ?? '…'} · 国内走 Gitee、国外走 GitHub',
       onTap: _checking
           ? () {}
           : hasNew && latest != null

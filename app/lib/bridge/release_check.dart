@@ -45,10 +45,12 @@ class ReleaseInfo {
 }
 
 /// 拉最新发布：先 Gitee 后 GitHub；都失败抛 RequestException。
-Future<ReleaseInfo> fetchLatestRelease() async {
+/// [client] 仅供测试注入 MockClient，生产用默认 http.Client。
+Future<ReleaseInfo> fetchLatestRelease({http.Client? client}) async {
+  final c = client ?? http.Client();
   // Gitee：api/v5 releases/latest，assets[].name + browser_download_url。
   try {
-    final r = await http
+    final r = await c
         .get(
           Uri.parse('https://gitee.com/api/v5/repos/$_repo/releases/latest'),
           headers: const {'Accept': 'application/json'},
@@ -62,7 +64,7 @@ Future<ReleaseInfo> fetchLatestRelease() async {
     // 落到 GitHub。
   }
   // GitHub：api.github.com releases/latest（国内可能超时——上面的 8s 上限兜底）。
-  final r = await http
+  final r = await c
       .get(
         Uri.parse('https://api.github.com/repos/$_repo/releases/latest'),
         headers: const {'Accept': 'application/vnd.github+json'},
@@ -89,7 +91,14 @@ ReleaseInfo? _releaseFromJson(Object? body, {required bool gitee}) {
   for (final a in assets) {
     if (a is! Map) continue;
     final name = (a['name'] ?? '') as String;
-    if (!name.endsWith('.apk') || !name.startsWith('dsh-Chat-')) continue;
+    // 历史命名两套都放行：release.sh 的 dsh-Chat-v*.apk 与
+    // sync-gitee-release.sh 的 dshchat-*_N-android.apk（注意 dsh-chat- 与
+    // dshchat- 是两个不同前缀，都要显式匹配）。
+    if (!name.endsWith('.apk')) continue;
+    final lower = name.toLowerCase();
+    if (!lower.startsWith('dsh-chat-') && !lower.startsWith('dshchat-')) {
+      continue;
+    }
     final url = (a['browser_download_url'] ?? '') as String;
     if (url.isEmpty) continue;
     return ReleaseInfo(
