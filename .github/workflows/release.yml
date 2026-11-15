@@ -58,14 +58,12 @@ jobs:
         run: |
           if [ -n "$KEYSTORE_BASE64" ]; then
             printf '%s' "$KEYSTORE_BASE64" | base64 -d > app/android/dshchat-release.jks
-            cat > app/android/key.properties <<EOF2
-            storeFile=dshchat-release.jks
-            storePassword=$KEYSTORE_PASSWORD
-            keyAlias=$KEY_ALIAS
-            keyPassword=$KEY_PASSWORD
-            EOF2
-            # heredoc 会在每行前保留缩进——去缩进重写，Properties 解析最稳。
-            sed -i 's/^            //' app/android/key.properties
+            {
+              printf 'storeFile=dshchat-release.jks\n'
+              printf 'storePassword=%s\n' "$KEYSTORE_PASSWORD"
+              printf 'keyAlias=%s\n' "$KEY_ALIAS"
+              printf 'keyPassword=%s\n' "$KEY_PASSWORD"
+            } > app/android/key.properties
             echo "release keystore 已注入"
           else
             echo "::warning::未配置 KEYSTORE_BASE64 等 Secrets，回落 debug 签名"
