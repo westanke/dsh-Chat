@@ -157,7 +157,8 @@ bash scripts/package.sh           # 双闸门（测试+构建）一键发版前�
   `m[n] === undefined`（拆必组正则）；动态键值映射用 `Map<string,T>`（姊妹仓无
   `Record<string,类>` 先例）；import 不带 `type` 修饰符。协议模型显式定义 class + `fromJson`，
   同 Dart 口径（§5 round-trip 测试同样适用）。
-- 单文件 ≤ 500 行对 ets/.ts 同样生效；禁 `print`（鸿蒙用 `hilog`，封装在 ets/core/debug）。
+- 单文件 ≤ 500 行对 ets/.ts 同样生效；禁 `print`（鸿蒙用 `hilog`，封装在
+  `harmony/entry/src/main/ets/platform/Dlog.ets`——core 层禁 import @kit，实现只在 platform）。
 - 鸿蒙工程配置（build-profile.json5 / hvigorfile.ts / module.json5）改动要在提交说明里点名；
   `compatibleSdkVersion` 升级需在 `harmony/docs/PORT-MAP.md` 记录原因。
 
