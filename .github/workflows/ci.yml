@@ -48,10 +48,13 @@ jobs:
       - uses: actions/checkout@v4
 
       # 版本口径：pubspec.lock 尾部要求 dart >=3.13.7 / flutter >=3.47.0，
-      # 本机开发用的 stable 是 3.47.9。这里跟 stable 通道、不写死小版本 ——
-      # 写死会和本机 SDK 漂移，flutter-action 的版本表也未必有我们这一版。
+      # 本机开发用的 stable 是 3.47.9。**必须 pin 到本机同一版**：
+      # 2026-11-15 教训 —— stable 跟最新导致 CI 拿到 3.50.0（本机 3.47.9），
+      # 新 analyzer 规则把本机 0 issue 的代码在 CI 判挂（run #10）。本机
+      # 升 SDK 时同步改这里，两处永远同版。
       - uses: subosito/flutter-action@v2
         with:
+          version: 3.47.9
           channel: stable
           cache: true
 
