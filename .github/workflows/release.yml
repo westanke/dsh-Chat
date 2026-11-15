@@ -35,7 +35,7 @@ jobs:
 
       - name: 版本号核对（发版必须升版本）
         run: |
-          VER=$(grep -oP '^version: \K.*' pubspec.yaml)
+          VER=$(grep -oP '^version: \K.*' app/pubspec.yaml)
           echo "pubspec version=$VER"
           if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
             TAG="${GITHUB_REF_NAME#v}"
@@ -47,11 +47,13 @@ jobs:
           echo "APK_VERSION=$VER" >> "$GITHUB_ENV"
 
       - run: flutter pub get
+        working-directory: app
 
       - run: flutter build apk --release
+        working-directory: app
 
       - name: 重命名产物
-        run: cp build/app/outputs/flutter-apk/app-release.apk "dshchat-${APK_VERSION/+/_}-android.apk"
+        run: cp app/build/app/outputs/flutter-apk/app-release.apk "dshchat-${APK_VERSION/+/_}-android.apk"
 
       - uses: actions/upload-artifact@v4
         with:
@@ -73,7 +75,7 @@ jobs:
 
       - name: 版本号核对（发版必须升版本）
         run: |
-          VER=$(grep -E '^version:' pubspec.yaml | sed -E 's/version: *//')
+          VER=$(grep -E '^version:' app/pubspec.yaml | sed -E 's/version: *//')
           echo "pubspec version=$VER"
           if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
             TAG="${GITHUB_REF_NAME#v}"
@@ -85,14 +87,16 @@ jobs:
           echo "IPA_VERSION=$VER" >> "$GITHUB_ENV"
 
       - run: flutter pub get
+        working-directory: app
 
       # 无签名构建（无证书）；Podfile 平台版本由 flutter 生成
       - run: flutter build ios --release --no-codesign
+        working-directory: app
 
       - name: 打包未签名 IPA
         run: |
           mkdir -p Payload
-          cp -R build/ios/iphoneos/Runner.app Payload/
+          cp -R app/build/ios/iphoneos/Runner.app Payload/
           zip -qry "dshchat-${IPA_VERSION/+/_}-ios-unsigned.ipa" Payload
           ls -la *.ipa
 
