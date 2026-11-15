@@ -7,7 +7,7 @@
 /// 点踩图标按真机反馈（2026-11-04）移除。
 library;
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 
 import '../bridge/platform.dart';

@@ -2,7 +2,7 @@
 /// select-model 帧切换；对照 companion ChatSheets/ModelSheetGroups。
 library;
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../bridge/gateway.dart';
 import '../bridge/models_view.dart';

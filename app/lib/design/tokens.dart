@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// 设计 token 单一来源（宪法 §4）。
 /// 数值依据 docs/design-tokens.md（官方 Web CSS + App 真机实测）。

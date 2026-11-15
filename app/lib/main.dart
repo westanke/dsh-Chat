@@ -5,8 +5,13 @@
 /// 位于 MaterialApp 之上（宪法 §4/§8：改样式先改 docs/design-tokens.md）。
 library;
 
-import 'package:flutter/material.dart';
-import 'package:flutter_localizations/flutter_localizations.dart';
+// 2026-11-15 Flutter 3.50 拆包迁移：Material/Cupertino 组件与全局本地化
+// 移入 material_ui / cupertino_ui 独立包；flutter/widgets 与 Widgets 本地化
+// 仍在 flutter_localizations（hide 掉与上面两个包重名的 delegate）。
+import 'package:cupertino_ui/cupertino_ui.dart';
+import 'package:flutter_localizations/flutter_localizations.dart'
+    hide GlobalMaterialLocalizations, GlobalCupertinoLocalizations;
+import 'package:material_ui/material_ui.dart';
 
 import 'bridge/credentials.dart';
 import 'bridge/device.dart';

@@ -5,7 +5,7 @@
 /// 提交走 question-answer 帧。审批卡：允许一次 / 拒绝两键（协议无「始终允许」）。
 library;
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../bridge/questions.dart';
 import '../design/tokens.dart';

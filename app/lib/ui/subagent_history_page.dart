@@ -4,7 +4,7 @@
 /// 拆出原因：宪法 §7 单文件 ≤500 行（projection_sheets.dart 已近线）。
 library;
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../bridge/gateway.dart';
 import '../bridge/models.dart';

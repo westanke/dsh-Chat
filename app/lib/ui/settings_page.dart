@@ -14,7 +14,7 @@
 /// 宪法 §7 单文件 ≤500 行：分区与通用组件拆到同库的 part 文件，私有成员共享。
 library;
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 
 import 'dart:async';

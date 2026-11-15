@@ -111,3 +111,51 @@ sheet 交互 3（默认项 + 去重 + 绝对路径副标题 + 选中写回；已
 
 `flutter analyze` 0 issue；`flutter test` 142 全绿（+8）；
 `docs-check.sh` 通过。
+
+# Flutter 3.50 拆包迁移：material.dart → material_ui（2026-11-15）
+
+## 背景与触发
+
+CI 升到 Flutter 3.50.0 stable 后（run #10）报 33 处 `deprecated_member_use`：
+`package:flutter/material.dart` 已 deprecated，官方指引迁往独立包
+`package:material_ui/material_ui.dart`（after v3.47.0-0.0.pre）。3.50 里
+Material/Cupertino 组件库、全局 Material/Cupertino 本地化 delegate 全部拆出
+SDK，改为 pub 包 `material_ui` / `cupertino_ui` 发布；`flutter/widgets` 与
+`GlobalWidgetsLocalizations` 仍留在原处。
+
+## 迁移内容
+
+1. **机械替换**：`dart fix --apply` 34 处（32 文件 import 改写 + pubspec
+   自动补依赖）。注意 dart fix 加的依赖是 `any`，锁不住版本，手工改为
+   `material_ui: ^1.11.0`、`cupertino_ui: ^1.1.6`（迁移时 pub 镜像最新）。
+2. **main.dart 手工收尾**：`GlobalMaterialLocalizations` /
+   `GlobalCupertinoLocalizations` 在 `flutter_localizations` 与新包里重名
+   （ambiguous_import），处理为
+   `import 'package:flutter_localizations/flutter_localizations.dart'
+   hide GlobalMaterialLocalizations, GlobalCupertinoLocalizations`——保留
+   `GlobalWidgetsLocalizations`，Material/Cupertino delegate 用新包版本。
+3. **测试适配（render_md_test.dart）**：3.50 测试框架新增「树卸载后不得有
+   残留 transient callback」的 postTest 检查。teardown 期间框架派发
+   fontsChange（flutter/system channel）→ `_SystemFontsNotifier` → 残留
+   render object 注册帧回调 → 判「An animation is still running even after
+   the widget tree was disposed」。试过 ①末尾手动 pumpWidget 卸载树、②
+   `setMockMessageHandler` 吞消息，都无效——**mock 会在 postTest 被清掉，
+   fontsChange 在清理之后才派发**。最终修法：test 开头真实替换该 channel
+   的 handler 吞掉系统消息（`BasicMessageChannel('flutter/system',
+   JSONMessageCodec()).setMessageHandler((_) async {})`）。本文件仅一个
+   测试且 flutter test 每文件独立进程，无跨测试污染。
+
+## 验证
+
+- `flutter analyze`（3.50.0）：0 issue。
+- `flutter test`：142 全绿。
+- 本机默认 SDK 已切换：`tools/flutter -> flutter-3.50.0`（软链，env.sh 的
+  FLUTTER_ROOT 无需改）；旧 3.47.9 已不在。
+- CI pin：ci.yml `flutter-version: 3.50.0`。
+- release APK 以 3.50.0 重新构建。
+
+## 备注
+
+- Flutter 镜像下载路径必须含 `stable/linux/` 前缀，漏了会 404 存下错误页。
+- `docs/ecosystem/material_ui`（SDK 内）是 monorepo 内部 M3E 迁移清单，
+  与应用层无关；应用层迁移就是 import + delegate 两件事。

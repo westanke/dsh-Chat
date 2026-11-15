@@ -49,6 +49,10 @@ dependencies:
   # 会话内链接跳转（真机反馈第四轮 5）：外接浏览器打开，零 UI 依赖。
   url_launcher: ^6.3.0
 
+  # Flutter 3.50 拆包：Material/Cupertino 组件库独立发布（dart fix 自动加
+  # 的 any 锁不住版本，显式 pin 到迁移时最新）。
+  material_ui: ^1.11.0
+  cupertino_ui: ^1.1.6
 dev_dependencies:
   flutter_test:
     sdk: flutter

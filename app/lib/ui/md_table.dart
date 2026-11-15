@@ -13,7 +13,7 @@
 /// 而且没有官方那条 banner。这里用 tableBuilder 完全自绘。
 library;
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:gpt_markdown/gpt_markdown.dart';
 
 import '../design/tokens.dart';

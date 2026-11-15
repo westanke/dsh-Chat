@@ -8,7 +8,8 @@ import 'dart:ui' as ui;
 
 import 'package:dshchat/design/tokens.dart';
 import 'package:dshchat/ui/md_view.dart';
-import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show BasicMessageChannel, JSONMessageCodec;
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -51,6 +52,15 @@ Inline math: \$\\frac{a}{b}\$ sits on this line.
 
 void main() {
   testWidgets('导出 Markdown 全家福 PNG', (tester) async {
+    // Flutter 3.50：teardown 期间会派发 fontsChange（flutter/system channel），
+    // 树卸载后 RelayoutWhenSystemFontsChange 仍调度帧回调 → postTest 判
+    // 「animation still running」。setMockMessageHandler 会在 postTest 被清掉
+    // 拦不住，这里真实替换 handler 吞掉系统消息（本文件仅此一个测试，
+    // flutter test 每文件独立进程，不影响其他测试）。
+    const BasicMessageChannel<dynamic>(
+      'flutter/system',
+      JSONMessageCodec(),
+    ).setMessageHandler((message) async {});
     tester.view.physicalSize = const Size(1080, 4000);
     tester.view.devicePixelRatio = 3.0;
     addTearDown(tester.view.reset);

@@ -9,7 +9,7 @@
 /// 全部样式走 DsColors / DsTypography / DsSpacing（宪法 §4，零裸色）。
 library;
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../bridge/gateway.dart';
 import '../bridge/projections.dart';

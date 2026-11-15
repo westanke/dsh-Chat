@@ -4,7 +4,7 @@
 /// 配对/导入成功后凭证写入 DshCredentials 并 upsert 进 DshHosts。
 library;
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../bridge/credentials.dart';
 import '../bridge/gateway.dart';

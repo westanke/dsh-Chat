@@ -3,7 +3,7 @@
 /// 协议没有 stats 帧，这里不臆造服务端数字。
 library;
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../bridge/models.dart';
 import '../design/tokens.dart';

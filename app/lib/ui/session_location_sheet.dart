@@ -11,7 +11,7 @@
 /// - file-list 浏览授权根目录（ws-files.ts，需要 files.read scope）。
 library;
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../bridge/gateway.dart';
 import '../bridge/models.dart';

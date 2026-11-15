@@ -3,7 +3,7 @@
 /// 渲染引擎 gpt_markdown 1.4.0；语法高亮用其内置 val_highlight（随 Brightness 切换）。
 library;
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:gpt_markdown/gpt_markdown.dart';
 import 'package:url_launcher/url_launcher.dart';
 
