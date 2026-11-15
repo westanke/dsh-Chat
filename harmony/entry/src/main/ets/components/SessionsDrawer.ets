@@ -15,6 +15,7 @@ export struct SessionsDrawer {
   @StorageProp('dshDark') dark: boolean = false;
   @Prop version: number = 0;
   onClose: (() => void) | null = null;
+  onOpenSettings: (() => void) | null = null;
 
   private c(): DsColors {
     return new DsColors(this.dark);
@@ -151,6 +152,31 @@ export struct SessionsDrawer {
         .textOverflow({ overflow: TextOverflow.Ellipsis })
         .layoutWeight(1)
     }
+
+      Divider().color(this.c().borderL1).strokeWidth(1)
+
+      Row({ space: 8 }) {
+        Text('⚙️')
+          .fontSize(17)
+        Text('设置')
+          .fontSize(15)
+          .fontColor(this.c().labelPrimary)
+          .layoutWeight(1)
+        Text('›')
+          .fontSize(15)
+          .fontColor(this.c().labelTertiary)
+      }
+      .width('100%')
+      .height(44)
+      .padding({ left: 16, right: 12 })
+      .onClick(() => {
+        if (this.onClose !== null) {
+          this.onClose();
+        }
+        if (this.onOpenSettings !== null) {
+          this.onOpenSettings();
+        }
+      })
     .width('100%')
     .height(44)
     .padding({ left: 16, right: 12 })

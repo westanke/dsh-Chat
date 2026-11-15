@@ -16,6 +16,7 @@ import { JsonAccess, JsonMap } from './JsonAccess';
 import { WireBuilder } from './Wire';
 import { DshSession, DshWorkspace, DshDirectoryPage, SessionWaitResult } from './Models';
 import { QuestionAnswerItem } from './Questions';
+import { GatewayRoot, GatewayEntry, ResolvedFile } from './Files';
 import { HistoryPage } from './HistoryPage';
 import { RequestException } from './GatewayEvents';
 import { GatewayClient } from './GatewayClient';
@@ -246,15 +247,14 @@ export class GatewayApi {
 
   /** 切换模型（select-model 帧；应答经 requestId 匹配结算）。 */
   selectModel(sessionId: string, provider: string, model: string,
-              reasoningEffort: string): Promise<void> {
+              reasoningEffort: string | null): Promise<JsonMap> {
     const b: WireBuilder = new WireBuilder();
     b.put('sessionId', sessionId);
     b.put('provider', provider);
     b.put('model', model);
-    b.putNonBlank('reasoningEffort', reasoningEffort);
-    return this.client.request('select-model', b.buildMap()).then((data: JsonMap): void => {
-      return;
-    });
+    b.putNonBlank('reasoningEffort', reasoningEffort === null ? '' : reasoningEffort);
+    // 应答 kind='sent'（五生产者共享），data.type=='select-model' 时带 selected。
+    return this.client.request('select-model', b.buildMap());
   }
 
   // ------------------------------------------------------------------
@@ -397,7 +397,7 @@ export class GatewayApi {
   }
 
   /** 取附件字节（base64 由调用方从 data 解码；缺 sessionId 会 400 BODY_INVALID）。 */
-  fetchAttachment(attachmentId: string, sessionId: string): Promise<string> {
+  fetchAttachment(attachmentId: string, sessionId: string): Promise<Uint8Array> {
     const path: string = '/api/v1/attachments/' + GatewayApi.encodePath(attachmentId)
       + '?sessionId=' + GatewayApi.encodePath(sessionId);
     if (this.http === null) {
@@ -405,17 +405,60 @@ export class GatewayApi {
     }
     const req: HttpRequest = new HttpRequest('GET', this.client.getBaseUrl() + path,
       this.restHeaders(), null, HTTP_TIMEOUT_MS);
-    return this.http.request(req).then((resp: HttpResponse): string => {
+    return this.http.request(req).then((resp: HttpResponse): Uint8Array => {
       if (resp.status !== 200) {
         throw new RequestException('HTTP_' + resp.status.toString(), '附件获取失败');
       }
-      return resp.body;
+      if (resp.bodyBytes === null) {
+        throw new RequestException('NO_BODY', '响应缺字节体');
+      }
+      return resp.bodyBytes;
     });
   }
 
   /** 取图片交接字节（GET /api/v1/image-handoff?name=enc）。 */
-  fetchImageHandoff(name: string): Promise<string> {
-    const path: string = '/api/v1/image-handoff?name=' + GatewayApi.encodePath(name);
+  /** 授权根列表（GET /api/v1/roots）。 */
+  listRootsRest(): Promise<GatewayRoot[]> {
+    return this.restJson('GET', '/api/v1/roots', null, [200]).then((data: JsonMap): GatewayRoot[] => {
+      return GatewayRoot.listFrom(data, 'items');
+    });
+  }
+
+  /** 根下条目（GET /api/v1/roots/{id}/entries?path=&limit=500；目录优先排序）。 */
+  listEntriesRest(rootId: string, wirePath: string): Promise<GatewayEntry[]> {
+    const encRoot: string = GatewayApi.encodePath(rootId);
+    let path: string = '/api/v1/roots/' + encRoot + '/entries?path=' +
+      GatewayApi.encodePath(wirePath) + '&limit=500';
+    return this.restJson('GET', path, null, [200]).then((data: JsonMap): GatewayEntry[] => {
+      const out: GatewayEntry[] = [];
+      const arr: Object[] = JsonAccess.arr(data, 'entries');
+      for (const raw of arr) {
+        const e: GatewayEntry | null = GatewayEntry.fromJson(JsonAccess.asMap(raw));
+        if (e !== null) {
+          out.push(e);
+        }
+      }
+      GatewayEntry.sortList(out);
+      return out;
+    });
+  }
+
+  /** 路径解析（GET /api/v1/roots/resolve?path=；404→FILE_404）。 */
+  resolvePathRest(absPath: string): Promise<ResolvedFile> {
+    return this.restJson('GET', '/api/v1/roots/resolve?path=' + GatewayApi.encodePath(absPath),
+      null, [200]).then((data: JsonMap): ResolvedFile => {
+      const kind: string = JsonAccess.strOr(data, 'kind', '');
+      if (kind !== 'file') {
+        throw new RequestException('NOT_FILE', '这不是一个文件');
+      }
+      return ResolvedFile.fromJson(data);
+    });
+  }
+
+  /** 全文读取（GET /api/v1/roots/{rootId}/content?path=；.md 全屏查看用）。 */
+  readFileBytes(rootId: string, wirePath: string): Promise<string> {
+    const path: string = '/api/v1/roots/' + GatewayApi.encodePath(rootId) +
+      '/content?path=' + GatewayApi.encodePath(wirePath);
     if (this.http === null) {
       return Promise.reject(new RequestException('NO_TRANSPORT', 'HTTP 传输未注入'));
     }
@@ -423,9 +466,27 @@ export class GatewayApi {
       this.restHeaders(), null, HTTP_TIMEOUT_MS);
     return this.http.request(req).then((resp: HttpResponse): string => {
       if (resp.status !== 200) {
-        throw new RequestException('HTTP_' + resp.status.toString(), '图片交接获取失败');
+        throw new RequestException('HTTP_' + resp.status.toString(), '文件读取失败');
       }
       return resp.body;
+    });
+  }
+
+  fetchImageHandoff(name: string): Promise<Uint8Array> {
+    const path: string = '/api/v1/image-handoff?name=' + GatewayApi.encodePath(name);
+    if (this.http === null) {
+      return Promise.reject(new RequestException('NO_TRANSPORT', 'HTTP 传输未注入'));
+    }
+    const req: HttpRequest = new HttpRequest('GET', this.client.getBaseUrl() + path,
+      this.restHeaders(), null, HTTP_TIMEOUT_MS);
+    return this.http.request(req).then((resp: HttpResponse): Uint8Array => {
+      if (resp.status !== 200) {
+        throw new RequestException('HTTP_' + resp.status.toString(), '图片交接获取失败');
+      }
+      if (resp.bodyBytes === null) {
+        throw new RequestException('NO_BODY', '响应缺字节体');
+      }
+      return resp.bodyBytes;
     });
   }
 }

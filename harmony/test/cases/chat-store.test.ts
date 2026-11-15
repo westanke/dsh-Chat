@@ -7,14 +7,17 @@
  * lastRequestId），最后 await 动作 promise——顺序反了应答会扑空。
  */
 
-import test from 'node:test';
+import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { GatewayClient, GatewayDeps } from '../../entry/src/main/ets/core/GatewayClient.ts';
 import { GatewayApi } from '../../entry/src/main/ets/core/GatewayApi.ts';
 import { GatewayState } from '../../entry/src/main/ets/core/GatewayEvents.ts';
-import { ChatStore, oldestSeqOf, ensureMobileWorkspace } from '../../entry/src/main/ets/core/ChatStore.ts';
+import { ChatStore } from '../../entry/src/main/ets/core/ChatStore.ts';
+import { oldestSeqOf, ensureMobileWorkspace } from '../../entry/src/main/ets/core/MobileWorkspace.ts';
 import { ChatMessage } from '../../entry/src/main/ets/core/HistoryPage.ts';
+import { PromptPart } from '../../entry/src/main/ets/core/Content.ts';
+import { PendingQuestion, PendingApproval, QuestionAnswerItem } from '../../entry/src/main/ets/core/Questions.ts';
 import { DshSession } from '../../entry/src/main/ets/core/Models.ts';
 import { FakeTimers, FakeSocket, FakeHttp } from '../helpers/fake-ws.ts';
 
@@ -74,8 +77,17 @@ function makeReady(deviceName: string = 'DSH Bridge'): ReadyCtx {
   p.catch((e: Error): void => {
     throw e;
   });
+  createdClients.push(client);
   return { socket, timers, http, store, client, api };
 }
+
+/** 文件收口：清掉所有心跳 timer，否则 node:test 报 pending promise。 */
+const createdClients: GatewayClient[] = [];
+after(() => {
+  for (const c of createdClients) {
+    c.dispose();
+  }
+});
 
 /** 打开会话 s1 并注入历史应答（先发起后应答，见文件头时序约定）。 */
 async function openSession1(ctx: ReadyCtx, history: Object[],
@@ -399,4 +411,106 @@ test('ensureMobileWorkspace：缓存命中不发起请求', async () => {
   const got: string | null = await ensureMobileWorkspace(api, 'ws-cached');
   assert.equal(got, 'ws-cached');
   assert.equal(http.requests.length, 0);
+});
+
+test('sendWithImage：纯图也允许（text 空 → 上屏 [图片]）+ contentParts 携带 image part', async () => {
+  const ctx: ReadyCtx = makeReady();
+  await openSession1(ctx, []);
+  drain();
+  const part: PromptPart = PromptPart.image('image/png', 'aGk=', 'x.png');
+  const pSend: Promise<void> = ctx.store.sendWithImage('', part);
+  await drain();
+  const sent = ctx.socket.lastSent();
+  assert.equal(sent['type'], 'message');
+  const content: Object[] = (sent['content'] as Object[]);
+  assert.equal(content.length, 2);
+  const imgPart = (content[1] as Record<string, Object>);
+  assert.equal(imgPart['type'], 'image');
+  assert.equal(imgPart['mediaType'], 'image/png');
+  // 上屏占位
+  assert.equal(ctx.store.messages[0].text, '[图片]');
+  const pWs = ctx.socket.serverFrame({ kind: 'reply',
+    data: { requestId: ctx.socket.lastRequestId(), sessionId: 's1' } });
+  await pSend;
+  ctx.socket.serverHello(3);
+});
+
+test('runCommand：本地命令卡 → executeCommand → ✓/✗ 回填', async () => {
+  const ctx: ReadyCtx = makeReady();
+  await openSession1(ctx, []);
+  drain();
+  const pRun: Promise<void> = ctx.store.runCommand('/help');
+  await drain();
+  // 命令卡上屏（seq=-1，role=command）
+  const card: ChatMessage | null = ctx.store.messages.length > 0
+    ? ctx.store.messages[ctx.store.messages.length - 1] : null;
+  assert.ok(card !== null && card.role === 'command');
+  assert.ok((card as ChatMessage).text.startsWith('/help'));
+  // executeCommand 回显：错误分支
+  ctx.socket.serverFrame({ kind: 'reply',
+    data: { requestId: ctx.socket.lastRequestId(),
+      result: { kind: 'error', text: '未知命令' } } });
+  await pRun;
+  assert.ok((card as ChatMessage).text.includes('✗ 未知命令'));
+  // 重新执行：成功分支
+  const pRun2: Promise<void> = ctx.store.runCommand('/compact');
+  await drain();
+  const card2 = ctx.store.messages[ctx.store.messages.length - 1];
+  ctx.socket.serverFrame({ kind: 'reply',
+    data: { requestId: ctx.socket.lastRequestId(), result: { kind: 'ok', text: '压缩完成' } } });
+  await pRun2;
+  assert.ok(card2.text.includes('✓ 压缩完成'));
+});
+
+test('HITL：question/approval 挂起 → answer/decide 摘卡', async () => {
+  const ctx: ReadyCtx = makeReady();
+  await openSession1(ctx, []);
+  drain();
+  // 事件：提问挂起
+  ctx.socket.serverFrame({ kind: 'event',
+    data: { type: 'userQuestions/requested', sessionId: 's1',
+      callId: 'q1', questions: [{ id: 'a', question: '选择环境' }] } });
+  await drain();
+  assert.equal(ctx.store.pendingQuestions.length, 1);
+  // 事件：审批挂起
+  ctx.socket.serverFrame({ kind: 'event',
+    data: { type: 'approval.requested', sessionId: 's1',
+      approvalId: 'ap1', toolName: 'bash', risk: 'standard' } });
+  await drain();
+  assert.equal(ctx.store.pendingApprovals.length, 1);
+  // answer
+  const q: PendingQuestion = ctx.store.pendingQuestions[0];
+  const pAns: Promise<void> = ctx.store.answerQuestion(q,
+    [new QuestionAnswerItem('a', ['本地'], '')]);
+  await drain();
+  ctx.socket.serverFrame({ kind: 'reply',
+    data: { requestId: ctx.socket.lastRequestId(), accepted: true } });
+  await pAns;
+  assert.equal(ctx.store.pendingQuestions.length, 0);
+  // decide allow
+  const ap: PendingApproval = ctx.store.pendingApprovals[0];
+  const pDec: Promise<void> = ctx.store.decideApproval(ap, true);
+  await drain();
+  ctx.socket.serverFrame({ kind: 'reply',
+    data: { requestId: ctx.socket.lastRequestId(), accepted: true } });
+  await pDec;
+  assert.equal(ctx.store.pendingApprovals.length, 0);
+});
+
+test('setPermission：当前有会话才发 permission 帧', async () => {
+  const ctx: ReadyCtx = makeReady();
+  await openSession1(ctx, []);
+  drain();
+  const pSet: Promise<void> = ctx.store.setPermission('workspace-write');
+  await drain();
+  const sent = ctx.socket.lastSent();
+  assert.equal(sent['type'], 'permission');
+  assert.equal(sent['name'], 'workspace-write');
+  ctx.socket.serverFrame({ kind: 'reply',
+    data: { requestId: ctx.socket.lastRequestId(), result: { kind: 'ok' } } });
+  await pSet;
+  // 无会话：拒绝 NO_SESSION
+  ctx.store.sessionId = null;
+  await assert.rejects(ctx.store.setPermission('read-only'),
+    (e: Error): boolean => (e as Error).message.includes('当前没有会话'));
 });

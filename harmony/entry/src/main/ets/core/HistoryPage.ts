@@ -428,3 +428,29 @@ export class HistoryPage {
     return page;
   }
 }
+
+/**
+ * 翻页合并：把新页 items 按 seq 去重后 prepend 到已有列表前
+ * （seq<0 的本地乐观消息一律保留；安卓 chat_history_actions.loadOlder 同款）。
+ * 返回 [合并后消息, 合并后原始事件, 是否有新增]。
+ */
+export function mergeOlderMessages(existing: ChatMessage[],
+  existingRaw: JsonMap[], fresh: ChatMessage[],
+  freshRaw: JsonMap[]): [ChatMessage[], JsonMap[], boolean] {
+  const known: Map<number, boolean> = new Map();
+  for (const m of existing) {
+    if (m.seq >= 0) {
+      known.set(m.seq, true);
+    }
+  }
+  const picked: ChatMessage[] = [];
+  for (const m of fresh) {
+    if (m.seq < 0 || !known.has(m.seq)) {
+      picked.push(m);
+    }
+  }
+  if (picked.length === 0) {
+    return [existing, existingRaw, false];
+  }
+  return [[...picked, ...existing], [...freshRaw, ...existingRaw], true];
+}

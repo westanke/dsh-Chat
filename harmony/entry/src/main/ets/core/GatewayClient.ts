@@ -19,8 +19,8 @@
 import { JsonAccess, JsonMap } from './JsonAccess';
 import { WireBuilder } from './Wire';
 import { MessageDelta, MessageCommitted } from './Models';
-import { PendingQuestion, PendingApproval } from './Questions';
-import { GatewayEvent, GatewayState, RequestException, requestExceptionFromFrame } from './GatewayEvents';
+
+import { GatewayEvent, GatewayState, RequestException, requestExceptionFromFrame, eventFromFrame } from './GatewayEvents';
 import {
   EventSocketHandle, TimerBridge, WebSocketCallbacks, WebSocketTransport,
   HEARTBEAT_INTERVAL_MS, MAX_BACKOFF_INDEX, MAX_BACKOFF_SECONDS,
@@ -329,62 +329,10 @@ export class GatewayClient {
   }
 
   private onEventData(data: JsonMap | null): void {
-    if (data === null) {
-      return;
+    const ev: GatewayEvent | null = eventFromFrame(data);
+    if (ev !== null) {
+      this.emit(ev);
     }
-    const etype: string = JsonAccess.strOr(data, 'type', '');
-    const sessionId: string = JsonAccess.strOr(data, 'sessionId', '');
-    if (etype === 'chat.message.delta') {
-      const d: MessageDelta = MessageDelta.fromJson(data);
-      this.emit(GatewayEvent.delta(d));
-      return;
-    }
-    if (etype === 'chat.message.committed') {
-      const c: MessageCommitted = MessageCommitted.fromJson(data);
-      this.emit(GatewayEvent.committed(c));
-      return;
-    }
-    if (etype === 'chat.turn.failed') {
-      const msg: string = JsonAccess.strOr(data, 'message', '执行失败');
-      this.emit(GatewayEvent.turnFailed(sessionId, msg));
-      return;
-    }
-    if (etype === 'chat.session.event') {
-      const ev: string = JsonAccess.strOr(data, 'eventType', '');
-      this.emit(GatewayEvent.sessionEvent(sessionId, ev));
-      return;
-    }
-    if (etype === 'userQuestions/requested') {
-      const q: PendingQuestion = PendingQuestion.fromJson(sessionId, data);
-      this.emit(GatewayEvent.questionRequested(q));
-      return;
-    }
-    if (etype === 'userQuestions/answered' || etype === 'userQuestions/dismissed') {
-      const callId: string = JsonAccess.strOr(data, 'callId', '');
-      this.emit(GatewayEvent.questionResolved(sessionId, callId));
-      return;
-    }
-    if (etype === 'approval.requested') {
-      const a: PendingApproval = PendingApproval.fromJson(sessionId, data);
-      this.emit(GatewayEvent.approvalRequested(a));
-      return;
-    }
-    if (etype === 'approval.resolved') {
-      const approvalId: string = JsonAccess.strOr(data, 'approvalId', '');
-      this.emit(GatewayEvent.approvalResolved(sessionId, approvalId));
-      return;
-    }
-    if (etype === 'chat.deliverables.presented') {
-      // 帧里只有 files+seq，不就地插卡，转会话事件防抖重拉 history。
-      this.emit(GatewayEvent.sessionEvent(sessionId, 'deliverables/presented'));
-      return;
-    }
-    if (etype === 'chat.models.updated') {
-      const provider: string = JsonAccess.strOr(data, 'provider', '');
-      this.emit(GatewayEvent.modelsUpdated(provider));
-      return;
-    }
-    // 其余事件忽略（Android 同口径）。
   }
 
   // ------------------------------------------------------------------

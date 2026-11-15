@@ -6,11 +6,16 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { TrajectoryNodeKind, TrajectoryTurn, trajectoryOf, todoItems,
-  agentTeamProjectionOf, prettyJson, UNKNOWN_TURN }
+  agentTeamProjectionOf, prettyJson, UNKNOWN_TURN, chatStatsOf }
   from '../../entry/src/main/ets/core/Projections.ts';
+import { ChatMessage } from '../../entry/src/main/ets/core/HistoryPage.ts';
+import { ToolCallInfo } from '../../entry/src/main/ets/core/ToolCall.ts';
 import { ReleaseInfo, releaseFromJson, isNewerVersion, RELEASE_REPO }
   from '../../entry/src/main/ets/core/ReleaseCheck.ts';
 import { JsonAccess } from '../../entry/src/main/ets/core/JsonAccess.ts';
+import { fetchLatestRelease } from '../../entry/src/main/ets/core/ReleaseCheck.ts';
+import { FakeHttp } from '../helpers/fake-ws.ts';
+import { RequestException } from '../../entry/src/main/ets/core/GatewayEvents.ts';
 
 function map(text: string): Record<string, Object> | null {
   return JsonAccess.asMap(JsonAccess.parse(text));
@@ -178,4 +183,66 @@ test('isNewerVersion: 三段逐位比较', () => {
   assert.equal(isNewerVersion([1, 0, 17], [1, 0, 17]), false);
   assert.equal(isNewerVersion([1, 0, 16], [1, 0, 17]), false);
   assert.equal(isNewerVersion([0, 9, 9], [1, 0, 0]), false);
+});
+
+test('chatStatsOf: 七键统计口径', () => {
+  const user: ChatMessage = new ChatMessage(null);
+  user.role = 'user';
+  user.text = '你好';
+  const asst: ChatMessage = new ChatMessage(null);
+  asst.role = 'assistant';
+  asst.text = '回答';
+  asst.reasoning = '想了想';
+  const proc: ChatMessage = new ChatMessage(null);
+  proc.role = 'process';
+  proc.toolCalls = [new ToolCallInfo('c1', 'bash'), new ToolCallInfo('c2', 'grep')];
+  const err: ChatMessage = new ChatMessage(null);
+  err.role = 'error';
+  const stats: Map<string, number> = chatStatsOf([user, asst, proc, err]);
+  assert.equal(stats.get('消息总数'), 4);
+  assert.equal(stats.get('用户消息'), 1);
+  assert.equal(stats.get('助手回复'), 1);
+  assert.equal(stats.get('工具过程组'), 1);
+  assert.equal(stats.get('错误提示'), 1);
+  assert.equal(stats.get('工具调用'), 2);
+  assert.equal(stats.get('思考块'), 1);
+});
+
+test('chatStatsOf: 空列表全零', () => {
+  const stats: Map<string, number> = chatStatsOf([]);
+  assert.equal(stats.get('消息总数'), 0);
+  assert.equal(stats.get('思考块'), 0);
+});
+
+test('fetchLatestRelease: Gitee 优先', async () => {
+  const http: FakeHttp = new FakeHttp();
+  http.push(200, JSON.stringify({
+    tag_name: 'v1.0.18',
+    assets: [{ name: 'dsh-chat-1_0_18.apk', browser_download_url: 'http://x/a' }]
+  }));
+  const rel: ReleaseInfo = await fetchLatestRelease(http);
+  assert.equal(rel.tag, 'v1.0.18');
+  assert.equal(http.requests.length, 1);
+  assert.match(http.requests[0].url, /gitee/);
+});
+
+test('fetchLatestRelease: Gitee 无资产落 GitHub', async () => {
+  const http: FakeHttp = new FakeHttp();
+  http.push(200, JSON.stringify({ tag_name: 'v0.9.0', assets: [] })); // Gitee 解析不出 apk → null
+  http.push(200, JSON.stringify({
+    tag_name: 'v1.0.18',
+    assets: [{ name: 'dsh-chat-1_0_18.apk', browser_download_url: 'http://x/a' }]
+  }));
+  const rel: ReleaseInfo = await fetchLatestRelease(http);
+  assert.equal(rel.tag, 'v1.0.18');
+  assert.match(http.requests[1].url, /github/);
+});
+
+test('fetchLatestRelease: 双失败抛', async () => {
+  const http: FakeHttp = new FakeHttp();
+  http.push(404, '{}');
+  http.push(404, '{}');
+  await assert.rejects(fetchLatestRelease(http), (e: RequestException): boolean => {
+    return e.code === 'HTTP_404';
+  });
 });

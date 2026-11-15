@@ -242,6 +242,8 @@ export class DsSpacing {
   static readonly blockGap: number = 16;
   static readonly bubbleRadius: number = 16;
   static readonly topBarHeight: number = 44;
+  static readonly actionIconSize: number = 17;
+  static readonly actionIconGap: number = 20;
   static readonly codeBlockRadius: number = 8;
   static readonly codeBlockPad: number = 12;
   static readonly codeBlockPadH: number = 15;
@@ -260,5 +262,16 @@ export class DsSpacing {
   /// 用户气泡 maxWidth = 可见内容区宽 × 0.864（官方基准）。
   static readonly userBubbleMaxFraction: number = 0.864;
   /// HITL 挂起卡面板最大高度占屏比。
+  static readonly liGap: number = 6; // li:not(:first-child) margin-top
+  static readonly chipIconGap: number = 4;
+  static readonly chipRadius: number = 15;
+  static readonly chipGap: number = 19;
+  static readonly composerButtonSize: number = 24;
+  // 设置卡/投影面板（安卓 tokens.dart:405-414）
+  static readonly settingsCardRadius: number = 14;
+  static readonly settingsCardPadH: number = 16;
+  static readonly settingsCardPadV: number = 6;
+  static readonly settingsChipGap: number = 7;
+  static readonly thinkHMargin: number = 12;
   static readonly hitlPanelMaxFraction: number = 0.5;
 }

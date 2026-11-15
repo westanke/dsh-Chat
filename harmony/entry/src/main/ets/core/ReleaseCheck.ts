@@ -10,6 +10,62 @@
  */
 
 import { JsonAccess, JsonMap } from './JsonAccess';
+import { HttpTransport, HttpRequest, HttpResponse } from './Transport';
+import { RequestException } from './GatewayEvents';
+
+/** 拉取超时（安卓 8s 同款）。 */
+const RELEASE_TIMEOUT_MS: number = 8000;
+
+/**
+ * 拉最新 Release（Gitee → GitHub 回退；安卓 fetchLatestRelease 同口径）。
+ * http 为 null 时直接拒绝（NO_TRANSPORT）。Gitee 8s 超时兜底后落 GitHub；
+ * 两边都失败才抛。鸿蒙只做查新版，下载/安装不移植（PORT-MAP 偏差）。
+ */
+export function fetchLatestRelease(http: HttpTransport | null): Promise<ReleaseInfo> {
+  if (http === null) {
+    return Promise.reject(new RequestException('NO_TRANSPORT', 'HTTP 传输未注入'));
+  }
+  const giteeUrl: string = 'https://gitee.com/api/v5/repos/' + RELEASE_REPO + '/releases/latest';
+  const githubUrl: string = 'https://api.github.com/repos/' + RELEASE_REPO + '/releases/latest';
+  const getJson = (url: string, accept: string): Promise<HttpResponse> => {
+    const headers: Map<string, string> = new Map<string, string>();
+    headers.set('accept', accept);
+    return http.request(new HttpRequest('GET', url, headers, null, RELEASE_TIMEOUT_MS));
+  };
+  return getJson(giteeUrl, 'application/json').then((resp: HttpResponse): Promise<ReleaseInfo> => {
+    if (resp.status === 200) {
+      const rel: ReleaseInfo | null = releaseFromJson(
+        JsonAccess.asMap(JsonAccess.parse(resp.body)));
+      if (rel !== null) {
+        return Promise.resolve<ReleaseInfo>(rel);
+      }
+    }
+    return getJson(githubUrl, 'application/vnd.github+json').then((g: HttpResponse): ReleaseInfo => {
+      if (g.status !== 200) {
+        throw new RequestException('HTTP_' + g.status.toString(), 'release check failed (gitee+github)');
+      }
+      const rel2: ReleaseInfo | null = releaseFromJson(
+        JsonAccess.asMap(JsonAccess.parse(g.body)));
+      if (rel2 === null) {
+        throw new RequestException('BAD_REPLY', 'release check failed (gitee+github)');
+      }
+      return rel2;
+    });
+  }, (err: Object): Promise<ReleaseInfo> => {
+    // Gitee 网络层失败 → 落 GitHub。
+    return getJson(githubUrl, 'application/vnd.github+json').then((g: HttpResponse): ReleaseInfo => {
+      if (g.status !== 200) {
+        throw new RequestException('HTTP_' + g.status.toString(), 'release check failed (gitee+github)');
+      }
+      const rel2: ReleaseInfo | null = releaseFromJson(
+        JsonAccess.asMap(JsonAccess.parse(g.body)));
+      if (rel2 === null) {
+        throw new RequestException('BAD_REPLY', 'release check failed (gitee+github)');
+      }
+      return rel2;
+    });
+  });
+}
 
 export const RELEASE_REPO: string = 'westanke/dsh-Chat';
 

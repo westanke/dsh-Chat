@@ -63,14 +63,17 @@ export class HttpTransportImpl implements HttpTransport {
           }
         }
         let bodyText = '';
+        let rawBytes: Uint8Array | null = null;
         if (typeof resp.result === 'string') {
           bodyText = resp.result;
         } else if (resp.result !== null && resp.result !== undefined) {
+          rawBytes = new Uint8Array(resp.result as ArrayBuffer);
           const decoder = util.TextDecoder.create('utf-8');
-          const bytes = new Uint8Array(resp.result as ArrayBuffer);
-          bodyText = decoder.decodeWithStream(bytes);
+          bodyText = decoder.decodeWithStream(rawBytes);
         }
-        resolve(new HttpResponse(resp.responseCode, headers, bodyText));
+        const out: HttpResponse = new HttpResponse(resp.responseCode, headers, bodyText);
+        out.bodyBytes = rawBytes;
+        resolve(out);
       }).catch((e: BusinessError): void => {
         reject(new Error('HTTP_' + e.code + ': ' + e.message));
       });

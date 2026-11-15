@@ -121,3 +121,21 @@
 **编译坑**（ArkTS 严格）：theme 缺 h1/h2 定义；SimpleHighlight LANG_KW Map 泛型 string→string[]；
 MdTable 属性名 align 撞框架 `.align()` → aligns；Font.size 是 Length 联合类型，算术要 `as number`；
 Flex 链式 .alignItems 不存在（构造参数里传）。
+
+## 阶段 4：全功能对齐（2026-11-16）
+
+**第一批 工具折叠组 + HITL 全链**：core/HitlStore.ts（挂起表 callId/approvalId 全连接、sessionQuestions/sessionApprovals 过滤、on*Requested/Resolved 摘卡、answerQuestion/cancelQuestion/decideApproval(api)）+ components/ToolBlock.ets（摘要行 phraseText 单行省略/展开逐条 ✓✗ phrases join/详情 prettyArgs 值截 200/bash 走 MdCodeBlock）+ components/HitlPanel.ets（审批卡 settingsWarnBg ⚖/提问卡 chipSelectedBg/单选清旧/自定义回答 canSubmit）；ChatStore 接线 hitl 四事件分支 + 三动作转发 + pendingQuestions/pendingApprovals getter；ChatView 挂 HitlPanel。
+
+**第二批 composer 全家**：core/Files.ts（GatewayRoot/GatewayEntry/ResolvedFile）+ GatewayApi roots 四件 REST（listRootsRest/listEntriesRest/resolvePathRest/readFileBytes）；ChatStore send(text,imagePart?,mode)/runCommand/sendWithImage/regenerateAt/setPermission(currentPermission getter)；Composer.ets 重构（发送键三态/命令补全缓存切会话失效/`@` 文件补全多根下钻/图片 chip 8MiB/权限 chip）；PhotoPicker 走 platform/ImagePick.ets。
+
+**第三批 收图渲染**：core/ImageRef.ts（DsImageRef attachment|handoff/cacheKey/imageRefsOf/handoffRefOf）+ core/ImageFetcher.ts（进程内字节缓存不淘汰+EMPTY 校验）+ components/ImageTile.ets（loading/error/重试/点按全屏 coverOpen；createImageSource→createPixelMap）；MessageList 用户气泡图片组+助手 handoff 图。Transport HttpResponse 加 bodyBytes（@ohos http ArrayBuffer 直读）。
+
+**第四批 五面板 + 模型切换**：core/Projections.ts 补 chatStatsOf（七键）+ components/ProjectionSheets.ets（Stats/Trajectory/Team/Todo 四 bindSheet）+ components/ModelSheet.ets（分组折叠/effort chips/确认 selectModel→parseSelectModelReply）；ChatView ⋮ 溢出菜单五项 + bindSheet 挂载。
+
+**第五批 设置页**：pages/SettingsView.ets（连接只读 stateLabel/deviceLine（getServerDevice 代理）/外观 themeChip 三档（system/light/dark 写 AppStorage dshThemeMode+PrefsStore）/发送 sendChip queue|steer（Composer 读 dshBusySend 传 send mode）/关于 appVersion()+检查更新 fetchLatestRelease（ReleaseCheck Gitee→GitHub 落级，8s 超时）/断开连接 confirmDiscard 清凭证）；Index settings 路由+applyTheme（dshThemeMode 应用到 dshDark）+ SessionsDrawer 底部设置入口。
+
+**第六批 消息操作/命令卡/文档页**：platform/Tts.ets（CoreSpeechKit zh-CN/person 0/online 1，音量语速走 extraParams）+ platform/Share.ets（Want sendData）+ components/MessageActions.ets（复制/喜欢/朗读 hint/分享/⟳ regenerateAt）；MessageList commandCard builder（role='command' 本地命令卡 ⌨ ✗ danger）+ fileCard builder（.md 点开 bindContentCover）+ pages/MdDocViewer.ets（gatewayResolvePath/readFileBytes→MdView，KB/MB caption，失败重试）。
+
+**500 行合规拆分**：core/ChatActions.ts（runCommandIn/regenerateAtIn/cancelTurnIn/setPermissionIn 收 store 参数）→ ChatStore 450 行；GatewayEvents.ts 收编 eventFromFrame（十一支事件映射纯函数）→ GatewayClient 473 行；components/PermissionSheet.ets（权限 sheet 组件化，aboutToAppear 拉清单）→ Composer 423 行。另拆 core/MobileWorkspace.ts（ensureMobileWorkspace/prepareSessionFor/oldestSeqOf）、core/ChatLabels.ts（四个 label 纯函数）、HistoryPage.mergeOlderMessages。
+
+**测试**：npm test 179/179 全绿（chat-store 22/22 含 sendWithImage/runCommand/权限 NO_SESSION）；**根因教训**：全量测试卡死=拆分时 setPermission 丢 NO_SESSION 校验发空 sessionId 帧等 30s 超时——`import test, { after } from 'node:test'` 收口 dispose + --test-name-pattern 逐用例定位。hvigorw assembleHap BUILD SUCCESSFUL（唯一 WARN=已知 PATCH 枚举透传）。

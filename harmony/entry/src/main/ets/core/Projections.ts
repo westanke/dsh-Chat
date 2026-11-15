@@ -12,6 +12,7 @@
  */
 
 import { JsonAccess, JsonMap } from './JsonAccess';
+import { ChatMessage } from './HistoryPage';
 
 /** 未带 data.turn 的事件归到 0，时间轴里永远垫底（companion 显示「轮次之间」）。 */
 export const UNKNOWN_TURN: number = 0;
@@ -357,4 +358,38 @@ export function prettyJson(data: JsonMap | null): string {
   } catch (e) {
     return String(data);
   }
+}
+
+/** 会话统计（安卓 stats_sheet.dart chatStatsOf：本地计算不产生网络请求）。 */
+export function chatStatsOf(messages: ChatMessage[]): Map<string, number> {
+  let users: number = 0;
+  let assistants: number = 0;
+  let processes: number = 0;
+  let errors: number = 0;
+  let tools: number = 0;
+  let thinks: number = 0;
+  for (const m of messages) {
+    if (m.role === 'user') {
+      users++;
+    } else if (m.role === 'assistant') {
+      assistants++;
+    } else if (m.role === 'process') {
+      processes++;
+    } else if (m.role === 'error') {
+      errors++;
+    }
+    tools += m.toolCalls.length;
+    if (m.reasoning.length > 0) {
+      thinks++;
+    }
+  }
+  const out: Map<string, number> = new Map();
+  out.set('消息总数', messages.length);
+  out.set('用户消息', users);
+  out.set('助手回复', assistants);
+  out.set('工具过程组', processes);
+  out.set('错误提示', errors);
+  out.set('工具调用', tools);
+  out.set('思考块', thinks);
+  return out;
 }

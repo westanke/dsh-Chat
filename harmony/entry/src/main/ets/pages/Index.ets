@@ -14,6 +14,7 @@ import { DsColors, DsTypography, DsSpacing } from '../ui/theme';
 import { mediaquery } from '@kit.ArkUI';
 import { ConnectView } from './ConnectView';
 import { ChatView } from './ChatView';
+import { SettingsView } from './SettingsView';
 import { ChatStore } from '../core/ChatStore';
 
 @Entry
@@ -56,15 +57,27 @@ struct Index {
     try {
       const listener = this.getUIContext().getMediaQuery()
         .matchMediaSync('(dark-mode: true)');
-      AppStorage.setOrCreate('dshDark', listener.matches);
+      this.applyTheme(listener.matches);
       listener.on('change', (result: mediaquery.MediaQueryResult): void => {
-        AppStorage.setOrCreate('dshDark', result.matches);
+        this.applyTheme(result.matches);
       });
       this.mediaListener = listener;
     } catch (e) {
       const err = e as Error;
       Dlog.warn('bind dark mode failed: ' + err.message);
     }
+  }
+
+  /** 界面风格偏好落色：system 跟随系统，light/dark 直写（设置页写 dshThemeMode）。 */
+  private applyTheme(sysDark: boolean): void {
+    const mode: string = AppStorage.get<string>('dshThemeMode') ?? 'system';
+    let dark: boolean = sysDark;
+    if (mode === 'light') {
+      dark = false;
+    } else if (mode === 'dark') {
+      dark = true;
+    }
+    AppStorage.setOrCreate('dshDark', dark);
   }
 
   private buildGateway(baseUrl: string): GatewayClient {
@@ -144,6 +157,23 @@ struct Index {
         ChatView({
           store: this.chatStore(), onExit: (): void => {
             // 退出到连接页（断开当前 gateway）。
+            if (this.gateway !== null) {
+              this.gateway.dispose();
+            }
+            this.gateway = null;
+            this.api = null;
+            this.chat = null;
+            this.route = 'connect';
+          }, onOpenSettings: (): void => {
+            this.route = 'settings';
+          },
+        })
+      }
+      if (this.route === 'settings') {
+        SettingsView({
+          store: this.chatStore(), onDisconnect: (): void => {
+            // 清凭证 + 断开 + 回连接页（安卓 settings 断开口径）。
+            PrefsStore.removeKey('dsh.credentials');
             if (this.gateway !== null) {
               this.gateway.dispose();
             }

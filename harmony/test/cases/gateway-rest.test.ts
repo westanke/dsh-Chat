@@ -65,14 +65,15 @@ test('REST 空 body → 空对象', async () => {
 
 test('fetchAttachment: sha256 冒号 percent-encode + sessionId 必带', async () => {
   const http: FakeHttp = new FakeHttp();
-  http.push(200, 'base64bytes');
+  http.pushBytes(200, new Uint8Array([1, 2, 3, 4]));
   const api: GatewayApi = await makeApi(http);
-  const data: string = await api.fetchAttachment('sha256:abc123', 's/1?x');
+  const data: Uint8Array = await api.fetchAttachment('sha256:abc123', 's/1?x');
+  assert.equal(data.length, 4);
   const req = http.requests[0];
   assert.equal(req.method, 'GET');
   assert.equal(req.url,
     'http://192.168.1.10:8765/api/v1/attachments/sha256%3Aabc123?sessionId=s%2F1%3Fx');
-  assert.equal(data, 'base64bytes');
+  assert.equal(data.length, 4);
 });
 
 test('fetchAttachment 非 200 → HTTP_<code>', async () => {
@@ -85,12 +86,14 @@ test('fetchAttachment 非 200 → HTTP_<code>', async () => {
 
 test('fetchImageHandoff: name encode', async () => {
   const http: FakeHttp = new FakeHttp();
-  http.push(200, 'imgbytes');
   const api: GatewayApi = await makeApi(http);
-  const data: string = await api.fetchImageHandoff('abc.png?raw=1');
+  http.pushBytes(200, new Uint8Array([9, 8, 7, 6]));
+  const data: Uint8Array = await api.fetchImageHandoff('abc.png?raw=1');
+  assert.equal(data.length, 4);
   assert.equal(http.requests[0].url,
     'http://192.168.1.10:8765/api/v1/image-handoff?name=abc.png%3Fraw%3D1');
-  assert.equal(data, 'imgbytes');
+  assert.ok(data instanceof Uint8Array);
+  assert.equal(data.length, 4);
 });
 
 test('http 未注入 → NO_TRANSPORT（不发请求）', async () => {

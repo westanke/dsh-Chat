@@ -164,4 +164,11 @@ export class FakeHttp implements HttpTransport {
   push(status: number, body: string): void {
     this.responses.push(new HttpResponse(status, new Map<string, string>(), body));
   }
+
+  /** 字节应答（图片端点用）。 */
+  pushBytes(status: number, bytes: Uint8Array): void {
+    const resp: HttpResponse = new HttpResponse(status, new Map<string, string>(), '');
+    resp.bodyBytes = bytes;
+    this.responses.push(resp);
+  }
 }

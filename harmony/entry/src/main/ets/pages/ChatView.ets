@@ -12,15 +12,26 @@ import { DshSession } from '../core/Models';
 import { DsColors, DsTypography, DsSpacing } from '../ui/theme';
 import { MessageList } from '../components/MessageList';
 import { Composer } from '../components/Composer';
+import { HitlPanel } from '../components/HitlPanel';
+import { PendingQuestion, PendingApproval, QuestionAnswerItem } from '../core/Questions';
 import { SessionsDrawer } from '../components/SessionsDrawer';
+import { ModelSheet } from '../components/ModelSheet';
+import { StatsSheet, TrajectorySheet, TeamSheet, TodoSheet } from '../components/ProjectionSheets';
 
 @Component
 export struct ChatView {
   store: ChatStore | null = null;
   onExit: (() => void) | null = null;
+  onOpenSettings: (() => void) | null = null;
   @StorageProp('dshDark') dark: boolean = false;
   @State version: number = 0;
   @State drawerOpen: boolean = false;
+  @State menuOpen: boolean = false;
+  @State statsSheet: boolean = false;
+  @State trajectorySheet: boolean = false;
+  @State teamSheet: boolean = false;
+  @State todoSheet: boolean = false;
+  @State modelSheet: boolean = false;
 
   private c(): DsColors {
     return new DsColors(this.dark);
@@ -58,6 +69,10 @@ export struct ChatView {
         SessionsDrawer({
           store: this.store, onClose: (): void => {
             this.drawerOpen = false;
+          }, onOpenSettings: (): void => {
+            if (this.onOpenSettings !== null) {
+              this.onOpenSettings();
+            }
           }
         })
       }
@@ -72,6 +87,23 @@ export struct ChatView {
   chatScaffold() {
     Column() {
       this.topBar()
+      // HITL 挂起面板（提问/审批；无挂起项不占空间；限高屏 50% 可滚动）
+      if (!this.isEmpty()) {
+        HitlPanel({
+          questions: this.store !== null ? this.store.pendingQuestions : [],
+          approvals: this.store !== null ? this.store.pendingApprovals : [],
+          onAnswer: (q: PendingQuestion, answers: QuestionAnswerItem[]): void => {
+            if (this.store !== null) {
+              this.store.answerQuestion(q, answers).catch((): void => {});
+            }
+          },
+          onDecide: (a: PendingApproval, allow: boolean): void => {
+            if (this.store !== null) {
+              this.store.decideApproval(a, allow).catch((): void => {});
+            }
+          },
+        })
+      }
       if (this.isEmpty()) {
         this.greeting()
       } else {
@@ -85,6 +117,129 @@ export struct ChatView {
     }
     .width('100%')
     .height('100%')
+    .bindSheet(this.sheetOpen(), this.sheetContent(), {
+      height: this.sheetHeight(), showClose: true, title: { title: this.sheetTitle() },
+      preferType: SheetType.BOTTOM, onDisappear: (): void => {
+        this.statsSheet = false;
+        this.trajectorySheet = false;
+        this.teamSheet = false;
+        this.todoSheet = false;
+        this.modelSheet = false;
+      }
+    })
+    .bindContentCover(this.menuOpen, this.overflowMenu(), {
+      onDisappear: (): void => {
+        this.menuOpen = false;
+      }
+    })
+  }
+
+  private sheetOpen(): boolean {
+    return this.statsSheet || this.trajectorySheet || this.teamSheet || this.todoSheet
+      || this.modelSheet;
+  }
+
+  private sheetTitle(): string {
+    if (this.statsSheet) {
+      return '会话统计';
+    }
+    if (this.trajectorySheet) {
+      return '运行轨迹';
+    }
+    if (this.teamSheet) {
+      return '智能团队';
+    }
+    if (this.todoSheet) {
+      return '待办任务';
+    }
+    if (this.modelSheet) {
+      return '调整模型';
+    }
+    return '';
+  }
+
+  private sheetHeight(): SheetSize {
+    if (this.modelSheet) {
+      return SheetSize.MEDIUM;
+    }
+    return SheetSize.LARGE;
+  }
+
+  /** 溢出菜单（全屏遮层点任意处关闭；对照安卓 PopupMenu 五项）。 */
+  @Builder
+  overflowMenu() {
+    Column() {
+      Blank()
+      Column({ space: 4 }) {
+        this.menuItem('📊', '会话统计', (): void => {
+          this.statsSheet = true;
+        })
+        this.menuItem('🧭', '运行轨迹', (): void => {
+          this.trajectorySheet = true;
+        })
+        this.menuItem('🧠', '智能团队', (): void => {
+          this.teamSheet = true;
+        })
+        this.menuItem('✅', '待办任务', (): void => {
+          this.todoSheet = true;
+        })
+        this.menuItem('🎛️', '调整模型', (): void => {
+          this.modelSheet = true;
+        })
+      }
+      .width(190)
+      .padding(6)
+      .borderRadius(14)
+      .backgroundColor(this.c().settingsSurface)
+      .shadow({ radius: 18, color: this.c().shadow, offsetX: 0, offsetY: 4 })
+      .margin({ right: DsSpacing.screenPad - 14, top: DsSpacing.topBarHeight })
+    }
+    .width('100%')
+    .height('100%')
+    .alignItems(HorizontalAlign.End)
+    .onClick(() => {
+      this.menuOpen = false;
+    })
+  }
+
+  @Builder
+  menuItem(icon: string, label: string, onTap: () => void) {
+    Row({ space: DsSpacing.chipIconGap }) {
+      Text(icon)
+        .fontSize(15)
+      Text(label)
+        .fontSize(DsTypography.small.size)
+        .fontColor(this.c().labelPrimary)
+        .layoutWeight(1)
+    }
+    .width('100%')
+    .height(40)
+    .padding({ left: 12, right: 12 })
+    .borderRadius(10)
+    .onClick(() => {
+      this.menuOpen = false;
+      onTap();
+    })
+  }
+
+  /** bindSheet 内容（按当前 sheet 分派；骨架已内联在各组件）。 */
+  @Builder
+  sheetContent() {
+    if (this.statsSheet) {
+      StatsSheet({ store: this.store })
+    } else if (this.trajectorySheet) {
+      TrajectorySheet({ store: this.store })
+    } else if (this.teamSheet) {
+      TeamSheet({ store: this.store })
+    } else if (this.todoSheet) {
+      TodoSheet({ store: this.store })
+    } else if (this.modelSheet) {
+      ModelSheet({
+        store: this.store, onDone: (): void => {
+          this.modelSheet = false;
+        }
+      })
+    }
   }
 
   private isEmpty(): boolean {
@@ -130,6 +285,15 @@ export struct ChatView {
           if (st !== null) {
             st.newChat();
           }
+        })
+      Text('⋮')
+        .fontSize(20)
+        .fontColor(this.c().labelPrimary)
+        .width(36)
+        .height(DsSpacing.topBarHeight)
+        .textAlign(TextAlign.Center)
+        .onClick(() => {
+          this.menuOpen = true;
         })
     }
     .width('100%')

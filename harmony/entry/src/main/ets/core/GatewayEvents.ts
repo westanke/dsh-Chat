@@ -147,3 +147,45 @@ export function requestExceptionFromFrame(data: JsonMap | null): RequestExceptio
   const message: string = JsonAccess.strOr(data, 'message', '');
   return new RequestException(code, message);
 }
+
+/** 事件帧 → GatewayEvent（十一支映射，纯函数；未知 type 回 null 由调用方忽略）。 */
+export function eventFromFrame(data: JsonMap | null): GatewayEvent | null {
+  if (data === null) {
+    return null;
+  }
+  const etype: string = JsonAccess.strOr(data, 'type', '');
+  const sessionId: string = JsonAccess.strOr(data, 'sessionId', '');
+  if (etype === 'chat.message.delta') {
+    return GatewayEvent.delta(MessageDelta.fromJson(data));
+  }
+  if (etype === 'chat.message.committed') {
+    return GatewayEvent.committed(MessageCommitted.fromJson(data));
+  }
+  if (etype === 'chat.turn.failed') {
+    return GatewayEvent.turnFailed(sessionId, JsonAccess.strOr(data, 'message', '执行失败'));
+  }
+  if (etype === 'chat.session.event') {
+    return GatewayEvent.sessionEvent(sessionId, JsonAccess.strOr(data, 'eventType', ''));
+  }
+  if (etype === 'userQuestions/requested') {
+    return GatewayEvent.questionRequested(PendingQuestion.fromJson(sessionId, data));
+  }
+  if (etype === 'userQuestions/answered' || etype === 'userQuestions/dismissed') {
+    return GatewayEvent.questionResolved(sessionId, JsonAccess.strOr(data, 'callId', ''));
+  }
+  if (etype === 'approval.requested') {
+    return GatewayEvent.approvalRequested(PendingApproval.fromJson(sessionId, data));
+  }
+  if (etype === 'approval.resolved') {
+    return GatewayEvent.approvalResolved(sessionId, JsonAccess.strOr(data, 'approvalId', ''));
+  }
+  if (etype === 'chat.deliverables.presented') {
+    // 帧里只有 files+seq，不就地插卡，转会话事件防抖重拉 history。
+    return GatewayEvent.sessionEvent(sessionId, 'deliverables/presented');
+  }
+  if (etype === 'chat.models.updated') {
+    return GatewayEvent.modelsUpdated(JsonAccess.strOr(data, 'provider', ''));
+  }
+  // 其余事件忽略（Android 同口径）。
+  return null;
+}

@@ -54,6 +54,8 @@ export class HttpResponse {
   status: number = 0;
   headers: Map<string, string> = new Map();
   body: string = '';
+  /** 原始字节（二进制端点用；JSON 端点忽略）。平台层填，node 测试可用 null。 */
+  bodyBytes: Uint8Array | null = null;
 
   constructor(status: number, headers: Map<string, string>, body: string) {
     this.status = status;

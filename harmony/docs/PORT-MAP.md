@@ -17,23 +17,23 @@
 
 | 安卓版（app/lib/…） | 鸿蒙版（entry/src/main/ets/…） | 阶段 | 状态 |
 |---|---|---|---|
-| design/tokens.dart | resources color/string + ui/tokens（阶段 3 登记） | 3 | ☐ 计划 |
-| bridge/models.dart（协议帧模型） | ets/core/Models.ts + test/cases/models.test.ts | 1 | ◐ core 首批已落 |
+| design/tokens.dart | ui/theme.ets（DsPalette/DsColors/DsTypography/DsSpacing，色值逐一对应） | 3 | ✅ 2026-11-16 |
+| bridge/models.dart（协议帧模型） | ets/core/Models.ts（8 类 + listFrom）+ test/cases/models.test.ts | 1 | ✅ 2026-11-16 |
 | bridge/content.dart（内容部件/命令/@草稿） | ets/core/Content.ts + test/cases/content.test.ts | 1 | ✅ 2026-11-15 |
 | bridge/image_media_type.dart（图片魔数/白名单） | ets/core/ImageMediaType.ts + test/cases | 1 | ✅ 2026-11-15 |
 | bridge/gateway.dart（WS 状态机） | ets/core/GatewayClient.ts + Transport.ts（注入分层） | 1 | ✅ 2026-11-15 |
 | bridge/gateway_events.dart（事件/状态枚举） | ets/core/GatewayEvents.ts | 1 | ✅ 2026-11-15 |
 | bridge/questions.dart（HITL 模型） | ets/core/Questions.ts | 1 | ✅ 2026-11-15 |
 | bridge/gateway_api.dart（WS 端点 19 个） | ets/core/GatewayApi.ts（含 history/subagentHistory） | 1 | ✅ 2026-11-15 |
-| bridge/gateway_rest.dart + gateway_http.dart | ets/core/GatewayApi.ts restJson/fetchAttachment/fetchImageHandoff（配对走 REST，不走 dsh-pair 子协议——@ohos 配不了双子协议，姊妹仓口径） | 1 | ◐ roots/content 端点待补 |
+| bridge/gateway_rest.dart + gateway_http.dart | ets/core/GatewayApi.ts restJson/fetchAttachment/fetchImageHandoff + roots 四件（listRootsRest/listEntriesRest/resolvePathRest/readFileBytes；配对走 REST——@ohos 配不了 dsh-pair 双子协议，姊妹仓口径） | 1 | ✅ 2026-11-16 |
 | bridge/history_page.dart（历史装配） | ets/core/HistoryPage.ts（fromEvents 分组语义 + 文件卡轮尾 + 错误卡） | 1 | ✅ 2026-11-15 |
 | bridge/tool_call.dart（工具措辞/合并） | ets/core/ToolCall.ts（短语表/摘要/结果正文） | 1 | ✅ 2026-11-15 |
 | bridge/hosts.dart（DSH1 导入/主机库） | ets/core/Hosts.ts（纯逻辑；preferences 落库留 entry 层） | 1/4 | ✅ 2026-11-15 |
 | bridge/models_view.dart（models 收敛） | ets/core/ModelsView.ts | 1 | ✅ 2026-11-15 |
 | bridge/permissions.dart（权限目录） | ets/core/Permissions.ts | 1 | ✅ 2026-11-15 |
 | bridge/projections.dart（轨迹/团队投影） | ets/core/Projections.ts | 1 | ✅ 2026-11-15 |
-| bridge/release_check.dart（新版检测） | ets/core/ReleaseCheck.ts（纯解析；HTTP/下载安装留 entry——鸿蒙不自安装 APK，只引导 Gitee/AGC） | 1/4 | ◐ 2026-11-15 |
-| bridge/platform.dart（TTS/分享/选图/下载） | entry/src/main/ets/platform/（@ohos 能力） | 4 | ☐ 阶段 4 |
+| bridge/release_check.dart（新版检测） | ets/core/ReleaseCheck.ts（解析+比较+fetchLatestRelease Gitee→GitHub 落级；鸿蒙不自安装 APK，只提示跳转） | 1 | ✅ 2026-11-16 |
+| bridge/platform.dart（TTS/分享/选图/下载） | entry/src/main/ets/platform/{Tts,Share,ImagePick,PlatformBridge,Dlog,HttpTransport,WsTransport}.ets（@ohos 能力；下载 APK 不移植） | 4 | ✅ 2026-11-16 |
 | bridge/dlog.dart（文件日志） | entry/src/main/ets/platform/Dlog.ets（hilog 封装；core 不 import @kit，实现只在 platform） | 2/4 | ✅ 骨架 2026-11-15 |
 | bridge/credentials.dart / device.dart | ets/core/Credentials.ts + platform/PlatformBridge.ets（PrefsStore 持久化 / timeZoneId） | 1 / 2 | ✅ 2026-11-15 |
 
@@ -48,22 +48,22 @@
 | ui/chat_state.dart + chat_history_actions.dart | ets/core/ChatStore.ts（node 18 用例） | 2 | ✅ 2026-11-15 |
 | ui/mobile_workspace.dart | ets/core/ChatStore.ts ensureMobileWorkspace | 2 | ✅ 2026-11-15 |
 | ui/chat_page.dart + chat_message_items/list | pages/ChatView.ets + components/MessageList.ets（气泡/流式/错误条 + **MdView 富渲染接入**） | 2/3 | ✅ 2026-11-16 |
-| ui/composer.dart + composer_bar/widgets | components/Composer.ets（输入+发送/停止；命令面板/图片/@引用阶段 4） | 2/4 | ◐ 2026-11-15 |
-| ui/sessions_drawer.dart + session_groups.dart | components/SessionsDrawer.ets（分组列表/新建/高亮；搜索/删除/推挤动画阶段 4） | 2/4 | ◐ 2026-11-15 |
-| ui/brand_mark.dart（品牌标） | ChatView 空态文字占位（自绘 path 阶段 4） | 2/4 | ◐ 2026-11-15 |
+| ui/composer.dart + composer_bar/panels/widgets | components/Composer.ets（发送键三态/命令补全/@ 引用/图片 chip/权限 chip=PermissionSheet.ets）+ ComposerPanels.ets | 4 | ✅ 2026-11-16 |
+| ui/sessions_drawer.dart + session_groups.dart | components/SessionsDrawer.ets（分组列表/新建/高亮/设置入口） | 2 | ◐ 2026-11-16（搜索/删除/推挤动画延后） |
+| ui/brand_mark.dart（品牌标） | ChatView 空态文字占位（自绘 path 延后阶段 5） | 2 | ◐ 2026-11-16 |
 | ui/md_view 系（Markdown 全家福） | components/md/MdView.ets（块级循环+行内混排 Span）+ core/{MdParser,MdInline}.ts（node 22 用例） | 3 | ✅ 2026-11-16 |
 | **公式渲染（行内/块级）** | core/LatexLite.ts + components/md/MdLatex.ets（自研子集，首版就上不降级——用户拍板） | 3 | ✅ 2026-11-16 |
 | ui/md_code_block.dart | components/md/MdCodeBlock.ets + core/SimpleHighlight.ts（Atom One Light 配色；高亮仅 str/num/comment/kw 四类简化） | 3 | ✅ 2026-11-16 |
 | ui/md_table.dart | components/md/MdTable.ets（复制；下载/展开延后阶段 4） | 3 | ✅ 2026-11-16 |
-| ui/process_group.dart（工具折叠组） | components/ToolBlockBody.ets | 3 | ☐ 计划 |
-| ui/message_actions.dart | ui/MessageActions.ets | 4 | ☐ 计划 |
+| ui/process_group.dart（工具折叠组） | components/ToolBlock.ets（摘要行/逐条 ✓✗/详情 prettyArgs+bash 代码块） | 3 | ✅ 2026-11-16 |
+| ui/message_actions.dart | components/MessageActions.ets（复制/喜欢/朗读/分享/重新生成）+ platform/{Tts,Share}.ets | 4 | ✅ 2026-11-16 |
 **阶段 3 已记偏差（2026-11-16）**：①代码高亮四类 token（kw/str/num/comment）+ 五语言关键词表，非 Atom One 全量 scope；②流式渲染无闪烁光标（安卓 GptMarkdown isStreaming 有）；③表格下载/展开按钮延后阶段 4；④任务列表勾选框用 Unicode ☑/☐ 字符非自绘 Checkbox；⑤HTML 内联块纯文本化不渲染。
 
-| HITL（question/approval 卡） | ui/HitlCards.ets | 4 | ☐ 计划 |
-| 投影面板（轨迹/团队/待办） | ui/ProjectionPanels.ets | 4 | ☐ 计划 |
-| 7 个 MethodChannel | platform/（i18n 时区、Core Speech TTS、systemShare、photoViewPicker、startAbility 打开文件、request.agent 下载、bundleManager 版本） | 4 | ☐ 计划 |
-| 检查更新（下载 APK 直装） | **改口径**：查新版 + 跳 Gitee/AGC（鸿蒙不能自安装） | 4 | ☐ 计划 |
-| settings_page.dart | ui/SettingsScreen.ets | 4 | ☐ 计划 |
+| HITL（question/approval 卡） | core/HitlStore.ts（挂起表/摘卡/三动作）+ components/HitlPanel.ets（审批卡/提问卡/自定义回答） | 4 | ✅ 2026-11-16 |
+| 投影面板（轨迹/团队/待办/统计/模型） | core/Projections.ts chatStatsOf + components/{ProjectionSheets,ModelSheet}.ets（bindSheet 五面板） | 4 | ✅ 2026-11-16（子会话下钻延后） |
+| 7 个 MethodChannel | platform/（i18n 时区/Core Speech TTS/系统分享/photoViewPicker/startAbility/bundleManager 版本；下载 APK 不移植） | 4 | ✅ 2026-11-16 |
+| 检查更新（下载 APK 直装） | **改口径**：ReleaseCheck.fetchLatestRelease 查新版 + SettingsView 提示跳 Gitee Release 页（鸿蒙不能自安装，下载/安装/进度轮询不移植） | 4 | ✅ 2026-11-16 |
+| settings_page.dart（六分区设置页） | pages/SettingsView.ets（连接只读/外观三档/发送模式/关于+检查更新/断开连接） | 4 | ✅ 2026-11-16（字号缩放/诊断日志开关延后阶段 5） |
 
 ## 2. 决策记录（用户 2026-11-15 拍板）
 
@@ -92,3 +92,5 @@
 - `图标暂为放大位图` —— 鸿蒙侧前景/启动图标由本工程安卓自绘图标 192→1024 LANCZOS
   放大 + 锐化生成（合规：自绘资产自用）。真机阶段前按安卓同款视觉矢量精绘。
 - `test node_modules 不进 CI 缓存外目录` —— npm 用 npmmirror（toolchain-env.sh 已配）。
+
+**阶段 4 已记偏差（2026-11-16）**：①@s 文件补全多根下钻/删除确认照搬；②设置页「字号跟随系统」开关与 Slider 鸿蒙版延后阶段 5（fontScale 真机定）；③诊断日志开关不移植（Dlog.ets hilog 直写不落文件）；④子会话历史页（subagent_history_page）与 subagentHistory REST 已有，入口延后阶段 5；⑤会话目录选择（session_location_sheet）延后阶段 5；⑥表格下载/展开、推挤抽屉动画、自绘品牌标延后。

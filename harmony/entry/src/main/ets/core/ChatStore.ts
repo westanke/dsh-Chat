@@ -9,83 +9,32 @@
  */
 
 import { JsonAccess, JsonMap } from './JsonAccess';
-import { DshSession, DshWorkspace, MessageCommitted, MessageDelta } from './Models';
+import { DshSession, MessageCommitted, MessageDelta } from './Models';
 import { GatewayClient } from './GatewayClient';
 import { GatewayApi } from './GatewayApi';
 import {
   GatewayEvent, GatewayEventType, GatewayState, RequestException,
 } from './GatewayEvents';
 import { ChatMessage, HistoryPage } from './HistoryPage';
+import { ensureMobileWorkspace, oldestSeqOf, prepareSessionFor } from './MobileWorkspace';
+import { mergeOlderMessages } from './HistoryPage';
+import { sessionTitleOf, deviceLabelOf, connectionLabelOf } from './ChatLabels';
+import { PromptPart } from './Content';
+import { DsImageRef } from './ImageRef';
+import { ImageFetcher } from './ImageFetcher';
+import { HitlStore } from './HitlStore';
+import { runCommandIn, regenerateAtIn, cancelTurnIn, setPermissionIn } from './ChatActions';
+import { ModelSelection, parseSelectModelReply } from './ModelsView';
+import { PendingQuestion, PendingApproval, QuestionAnswerItem } from './Questions';
 import type { TimerBridge } from './Transport';
 
-const MOBILE_WORKSPACE_DIR: string = '.dsh-mobile';
-const MOBILE_WORKSPACE_TITLE: string = '手机会话';
 const HISTORY_MAX_MESSAGES: number = 200;
 const TOOL_REFRESH_DEBOUNCE_MS: number = 800;
 
-/** 已加载的最小 seq（下一页 beforeSeq）；null = 没有可翻页的消息。 */
-export function oldestSeqOf(messages: ChatMessage[]): number | null {
-  for (const m of messages) {
-    if (m.seq >= 0) {
-      return m.seq;
-    }
-  }
-  return null;
-}
-
-/**
- * 找到或创建「手机会话」工作区：已知缓存 → title 含「手机」→ 在首个
- * 授权根下建 `.dsh-mobile`（幂等）+ REST 登记 + PATCH 改名。
- * 失败回 null（回落未分组，不阻断发送）。
- */
-export function ensureMobileWorkspace(api: GatewayApi,
-  cachedId: string | null): Promise<string | null> {
-  if (cachedId !== null) {
-    return Promise.resolve(cachedId);
-  }
-  return api.workspaces().then((workspaces: DshWorkspace[]): Promise<string | null> => {
-    for (const w of workspaces) {
-      if (w.title.indexOf('手机') >= 0) {
-        return Promise.resolve(w.id);
-      }
-    }
-    let rootId: string = '';
-    for (const w of workspaces) {
-      if (w.rootId !== '') {
-        rootId = w.rootId;
-        break;
-      }
-    }
-    if (rootId === '') {
-      return Promise.resolve(null); // 无授权根可见，放弃（不阻断发送）
-    }
-    return api.createDirectory(rootId, MOBILE_WORKSPACE_DIR)
-      .catch((e: Error): void => {
-        // 409 = 目录已存在（幂等），其余错误也继续试登记（登记幂等）。
-      })
-      .then((): Promise<string> => {
-        return api.createWorkspaceRest(rootId, MOBILE_WORKSPACE_DIR);
-      })
-      .then((wsId: string): Promise<string | null> => {
-        return api.renameWorkspaceRest(wsId, MOBILE_WORKSPACE_TITLE)
-          .catch((e: Error): void => {
-            // 名字不重要，继续。
-          })
-          .then((): Promise<string | null> => {
-            return Promise.resolve(wsId);
-          });
-      })
-      .catch((e: Error): Promise<string | null> => {
-        return Promise.resolve(null); // 失败回落未分组，不阻断发送
-      });
-  }).catch((e: Error): Promise<string | null> => {
-    return Promise.resolve(null);
-  });
-}
-
 export class ChatStore {
   private gateway: GatewayClient;
-  private api: GatewayApi;
+  /** 网关 API（面板组件直连：models/命令/权限/REST roots/文档）。 */
+  api: GatewayApi;
   private timers: TimerBridge;
 
   sessionId: string | null = null;
@@ -102,8 +51,9 @@ export class ChatStore {
   rawEvents: JsonMap[] = [];
   projections: JsonMap | null = null;
 
-  private pendingSessionId: string | null = null;
-  private mobileWorkspaceId: string | null = null;
+  // 切换中的会话 id（createSession 应答未落时收推送用；prepareSessionFor 写）
+  pendingSessionId: string | null = null;
+  mobileWorkspaceId: string | null = null;
   private refreshScheduled: boolean = false;
   private notify: (() => void) | null = null;
 
@@ -125,7 +75,7 @@ export class ChatStore {
     this.notify = fn;
   }
 
-  private changed(): void {
+  changed(): void {
     if (this.notify !== null) {
       this.notify();
     }
@@ -137,39 +87,24 @@ export class ChatStore {
 
   /** 当前会话标题（顶栏居中显示；新对话空串）。 */
   get sessionTitle(): string {
-    const id: string | null = this.sessionId;
-    if (id === null || id === '') {
-      return '';
-    }
-    for (const s of this.sessions) {
-      if (s.id === id) {
-        return s.displayTitle;
-      }
-    }
-    return '';
+    return sessionTitleOf(this.sessions, this.sessionId);
   }
 
-  /** 设备名（抽屉底部账号栏；hello.device.name 优先，兜底 'DSH Bridge'）。 */
+  /** 服务端设备信息（hello.device；设置页连接区只读展示）。 */
+  getServerDevice(): JsonMap | null {
+    return this.gateway.getServerDevice();
+  }
+
   get deviceLabel(): string {
-    const device: JsonMap | null = this.gateway.getServerDevice();
-    if (device !== null) {
-      const name: string = JsonAccess.strOr(device, 'name', '').trim();
-      if (name !== '') {
-        return name;
-      }
-    }
-    return 'DSH Bridge';
+    return deviceLabelOf(this.gateway.getServerDevice());
   }
 
-  /** 连接地址（去协议前缀，只留 host[:port]）。 */
   get connectionState(): GatewayState {
     return this.gateway.getState();
   }
 
   get connectionLabel(): string {
-    const raw: string = this.gateway.getBaseUrl();
-    const stripped: string = raw.replace(/^https?:\/\//, '').replace(/\/+$/, '');
-    return stripped === '' ? raw : stripped;
+    return connectionLabelOf(this.gateway.getBaseUrl());
   }
 
   // ------------------------------------------------------------------
@@ -195,16 +130,7 @@ export class ChatStore {
     this.sessionId = s.id;
     // 切会话先清空原始事件/投影/流式缓冲：防止上一会话内容串台
     //（流式残留会以流式气泡挂在新会话页尾部，安卓 2026-11-15 反馈教训）。
-    this.rawEvents = [];
-    this.projections = null;
-    this.historyHasMore = false;
-    this.loadingOlder = false;
-    this.historyPageJustLoaded = false;
-    this.streaming = false;
-    this.streamText = '';
-    this.streamReasoning = '';
-    this.lastError = null;
-    this.changed();
+    this.resetSessionView();
     this.gateway.subscribe(s.id);
     return this.reloadHistory();
   }
@@ -212,6 +138,13 @@ export class ChatStore {
   newChat(): void {
     this.sessionId = null;
     this.messages = [];
+    this.resetSessionView();
+    this.gateway.subscribe(null);
+    this.changed();
+  }
+
+  /** 清屏公共段（切会话/新建共用）：原始事件/投影/翻页/流式/错误全清。 */
+  private resetSessionView(): void {
     this.rawEvents = [];
     this.projections = null;
     this.historyHasMore = false;
@@ -221,23 +154,26 @@ export class ChatStore {
     this.streamText = '';
     this.streamReasoning = '';
     this.lastError = null;
-    this.gateway.subscribe(null);
     this.changed();
   }
 
   /** 发送文本（阶段 2 纯文本；带图走阶段 4 PromptPart.image）。 */
-  send(text: string): Promise<void> {
+  sendWithImage(text: string, image: PromptPart, mode: string = 'queue'): Promise<void> {
+    return this.send(text, image);
+  }
+
+  send(text: string, imagePart?: PromptPart, mode: string = 'queue'): Promise<void> {
     const trimmed: string = text.trim();
-    if (trimmed === '') {
+    // 纯图无文字也允许发（图片是完整消息内容）；两者都空才忽略。
+    if (trimmed === '' && imagePart === undefined) {
       return Promise.resolve();
     }
     this.lastError = null;
     const userMsg: ChatMessage = new ChatMessage();
     userMsg.role = 'user';
-    userMsg.text = trimmed;
+    userMsg.text = trimmed === '' ? '[图片]' : trimmed;
     this.messages = [...this.messages, userMsg];
-    // 繁忙发送模式（阶段 2 固定 queue；steer 偏好随设置页在阶段 4 接入）。
-    const mode: string = 'queue';
+    // busySendMode 由 Composer 传入（设置页写 dshBusySend）。
     if (!this.streaming) {
       this.streamText = '';
       this.streamReasoning = '';
@@ -245,9 +181,10 @@ export class ChatStore {
     this.streaming = true;
     this.changed();
     const self: ChatStore = this;
-    return this.prepareSession().then((): Promise<string> => {
+    return prepareSessionFor(this).then((): Promise<string> => {
       const sidArg: string | null = self.sessionId;
-      return self.api.sendText(sidArg, trimmed, mode, []);
+      const parts: JsonMap[] = imagePart === undefined ? [] : [imagePart.toMap()];
+      return self.api.sendText(sidArg, trimmed, mode, parts);
     }).then((sid: string): void => {
       if (self.sessionId === null && sid !== '') {
         self.sessionId = sid;
@@ -269,27 +206,27 @@ export class ChatStore {
     });
   }
 
-  /** 停止当前回合：session-cancel + 立即收流式 + 重拉历史。 */
+  /** 图片字节拉取（缓存命中不请求；实现见 ImageFetcher）。 */
+  private imageFetcher: ImageFetcher = new ImageFetcher();
+
+  /** 取图片字节（缓存命中不请求；见 ImageFetcher）。 */
+  fetchImageBytes(ref: DsImageRef): Promise<Uint8Array> {
+    return this.imageFetcher.fetch(this.api, this.sessionId, ref);
+  }
+
+  /** 执行斜杠命令（实现见 ChatActions.runCommandIn）。 */
+  runCommand(line: string): Promise<void> {
+    return runCommandIn(this, line);
+  }
+
+  /** 重新生成（实现见 ChatActions.regenerateAtIn）。 */
+  regenerateAt(index: number): Promise<void> {
+    return regenerateAtIn(this, index);
+  }
+
+  /** 停止当前回合（实现见 ChatActions.cancelTurnIn）。 */
   cancelTurn(): Promise<void> {
-    const id: string | null = this.sessionId;
-    if (!this.streaming || id === null || id === '') {
-      return Promise.resolve();
-    }
-    this.streaming = false;
-    this.streamText = '';
-    this.streamReasoning = '';
-    this.lastError = null;
-    this.changed();
-    return this.api.cancelTurn(id).then((): Promise<void> => {
-      return this.reloadHistory();
-    }).catch((e: Error): void => {
-      if (e instanceof RequestException) {
-        this.lastError = '停止失败：' + e.message;
-        this.changed();
-        return;
-      }
-      throw e;
-    });
+    return cancelTurnIn(this);
   }
 
   /** 重拉当前会话历史（openSession / 事件防抖 / 停止后都会调）。 */
@@ -335,21 +272,11 @@ export class ChatStore {
       if (self.sessionId !== id) {
         return; // 翻页期间切了会话：丢弃
       }
-      const known: Map<number, boolean> = new Map();
-      for (const m of self.messages) {
-        if (m.seq >= 0) {
-          known.set(m.seq, true);
-        }
-      }
-      const fresh: ChatMessage[] = [];
-      for (const m of page.items) {
-        if (m.seq < 0 || !known.has(m.seq)) {
-          fresh.push(m);
-        }
-      }
-      if (fresh.length > 0) {
-        self.messages = [...fresh, ...self.messages];
-        self.rawEvents = [...page.rawEvents, ...self.rawEvents];
+      const merged: [ChatMessage[], JsonMap[], boolean] =
+        mergeOlderMessages(self.messages, self.rawEvents, page.items, page.rawEvents);
+      self.messages = merged[0];
+      self.rawEvents = merged[1];
+      if (merged[2]) {
         self.historyPageJustLoaded = true;
       }
       self.historyHasMore = page.hasMore;
@@ -389,6 +316,46 @@ export class ChatStore {
       this.reloadHistory();
     }
     this.changed();
+  }
+
+  // ---- HITL（全连接挂起表；UI 只渲染当前会话条目）----
+
+  private readonly hitl: HitlStore = new HitlStore();
+
+  /** 当前会话待答的提问（到达序）。 */
+  get pendingQuestions(): PendingQuestion[] {
+    return this.hitl.sessionQuestions(this.sessionId);
+  }
+
+  /** 当前会话待决的审批。 */
+  get pendingApprovals(): PendingApproval[] {
+    return this.hitl.sessionApprovals(this.sessionId);
+  }
+
+  /** 提交一套答案（question-answer 帧），成功即本地摘卡（HitlStore 持 api 动作）。 */
+  answerQuestion(question: PendingQuestion, answers: QuestionAnswerItem[]): Promise<void> {
+    return this.hitl.answerQuestion(this.api, question, answers).then((): void => {
+      this.changed();
+    });
+  }
+
+  /** 放弃一条提问（question-cancel）。continued 态取消会失败，卡片保留。 */
+  cancelQuestion(question: PendingQuestion): Promise<void> {
+    return this.hitl.cancelQuestion(this.api, question).then((): void => {
+      this.changed();
+    });
+  }
+
+  /** 切换权限档位（permission 帧；NO_SESSION 时调用方先提示）。 */
+  setPermission(name: string): Promise<void> {
+    return setPermissionIn(this, name);
+  }
+
+  /** 审批决定（allowed-once / rejected），成功即本地摘卡。 */
+  decideApproval(approval: PendingApproval, allow: boolean): Promise<void> {
+    return this.hitl.decideApproval(this.api, approval, allow).then((): void => {
+      this.changed();
+    });
   }
 
   private onEvent(event: GatewayEvent): void {
@@ -444,7 +411,11 @@ export class ChatStore {
       this.scheduleToolRefresh();
       return;
     }
-    // QUESTION_* / APPROVAL_* / MODELS_UPDATED 在阶段 4 HITL 接入。
+    if (this.hitl.onEvent(event)) {
+      this.changed();
+    }
+    return;
+    // MODELS_UPDATED（模型列表变化）在阶段 4 模型切换接入。
   }
 
   /** 800ms 防抖重拉（一轮 turn 事件很密，限流）。 */
@@ -477,23 +448,27 @@ export class ChatStore {
   // ------------------------------------------------------------------
 
   /** 首条消息前准备会话通道：目录选择（阶段 4）走 session-create{rootId,cwd}。 */
-  private prepareSession(): Promise<void> {
-    if (this.sessionId !== null) {
-      return Promise.resolve();
+  /** 当前会话权限档位 value（projections.values.permissions.currentValue；
+   * 投影缺席/没有该条时为 null，UI 显示「权限」并可拉 permission-options）。 */
+  get currentPermission(): string | null {
+    const values: JsonMap | null = JsonAccess.obj(this.projections, 'values');
+    if (values === null) {
+      return null;
     }
-    const self: ChatStore = this;
-    return ensureMobileWorkspace(this.api, this.mobileWorkspaceId)
-      .then((wsId: string | null): Promise<void> => {
-        if (wsId === null) {
-          return Promise.resolve(); // 落 message 帧自动建（未分组）
-        }
-        return self.api.createSessionInWorkspace(wsId).then((sid: string): void => {
-          self.mobileWorkspaceId = wsId;
-          self.sessionId = sid;
-          self.pendingSessionId = sid;
-        }).catch((e: Error): void => {
-          // 建会话失败不阻断发消息：退回 message 帧自动建（落未分组）。
-        });
+    const perm: JsonMap | null = JsonAccess.obj(values, 'permissions');
+    if (perm === null) {
+      return null;
+    }
+    const v: string = JsonAccess.strOr(perm, 'currentValue', '');
+    return v.length === 0 ? null : v;
+  }
+
+  /** 调整模型（select-model 帧；应答 data.type=='select-model' 带 selected）。 */
+  selectModel(provider: string, model: string, effort: string | null): Promise<ModelSelection | null> {
+    return this.api.selectModel(this.sessionId ?? '', provider, model, effort)
+      .then((data: JsonMap): ModelSelection | null => {
+        return parseSelectModelReply(data);
       });
   }
+
 }

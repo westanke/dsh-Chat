@@ -8,6 +8,7 @@
 import { preferences } from '@kit.ArkData';
 import { common } from '@kit.AbilityKit';
 import { BusinessError } from '@kit.BasicServicesKit';
+import { bundleManager } from '@kit.AbilityKit';
 import type { TimerBridge } from '../core/Transport';
 
 export class ArkTimers implements TimerBridge {
@@ -42,6 +43,20 @@ export class DeviceIdentity {
   static deviceId(): string {
     const now = Date.now();
     return 'dsh-chat-' + now.toString(36);
+  }
+}
+
+/// 应用版本（bundleManager 读 versionName+versionCode；失败降级 '…'）。
+/// 安卓 DshPlatform.appVersion() 同口径；设置页关于区展示。
+export async function appVersion(): Promise<string> {
+  try {
+    const info = await bundleManager.getBundleInfoForSelf(
+      bundleManager.BundleFlag.GET_BUNDLE_INFO_WITH_APPLICATION);
+    const name: string = info.versionName;
+    const code: number = info.versionCode;
+    return name + '+' + code.toString();
+  } catch (err) {
+    return '…';
   }
 }
 
