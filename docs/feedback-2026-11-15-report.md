@@ -234,3 +234,26 @@ macOS runner 计费约 ×10（私有仓库），一次 iOS 构建 20-30 分钟�
 GitHub 构建完成后跑 `scripts/sync-gitee-release.sh v1.0.15 <run-id>`
 同步 gitee；用户手机 1.0.14 点检查更新应发现 v1.0.15 → 下载（gitee
 附件直链）→ 安装后版本行与「已是最新」口径全部对齐。
+
+## 续编二：安卓覆盖安装「签名不一致」修复（1.0.16+17）
+
+用户反馈每次更新都提示签名不一致。根因：release.yml 未提供签名密钥，
+GitHub runner 每次新机器回落**随机** debug keystore——每个 CI 包签名都
+不同，覆盖安装必然被拒。
+
+修复（提交 9548895）：
+- 正式 keystore 在本机生成（RSA 2048 / 有效期 30 年 / alias dshchat），
+  保存于仓库外 workspace/keys/（.gitignore 双重拉黑 key.properties 与
+  *.jks，宪法 §10 绝不提交凭证）；
+- build.gradle.kts 的 hasReleaseKeystore 分支是现成的（11-04 就写好了），
+  本地 app/android/key.properties 指向仓库外 keystore，构建即生效
+  （apksigner verify：CN=DSH Chat，SHA-256 15ffe95f…）；
+- release.yml 增加签名注入步骤：KEYSTORE_BASE64/KEYSTORE_PASSWORD/
+  KEY_ALIAS/KEY_PASSWORD 四个仓库 Secrets（libsodium sealed box 加密经
+  REST API 上传，tweetnacl-sealedbox-js 实现），构建前解码写
+  key.properties；Secrets 缺失时 warning 回落 debug（保持克隆可构建）；
+- 本地与 CI 共用同一证书，此后 CI 包互相覆盖、与本地包互相覆盖都不再
+  报签名不一致。
+
+**用户迁移路径**：旧包（历史 debug 随机签名）与 1.0.16 仍不一致——
+最后一次卸载重装；装上 1.0.16+17 后永久覆盖升级。
