@@ -41,6 +41,44 @@ extension GatewayApi on GatewayClient {
     return sid;
   }
 
+  /// 在授权根指定目录建会话（新建会话可选工作目录，2026-11-15 反馈）。
+  /// session-create 带 rootId+cwd（ws-sessions.ts:48 handleSessionCreate，
+  /// 语义与 REST POST /chat/sessions 的 [rootId,path] 一致）：[rootId] 空 =
+  /// 首个授权根；[cwd] 是根内相对路径（WirePath），'' = 会话目录就是根。
+  /// 不带 workspaceId → 会话落「未分组」（session_groups.dart 分组语义）。
+  /// 应答 kind=session-created{sessionId,rootId}。
+  /// 注意：失败必须显式报错，不要静默回退手机工作区——那等于「建到了
+  /// 用户没选的地方」（ws-sessions.ts 防呆注释的同款精神）。
+  Future<String> createSessionAt({String? rootId, String cwd = ''}) async {
+    final r = await request('session-create', {
+      'rootId': ?rootId,
+      'cwd': cwd,
+    });
+    final sid = r['sessionId'];
+    if (sid is! String || sid.isEmpty) {
+      throw RequestException('BAD_REPLY', 'session-create 应答缺 sessionId');
+    }
+    return sid;
+  }
+
+  /// 目录浏览（file-list 帧，ws-files.ts:41；同 REST GET /roots/{id}/entries）。
+  /// [path] 根内相对路径，'' = 列根目录；[rootId] 空 = 首个授权根。
+  /// 应答 kind=file-list，data{rootId,path,entries,nextCursor?}。
+  /// 需要 files.read scope。
+  Future<DshDirectoryPage> listDirectory({
+    String? rootId,
+    String path = '',
+    String? cursor,
+  }) async {
+    final r = await request('file-list', {
+      'rootId': ?rootId,
+      'path': path,
+      'cursor': ?cursor,
+      'limit': 200,
+    });
+    return DshDirectoryPage.fromJson(r);
+  }
+
   /// 在授权根下建目录（directory-create 帧，files.write scope）。
   /// [path] 是根内相对路径；已存在回 409 PATH_ALREADY_EXISTS（幂等，调用方忽略）。
   Future<void> createDirectory({String? rootId, required String path}) async {

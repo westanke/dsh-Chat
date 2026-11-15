@@ -21,6 +21,7 @@ class DshSession {
     this.title,
     this.workspaceId,
     this.workspaceTitle,
+    this.cwd = '',
     this.cwdAbsolute,
   });
 
@@ -40,6 +41,11 @@ class DshSession {
   /// 真机反馈 2026-11-04 第 3 项的 @ 补全数据源）。
   final String? cwdAbsolute;
 
+  /// 会话工作目录，授权根内相对路径（openapi §ChatSession.required，
+  /// WirePath 语义；'' = 会话目录就是授权根本身）。
+  /// 新建会话目录选择（2026-11-15 反馈）用它做「最近使用」候选。
+  final String cwd;
+
   factory DshSession.fromJson(Map<String, dynamic> j) => DshSession(
     id: (j['id'] ?? '') as String,
     rootId: (j['rootId'] ?? '') as String,
@@ -49,6 +55,7 @@ class DshSession {
     title: j['title'] as String?,
     workspaceId: j['workspaceId'] as String?,
     workspaceTitle: j['workspaceTitle'] as String?,
+    cwd: (j['cwd'] ?? '') as String,
     cwdAbsolute: j['cwdAbsolute'] as String?,
   );
 
@@ -132,5 +139,70 @@ class MessageCommitted {
     turn: (d['turn'] ?? 0) as int,
     step: (d['step'] ?? 0) as int,
   );
+}
+
+/// 新建会话的待定工作目录（2026-11-15 反馈「新建会话可选工作目录」）。
+/// 发送首条消息前可选；[rootId] 空 = 首个授权根（session-create 语义），
+/// [cwd] 是授权根内相对路径（WirePath），'' = 会话目录就是根。
+/// [label] 仅 UI 显示（sheet 候选组装），协议层不解释。
+class SessionLocation {
+  const SessionLocation({
+    this.rootId,
+    required this.cwd,
+    required this.label,
+  });
+
+  final String? rootId;
+  final String cwd;
+  final String label;
+}
+
+/// file-list 应答条目（ws-files.ts handleFileList；openapi §FileEntry）。
+/// [kind] ∈ file|directory|symlink|other；目录选择浏览器只消费 directory。
+class DshFileEntry {
+  const DshFileEntry({
+    required this.name,
+    required this.path,
+    required this.kind,
+  });
+
+  final String name;
+  final String path;
+  final String kind;
+
+  factory DshFileEntry.fromJson(Map<String, dynamic> j) => DshFileEntry(
+    name: (j['name'] ?? '') as String,
+    path: (j['path'] ?? '') as String,
+    kind: (j['kind'] ?? 'file') as String,
+  );
+}
+
+/// file-list 应答页（ws-files.ts 应答 data{rootId,...page}；openapi §DirectoryPage）。
+class DshDirectoryPage {
+  const DshDirectoryPage({
+    required this.rootId,
+    required this.path,
+    required this.entries,
+    this.nextCursor,
+  });
+
+  final String rootId;
+  final String path;
+  final List<DshFileEntry> entries;
+  final String? nextCursor;
+
+  factory DshDirectoryPage.fromJson(Map<String, dynamic> j) =>
+      DshDirectoryPage(
+        rootId: (j['rootId'] ?? '') as String,
+        path: (j['path'] ?? '') as String,
+        nextCursor: j['nextCursor'] as String?,
+        entries: (j['entries'] as List? ?? const [])
+            .map(
+              (e) => DshFileEntry.fromJson(
+                Map<String, dynamic>.from(e as Map),
+              ),
+            )
+            .toList(),
+      );
 }
 

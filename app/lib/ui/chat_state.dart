@@ -11,6 +11,7 @@ import '../bridge/gateway.dart';
 import '../bridge/models.dart';
 import '../design/app_settings.dart';
 import 'hitl_state.dart';
+import 'chat_history_actions.dart';
 import 'mobile_workspace.dart';
 import 'session_groups.dart';
 
@@ -84,6 +85,20 @@ class ChatState extends ChangeNotifier {
   List<DshSession> sessions = [];
   List<ChatMessage> messages = [];
 
+  /// 新建会话的待定工作目录（2026-11-15 反馈）：null = 默认「手机会话」
+  /// 工作区；非空时 send() 首条消息走 session-create{rootId,cwd}，
+  /// 会话建好即清；newChat() 也清（不沿用上次选择）。
+  SessionLocation? pendingLocation;
+
+  /// 目录 sheet 的写入入口（含通知；别直接赋值）。
+  void setPendingLocation(SessionLocation? loc) {
+    pendingLocation = loc;
+    notifyListeners();
+  }
+
+  /// 顶层动作文件的对外通知入口（notifyListeners 是 protected）。
+  void notifyUi() => notifyListeners();
+
   /// 历史翻页（真机反馈 2026-11-04 第 5 项）：
   /// [historyHasMore] 服务端还有更早事件（history 应答 hasMore）；
   /// [loadingOlder] 翻页请求进行中（按钮转圈/防重复点击）。
@@ -97,13 +112,6 @@ class ChatState extends ChangeNotifier {
   bool historyPageJustLoaded = false;
 
   /// 已加载的最小 seq（下一页 beforeSeq）；-1 = 流式中的临时消息，跳过。
-  int? get oldestSeq {
-    for (final m in messages) {
-      if (m.seq >= 0) return m.seq;
-    }
-    return null;
-  }
-
   /// 当前会话的原始历史事件（轨迹 Sheet 本地分组用，零网络请求）。
   /// 形状：[{type, seq, time, data}]，data 为原样 Map。
   List<Map<String, dynamic>> rawEvents = [];
@@ -185,84 +193,16 @@ class ChatState extends ChangeNotifier {
     historyHasMore = false;
     loadingOlder = false;
     historyPageJustLoaded = false;
+    // 目录选择随新会话重置回「手机会话」默认（不沿用上次选择）。
+    pendingLocation = null;
     _clearStream();
     _gateway.subscribe(null);
     notifyListeners();
   }
 
-  Future<void> reloadHistory() async {
-    final id = sessionId;
-    if (id == null || id.isEmpty) return;
-    try {
-      final page = await _gateway.history(id, maxMessages: 200);
-      DshLog.w('ui history id=$id items=${page.items.length} '
-          'raw=${page.rawEvents.length} '
-          'projections=${page.projections != null} '
-          'hasMore=${page.hasMore}');
-      messages = page.items;
-      rawEvents = page.rawEvents;
-      historyHasMore = page.hasMore;
-      // 命令卡保留（第六轮反馈 m03878）：reloadHistory 重建 messages，
-      // 本地命令卡（role=='command'，seq=-1）会被冲掉——重灌回列表尾部。
-      final cards = messages.where((m) => m.role == 'command').toList();
-      if (cards.isNotEmpty) {
-        messages = [...messages, ...cards.where((m) => m.seq < 0)];
-      }
-      // 翻页/刷新时 projections 可能缺席：保留上一份（同会话），避免面板闪空。
-      // 切会话时 newChat()/openSession() 会先清空，不会串台。
-      projections = page.projections ?? projections;
-      notifyListeners();
-    } on RequestException catch (e) {
-      lastError = '加载历史失败：${e.message}';
-      notifyListeners();
-    }
-  }
+  Future<void> reloadHistory() => reloadChatHistory(this); // 实现见 chat_history_actions.dart
 
-  /// 向上翻页加载更早消息（真机反馈 2026-11-04 第 5 项）：
-  /// beforeSeq = 当前已加载的最小 seq，返回的更早事件 prepend 到头部并按
-  /// seq 去重（防刷新窗口内重叠）。翻页应答不带 projections（API.md:766）。
-  ///
-  /// 真机反馈 2026-11-04 第二轮 A：翻页成功置 [historyPageJustLoaded] 标记，
-  /// 列表层据此跳过一次贴底跟随——否则用户点按钮时 _wantsBottom 仍为 true，
-  /// prepend 后 maxScrollExtent 暴涨触发 followBottom，视觉上「新消息被冲走」。
-  Future<void> loadOlder() async {
-    final id = sessionId;
-    if (id == null || id.isEmpty || loadingOlder || !historyHasMore) return;
-    final before = oldestSeq;
-    if (before == null || before <= 0) return;
-    loadingOlder = true;
-    notifyListeners();
-    try {
-      final page = await _gateway.history(
-        id,
-        maxMessages: 200,
-        beforeSeq: before,
-      );
-      DshLog.w('ui history-older id=$id before=$before '
-          'items=${page.items.length} hasMore=${page.hasMore}');
-      if (id != sessionId) return; // 翻页期间切了会话：丢弃
-      final known = messages
-          .where((m) => m.seq >= 0)
-          .map((m) => m.seq)
-          .toSet();
-      final fresh = page.items
-          .where((m) => m.seq < 0 || !known.contains(m.seq))
-          .toList();
-      if (fresh.isNotEmpty) {
-        messages = [...fresh, ...messages];
-        rawEvents = [...page.rawEvents, ...rawEvents];
-        historyPageJustLoaded = true;
-      }
-      historyHasMore = page.hasMore;
-      notifyListeners();
-    } on RequestException catch (e) {
-      lastError = '加载更早消息失败：${e.message}';
-      notifyListeners();
-    } finally {
-      loadingOlder = false;
-      if (id == sessionId) notifyListeners();
-    }
-  }
+  Future<void> loadOlder() => loadOlderMessages(this);
 
   /// 带图发送（真机反馈 2026-11-04 第 2 项）：图片走 PromptPart.image
   /// （base64 内联，mediaType 白名单），文本可空。
@@ -293,10 +233,18 @@ class ChatState extends ChangeNotifier {
     notifyListeners();
     try {
       DshLog.w('ui send start sid=$sessionId mode=$mode');
-      // 新会话落「手机会话」分组（真机反馈 2026-11-04 第 7 项）：
-      // message 帧自动建会话不带 workspaceId（ws-basic.ts:39-47，落未分组），
-      // 所以首条消息前先 session-create{workspaceId} 显式建到手机工作区。
-      if (sessionId == null) {
+      // 建会话通道：选了目录走 session-create{rootId,cwd}；否则落手机工作区。
+      if (sessionId == null && pendingLocation != null) {
+        final loc = pendingLocation!;
+        final sid = await _gateway.createSessionAt(
+          rootId: loc.rootId,
+          cwd: loc.cwd,
+        );
+        DshLog.w('ui pre-created session $sid at ${loc.cwd}');
+        sessionId = sid;
+        _pendingSessionId = sid;
+        pendingLocation = null; // 目录已定死，随会话落位。
+      } else if (sessionId == null) {
         final wsId = await ensureMobileWorkspace(_gateway, _mobileWorkspaceId);
         if (wsId != null) {
           try {

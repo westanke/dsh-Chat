@@ -46,3 +46,68 @@ notify 提前到 reloadHistory 之前，history 网络往返期间 B 页先渲�
   不混入本次提交。
 - 实时帧 `chat.message.delta` 带 sessionId（MessageDelta.from 已解析），
   路由本身没有协议缺口，无需 bridge 改动。
+
+---
+
+# 新建会话可选工作目录（2026-11-15）调查报告
+
+反馈：「新建会话中 默认工作目录是手机会话，能加一个可调整或者选择 会话目录吗。
+历史会话不需要也变不了。」
+
+## 现状与协议
+
+- 手机端发送首条消息时 `send()` → `ensureMobileWorkspace()` 预建会话到
+  「手机会话」工作区（`/storage/emulated/0/Android/data/.../files/workspace`），
+  目录无处可改。
+- bridge WS `session-create` 帧本就支持 `rootId + cwd`（cwd 为授权根内
+  WirePath 相对路径，空串 = 根本身）与 `workspaceId` 两套入参（ws-sessions.ts:48），
+  手机端只用了后者——**协议无缺口，纯客户端工作**。
+- `file-list` 帧（ws-files.ts:41，files.read scope）即目录浏览：应答
+  entries[name/path/kind/size/modifiedAt/writable] + nextCursor。
+- WS 无 roots 枚举帧；多授权根场景的候选只能取自历史会话快照的
+  (rootId, cwd) 去重（与官方 Web 的 New session 目录选择同口径）。
+
+## 实现
+
+- **模型**（models.dart）：`DshSession.cwd`；`SessionLocation{rootId?,cwd,label}`、
+  `DshFileEntry`、`DshDirectoryPage`。
+- **网关**（gateway_api.dart）：`createSessionAt({rootId, cwd})`（session-create
+  帧，失败显式报错，不静默回退默认目录——建错地方的会话比报错更糟）；
+  `listDirectory()`（file-list 帧，limit 200）。
+- **状态分流**（chat_state.dart）：`pendingLocation` 待定目录；`send()` 在
+  sessionId==null 时分流——已选目录走 `createSessionAt`（成功即 `pendingLocation=null`，
+  会话目录定死），未选保持原手机工作区通道；`newChat()` 清待定（不沿用上次
+  选择）。历史会话方法体抽 `chat_history_actions.dart`（chat_state.dart 压回
+  500 行，宪法 §7）。
+- **选择 sheet**（session_location_sheet.dart 新）：默认项「手机会话（默认）」+
+  已选高亮（可点恢复默认）+「最近使用」（历史会话 (rootId,cwd) 去重，
+  cwdAbsolute 副标题）+「浏览授权根目录…」（面包屑 + 只列目录 + 加载更多 +
+  「在此目录新建会话」）。`DirectoryLister` 注入点供测试。
+- **入口**（chat_page.dart）：空态问候区加工作目录 chip（手机图标/文件夹图标
+  随状态切换，label = 已选 label 或「手机会话（默认）」）。
+
+## 设计取舍
+
+- **不在会话建立后改目录**：目录在 session-create 时定死（bridge 语义即如此，
+  cwd 是会话构造参数）；用户反馈也只要新建时可选。
+- **WS 无 roots 帧不扩协议**：候选取历史快照 + 浏览从「浏览授权根目录」进入时
+  以第一个授权根起步；单根（主流手机场景）完全够用。后续如要多根平铺，
+  加 roots 枚举帧是 bridge 独立改动。
+- **sendText 失败的会话不回滚**：会话已建、目录已定，重试继续用该会话
+  （sessionId 已挂上），避免反复建空白会话。
+
+## 测试
+
+`app/test/session_location_test.dart`（新 8 项）：模型解析 2、send 分流 3
+（选了目录走 session-create{rootId,cwd} 并清待定；未选不走；newChat 清）、
+sheet 交互 3（默认项 + 去重 + 绝对路径副标题 + 选中写回；已选高亮；
+浏览进子目录回传相对路径）。
+
+**教训**：Dart extension 方法静态分派——测试假网关 extends GatewayClient
+覆写 extension 成员（createSessionAt）无效，必须覆写类本体方法（request()）
+按 type 发假应答，顺带覆盖「extension → request」完整链路。
+
+## 验证
+
+`flutter analyze` 0 issue；`flutter test` 142 全绿（+8）；
+`docs-check.sh` 通过。
