@@ -28,6 +28,49 @@ PendingQuestion _q({bool multiSelect = false, List<UserQuestionOption>? options}
     );
 
 void main() {
+  group('HitlState 合流与角标（2026-11-16 待回答修复）', () {
+    test('mergeQuestions: REST 条目按 callId upsert，保留已有 rpcId', () {
+      final hitl = HitlState()
+        ..onQuestionRequested(_q()); // WS 条目带 rpcId=rpc-1
+      // REST 镜像（无 rpcId、state=continued）不应把 rpcId 冲掉。
+      hitl.mergeQuestions([
+        PendingQuestion.from('s1', {
+          'callId': 'call-1',
+          'state': 'continued',
+          'questions': [
+            {'id': 'q1', 'question': '用哪个方案？'},
+          ],
+        }),
+      ]);
+      expect(hitl.pendingQuestions['call-1']!.rpcId, 'rpc-1');
+      expect(hitl.pendingQuestions['call-1']!.state, 'continued');
+
+      // 新 callId 正常入表；空 callId（异常数据）跳过。
+      hitl.mergeQuestions([
+        PendingQuestion.from('s2', {
+          'callId': 'call-2',
+          'questions': [
+            {'id': 'q2', 'question': '第二问'},
+          ],
+        }),
+        PendingQuestion.from('s2', {'callId': '', 'questions': []}),
+      ]);
+      expect(hitl.pendingQuestions.keys, containsAll(['call-1', 'call-2']));
+      expect(hitl.pendingQuestions.length, 2);
+    });
+
+    test('pendingQuestionSessionIds / pendingApprovalSessionIds 派生', () {
+      final hitl = HitlState()..onQuestionRequested(_q());
+      hitl.onApprovalRequested(
+        PendingApproval.from({'sessionId': 's9', 'approvalId': 'ap-9', 'toolName': 'bash'}),
+      );
+      expect(hitl.pendingQuestionSessionIds, {'s1'});
+      expect(hitl.pendingApprovalSessionIds, {'s9'});
+      hitl.onQuestionResolved('call-1');
+      expect(hitl.pendingQuestionSessionIds, isEmpty);
+    });
+  });
+
   group('PendingQuestion / PendingApproval 收敛', () {
     test('parses bridge userQuestions/requested payload', () {
       final q = PendingQuestion.from('s1', {
