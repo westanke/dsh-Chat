@@ -288,3 +288,7 @@ CI 构建没人用（理由见 ci.yml 头注释）；鸿蒙构建需 DevEco 工�
 - `node WebSocket 无 header` —— 探针要打 Authorization 头必须 require ws 包，内置全局 WebSocket 不认 headers。
 - `uitest inputText 是追加` —— 不清空会双拼（DSH1 报「配置文本无法识别」）。
 - `设备上无 sed -i` —— 报 `sed: no temp file`；改设备文件用 `hdc file send` + `hdc shell cp`。
+- `bindContentCover 与 bindSheet 同节点失效` —— 两个弹层修饰器挂同一节点时后者不弹；改用 Stack 内联 `if (open)` overlay + 遮罩。
+- `getRouter().back() 退应用` —— 本项目用 `@State route` 切页不是 Router 栈，back() 会退出应用；返回一律传回调给父组件。
+- `私有方法只定义没调用` —— ArkTS 不报未使用告警，`load()`/`ensureCommands()` 漏调用会静默卡「加载中…」/无补全；新组件挂载点自查 `aboutToAppear`。
+- `切权限不刷投影` —— permission 帧只改服务端投影、不产生 chat 事件，成功后必须 `reloadHistory()` 才能更新 chip。

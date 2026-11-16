@@ -30,6 +30,11 @@ export struct ModelSheet {
     return new DsColors(this.dark);
   }
 
+  /** 挂载即拉清单（缺此调用会永远停在「加载中…」）。 */
+  aboutToAppear(): void {
+    this.load();
+  }
+
   private sid(): string {
     const st: ChatStore | null = this.store;
     return st === null ? '' : (st.sessionId ?? '');

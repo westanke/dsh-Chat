@@ -123,5 +123,21 @@
   先清数据重装，要么发 DEL 清空。
 - `设备上无 sed -i` —— 鸿蒙设备 shell 的 `sed -i` 报 `sed: no temp file`。改设备文件
   （如 preferences）要 `hdc file send` 传新文件再 `hdc shell cp` 覆盖。
+- `bindContentCover 与 bindSheet 同节点失效` —— 同一节点同时挂 `bindSheet` +
+  `bindContentCover` 时，后者（bindContentCover）点了不弹。真机现象：ChatView 的 ⋮
+  溢出菜单 `menuOpen=true` 但界面毫无变化（`uitest` 树里也没有）。修法：改成 Stack 内联
+  叠加 —— `if (this.menuOpen) { 遮罩 Column().onClick(关闭) ; this.overflowMenu() }`，
+  同会话抽屉的写法；弹层本身用 `Blank()` 挤到底部或 `justifyContent` 定位。
+- `getRouter().back() 退应用` —— 本工程页面切换是 `Index.ets` 里 `@State route` 的条件
+  渲染（boot/connect/chat/settings），**没有 Router 栈**。`this.getUIContext().getRouter().back()`
+  在这种结构下会把整个应用退到桌面（真机现象：点设置页「‹」后露出别的 App）。返回一律
+  传回调：`onBack: () => { this.route = 'chat'; }`。
+- `私有方法只定义没调用` —— ArkTS 编译器**不报未使用私有方法**。`ModelSheet.load()` 无
+  `aboutToAppear` 调用 → 面板永远停在「加载中…」；`Composer.ensureCommands()` 无调用点 →
+  输入 `/` 永远没有补全候选。新写组件的 `load()/ensureXxx()` 必须确认有挂载点。
+- `切权限不刷投影` —— `permission` 帧只改服务端投影（`values.permissions.currentValue`），
+  **不产生 chat 事件**，所以客户端不会自动重渲染。`setPermissionIn` 成功后必须显式
+  `store.reloadHistory()`（同 `runCommandIn` 的收尾），否则 chip 永远停在旧档位。
+
 
 **阶段 4 已记偏差（2026-11-16）**：①@s 文件补全多根下钻/删除确认照搬；②设置页「字号跟随系统」开关与 Slider 鸿蒙版延后阶段 5（fontScale 真机定）；③诊断日志开关不移植（Dlog.ets hilog 直写不落文件）；④子会话历史页（subagent_history_page）与 subagentHistory REST 已有，入口延后阶段 5；⑤会话目录选择（session_location_sheet）延后阶段 5；⑥表格下载/展开、推挤抽屉动画、自绘品牌标延后。

@@ -93,5 +93,9 @@ export function setPermissionIn(store: ChatStore, name: string): Promise<void> {
   if (sid === null || sid === '') {
     return Promise.reject(new RequestException('NO_SESSION', '当前没有会话'));
   }
-  return store.api.setPermission(sid, name);
+  return store.api.setPermission(sid, name).then((): Promise<void> => {
+    // 切换权限只改服务端投影、不产生 chat 事件，必须主动重拉 history 才能更新
+    // values.permissions.currentValue（否则 chip 永远停在旧档位）。
+    return store.reloadHistory();
+  });
 }

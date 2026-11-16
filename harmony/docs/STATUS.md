@@ -156,3 +156,21 @@ Flex 链式 .alignItems 不存在（构造参数里传）。
 **验收**：发「1+1等于几？只回答数字」→ 用户气泡 + 助手 Markdown（reasoning 折叠块、正文、⧉/👍/🔊/⤴/⟳ 操作行）全渲染，进程稳定不退出；`npm --prefix harmony/test test` 179/179 全绿。
 
 **排障方法论**（写进 PORT-MAP §3 坑位索引，共 7 条）：真机 hilog 取不到应用域日志，protocol 层排障靠 `mock-bridge`（`ws` 包 + `handleProtocols: dsh-mobile-v1`）抓 App 实际帧、REST 直查 bridge 会话历史；`uitest inputText` 是追加语义；设备上无 `sed -i`。
+
+## 阶段 5 第二批：全功能冒烟修复（2026-11-16）
+
+真机逐项冒烟，发现并修掉七个功能缺口（全部装机复验）：
+
+1. **会话抽屉结构错位**（`components/SessionsDrawer.ets`）：早前脚本改文件留下残迹，`@Builder sessionRow` 里混进了 `Divider` + 「设置」Row，且标题 Row 的 `.onClick` 链挂到了设置行上 —— 界面上每个会话后面都多出一行「⚙️ 设置 ›」，标题行反而点不动。修法：设置行移出 `sessionRow`、放到 `build()` 的 List 之后（全抽屉唯一入口），修饰链归还标题 Row。
+2. **设置页返回退应用**（`pages/SettingsView.ets` + `pages/Index.ets`）：`getRouter().back()` 在 `@State route` 条件渲染结构下会退出整个 App。改成 `onBack` 回调，Index 里 `this.route = 'chat'`。
+3. **⋮ 溢出菜单不弹**（`pages/ChatView.ets`）：`bindSheet` 与 `bindContentCover` 挂在同一节点，后者不生效。改成 Stack 内联 `if (this.menuOpen)` 遮罩 + 菜单，走 `justifyContent(FlexAlign.Start)` 定位。
+4. **模型面板永远「加载中…」**（`components/ModelSheet.ets`）：`load()` 没有挂载点，补 `aboutToAppear()`。
+5. **命令补全不弹**（`components/Composer.ets`）：`ensureCommands()` 无调用点，`updatePanel()` 开头补一次（按会话懒加载，切会话失效）。
+6. **切权限档位不生效**（`core/ChatActions.ts` + `components/PermissionSheet.ets` + `components/Composer.ets`）：`permission` 帧只改服务端投影、不产生 chat 事件，客户端不会自己刷新。`setPermissionIn` 成功后链 `reloadHistory()`；PermissionSheet 成功后写 `this.current` 并把「权限已切换为「X」」经 `onDone` 传给 Composer 的 `permHint` 提示条。
+7. **交付文件卡缺失**（`components/MessageList.ets`）：import 了 `MdDocViewer` 却从未挂载，`role === 'files'` 也从无渲染分支。补 `fileCard(m)` builder（📄/📎 按 `isMarkdown(path)` 选，标题退回 `f.path`，描述透传）+ `.bindContentCover(this.docOpen, this.docViewer())` 站内查看 `.md`。
+
+**输入框对齐官方**（`components/Composer.ets`）：底部行改为「圆形 ＋」→「🛡 权限 ≤200px ⌄」→ 右侧 44×44 发送/停止圆键；占位文案改官方口径「发消息或创建任务，/ 调用指令，@ 文件或对话」。用户明确要求不做识图与模型选择入口，故不摆。
+
+**冒烟已验证**：主对话页（气泡/Markdown/操作行）、会话抽屉（分组+切会话）、设置页六分区、权限四档切换（chip 与面板 ✓ 同步）、📊会话统计、🧭运行轨迹（轮次/事件节点可展开）、🧠智能团队、✅待办任务、🎛️调整模型（六分组 + effort chips + 确认切换）、`/` 命令补全列表、发消息端到端（reasoning + 正文）。
+
+**测试**：`npm --prefix harmony/test test` 179/179；`setPermission` 用例补 `respondHistory` 应答（修复后多了一次重拉 history）。

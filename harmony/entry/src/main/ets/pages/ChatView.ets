@@ -89,6 +89,18 @@ export struct ChatView {
           }
         })
       }
+      // 溢出菜单：Stack 内联 overlay（bindContentCover 与 bindSheet 同挂一个节点
+      // 时不生效，2026-11-16 真机实证；遮罩点按关闭，同会话抽屉口径）。
+      if (this.menuOpen) {
+        Column()
+          .width('100%')
+          .height('100%')
+          .backgroundColor(this.c().drawerScrim)
+          .onClick(() => {
+            this.menuOpen = false;
+          })
+        this.overflowMenu()
+      }
     }
     .width('100%')
     .height('100%')
@@ -140,11 +152,6 @@ export struct ChatView {
         this.modelSheet = false;
       }
     })
-    .bindContentCover(this.menuOpen, this.overflowMenu(), {
-      onDisappear: (): void => {
-        this.menuOpen = false;
-      }
-    })
   }
 
   private sheetOpen(): boolean {
@@ -182,7 +189,6 @@ export struct ChatView {
   @Builder
   overflowMenu() {
     Column() {
-      Blank()
       Column({ space: 4 }) {
         this.menuItem('📊', '会话统计', (): void => {
           this.statsSheet = true;
@@ -210,9 +216,7 @@ export struct ChatView {
     .width('100%')
     .height('100%')
     .alignItems(HorizontalAlign.End)
-    .onClick(() => {
-      this.menuOpen = false;
-    })
+    .justifyContent(FlexAlign.Start)
   }
 
   @Builder

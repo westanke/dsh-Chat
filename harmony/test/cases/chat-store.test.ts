@@ -508,6 +508,9 @@ test('setPermission：当前有会话才发 permission 帧', async () => {
   assert.equal(sent['name'], 'workspace-write');
   ctx.socket.serverFrame({ kind: 'reply',
     data: { requestId: ctx.socket.lastRequestId(), result: { kind: 'ok' } } });
+  // 切换成功后会让 store 重拉 history（投影 values.permissions 才更新）。
+  await drain();
+  respondHistory(ctx.socket, []);
   await pSet;
   // 无会话：拒绝 NO_SESSION
   ctx.store.sessionId = null;

@@ -133,6 +133,32 @@ export struct SessionsDrawer {
       .layoutWeight(1)
       .scrollBar(BarState.Off)
       .width('100%')
+
+      // 底部唯一设置入口（安卓 sessions_drawer 同位置）。
+      Divider().color(this.c().borderL1).strokeWidth(1)
+
+      Row({ space: 8 }) {
+        Text('⚙️')
+          .fontSize(17)
+        Text('设置')
+          .fontSize(15)
+          .fontColor(this.c().labelPrimary)
+          .layoutWeight(1)
+        Text('›')
+          .fontSize(15)
+          .fontColor(this.c().labelTertiary)
+      }
+      .width('100%')
+      .height(44)
+      .padding({ left: 16, right: 12 })
+      .onClick(() => {
+        if (this.onClose !== null) {
+          this.onClose();
+        }
+        if (this.onOpenSettings !== null) {
+          this.onOpenSettings();
+        }
+      })
     }
     .width('78%')
     .height('100%')
@@ -159,31 +185,6 @@ export struct SessionsDrawer {
         .textOverflow({ overflow: TextOverflow.Ellipsis })
         .layoutWeight(1)
     }
-
-      Divider().color(this.c().borderL1).strokeWidth(1)
-
-      Row({ space: 8 }) {
-        Text('⚙️')
-          .fontSize(17)
-        Text('设置')
-          .fontSize(15)
-          .fontColor(this.c().labelPrimary)
-          .layoutWeight(1)
-        Text('›')
-          .fontSize(15)
-          .fontColor(this.c().labelTertiary)
-      }
-      .width('100%')
-      .height(44)
-      .padding({ left: 16, right: 12 })
-      .onClick(() => {
-        if (this.onClose !== null) {
-          this.onClose();
-        }
-        if (this.onOpenSettings !== null) {
-          this.onOpenSettings();
-        }
-      })
     .width('100%')
     .height(44)
     .padding({ left: 16, right: 12 })

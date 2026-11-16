@@ -49,6 +49,8 @@ export struct Composer {
   @State atDir: string = '';
   private atRoots: GatewayRoot[] = []; // 授权根缓存
   @State permSheetOpen: boolean = false;
+  /** 权限切换结果提示（成功/失败；点一下清除）。 */
+  @State permHint: string = '';
 
   private c(): DsColors {
     return new DsColors(this.dark);
@@ -97,6 +99,8 @@ export struct Composer {
   }
 
   private updatePanel(): void {
+    // 命令清单按会话懒加载（切会话失效）；缺此调用会永远没有补全候选。
+    this.ensureCommands();
     const slash = parseSlashDraft(this.draft);
     if (slash !== null && this.commands.commands.length > 0) {
       this.panel = 'cmd';
@@ -272,7 +276,7 @@ export struct Composer {
     PermissionSheet({
       store: this.store,
       onDone: (m: string): void => {
-        this.imageError = m;
+        this.permHint = m;
       },
     })
   }
@@ -288,6 +292,16 @@ export struct Composer {
           .maxLines(2)
           .width('100%')
           .padding({ left: DsSpacing.screenPad, right: DsSpacing.screenPad, bottom: 6 })
+      }
+      if (this.permHint.length > 0) {
+        Text(this.permHint)
+          .fontSize(13)
+          .fontColor(this.c().labelSecondary)
+          .width('100%')
+          .padding({ left: DsSpacing.screenPad, right: DsSpacing.screenPad, bottom: 6 })
+          .onClick(() => {
+            this.permHint = '';
+          })
       }
       if (this.imageError.length > 0) {
         Text(this.imageError)
@@ -314,7 +328,7 @@ export struct Composer {
           onRetry: (): void => this.retryAt(),
         })
       }
-      TextArea({ text: this.draft, placeholder: '给 DSH 发送消息',
+      TextArea({ text: this.draft, placeholder: '发消息或创建任务，/ 调用指令，@ 文件或对话',
         controller: new TextAreaController() })
         .placeholderFont(DsTypography.inputPlaceholder)
         .fontColor(this.c().labelPrimary)
@@ -353,38 +367,45 @@ export struct Composer {
         .backgroundColor(this.c().chipSelectedBg)
         .margin({ top: 6 })
       }
+      // 底部行对齐官方输入框：左「＋」→ 权限 chip（盾牌 + 展开箭头），右发/停圆键。
       Row({ space: 8 }) {
-        Text('🔒 ' + this.permissionLabel())
-          .fontSize(12)
-          .fontColor(this.c().chipSelectedFg)
-          .padding({ left: 10, right: 10, top: 6, bottom: 6 })
-          .borderRadius(DsSpacing.chipRadius)
-          .backgroundColor(this.c().chipSelectedBg)
+        Text('＋')
+          .fontSize(20)
+          .fontColor(this.hasImage() ? this.c().onBrand : this.c().labelPrimary)
+          .width(DsSpacing.composerButtonSize)
+          .height(DsSpacing.composerButtonSize)
+          .borderRadius(DsSpacing.composerButtonSize / 2)
+          .backgroundColor(this.hasImage() ? this.c().brand : this.c().bgLayer1)
+          .border({ width: 1, color: this.c().borderL1 })
+          .textAlign(TextAlign.Center)
           .onClick(() => {
-            this.permSheetOpen = true;
+            this.pickImage();
           })
-        Blank()
-        if (!this.streaming()) {
-          Text('＋')
-            .fontSize(18)
-            .fontColor(this.hasImage() ? this.c().onBrand : this.c().labelSecondary)
-            .width(DsSpacing.composerButtonSize)
-            .height(DsSpacing.composerButtonSize)
-            .borderRadius(12)
-            .backgroundColor(this.hasImage() ? this.c().brand : Color.Transparent)
-            .border({ width: 1.4, color: this.c().borderL2 })
-            .textAlign(TextAlign.Center)
-            .onClick(() => {
-              this.pickImage();
-            })
+        Row({ space: 4 }) {
+          Text('🛡')
+            .fontSize(13)
+            .fontColor(this.c().labelSecondary)
+          Text(this.permissionLabel())
+            .fontSize(13)
+            .fontColor(this.c().labelSecondary)
+            .maxLines(1)
+            .textOverflow({ overflow: TextOverflow.Ellipsis })
+          Text('⌄')
+            .fontSize(13)
+            .fontColor(this.c().labelSecondary)
         }
+        .constraintSize({ maxWidth: 200 })
+        .onClick(() => {
+          this.permSheetOpen = true;
+        })
+        Blank()
         if (this.streaming()) {
-          Button('停止', { type: ButtonType.Circle })
+          Button('■', { type: ButtonType.Circle })
             .width(44)
             .height(44)
             .backgroundColor(this.c().brand)
             .fontColor(this.c().onBrand)
-            .fontSize(13)
+            .fontSize(15)
             .onClick(() => {
               this.stop();
             })

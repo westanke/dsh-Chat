@@ -171,7 +171,9 @@ struct Index {
       }
       if (this.route === 'settings') {
         SettingsView({
-          store: this.chatStore(), onDisconnect: (): void => {
+          store: this.chatStore(), onBack: (): void => {
+            this.route = 'chat';
+          }, onDisconnect: (): void => {
             // 清凭证 + 断开 + 回连接页（安卓 settings 断开口径）。
             PrefsStore.removeKey('dsh.credentials');
             if (this.gateway !== null) {

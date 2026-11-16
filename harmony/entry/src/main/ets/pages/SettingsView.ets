@@ -34,6 +34,8 @@ function localVersionParts(name: string): number[] {
 export struct SettingsView {
   store: ChatStore | null = null;
   onDisconnect: (() => void) | null = null;
+  /** 返回对话页（Index 用 @State route 切页，不是 Router 栈，不能 back()）。 */
+  onBack: (() => void) | null = null;
   @StorageProp('dshDark') dark: boolean = false;
   @StorageProp('dshThemeMode') themeMode: string = 'system';
   @StorageProp('dshBusySend') busySend: string = 'queue';
@@ -175,7 +177,9 @@ export struct SettingsView {
         .height(DsSpacing.topBarHeight)
         .textAlign(TextAlign.Center)
         .onClick(() => {
-          this.getUIContext().getRouter().back();
+          if (this.onBack !== null) {
+            this.onBack();
+          }
         })
       Text('设置')
         .fontSize(16)

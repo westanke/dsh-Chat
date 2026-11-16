@@ -7,7 +7,7 @@
  */
 
 import { ChatStore } from '../core/ChatStore';
-import { ChatMessage } from '../core/HistoryPage';
+import { ChatMessage, DeliverableFile } from '../core/HistoryPage';
 import { DsColors, DsTypography, DsSpacing } from '../ui/theme';
 import { MdView } from './md/MdView';
 import { ImageTile } from './ImageTile';
@@ -66,6 +66,8 @@ export struct MessageList {
             this.errorBar(m);
           } else if (m.role === 'command') {
             this.commandCard(m);
+          } else if (m.role === 'files') {
+            this.fileCard(m);
           } else {
             this.assistantBlock(m);
           }
@@ -80,6 +82,65 @@ export struct MessageList {
     .onAppear(() => {
       this.jumpToBottom(false);
     })
+    .bindContentCover(this.docOpen, this.docViewer(), {
+      modalTransition: ModalTransition.DEFAULT,
+      onDisappear: (): void => {
+        this.docOpen = false;
+      }
+    })
+  }
+
+  @Builder
+  docViewer() {
+    MdDocViewer({
+      store: this.store, absolutePath: this.docPath, title: this.docTitle,
+      onBack: (): void => {
+        this.docOpen = false;
+      },
+    })
+  }
+
+  /** 交付文件卡（安卓 _DeliverableStrip 口径）：.md 走站内查看器，其余交系统。 */
+  @Builder
+  fileCard(m: ChatMessage) {
+    Column({ space: 6 }) {
+      ForEach(m.files, (f: DeliverableFile) => {
+        Row({ space: 8 }) {
+          Text(this.isMarkdown(f.path) ? '📄' : '📎')
+            .fontSize(15)
+          Column({ space: 2 }) {
+            Text(f.name.length > 0 ? f.name : f.path)
+              .fontSize(DsTypography.small.size)
+              .fontColor(this.c().labelPrimary)
+              .maxLines(1)
+              .textOverflow({ overflow: TextOverflow.Ellipsis })
+              .width('100%')
+            if (f.description !== null) {
+              Text(f.description as string)
+                .fontSize(DsTypography.caption.size)
+                .fontColor(this.c().labelTertiary)
+                .maxLines(1)
+                .textOverflow({ overflow: TextOverflow.Ellipsis })
+                .width('100%')
+            }
+          }
+          .alignItems(HorizontalAlign.Start)
+          .layoutWeight(1)
+        }
+        .width('100%')
+        .padding({ left: 12, right: 12, top: 8, bottom: 8 })
+        .borderRadius(10)
+        .backgroundColor(this.c().bgLayer1)
+        .onClick(() => {
+          if (this.isMarkdown(f.path)) {
+            this.docPath = f.path;
+            this.docTitle = f.name.length > 0 ? f.name : f.path;
+            this.docOpen = true;
+          }
+        })
+      }, (f: DeliverableFile) => f.path)
+    }
+    .width('100%')
   }
 
   /** version 变化 → 重抄 store 派生数据（@Prop @Watch 回调）。 */

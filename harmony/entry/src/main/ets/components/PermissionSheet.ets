@@ -78,7 +78,17 @@ export struct PermissionSheet {
     if (st === null) {
       return;
     }
-    st.setPermission(v).catch((): void => {
+    let label: string = v;
+    for (const o of this.options) {
+      if (o.value === v) {
+        label = o.label;
+        break;
+      }
+    }
+    st.setPermission(v).then((): void => {
+      this.current = v;
+      this.onDone('权限已切换为「' + label + '」');
+    }).catch((): void => {
       this.onDone('权限切换失败');
     });
   }
