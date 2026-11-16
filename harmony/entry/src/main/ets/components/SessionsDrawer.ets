@@ -200,7 +200,7 @@ export struct SessionsDrawer {
         }
       })
     }
-    .width('78%')
+    .width('80%')
     .height('100%')
     .backgroundColor(this.c().bgLayer1)
     .alignItems(HorizontalAlign.Start)

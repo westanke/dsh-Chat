@@ -211,3 +211,5 @@ Flex 链式 .alignItems 不存在（构造参数里传）。
 **测试**：`npm --prefix harmony/test test` **181/181 全绿**，新增用例「refreshPendingMarks：REST 探测挂起项 → pendingMarkOf 返 question/approval」（覆盖三会话三分支 + 实时挂起表优先；**FakeHttp 是队列式应答，questions 先全发、approvals 在 questions 回来后才发，应答顺序必须按此排**）。
 
 **排障手法沉淀**：真机没有可用应用日志，验证「REST 探测是否跑通」的办法是把计数拼进稳定渲染的 Text（曾把副标题临时改成 `S[ok42/42:1]` 再 `uitest dumpLayout` 读回），确证后清理。
+
+**推挤式抽屉**：真机截图发现抽屉是覆盖式、右侧漏出聊天页 composer 一角，与官方口径不符。按 `docs/design-tokens.md` §4.2 改成推挤式——`pages/ChatView.ets` 把 `chatScaffold()` 包进 `Column().width('100%').height('100%').translate({ x: this.drawerOpen ? '80%' : '0%' }).animation({ duration: 240, curve: Curve.EaseOut })`（百分比位移，不依赖 screenW）；`components/SessionsDrawer.ets` 宽度 `78%` → `80%` 对齐官方 `drawerWidth = 288dp / 360dp`。真机截图 `harmony/build/smoke/drawer4.jpeg` 与官方 `ref/verify2-drawer-push.png` 形态一致（官方同样露出输入框一条）。抽屉点遮罩关闭、点会话行切换均正常。

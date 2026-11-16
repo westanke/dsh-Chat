@@ -296,6 +296,7 @@ CI 构建没人用（理由见 ci.yml 头注释）；鸿蒙构建需 DevEco 工�
 - `键盘遮输入框` —— 默认 OFFSET 避让会整页上移压住 composer；`onWindowStageCreate` 的 `loadContent` 回调里 `getMainWindowSync().getUIContext().setKeyboardAvoidMode(KeyboardAvoidMode.RESIZE)`。
 - `连接历史不落盘` —— `enterWith` 只存 credentials 不存 hosts，`reloadHosts()` 永远空；按安卓口径补 `host.id = stableId(baseUrl)` + `persistHosts(upsertHost(...))`。
 - `权限显示英文档位` —— 投影 `currentValue` 是 `workspace-write` 这类 ASCII 名，界面必须过 `permissionLabelOf()` 转中文（仅可查看/工作区读写/完全权限/自动审查）。
+- `覆盖式抽屉漏边` —— 官方抽屉是推挤式（聊天页整体右移一抽屉宽），覆盖式会在抽屉右缘漏出输入框；`translate({x: open ? '80%' : '0%'})` 用百分比别用像素。
 - `发送键白底看不见` —— 禁用态不能用 `inputFill`（浅色主题等于白底白箭头），走 `sendDisabledBg/sendDisabledFg` 浅灰底 + 中灰箭头。
 - `会话列表待回答标记靠 REST` —— bridge 的 sessions 列表只下发 `pendingInteraction:'approval'`（挂起审批），**挂起提问不发**；非当前会话的 HITL 帧也不补推。标记必须靠 `GET /chat/sessions/{sid}/questions` + `/approvals` 逐会话探测，结果抄进 `@State` 数组（Map 不触发 ArkUI）。
 - `GatewayApi 忘注入 HTTP transport` —— `new GatewayApi(gateway, null)` 会让所有 REST 功能（附件/图片交接/根列表/文件全文/挂起项）报 `NO_TRANSPORT`；两条连接路径（ConnectView 与 Index.autoConnect）都必须传 `new HttpTransportImpl()`。

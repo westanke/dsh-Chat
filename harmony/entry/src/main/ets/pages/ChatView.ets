@@ -76,7 +76,16 @@ export struct ChatView {
 
   build() {
     Stack() {
-      this.chatScaffold()
+      // 推挤式抽屉（官方口径，docs/design-tokens.md §4.2）：抽屉打开时聊天页整体
+      // 右移一个抽屉宽度，页面右缘与抽屉右缘齐平停到屏外；浅色无灰幕，深色淡遮罩。
+      // 覆盖式会让抽屉右缘漏出输入框一角（真机截图实证），故按官方做推挤。
+      Column() {
+        this.chatScaffold()
+      }
+      .width('100%')
+      .height('100%')
+      .translate({ x: this.drawerOpen ? '80%' : '0%' })
+      .animation({ duration: 240, curve: Curve.EaseOut })
       if (this.drawerOpen) {
         // 遮罩（浅色官方无灰幕，深色淡遮罩；点按关闭）。
         Column()

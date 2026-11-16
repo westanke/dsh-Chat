@@ -177,6 +177,12 @@
   浅色界面上几乎不可见（用户反馈）。改用 token `sendDisabledBg`（亮 `#EBEEF2` / 暗
   `c800`）+ `sendDisabledFg`（亮 `c500` / 暗 `c400`）；可用态走实心 `brand` + `onBrand`
   白箭头、字号 20 加粗。
+- `覆盖式抽屉漏边` —— 官方是**推挤式**（`docs/design-tokens.md` §4.2、`app/lib/design/tokens.dart:329`
+  `drawerWidth = 288.0` / `:336` `drawerPageShift = drawerWidth`）：抽屉滑入时聊天页整体右移
+  一个抽屉宽度，右缘与抽屉右缘对齐停到屏外（官方截图仍露输入框一条）。用
+  `Column(){ this.chatScaffold() }.translate({ x: this.drawerOpen ? '80%' : '0%' })
+  .animation({ duration: 240, curve: Curve.EaseOut })`——**用百分比不用像素**，免依赖
+  screenW；`SessionsDrawer` 宽度同步改 `.width('80%')`。
 - `切权限不刷投影` —— `permission` 帧只改服务端投影（`values.permissions.currentValue`），
   **不产生 chat 事件**，所以客户端不会自动重渲染。`setPermissionIn` 成功后必须显式
   `store.reloadHistory()`（同 `runCommandIn` 的收尾），否则 chip 永远停在旧档位。
