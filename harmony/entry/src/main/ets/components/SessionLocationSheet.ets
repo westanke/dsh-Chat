@@ -177,12 +177,13 @@ export struct SessionLocationSheet {
       .layoutWeight(1)
       if (picked) {
         Text('✓')
-          .fontSize(15)
+          .fontSize(16)
           .fontColor(this.c().brand)
       }
     }
     .width('100%')
     .padding({ left: DsSpacing.screenPad, right: DsSpacing.screenPad, top: 12, bottom: 12 })
+    .accessibilityText('选择此目录')
     .onClick(onTap)
   }
 
@@ -269,6 +270,7 @@ export struct SessionLocationSheet {
         .fontColor(this.c().brand)
         .width(36)
         .textAlign(TextAlign.Center)
+        .accessibilityText('返回上级目录')
         .onClick((): void => {
           if (this.browsePath === '') {
             this.browsing = false;
@@ -292,6 +294,7 @@ export struct SessionLocationSheet {
       }
       .alignItems(HorizontalAlign.Start)
       .layoutWeight(1)
+      .accessibilityText(this.browseRootLabel === '' ? '选择根目录' : '切换根目录：' + this.browseRootLabel)
       .onClick((): void => {
         this.switchRoot();
       })
@@ -299,6 +302,7 @@ export struct SessionLocationSheet {
         .fontSize(DsTypography.small.size)
         .fontColor(this.c().brand)
         .padding({ left: 10, right: 10, top: 6, bottom: 6 })
+        .accessibilityText('用此目录')
         .onClick((): void => {
           this.pick(new SessionLocation(this.browseRootId, this.browsePath,
             locationLabel(this.browsePath)));
@@ -322,6 +326,7 @@ export struct SessionLocationSheet {
         .fontColor(this.c().danger)
         .width('100%')
         .padding(16)
+        .accessibilityText('读取目录失败，点按重试')
         .onClick((): void => {
           this.browse(this.browsePath);
         })
@@ -335,7 +340,7 @@ export struct SessionLocationSheet {
       ForEach(this.entriesView, (e: GatewayEntry) => {
         Row({ space: 10 }) {
           Text('📁')
-            .fontSize(15)
+            .fontSize(16)
           Text(e.name)
             .fontSize(DsTypography.base.size)
             .fontColor(this.c().labelPrimary)
@@ -343,11 +348,12 @@ export struct SessionLocationSheet {
             .textOverflow({ overflow: TextOverflow.Ellipsis })
             .layoutWeight(1)
           Text('›')
-            .fontSize(15)
+            .fontSize(16)
             .fontColor(this.c().labelTertiary)
         }
         .width('100%')
         .padding({ left: DsSpacing.screenPad, right: DsSpacing.screenPad, top: 12, bottom: 12 })
+        .accessibilityText('进入 ' + e.name)
         .onClick((): void => {
           this.browse(e.path);
         })

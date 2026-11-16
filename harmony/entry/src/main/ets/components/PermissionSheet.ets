@@ -96,7 +96,7 @@ export struct PermissionSheet {
   build() {
     Column() {
       Text('会话权限档位')
-        .fontSize(15)
+        .fontSize(16)
         .fontWeight(FontWeight.Medium)
         .fontColor(this.c().labelPrimary)
         .padding({ left: 16, right: 16, top: 14, bottom: 8 })
@@ -120,7 +120,8 @@ export struct PermissionSheet {
           .layoutWeight(1)
         }
         .width('100%')
-        .padding({ left: 16, right: 16, top: 11, bottom: 11 })
+        .padding({ left: 16, right: 16, top: 12, bottom: 12 })
+        .accessibilityText(o.label + (o.descriptionLabel !== null ? '：' + o.descriptionLabel : ''))
         .onClick(() => {
           this.pick(o.value);
         })

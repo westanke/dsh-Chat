@@ -48,6 +48,7 @@ export struct ToolBlock {
       }
       .height(DsSpacing.processRowHeight)
       .width('100%')
+      .accessibilityText(this.phraseText + (this.expanded ? '，收起' : '，展开'))
       .onClick(() => {
         if (this.group.length > 0) {
           this.expanded = !this.expanded;
@@ -76,7 +77,7 @@ export struct ToolBlock {
         Text(t.failed ? '✗' : '✓')
           .fontSize(DsSpacing.processIconSize)
           .fontColor(t.failed ? this.c().labelTertiary : this.c().labelSecondary)
-          .margin({ right: DsSpacing.processIconGap, top: 3 })
+          .margin({ right: DsSpacing.processIconGap, top: 4 })
         Column() {
           Text(t.phrases.join('，'))
             .fontSize(DsTypography.small.size)
@@ -99,6 +100,7 @@ export struct ToolBlock {
       }
       .alignItems(VerticalAlign.Top)
       .width('100%')
+      .accessibilityText('展开详情')
       .onClick(() => {
         if (this.hasDetail(t)) {
           this.detailIdx = this.detailIdx === idx ? -1 : idx;
@@ -111,7 +113,7 @@ export struct ToolBlock {
     }
     .width('100%')
     .alignItems(HorizontalAlign.Start)
-    .padding({ top: 3, bottom: 3 })
+    .padding({ top: 4, bottom: 4 })
   }
 
   private hasDetail(t: ToolCallInfo): boolean {

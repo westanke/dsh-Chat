@@ -121,12 +121,13 @@ export struct ModelSheet {
           .fontColor(this.c().labelSecondary)
         Blank()
         Text(this.expanded.indexOf(g.id) >= 0 ? '⌃' : '⌄')
-          .fontSize(15)
+          .fontSize(16)
           .fontColor(this.c().labelTertiary)
       }
       .width('100%')
       .padding({ left: DsSpacing.settingsCardPadH, right: DsSpacing.settingsCardPadH,
         top: 6, bottom: 6 })
+      .accessibilityText(g.name + (this.expanded.indexOf(g.id) >= 0 ? '，收起' : '，展开'))
       .onClick(() => {
         this.toggleExpanded(g.id);
       })
@@ -171,7 +172,8 @@ export struct ModelSheet {
       }
       .width('100%')
       .padding({ left: DsSpacing.settingsCardPadH, right: DsSpacing.settingsCardPadH,
-        top: 9, bottom: m.reasoning === null ? 9 : 2 })
+        top: 10, bottom: m.reasoning === null ? 9 : 2 })
+      .accessibilityText(m.name + (this.isPending(g, m) ? '，当前选择' : ''))
       .onClick(() => {
         this.pick(g, m, m.reasoning === null ? '' : (m.reasoning.defaultEffort ?? ''));
       })
@@ -188,6 +190,7 @@ export struct ModelSheet {
               .borderRadius(DsSpacing.chipRadius)
               .backgroundColor(this.isPending(g, m) && this.pendingEffort === e.id
                 ? this.c().chipSelectedBg : this.c().inputFill)
+              .accessibilityText(reasoningEffortLabel(e.id) + (this.isPending(g, m) && this.pendingEffort === e.id ? '，当前选择' : ''))
               .onClick(() => {
                 this.pick(g, m, e.id);
               })
@@ -253,6 +256,7 @@ export struct ModelSheet {
         .fontSize(DsTypography.baseStrong.size)
         .enabled(this.pendingProvider.length > 0 && this.pendingModel.length > 0)
         .margin(DsSpacing.settingsCardPadH)
+        .accessibilityText('确认切换模型')
         .onClick(() => {
           this.confirm();
         })

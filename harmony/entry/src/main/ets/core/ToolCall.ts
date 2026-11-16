@@ -214,3 +214,70 @@ export function extractToolCalls(content: Object | null): RawToolCall[] {
   }
   return out;
 }
+
+/**
+ * 耗时展示（安卓 process_group.dart `_duration()` 同口径）：
+ * <1s 用 ms，<1min 用 s（一位小数），否则 m+s。负值/空值不显示（时钟倒退）。
+ */
+export function formatDuration(ms: number | null): string | null {
+  if (ms === null || ms < 0) {
+    return null;
+  }
+  if (ms < 1000) {
+    return ms.toString() + 'ms';
+  }
+  if (ms < 60000) {
+    return (ms / 1000).toFixed(1) + 's';
+  }
+  const m: number = Math.floor(ms / 60000);
+  const sec: number = Math.floor((ms % 60000) / 1000);
+  return m.toString() + 'm' + sec.toString() + 's';
+}
+
+/**
+ * bash 命令原文：name 为 bash / tools.bash 时从 arguments 里取 command 字段，
+ * 详情里按 BASH 代码块渲染（安卓 `_bashCommand()` 同口径）。
+ */
+export function bashCommandOf(name: string, rawArguments: string | null): string | null {
+  if (name !== 'bash' && name !== 'tools.bash') {
+    return null;
+  }
+  if (rawArguments === null || rawArguments.trim() === '') {
+    return null;
+  }
+  const parsed: JsonMap | null = JsonAccess.asMap(JsonAccess.parse(rawArguments));
+  if (parsed === null) {
+    return null;
+  }
+  const cmd: string | null = JsonAccess.str(parsed, 'command');
+  if (cmd === null || cmd.trim() === '') {
+    return null;
+  }
+  return cmd;
+}
+
+/**
+ * 参数 JSON 美化：逐行 `k: v`（值超 200 字截断）；非对象/解析失败返回原串。
+ * 安卓 `_prettyArgs()` 同口径。
+ */
+export function prettyArguments(rawArguments: string | null): string | null {
+  if (rawArguments === null || rawArguments.trim() === '') {
+    return null;
+  }
+  const parsed: Object | null = JsonAccess.parse(rawArguments);
+  const map: JsonMap | null = JsonAccess.asMap(parsed);
+  if (map === null) {
+    return rawArguments;
+  }
+  const out: string[] = [];
+  const keys: string[] = Object.keys(map);
+  for (const k of keys) {
+    const v: Object = map[k];
+    let text: string = typeof v === 'string' ? (v as string) : JSON.stringify(v);
+    if (text.length > 200) {
+      text = text.substring(0, 200) + '…';
+    }
+    out.push(k + ': ' + text);
+  }
+  return out.length === 0 ? null : out.join('\n');
+}

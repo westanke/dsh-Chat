@@ -8,12 +8,15 @@
 
 import { ChatStore } from '../core/ChatStore';
 import { ChatMessage, DeliverableFile } from '../core/HistoryPage';
+import { ToolCallInfo, formatDuration, bashCommandOf, prettyArguments } from '../core/ToolCall';
 import { DsColors, DsTypography, DsSpacing } from '../ui/theme';
 import { MdView } from './md/MdView';
 import { ImageTile } from './ImageTile';
 import { MessageActions } from './MessageActions';
 import { DsImageRef, imageRefsOf, handoffRefOf } from '../core/ImageRef';
 import { MdDocViewer } from '../pages/MdDocViewer';
+import { ThinkBlock } from './ThinkBlock';
+import { ProcessGroup } from './ProcessGroup';
 
 @Component
 export struct MessageList {
@@ -33,6 +36,11 @@ export struct MessageList {
   /** 正在翻页（按钮换 spinner）。 */
   @State loadingOlder: boolean = false;
   private scroller: Scroller = new Scroller();
+  /** 当前首个可见项下标（onScrollIndex 维护），翻页后据此把视口锚回原内容。 */
+  private firstIdx: number = 0;
+  /** 翻页瞬间的锚点快照：首个可见下标 + 当时的消息条数。 */
+  private anchorIdx: number = -1;
+  private anchorLen: number = 0;
 
   private c(): DsColors {
     return new DsColors(this.dark);
@@ -84,6 +92,7 @@ export struct MessageList {
           .width('100%')
           .justifyContent(FlexAlign.Center)
           .padding({ top: 8, bottom: 8 })
+          .accessibilityText('加载更早消息')
           .onClick((): void => {
             this.loadOlder();
           })
@@ -99,17 +108,25 @@ export struct MessageList {
             this.commandCard(m);
           } else if (m.role === 'files') {
             this.fileCard(m);
+          } else if (m.isProcess) {
+            ProcessGroup({ group: m });
           } else {
             this.assistantBlock(m);
           }
         }
-      }, (m: ChatMessage, idx: number) => `${m.seq}-${idx}-${m.text.length}`)
+      // key 里**不能**带 index：历史翻页会把旧消息插到数组前部，index 全体后移，
+      // 带 index 的 key 全变 → ArkUI 判定整列重建 → 滚动位置重置（真机现象：
+      // 点「加载更早消息」后直接跳回最新消息）。用 seq + 文本长度这类内容稳定值。
+      }, (m: ChatMessage) => `${m.role}-${m.seq}-${m.text.length}`)
     }
     .width('100%')
     .layoutWeight(1)
     .padding({ left: DsSpacing.screenPad, right: DsSpacing.contentPadRight,
       top: 12, bottom: DsSpacing.msgPad })
     .scrollBar(BarState.Off)
+    .onScrollIndex((first: number): void => {
+      this.firstIdx = first;
+    })
     .onAppear(() => {
       this.jumpToBottom(false);
     })
@@ -138,7 +155,7 @@ export struct MessageList {
       ForEach(m.files, (f: DeliverableFile) => {
         Row({ space: 8 }) {
           Text(this.isMarkdown(f.path) ? '📄' : '📎')
-            .fontSize(15)
+            .fontSize(16)
           Column({ space: 2 }) {
             Text(f.name.length > 0 ? f.name : f.path)
               .fontSize(DsTypography.small.size)
@@ -162,6 +179,7 @@ export struct MessageList {
         .padding({ left: 12, right: 12, top: 8, bottom: 8 })
         .borderRadius(10)
         .backgroundColor(this.c().bgLayer1)
+        .accessibilityText(f.name + '，文件：' + f.path)
         .onClick(() => {
           if (this.isMarkdown(f.path)) {
             this.docPath = f.path;
@@ -181,9 +199,23 @@ export struct MessageList {
     this.hasMore = st !== null && st.historyHasMore;
     this.loadingOlder = st !== null && st.loadingOlder;
     if (st !== null && st.consumeHistoryPageJustLoaded()) {
-      // 翻页 prepend：用户意图是往上读旧内容，不是贴底。ArkUI 没有 Flutter
-      // prepend 保持 pixels 的语义，这里消费掉标志（不跳底），由 List 自身
-      // 维护的滚动锚点停在原内容上。
+      // 翻页 prepend：用户意图是往上读旧内容，既不能跳底、也不该被顶到最早一条。
+      // ArkUI 没有 Flutter「prepend 保持 pixels」的语义，只能自己补偿：
+      // 记下点击瞬间的首个可见下标，翻页后把同一条消息重新滚回同一位置。
+      const added: number = this.anchorIdx >= 0 ? this.msgs.length - this.anchorLen : 0;
+      if (this.anchorIdx >= 0 && added > 0) {
+        const target: number = this.anchorIdx + added;
+        this.anchorIdx = -1;
+        setTimeout((): void => {
+          try {
+            this.scroller.scrollToIndex(target);
+          } catch (e) {
+            // 未挂载/索引越界时忽略：宁可不动也别跳底。
+          }
+        }, 0);
+      } else {
+        this.anchorIdx = -1;
+      }
       return;
     }
     // 新消息/流式增量到达后贴底（等一帧让 List 先按新数据布局）。
@@ -198,7 +230,11 @@ export struct MessageList {
     if (st === null || this.loadingOlder) {
       return;
     }
+    // 点击瞬间快照锚点（必须在 loadOlder 触发 changed() 之前取）。
+    this.anchorIdx = this.firstIdx;
+    this.anchorLen = this.msgs.length;
     st.loadOlder().catch((): void => {
+      this.anchorIdx = -1;
       // store 已把 RequestException 转成 lastError 并 changed()，这里吞掉避免
       // 未处理的 Promise 拒绝刷屏。
     });
@@ -217,7 +253,7 @@ export struct MessageList {
   commandCard(m: ChatMessage) {
     Row({ space: 8 }) {
       Text('⌨')
-        .fontSize(15)
+        .fontSize(16)
         .fontColor(m.text.includes('\u2717') ? this.c().danger : this.c().chipSelectedFg)
         .margin({ top: 2 })
       Column({ space: 2 }) {
@@ -300,22 +336,8 @@ export struct MessageList {
   @Builder
   assistantBlock(m: ChatMessage) {
     Column() {
-      if (m.toolCalls.length > 0) {
-        Text(m.phraseText)
-          .fontSize(13)
-          .fontColor(this.c().labelTertiary)
-          .maxLines(1)
-          .textOverflow({ overflow: TextOverflow.Ellipsis })
-          .width('100%')
-          .padding({ top: 2, bottom: 4 })
-      }
       if (m.reasoning !== '') {
-        Text(m.reasoning)
-          .fontSize(14)
-          .fontColor(this.c().labelTertiary)
-          .lineHeight(20)
-          .width('100%')
-          .padding({ bottom: 6 })
+        ThinkBlock({ text: m.reasoning, streaming: m.streaming })
       }
       if (m.text === '') {
         Text(' ')

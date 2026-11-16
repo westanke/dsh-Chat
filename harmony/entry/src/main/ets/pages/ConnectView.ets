@@ -263,16 +263,17 @@ export struct ConnectView {
                     .fontWeight(FontWeight.Medium)
                     .fontColor(this.c().labelPrimary)
                   Text(host.baseUrl)
-                    .fontSize(13)
+                    .fontSize(12)
                     .fontColor(this.c().labelSecondary)
                 }
                 .alignItems(HorizontalAlign.Start)
                 .layoutWeight(1)
 
                 Text('删除')
-                  .fontSize(13)
+                  .fontSize(12)
                   .fontColor(this.c().danger)
                   .padding({ left: 12, right: 4, top: 8, bottom: 8 })
+                  .accessibilityText('删除历史主机')
                   .onClick((): void => {
                     this.deleteHost(host);
                   })
@@ -282,6 +283,7 @@ export struct ConnectView {
               .borderRadius(12)
               .backgroundColor(this.c().settingsField)
               .border({ width: 1, color: this.c().borderL2 })
+              .accessibilityText('删除历史主机')
               .onClick((): void => {
                 this.connectHost(host);
               })
@@ -295,12 +297,13 @@ export struct ConnectView {
       if (this.error.length > 0) {
         Column({ space: 6 }) {
           Text(this.error)
-            .fontSize(13)
+            .fontSize(12)
             .fontColor(this.c().danger)
           if (this.failedHostId.length > 0) {
             Text('删除这条失效记录')
-              .fontSize(13)
+              .fontSize(12)
               .fontColor(this.c().link)
+              .accessibilityText('删除这条失效记录')
               .onClick((): void => {
                 let target: DshHost | null = null;
                 for (const h of this.hosts) {
@@ -326,8 +329,9 @@ export struct ConnectView {
           .fontColor(this.c().labelSecondary)
         Blank()
         Text(this.importOpen ? '收起' : '展开')
-          .fontSize(13)
+          .fontSize(12)
           .fontColor(this.c().link)
+          .accessibilityText(this.importOpen ? '收起 DSH1 导入' : '展开 DSH1 导入')
           .onClick((): void => {
             this.importOpen = !this.importOpen;
           })
@@ -348,12 +352,13 @@ export struct ConnectView {
             this.importText = value;
           })
         Button('导入并连接')
-          .fontSize(15)
+          .fontSize(16)
           .fontColor(this.c().onBrand)
           .backgroundColor(this.c().brand)
           .borderRadius(12)
           .width('100%')
           .enabled(!this.busy)
+          .accessibilityText(this.busy ? '导入中' : '导入并连接')
           .onClick((): void => {
             this.importConfig();
           })
@@ -395,6 +400,7 @@ export struct ConnectView {
         .width('100%')
         .height(46)
         .enabled(!this.busy)
+        .accessibilityText(this.busy ? '连接中' : '配对并连接')
         .onClick((): void => {
           this.pairAndConnect();
         })

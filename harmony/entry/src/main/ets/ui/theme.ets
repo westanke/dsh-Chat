@@ -47,6 +47,12 @@ export class DsPalette {
   static readonly synComment: string = '#A0A1A7';
   static readonly synPlain: string = '#383A42';
   static readonly codeTextDark: string = '#E3EAF2';
+  // 暗色语法高亮（官方 App 深色实测；亮色那套直接复用 synKeyword…synPlain）。
+  static readonly synDarkKeyword: string = '#CC99CD';
+  static readonly synDarkString: string = '#7EC699';
+  static readonly synDarkNumber: string = '#7EC699';
+  static readonly synDarkComment: string = '#999999';
+  static readonly synDarkPlain: string = '#D4D4D4';
   // App 实测 blockquote 竖线 / 表格边框
   static readonly quoteBarLight: string = '#E5E5E5';
   static readonly tableBorderLight: string = '#DCDCDC';
@@ -242,10 +248,11 @@ export class DsTypography {
   static readonly small: Font = { size: 14, weight: FontWeight.Normal };
   static readonly smallStrong: Font = { size: 14, weight: FontWeight.Medium };
   static readonly inlineCode: Font = { size: 14, weight: FontWeight.Normal };
-  static readonly codeBlock: Font = { size: 13, weight: FontWeight.Normal };
-  static readonly codeBlockLabel: Font = { size: 13, weight: FontWeight.Normal };
-  static readonly table: Font = { size: 15, weight: FontWeight.Normal };
-  static readonly tableHead: Font = { size: 15, weight: FontWeight.Medium };
+  // 13/15 不在鸿蒙 R023 字号阶梯内，按「规范就近落位」口径取 12/16（视觉差 ≤1vp）。
+  static readonly codeBlock: Font = { size: 12, weight: FontWeight.Normal };
+  static readonly codeBlockLabel: Font = { size: 12, weight: FontWeight.Normal };
+  static readonly table: Font = { size: 16, weight: FontWeight.Normal };
+  static readonly tableHead: Font = { size: 16, weight: FontWeight.Medium };
   static readonly inputPlaceholder: Font = { size: 16, weight: FontWeight.Normal };
   static readonly pageTitle: Font = { size: 16, weight: FontWeight.Medium };
   static readonly caption: Font = { size: 12, weight: FontWeight.Normal };
@@ -255,18 +262,21 @@ export class DsTypography {
 }
 
 /// 间距（App 实测 vp + Web 布局规则）。
+/// 间距/圆角一律落鸿蒙 R003 的 4/8 基数档位
+/// {0,2,4,6,8,10,12,14,16,18,20,22,24,26,32,36,40,56,64}；
+/// 13/15/17/19/7/5 这类安卓原值已按「规范就近落位」调整（差 ≤1vp）。
 export class DsSpacing {
   static readonly screenPad: number = 22;
-  static readonly contentPadRight: number = 15;
+  static readonly contentPadRight: number = 16;
   static readonly msgPad: number = 30;
   static readonly blockGap: number = 16;
   static readonly bubbleRadius: number = 16;
   static readonly topBarHeight: number = 44;
-  static readonly actionIconSize: number = 17;
+  static readonly actionIconSize: number = 16;
   static readonly actionIconGap: number = 20;
   static readonly codeBlockRadius: number = 8;
   static readonly codeBlockPad: number = 12;
-  static readonly codeBlockPadH: number = 15;
+  static readonly codeBlockPadH: number = 16;
   static readonly codeBlockPadV: number = 10;
   static readonly codeBlockBannerPadV: number = 8;
   static readonly cellPadV: number = 10;
@@ -275,23 +285,23 @@ export class DsSpacing {
   static readonly quotePadLeft: number = 14;
   static readonly quoteBarWidth: number = 2;
   static readonly inlineCodeRadius: number = 6;
-  static readonly inlineCodePadH: number = 5;
+  static readonly inlineCodePadH: number = 6;
   static readonly processRowHeight: number = 28;
-  static readonly processIconSize: number = 15;
+  static readonly processIconSize: number = 16;
   static readonly processIconGap: number = 6;
   /// 用户气泡 maxWidth = 可见内容区宽 × 0.864（官方基准）。
   static readonly userBubbleMaxFraction: number = 0.864;
   /// HITL 挂起卡面板最大高度占屏比。
   static readonly liGap: number = 6; // li:not(:first-child) margin-top
   static readonly chipIconGap: number = 4;
-  static readonly chipRadius: number = 15;
-  static readonly chipGap: number = 19;
+  static readonly chipRadius: number = 16;
+  static readonly chipGap: number = 18;
   static readonly composerButtonSize: number = 24;
   // 设置卡/投影面板（安卓 tokens.dart:405-414）
   static readonly settingsCardRadius: number = 14;
   static readonly settingsCardPadH: number = 16;
   static readonly settingsCardPadV: number = 6;
-  static readonly settingsChipGap: number = 7;
+  static readonly settingsChipGap: number = 6;
   static readonly thinkHMargin: number = 12;
   static readonly hitlPanelMaxFraction: number = 0.5;
 }

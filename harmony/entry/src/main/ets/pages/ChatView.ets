@@ -92,13 +92,15 @@ export struct ChatView {
       .width('100%')
       .height('100%')
       .translate({ x: this.drawerOpen ? '80%' : '0%' })
-      .animation({ duration: 240, curve: Curve.EaseOut })
+      // 动效取官方档位 200ms（R017 档位 100/150/200/300/350）。
+      .animation({ duration: 200, curve: Curve.EaseOut })
       if (this.drawerOpen) {
         // 遮罩（浅色官方无灰幕，深色淡遮罩；点按关闭）。
         Column()
           .width('100%')
           .height('100%')
           .backgroundColor(this.c().drawerScrim)
+          .accessibilityText('关闭菜单')
           .onClick(() => {
             this.drawerOpen = false;
           })
@@ -119,6 +121,7 @@ export struct ChatView {
           .width('100%')
           .height('100%')
           .backgroundColor(this.c().drawerScrim)
+          .accessibilityText('关闭菜单')
           .onClick(() => {
             this.menuOpen = false;
           })
@@ -250,7 +253,7 @@ export struct ChatView {
   menuItem(icon: string, label: string, onTap: () => void) {
     Row({ space: DsSpacing.chipIconGap }) {
       Text(icon)
-        .fontSize(15)
+        .fontSize(16)
       Text(label)
         .fontSize(DsTypography.small.size)
         .fontColor(this.c().labelPrimary)
@@ -260,6 +263,7 @@ export struct ChatView {
     .height(40)
     .padding({ left: 12, right: 12 })
     .borderRadius(10)
+    .accessibilityText('打开' + label)
     .onClick(() => {
       this.menuOpen = false;
       onTap();
@@ -314,6 +318,7 @@ export struct ChatView {
         .width(40)
         .height(DsSpacing.topBarHeight)
         .textAlign(TextAlign.Center)
+        .accessibilityText('打开会话列表')
         .onClick(() => {
           this.drawerOpen = true;
         })
@@ -332,6 +337,7 @@ export struct ChatView {
         .width(40)
         .height(DsSpacing.topBarHeight)
         .textAlign(TextAlign.Center)
+        .accessibilityText('新建对话')
         .onClick(() => {
           const st: ChatStore | null = this.store;
           if (st !== null) {
@@ -341,9 +347,10 @@ export struct ChatView {
       Text('⋮')
         .fontSize(20)
         .fontColor(this.c().labelPrimary)
-        .width(36)
+        .width(40)
         .height(DsSpacing.topBarHeight)
         .textAlign(TextAlign.Center)
+        .accessibilityText('更多操作')
         .onClick(() => {
           this.menuOpen = true;
         })
@@ -363,7 +370,7 @@ export struct ChatView {
   greeting() {
     Column({ space: 14 }) {
       Text('DSH')
-        .fontSize(40)
+        .fontSize(38)
         .fontWeight(FontWeight.Bold)
         .fontColor(this.c().brand)
       Text('嗨！今天想聊些什么？')
@@ -371,15 +378,15 @@ export struct ChatView {
         .fontWeight(FontWeight.Bold)
         .fontColor(this.c().labelPrimary)
       Text(this.greetingHost())
-        .fontSize(13)
+        .fontSize(12)
         .fontColor(this.c().labelTertiary)
       // 工作目录选择（对照安卓空态「工作目录」chip）：默认手机会话，
       // 发首条消息前可换成授权根下的指定目录；建好后随会话定死。
       Row({ space: 6 }) {
         Text(this.pendingLocView === null ? '📱' : '📁')
-          .fontSize(13)
+          .fontSize(12)
         Text(locationChipLabel(this.pendingLocView))
-          .fontSize(13)
+          .fontSize(12)
           .fontColor(this.c().labelPrimary)
           .maxLines(1)
           .textOverflow({ overflow: TextOverflow.Ellipsis })
@@ -393,6 +400,7 @@ export struct ChatView {
       .border({ width: 1, color: this.c().inputBorder })
       .constraintSize({ maxWidth: 300 })
       .margin({ top: 4 })
+      .accessibilityText('工作目录：' + locationChipLabel(this.pendingLocView))
       .onClick(() => {
         this.syncPendingLoc();
         this.locSheet = true;

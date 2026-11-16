@@ -17,6 +17,7 @@
  */
 
 import { JsonAccess, JsonMap } from './JsonAccess';
+import { onFrameOn, requestOn, requestWithTimeoutOn, subscribeOn } from './GatewayRequests';
 import { WireBuilder } from './Wire';
 import { MessageDelta, MessageCommitted } from './Models';
 
@@ -28,7 +29,7 @@ import {
 } from './Transport';
 
 /** 挂起中的请求（requestId → 结算器 + 超时句柄；姊妹仓 MobileChannel 同款 interface）。 */
-interface PendingRequest {
+export interface PendingRequest {
   resolve: (frame: JsonMap) => void;
   reject: (err: Error) => void;
   timer: number;
@@ -49,18 +50,22 @@ export interface GatewayDeps {
 
 export class GatewayClient {
   private baseUrl: string;
-  private deps: GatewayDeps;
+  /** 依赖注入（GatewayFrames 的帧收发函数也用；UI 不直接读）。 */
+  deps: GatewayDeps;
   private token: string = '';
   private deviceName: string = '';
 
   private state: GatewayState = GatewayState.IDLE;
-  private handle: EventSocketHandle | null = null;
+  /** 当前连接句柄（帧收发/心跳/teardown 共用）。 */
+  handle: EventSocketHandle | null = null;
   private helloTimer: number = -1;
   private heartbeatTimer: number = -1;
   private reconnectTimer: number = -1;
   private backoffIndex: number = 0;
-  private requestSeq: number = 0;
-  private pending: Map<string, PendingRequest> = new Map();
+  /** 请求序号（requestWithTimeout 生成 requestId 用）。 */
+  requestSeq: number = 0;
+  /** 在途请求表（帧回收 / teardown 拒绝用）。 */
+  pending: Map<string, PendingRequest> = new Map();
   private disposed: boolean = false;
   /** 连接代数：每次 connect() 递增；陈旧的 onDown/catch 回调一律忽略。 */
   private attempt: number = 0;
@@ -190,7 +195,7 @@ export class GatewayClient {
   }
 
   // ------------------------------------------------------------------
-  // 帧收发
+  // 帧收发（实现见 GatewayRequests.ts）
   // ------------------------------------------------------------------
 
   /**
@@ -198,60 +203,11 @@ export class GatewayClient {
    * data 优先取 data.requestId，兜底顶层 requestId（Android 双兜底口径）。
    */
   requestWithTimeout(type: string, payload: JsonMap | null, timeoutMs: number): Promise<JsonMap> {
-    return new Promise<JsonMap>((resolve: (d: JsonMap) => void, reject: (e: Error) => void) => {
-      const self: GatewayClient = this;
-      this.requestSeq += 1;
-      const requestId: string = 'r' + this.requestSeq.toString() + '-' + timeoutMs.toString();
-
-      let settled: boolean = false;
-      const ok = (data: JsonMap): void => {
-        if (settled) {
-          return;
-        }
-        settled = true;
-        self.deps.timers.cancel(timer);
-        self.pending.delete(requestId);
-        resolve(data);
-      };
-      const fail = (err: Error): void => {
-        if (settled) {
-          return;
-        }
-        settled = true;
-        self.deps.timers.cancel(timer);
-        self.pending.delete(requestId);
-        reject(err);
-      };
-      const timer: number = this.deps.timers.schedule(timeoutMs, (): void => {
-        fail(new RequestException('TIMEOUT', '请求超时: ' + type));
-      });
-
-      if (this.handle === null) {
-        fail(new RequestException('NOT_CONNECTED', '连接未就绪'));
-        return;
-      }
-      const pr: PendingRequest = { resolve: ok, reject: fail, timer: timer };
-      this.pending.set(requestId, pr);
-
-      const b: WireBuilder = new WireBuilder();
-      b.put('type', type);
-      if (payload !== null) {
-        const keys: string[] = Object.keys(payload);
-        for (let i = 0; i < keys.length; i++) {
-          const k: string = keys[i];
-          if (k === 'type' || k === 'requestId') {
-            continue;
-          }
-          b.put(k, JsonAccess.raw(payload, k));
-        }
-      }
-      b.put('requestId', requestId);
-      this.handle.send(JSON.stringify(b.buildMap()));
-    });
+    return requestWithTimeoutOn(this, type, payload, timeoutMs);
   }
 
   request(type: string, payload: JsonMap | null): Promise<JsonMap> {
-    return this.requestWithTimeout(type, payload, 30000);
+    return requestOn(this, type, payload);
   }
 
   /**
@@ -259,79 +215,16 @@ export class GatewayClient {
    * 所以不登记 pending，发出即成功。
    */
   subscribe(sessionId: string): boolean {
-    if (this.handle === null) {
-      return false;
-    }
-    const b: WireBuilder = new WireBuilder();
-    b.put('type', 'subscribe');
-    b.put('sessionId', sessionId);
-    this.handle.send(JSON.stringify(b.buildMap()));
-    return true;
+    return subscribeOn(this, sessionId);
   }
 
   // ------------------------------------------------------------------
-  // 内部：帧解析
+  // 内部：帧解析（实现见 GatewayRequests.ts）
   // ------------------------------------------------------------------
 
   private onFrame(text: string): void {
-    const frame: JsonMap | null = JsonAccess.asMap(JsonAccess.parse(text));
-    if (frame === null) {
-      return;
-    }
-    const kind: string = JsonAccess.strOr(frame, 'kind', '');
-    const data: JsonMap | null = JsonAccess.asMap(JsonAccess.raw(frame, 'data'));
-    // 双兜底：requestId 可能在 data 里，也可能在顶层。
-    let requestId: string = '';
-    if (data !== null) {
-      requestId = JsonAccess.strOr(data, 'requestId', '');
-    }
-    if (requestId === '') {
-      requestId = JsonAccess.strOr(frame, 'requestId', '');
-    }
-
-    if (kind === 'hello') {
-      this.onHello(data, requestId);
-      return;
-    }
-    if (kind === 'paired') {
-      return; // 鸿蒙配对走 REST，配对帧不出现；出现也忽略。
-    }
-    if (kind === 'pong') {
-      return;
-    }
-    if (kind === 'ping') {
-      if (this.handle !== null) {
-        const b: WireBuilder = new WireBuilder();
-        b.put('type', 'pong');
-        this.handle.send(JSON.stringify(b.buildMap()));
-      }
-      return;
-    }
-    if (kind === 'event') {
-      this.onEventData(data);
-      return;
-    }
-    if (kind === 'connection-resync-required') {
-      const dropped: boolean = data !== null && JsonAccess.boolOr(data, 'dropped', false);
-      this.emit(GatewayEvent.resync(dropped));
-      return;
-    }
-    if (kind === 'error') {
-      const err: RequestException = requestExceptionFromFrame(data);
-      const p: PendingRequest | undefined = requestId !== '' ? this.pending.get(requestId) : undefined;
-      if (p !== undefined) {
-        this.pending.delete(requestId);
-        p.reject(err);
-      }
-      return;
-    }
-    // 默认：带 requestId 的回显帧 → 结算对应请求。
-    const p: PendingRequest | undefined = requestId !== '' ? this.pending.get(requestId) : undefined;
-    if (p !== undefined) {
-      this.pending.delete(requestId);
-      const empty: JsonMap = {};
-      p.resolve(data !== null ? data : empty);
-    }
+    onFrameOn(this, text, (event: GatewayEvent): void => { this.emit(event); },
+      (data: JsonMap | null, requestId: string): void => { this.onHello(data, requestId); });
   }
 
   private onHello(data: JsonMap | null, requestId: string): void {

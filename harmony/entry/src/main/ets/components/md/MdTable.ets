@@ -61,12 +61,13 @@ export struct MdTable {
           .fontColor(this.c().labelTertiary)
           .layoutWeight(1)
         Text(this.copied ? '✓' : '⧉')
-          .fontSize(15)
+          .fontSize(16)
           .fontColor(this.c().labelTertiary)
         Text(this.copied ? '已复制' : '复制')
           .fontSize(DsTypography.codeBlockLabel.size)
           .fontColor(this.c().labelTertiary)
           .margin({ left: 4 })
+          .accessibilityText(this.copied ? '已复制' : '复制表格')
           .onClick(() => this.copy())
       }
       .padding({

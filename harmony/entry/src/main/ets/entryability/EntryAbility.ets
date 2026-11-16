@@ -1,12 +1,9 @@
 import { AbilityConstant, Configuration, ConfigurationConstant, UIAbility, Want } from '@kit.AbilityKit';
 import { BusinessError } from '@kit.BasicServicesKit';
-import { hilog } from '@kit.PerformanceAnalysisKit';
 import { window, KeyboardAvoidMode } from '@kit.ArkUI';
 import { PrefsStore } from '../platform/PlatformBridge';
 import { shutdownTts } from '../platform/Tts';
-
-const DOMAIN: number = 0x0000;
-const TAG: string = 'DshChat';
+import { Dlog } from '../platform/Dlog';
 
 /**
  * 鸿蒙版唯一 Ability。
@@ -18,7 +15,7 @@ const TAG: string = 'DshChat';
  */
 export default class EntryAbility extends UIAbility {
   onCreate(want: Want, launchParam: AbilityConstant.LaunchParam): void {
-    hilog.info(DOMAIN, TAG, 'EntryAbility onCreate');
+    Dlog.info('EntryAbility onCreate');
     this.bindColorMode();
     PrefsStore.init(this.context);
   }
@@ -29,7 +26,7 @@ export default class EntryAbility extends UIAbility {
       appContext.setColorMode(ConfigurationConstant.ColorMode.COLOR_MODE_NOT_SET);
     } catch (e) {
       const err = e as BusinessError;
-      hilog.warn(DOMAIN, TAG, 'setColorMode failed: %{public}s', JSON.stringify(err));
+      Dlog.warn('setColorMode failed: ' + JSON.stringify(err));
     }
     // 初始深浅色：ApplicationConfig 无 getConfig（本 SDK 实测），
     // 用主窗口 colorMode 在 onWindowStageCreate 读；先按浅色起步，
@@ -43,17 +40,17 @@ export default class EntryAbility extends UIAbility {
   }
 
   onDestroy(): void {
-    hilog.info(DOMAIN, TAG, 'EntryAbility onDestroy');
+    Dlog.info('EntryAbility onDestroy');
     // 释放 TTS 引擎：CoreSpeechKit 的引擎是进程级单例，不 shutdown 会一直占着
     // 音频焦点（下次朗读报忙/无声）。
     shutdownTts();
   }
 
   onWindowStageCreate(windowStage: window.WindowStage): void {
-    hilog.info(DOMAIN, TAG, 'EntryAbility onWindowStageCreate');
+    Dlog.info('EntryAbility onWindowStageCreate');
     windowStage.loadContent('pages/Index', (err) => {
       if (err.code) {
-        hilog.error(DOMAIN, TAG, 'loadContent failed: %{public}s', JSON.stringify(err));
+        Dlog.error('loadContent failed: ' + JSON.stringify(err));
         return;
       }
       // 键盘避让：默认 OFFSET 会整页上移，底部输入框连带被推出/压住（真机实证）。
@@ -65,9 +62,9 @@ export default class EntryAbility extends UIAbility {
           .setKeyboardAvoidMode(KeyboardAvoidMode.RESIZE);
       } catch (e) {
         const err = e as BusinessError;
-        hilog.warn(DOMAIN, TAG, 'setKeyboardAvoidMode failed: %{public}s', JSON.stringify(err));
+        Dlog.warn('setKeyboardAvoidMode failed: ' + JSON.stringify(err));
       }
-      hilog.info(DOMAIN, TAG, 'loadContent succeeded');
+      Dlog.info('loadContent succeeded');
     });
   }
 }

@@ -114,7 +114,8 @@
 
 ## harmony/（鸿蒙版，ArkUI 原生重写）
 
-> 安卓版全功能的鸿蒙移植，工程根 `harmony/`，阶段与规程见 `harmony/docs/{PORT-MAP,RELEASE,STATUS}.md`。
+> 安卓版全功能的鸿蒙移植，工程根 `harmony/`，阶段与规程见 `harmony/docs/{PORT-MAP,RELEASE,STATUS}.md`；
+> 静态审查报告见 `harmony/docs/REVIEW-20261116.md`（设计令牌/无障碍/一多/上架四类问题清单与排期）。
 > ets 源码按 `ets/` 内相对路径登记（`scripts/ci/docs-check.sh` 第 1b 条机检）。
 
 ### 工程配置
@@ -156,6 +157,8 @@
 | `ets/components/md/MdTable.ets` | 表格：banner「表格」+复制（\t 连接）+ 表头 w500 + cellAlign l/c/r + cellMinWidth 100 |
 | `ets/components/md/MdLatex.ets` | 轻量 LaTeX 渲染：frac/sqrt/sup/sub/sym 分派（横线分子分母/√ 上边框/70% 字号偏移）；嵌套 smallArg 拍平 |
 | `ets/components/ToolBlock.ets` | 工具折叠组：摘要行（⚒ 短语）+ 展开逐条（✓/✗ 措辞/耗时）+ 单条 detail（bash 走 MdCodeBlock，其余 prettyArgs） |
+| `ets/components/ProcessGroup.ets` | 官方 web 式工具三层折叠（从 MessageList 切出，控行数）：组头 🔧+短语+总耗时 → ToolRow 逐行（○/⊘ + 短语 + 路径摘要）→ detailBlock 灰底描边卡片（call.name monospace + 耗时 + ✓/✗ + bash 走 MdCodeBlock / 参数 prettyArguments / 输出·错误 / 结果为空） |
+| `ets/components/ThinkBlock.ets` | 深度思考可折叠小块（从 MessageList 切出）：🧭 + 「深度思考中…/已深度思考」+ ⌃⌄；流式默认展开、流式结束自动收起、用户手动展开后不再强制折叠；展开走 MdView small |
 | `ets/components/HitlPanel.ets` | 提问/审批卡：审批（⚖ 警示底 拒绝/允许一次）先、提问（选项 chips 单选清旧 + 自定义输入 canSubmit）后；限高 0.5 屏 |
 | `ets/components/ImageTile.ets` | 收图渲染四态（加载/像素/错误重试/全屏）：createImageSource→PixelMap→Image 260 Cover，点按 bindContentCover 全屏 |
 | `ets/components/MessageActions.ets` | 消息操作条：复制（pasteboard 回弹）/喜欢/朗读（Tts）/分享（Share）/⟳ 重新生成 |
@@ -185,8 +188,10 @@
 | `ets/core/Transport.ts` | 传输抽象：HttpRequest/HttpResponse/HttpTransport、WebSocketTransport.open→EventSocketHandle、TimerBridge；WS/请求/心跳/退避常量（协议时序唯一出处） |
 | `ets/core/GatewayEvents.ts` | GatewayState 枚举 + 扁平 GatewayEvent（十种事件 type 分派）+ RequestException（稳定错误码）+ eventFromFrame（十一支事件帧映射纯函数） |
 | `ets/core/Questions.ts` | HITL 模型：UserQuestion/UserQuestionOption/PendingQuestion/PendingApproval/QuestionAnswerItem（custom 空省略，与安卓 questions.dart 对齐） |
-| `ets/core/GatewayClient.ts` | WS 状态机：connect/hello 8s/心跳 25s/退避重连（1→30s，attempt 代数防迟到回调）、requestWithTimeout 配对、事件派发（映射在 GatewayEvents.eventFromFrame）、subscribe、dispose |
-| `ets/core/GatewayApi.ts` | WS 端点 19 个（含 history/subagentHistory）+ REST（pairing exchange/attachment/image-handoff）|
+| `ets/core/GatewayClient.ts` | WS 状态机：connect/hello 8s/心跳 25s/退避重连（1→30s，attempt+downAttempt 双代数防迟到/重复回调）、重连链 relay（reconnecting）、事件派发（映射在 GatewayEvents.eventFromFrame）、dispose；帧收发本体在 GatewayRequests |
+| `ets/core/GatewayApi.ts` | WS 端点 19 个 + REST 委托层（13 个同名方法转发给 GatewayRest；历史实现已搬到 GatewayRest，本体 365 行）|
+| `ets/core/GatewayRest.ts` | REST 实现（从 GatewayApi 拆出）：restHeaders/restJson/encodePath + pairing exchange/workspace 建改/roots 浏览/entries/path 解析/attachment/image-handoff/subagentHistory/countPending 两跳 |
+| `ets/core/GatewayRequests.ts` | 帧收发（从 GatewayClient 拆出）：requestWithTimeoutOn 请求-回显结算 + requestOn 默认 30s + subscribeOn 发出即成功 + onFrameOn 帧分派（kind=hello/event/error/ping/pong/resync 双兜底 requestId）|
 | `ets/core/ToolCall.ts` | 工具调用合并模型 + 措辞表（bash/read_image…/mcp__ 直译/run_code 内嵌扫描）+ toolSummary 九键 + toolResultText（text 拼接/图片占位）|
 | `ets/core/HistoryPage.ts` | 历史装配器 fromEvents：user/assistant 正文、连续 tool/call+result 合并过程组（callId 去重/就地升级）、文件卡轮尾挂载、turn/end 错误卡、注入内容过滤（source.kind）+ mergeOlderMessages 翻页去重 |
 | `ets/core/Projections.ts` | 轨迹分组 trajectoryOf（按 turn/seq、未知轮垫底）+ 服务端投影（todoItems/agentTeamProjectionOf，宽容零抛）+ chatStatsOf 七键统计 + prettyJson |
@@ -196,6 +201,8 @@
 | `ets/core/Permissions.ts` | permission-options 收敛（PermissionCatalog/Option）+ 本地中文标签（label/descriptionLabel/needsConfirm/isDerived）+ permissionLabelOf |
 | `ets/core/MobileWorkspace.ts` | 手机工作区约定：ensureMobileWorkspace（缓存→标题匹配→.dsh-mobile 建目录→REST 登记→改名，全失败回 null 不阻断）+ prepareSessionFor + oldestSeqOf |
 | `ets/core/ChatActions.ts` | 会话动作集（store 参数纯函数）：runCommandIn 命令卡（✓/✗ 就地改写）/regenerateAtIn 重生成/cancelTurnIn 停止/setPermissionIn（NO_SESSION 拒） |
+| `ets/core/ChatHitl.ts` | HITL 动作集（从 ChatStore 拆出，store 参数纯函数）：refreshPendingMarksIn 抽屉角标两跳计数/pendingMarkOfIn/answerQuestionIn/cancelQuestionIn/decideApprovalIn |
+| `ets/core/ChatHistory.ts` | 历史装载与翻页（从 ChatStore 拆出，store 参数纯函数）：reloadHistoryIn 重拉（本地命令卡灌回尾部）+ loadOlderIn 向上翻页（beforeSeq=最小 seq、合并去重、跨会话结果丢弃）|
 | `ets/core/SessionGroups.ts` | 会话抽屉分组纯函数：groupSessionsByTime 先按时间分桶（今天/昨天/更早，超 2 天折叠）、桶内按工作区聚合（同区只显示一次小节标题），visibleRowsOf 处理「更早」展开态；dayBucketOf 按本地日历天分桶 |
 | `ets/core/AppUpdate.ts` | 检查更新（华为应用市场口径）：UpdateCheckResult 结果对象 + updateErrorMessage SDK 错误码（1009400001~7/401）中文映射 + NOT_SUPPORTED_MESSAGE；平台调用在 SettingsView（updateManager.checkAppUpdate / showUpdateDialog） |
 | `ets/core/SessionLocation.ts` | 新建会话工作目录纯逻辑（对照安卓 session_location_sheet.dart）：SessionLocation(rootId,cwd,label)+key 契约串、locationLabel（''=根目录）、recentLocations（历史会话 (rootId,cwd) 去重保序、跳过无根会话）、locationSubtitle（优先 cwdAbsolute 退回 rootId）、parentPath 逐级上退、locationChipLabel 空态 chip 文案 |
@@ -221,10 +228,15 @@
 | `harmony/test/cases/gateway-api.test.ts` | WS 端点 15 用例：帧形状（键名对齐安卓）/requestId 配对/错误映射（BAD_REPLY/PERMISSION/QUESTION_REJECTED/APPROVAL_REJECTED）/history 装配/subagentHistory REST |
 | `harmony/test/cases/history-page.test.ts` | 装配器 11 用例：分组语义（安卓 models_test 同款）/措辞表/文件卡轮尾/错误卡/hasMore/projections |
 | `harmony/test/cases/hosts-models-permissions.test.ts` | 12 用例：FNV 幂等/DSH1 宽容解码/主机列表操作/SessionModels 收敛/select-model 判别/权限标签 |
-| `harmony/test/cases/projections-release.test.ts` |
+| `harmony/test/cases/projections-release.test.ts` | 7 用例：轨迹分组排序/todo 变体丢弃/团队投影空壳 null/发布资产双前缀/版本比较（更新检查已改走华为应用市场，ReleaseCheck 的 Gitee/GitHub 通道在鸿蒙版停用） |
 | `harmony/test/cases/md-parser.test.ts` | Markdown 四件套 22 用例：块级/行内/LaTeX/高亮 + splitLatex/任务项/表格对齐 |
- 8 用例：轨迹分组排序/todo 变体丢弃/团队投影空壳 null/发布资产双前缀/版本比较 |
-| `harmony/test/cases/gateway-rest.test.ts` | REST 8 用例：URL 拼装/头/HTTP_40x/BAD_REPLY/空 body/encode/NO_TRANSPORT |
+| `harmony/test/cases/gateway-rest.test.ts` | REST 用例：URL 拼装/头/HTTP_40x/BAD_REPLY/空 body/encode/NO_TRANSPORT + fetchQuestions 解析与 403 |
+| `harmony/test/cases/chat-store.test.ts` | 会话状态机：打开/订阅/历史装配/翻页去重/发送/停止/权限/模型选择 + openSession REST 兜底合流提问（空 callId 丢弃、403 静默、保留 WS rpcId） |
+| `harmony/test/cases/hitl-store.test.ts` | HITL 表 10 用例：mergeQuestions upsert/空 callId/保留旧 rpcId/采纳新 rpcId/跨会话隔离 + 两个 sessionIds 派生 + 摘卡收缩 + onEvent 四类消费 |
+| `harmony/test/cases/session-groups.test.ts` | 会话抽屉分组 10 用例：今天/昨天/更早分桶、空桶、时间倒序、同刻工作区升序、工作区聚合、未分组兜底、折叠可见性、常量 |
+| `harmony/test/cases/session-location.test.ts` | 工作目录 7 用例：locationLabel/最近使用去重保序（跳过无根会话）/locationSubtitle 三级回退/parentPath/locationChipLabel |
+| `harmony/test/cases/app-update.test.ts` | 检查更新 6 用例：UpdateCheckResult 三态 + updateErrorMessage 错误码 (1009400001~7/401/NOT_IN_MARKET) 中文映射 |
+| `harmony/test/cases/tool-detail.test.ts` | 工具详情 9 用例：formatDuration 四档（ms/s/mXs）+负值+null、bashCommandOf 认 bash/tools.bash、参数缺command/坏JSON/空串、prettyArguments 逐行+超200字截断 |
 | `harmony/test/helpers/fake-ws.ts` | FakeTimers（手动 advance）/FakeSocket（服务端扮演 + lastRequestId）/FakeHttp（队列式应答） |
 | `harmony/test/package.json` / `tsconfig.json` | node:test + tsx 跑 `cases/*.test.ts`，strict TS |
 

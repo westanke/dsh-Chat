@@ -306,28 +306,31 @@ export struct Composer {
     Column() {
       if (this.lastError() !== null) {
         Text(this.lastError() as string)
-          .fontSize(13)
+          .fontSize(12)
           .fontColor(this.c().danger)
           .maxLines(2)
           .width('100%')
           .padding({ left: DsSpacing.screenPad, right: DsSpacing.screenPad, bottom: 6 })
+          .accessibilityText('错误提示，点按查看')
       }
       if (this.permHint.length > 0) {
         Text(this.permHint)
-          .fontSize(13)
+          .fontSize(12)
           .fontColor(this.c().labelSecondary)
           .width('100%')
           .padding({ left: DsSpacing.screenPad, right: DsSpacing.screenPad, bottom: 6 })
+          .accessibilityText('权限提示，点按关闭')
           .onClick(() => {
             this.permHint = '';
           })
       }
       if (this.imageError.length > 0) {
         Text(this.imageError)
-          .fontSize(13)
+          .fontSize(12)
           .fontColor(this.c().danger)
           .width('100%')
           .padding({ left: DsSpacing.screenPad, right: DsSpacing.screenPad, bottom: 6 })
+          .accessibilityText('图片错误提示，点按关闭')
           .onClick(() => {
             this.imageError = '';
           })
@@ -355,7 +358,9 @@ export struct Composer {
         .fontColor(this.c().labelPrimary)
         .placeholderColor(this.c().inputHintText)
         .backgroundColor(Color.Transparent)
-        .borderRadius(0)
+        // ArkUI TextArea 默认圆角 20；这里要跟外层胶囊贴合走直角，取最小合法档 2
+        //（R003 的圆角档位不含 0）。
+        .borderRadius(2)
         .fontSize(16)
         .caretColor(this.c().brand)
         .constraintSize({ minHeight: 44, maxHeight: 120 })
@@ -383,6 +388,7 @@ export struct Composer {
           Text('✕')
             .fontSize(12)
             .fontColor(this.c().labelTertiary)
+            .accessibilityText('移除待发送图片')
             .onClick(() => {
               this.pendingImage = null;
             })
@@ -403,23 +409,25 @@ export struct Composer {
           .backgroundColor(this.hasImage() ? this.c().brand : this.c().bgLayer1)
           .border({ width: 1, color: this.c().borderL1 })
           .textAlign(TextAlign.Center)
+          .accessibilityText('添加图片')
           .onClick(() => {
             this.pickImage();
           })
         Row({ space: 4 }) {
           Text('🛡')
-            .fontSize(13)
+            .fontSize(12)
             .fontColor(this.c().labelSecondary)
           Text(this.permissionLabel())
-            .fontSize(13)
+            .fontSize(12)
             .fontColor(this.c().labelSecondary)
             .maxLines(1)
             .textOverflow({ overflow: TextOverflow.Ellipsis })
           Text('⌄')
-            .fontSize(13)
+            .fontSize(12)
             .fontColor(this.c().labelSecondary)
         }
         .constraintSize({ maxWidth: 200 })
+        .accessibilityText('会话权限：' + this.permissionLabel())
         .onClick(() => {
           this.permSheetOpen = true;
         })
@@ -430,7 +438,8 @@ export struct Composer {
             .height(44)
             .backgroundColor(this.c().brand)
             .fontColor(this.c().onBrand)
-            .fontSize(15)
+            .fontSize(16)
+            .accessibilityText('停止生成')
             .onClick(() => {
               this.stop();
             })
@@ -446,6 +455,7 @@ export struct Composer {
             .fontSize(20)
             .fontWeight(this.sendEnabled() ? FontWeight.Bold : FontWeight.Medium)
             .enabled(this.sendEnabled())
+            .accessibilityText(this.sendEnabled() ? '发送' : '发送（未就绪）')
             .onClick(() => {
               this.send();
             })
@@ -463,7 +473,7 @@ export struct Composer {
       .margin({ left: DsSpacing.screenPad, right: DsSpacing.screenPad })
       if (!this.streaming()) {
         Text('回答由 AI 生成，仅供参考')
-          .fontSize(11)
+          .fontSize(10)
           .fontColor(this.c().labelTertiary)
           .width('100%')
           .textAlign(TextAlign.Center)

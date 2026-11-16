@@ -103,11 +103,12 @@ export struct MessageActions {
   }
 
   @Builder
-  icon(glyph: string, color: ResourceColor, tap: () => void) {
+  icon(glyph: string, color: ResourceColor, label: string, tap: () => void) {
     Text(glyph)
-      .fontSize(17)
+      .fontSize(16)
       .fontColor(color)
       .padding({ right: DsSpacing.actionIconGap })
+      .accessibilityText(label)
       .onClick(() => {
         tap();
       })
@@ -116,22 +117,24 @@ export struct MessageActions {
   build() {
     Column() {
       Row() {
-        this.icon(this.copied ? '✓' : '⧉', this.c().labelTertiary, (): void => {
+        this.icon(this.copied ? '✓' : '⧉', this.c().labelTertiary,
+          this.copied ? '已复制' : '复制回答', (): void => {
           this.copy();
         })
         this.icon(this.liked ? '👍' : '👍', this.liked ? this.c().brand : this.c().labelTertiary,
-          (): void => {
+          this.liked ? '取消喜欢' : '喜欢', (): void => {
             this.liked = !this.liked;
           })
         this.icon(this.speaking ? '⏹' : '🔊',
-          this.speaking ? this.c().brand : this.c().labelTertiary, (): void => {
+          this.speaking ? this.c().brand : this.c().labelTertiary,
+          this.speaking ? '停止朗读' : '朗读回答', (): void => {
             this.toggleSpeak();
           })
-        this.icon('⤴', this.c().labelTertiary, (): void => {
+        this.icon('⤴', this.c().labelTertiary, '分享回答', (): void => {
           this.share();
         })
         Blank()
-        this.icon('⟳', this.c().labelTertiary, (): void => {
+        this.icon('⟳', this.c().labelTertiary, '重新生成', (): void => {
           if (this.onRegenerate !== null) {
             this.onRegenerate();
           }

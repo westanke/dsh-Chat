@@ -4,10 +4,10 @@
     "type": "entry",
     "description": "$string:module_desc",
     "mainElement": "EntryAbility",
+    // 只声明 phone：当前只有单列手机布局，未做 600/840vp 一多分档；
+    // 声明 tablet/2in1 会让上架核查发现「声明了多设备却无对应布局」。
     "deviceTypes": [
-      "phone",
-      "tablet",
-      "2in1"
+      "phone"
     ],
     "deliveryWithInstall": true,
     "installationFree": false,

@@ -224,6 +224,33 @@
 - `REST 合流别用 JsonAccess.arr` —— `core/JsonAccess.ts:73` 的 `arr()` 返回 `Object[]`，
   取字段要再强转；`fetchQuestions` 解析 `items` 必须用 `objArr()`（返 `JsonMap[]`），
   否则每条都拿不到 `callId`、全部被当空值丢掉（面板静默空白，不报错）。
+- `字号间距只有官方刻度` —— 鸿蒙开发台 `harmony_check review` 的硬规则：
+  **R023 允许字号** = `{8,9,10,12,14,16,18,20,22,24,28,30,36,38,46,48,56}`，
+  **R003 允许间距与圆角** = `{0,2,4,6,8,10,12,14,16,18,20,22,24,26,32,36,40,56,64}`
+  （圆角同样不认 0，最小合法档 2；`15`/`13`/`11`/`7`/`3`/`1` 都算违规）。
+  这是**实测反推**的集合（用一组候选值喂 review 看哪些报错），`harmony_search` 文档里
+  「15 级阶梯」的说法与它不完全一致，以工具实测为准。修的时候先改 `ui/theme.ets` 的
+  token（`codeBlock 13→12`、`table 15→16`、`contentPadRight 15→16`、`actionIconSize 17→16`、
+  `codeBlockPadH 15→16`、`inlineCodePadH 5→6`、`processIconSize 15→16`、`chipRadius 15→16`、
+  `chipGap 19→18`、`settingsChipGap 7→6`），再批量改引用处的裸值
+  （字号 `{13:12,15:16,11:10,17:16,32:30,40:38}` 48 处 / 16 文件；
+  间距圆角 `{7:8,3:4,1:2,11:12,9:10}` 29 处 / 10 文件）—— 改 token 不改引用处会留一堆裸值，
+  只改引用处不改 token 则 token 本身仍越界。
+- `hilog 只能在 Dlog` —— 宪法 §7 要求 hilog 封装在 `platform/Dlog.ets`，
+  `entryability/EntryAbility.ets` 曾直调 7 处 `hilog.`，DOMAIN 用 `0x0000`、TAG `DshChat`，
+  与 Dlog 的 `0xD5C0`/`Dsh` 不一致 → 真机 `hilog -x | grep A0D5C0` **抓不到 Ability
+  生命周期日志**（看起来像「日志没打」）。统一改 `Dlog.info/warn/error`。
+- `剪段拆文件会带走夹层方法` —— 把 `ChatStore.ts` 的历史分页段按行号剪进 `ChatHistory.ts`
+  时，夹在该区间里的 `setPermission` 被一起剪走 → 单测报
+  `TypeError: ctx.store.setPermission is not a function`。区间是「主题连续」的假设不可靠：
+  剪之前 `print(repr(lines[i-1]))` 核对首尾行、剪完 grep 原有公开方法名全集是否齐全。
+- `拆 if 链漏分支会静默挂死` —— `onFrame` 拆到 `core/GatewayRequests.ts` 时漏了
+  `kind === 'hello'` 分支 → 永远不 READY，全部客户端用例挂满 300s 才报
+  `Promise resolution is still pending but the event loop has already resolved`（不是断言失败，
+  是超时）。拆 if 链要按「原分支数 == 新分支数」逐条核对。
+- `脚本拼 head+tail 会坏括号` —— 拆 `GatewayApi.ts` 时尾部多出一个 `}`（esbuild
+  `Unexpected "}"`），剪出的段又少一个方法闭合 `}`（`Expected identifier but found end of
+  file`）。剪接脚本必须 assert 首行与末行内容，不能只按行号切片。
 - `发送键白底看不见` —— 禁用态底色若用 `inputFill`（浅色主题=纯白），白底 + 浅灰箭头在
   浅色界面上几乎不可见（用户反馈）。改用 token `sendDisabledBg`（亮 `#EBEEF2` / 暗
   `c800`）+ `sendDisabledFg`（亮 `c500` / 暗 `c400`）；可用态走实心 `brand` + `onBrand`

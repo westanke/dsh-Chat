@@ -68,7 +68,7 @@ export struct MdLatexView {
         }
         .borderWidth({ top: 1 })
         .borderColor(this.c().labelPrimary)
-        .padding({ left: 2, right: 2, top: 1 })
+        .padding({ left: 2, right: 2, top: 2 })
         .alignItems(HorizontalAlign.Center)
       }
       .alignItems(VerticalAlign.Bottom)

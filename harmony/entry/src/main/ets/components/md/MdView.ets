@@ -127,7 +127,7 @@ export struct MdView {
         Text(item.checked === 1 ? '☑' : '☐')
           .fontSize(18)
           .fontColor(item.checked === 1 ? this.c().brand : this.c().listMarker)
-          .margin({ right: 6, top: 1 })
+          .margin({ right: 6, top: 2 })
       } else if (kind === 'ul') {
         Text('•')
           .fontSize(this.segFont().size)
@@ -146,7 +146,7 @@ export struct MdView {
     }
     .alignItems(VerticalAlign.Top)
     .width('100%')
-    .padding({ top: 3, bottom: 3 })
+    .padding({ top: 4, bottom: 4 })
   }
 
   /// 行内片段流：连续非 latex 片段合成一个 Text（Span 混排样式），
@@ -161,6 +161,7 @@ export struct MdView {
           .fontSize(this.segFont().size)
           .fontColor(this.c().link)
           .decoration({ type: TextDecorationType.None })
+          .accessibilityText('打开链接：' + s.link)
           .onClick(() => openExternal(s.link))
           .margin({ right: 2 })
       } else {

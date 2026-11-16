@@ -173,6 +173,7 @@ export struct HitlPanel {
           .fontSize(DsTypography.small.size)
           .fontColor(this.c().danger)
           .padding({ left: 14, right: 14, top: 8, bottom: 8 })
+          .accessibilityText('拒绝本次审批')
           .onClick(() => this.onDecide(a, false))
         Text('允许一次')
           .fontSize(DsTypography.small.size)
@@ -181,6 +182,7 @@ export struct HitlPanel {
           .borderRadius(DsSpacing.chipRadius)
           .padding({ left: 14, right: 14, top: 8, bottom: 8 })
           .margin({ left: DsSpacing.chipGap })
+          .accessibilityText('允许本次审批')
           .onClick(() => this.onDecide(a, true))
       }
       .height(DsSpacing.composerButtonSize)
@@ -208,6 +210,7 @@ export struct HitlPanel {
           .backgroundColor(this.canSubmit() ? this.c().link : this.c().drawerGroupLabel)
           .borderRadius(DsSpacing.chipRadius)
           .padding({ left: 16, right: 16, top: 8, bottom: 8 })
+          .accessibilityText(this.canSubmit() ? '提交回答' : '提交回答（还没作答）')
           .onClick(() => {
             if (this.canSubmit()) {
               this.submit();
@@ -275,6 +278,7 @@ export struct HitlPanel {
       .border({ width: 1, color: this.pickedOf(item.id).indexOf(opt.label) >= 0 ? this.c().chipSelectedFg : this.c().borderL2 })
       .padding({ left: 12, right: 12, top: 6, bottom: 6 })
       .margin({ right: DsSpacing.chipIconGap, bottom: DsSpacing.chipIconGap })
+      .accessibilityText(opt.label + (this.pickedOf(item.id).indexOf(opt.label) >= 0 ? '，已选中' : ''))
       .onClick(() => this.toggleOption(item, opt.label))
   }
 

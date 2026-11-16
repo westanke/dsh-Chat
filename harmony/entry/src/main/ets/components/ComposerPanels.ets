@@ -35,7 +35,7 @@ export struct CommandPanel {
         ForEach(this.commands, (cmd: SlashCommand, idx: number) => {
           Row({ space: 8 }) {
             Text('›')
-              .fontSize(15)
+              .fontSize(16)
               .fontColor(this.c().chipSelectedFg)
             Text('/' + cmd.name)
               .fontSize(14)
@@ -56,6 +56,7 @@ export struct CommandPanel {
           .width('100%')
           .padding({ left: 12, right: 12, top: 10, bottom: 10 })
           .backgroundColor(idx === 0 ? this.c().chipSelectedBg : Color.Transparent)
+          .accessibilityText('/' + cmd.name + (cmd.description.length > 0 ? '：' + cmd.description : ''))
           .onClick(() => {
             this.onPick(cmd);
           })
@@ -95,18 +96,19 @@ export struct AtFilePanel {
       Column() {
         if (this.loading) {
           Text('正在加载目录…')
-            .fontSize(13).fontColor(this.c().labelTertiary)
+            .fontSize(12).fontColor(this.c().labelTertiary)
             .width('100%').padding(12)
         } else if (this.failed) {
           Text('目录加载失败，点按重试')
-            .fontSize(13).fontColor(this.c().danger)
+            .fontSize(12).fontColor(this.c().danger)
             .width('100%').padding(12)
+            .accessibilityText('目录加载失败，点按重试')
             .onClick(() => {
               this.onRetry();
             })
         } else if (this.entries.length === 0) {
           Text('没有匹配的文件')
-            .fontSize(13).fontColor(this.c().labelTertiary)
+            .fontSize(12).fontColor(this.c().labelTertiary)
             .width('100%').padding(12)
         } else {
           ForEach(this.entries, (e: AtEntry, idx: number) => {
@@ -124,6 +126,7 @@ export struct AtFilePanel {
             .width('100%')
             .padding({ left: 12, right: 12, top: 10, bottom: 10 })
             .backgroundColor(idx === 0 ? this.c().chipSelectedBg : Color.Transparent)
+            .accessibilityText('/' + e.path)
             .onClick(() => {
               this.onPick(e);
             })
@@ -157,7 +160,7 @@ export struct PermissionPanel {
   build() {
     Column() {
       Text('会话权限档位')
-        .fontSize(15)
+        .fontSize(16)
         .fontWeight(FontWeight.Medium)
         .fontColor(this.c().labelPrimary)
         .padding({ left: 16, right: 16, top: 14, bottom: 8 })
@@ -181,7 +184,8 @@ export struct PermissionPanel {
           .layoutWeight(1)
         }
         .width('100%')
-        .padding({ left: 16, right: 16, top: 11, bottom: 11 })
+        .padding({ left: 16, right: 16, top: 12, bottom: 12 })
+        .accessibilityText(o.label + (o.descriptionLabel !== null ? '：' + o.descriptionLabel : ''))
         .onClick(() => {
           this.onPick(o.value);
         })

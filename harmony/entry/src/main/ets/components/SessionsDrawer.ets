@@ -125,10 +125,11 @@ export struct SessionsDrawer {
         .alignItems(HorizontalAlign.Start)
         .layoutWeight(1)
         Button('+ 新对话')
-          .height(34)
-          .fontSize(13)
+          .height(40)
+          .fontSize(12)
           .backgroundColor(this.c().brand)
           .fontColor(this.c().onBrand)
+          .accessibilityText('当前连接：' + this.hostLabel())
           .onClick(() => {
             const st: ChatStore | null = this.store;
             if (st !== null) {
@@ -156,12 +157,13 @@ export struct SessionsDrawer {
                   .layoutWeight(1)
                 if (g.collapsible) {
                   Text(this.earlierOpen ? (g.count().toString() + ' 条 · 收起') : (g.count().toString() + ' 条 · 展开'))
-                    .fontSize(11)
+                    .fontSize(10)
                     .fontColor(this.c().labelTertiary)
                 }
               }
               .width('100%')
               .padding({ left: 16, right: 16, top: 14, bottom: 6 })
+              .accessibilityText(g.title + '，' + g.count().toString() + (this.earlierOpen ? ' 条，收起' : ' 条，展开'))
               .onClick(() => {
                 if (g.collapsible) {
                   this.earlierOpen = !this.earlierOpen;
@@ -171,7 +173,7 @@ export struct SessionsDrawer {
               ForEach(this.rowsOf(g), (r: SessionRow) => {
                 if (r.sectionLabel.length > 0) {
                   Text(r.sectionLabel)
-                    .fontSize(11)
+                    .fontSize(10)
                     .fontColor(this.c().drawerGroupLabel)
                     .width('100%')
                     .padding({ left: 20, top: 8, bottom: 2 })
@@ -192,18 +194,19 @@ export struct SessionsDrawer {
 
       Row({ space: 8 }) {
         Text('⚙️')
-          .fontSize(17)
+          .fontSize(16)
         Text('设置')
-          .fontSize(15)
+          .fontSize(16)
           .fontColor(this.c().labelPrimary)
           .layoutWeight(1)
         Text('›')
-          .fontSize(15)
+          .fontSize(16)
           .fontColor(this.c().labelTertiary)
       }
       .width('100%')
       .height(44)
       .padding({ left: 16, right: 12 })
+      .accessibilityText('打开设置')
       .onClick(() => {
         if (this.onClose !== null) {
           this.onClose();
@@ -235,7 +238,7 @@ export struct SessionsDrawer {
         .fill(s.running ? this.c().brand : Color.Transparent)
         .visibility(s.running ? Visibility.Visible : Visibility.None)
       Text(s.displayTitle)
-        .fontSize(15)
+        .fontSize(16)
         .fontColor(this.c().labelPrimary)
         .maxLines(1)
         .textOverflow({ overflow: TextOverflow.Ellipsis })
@@ -245,17 +248,17 @@ export struct SessionsDrawer {
       // 所以标记一律由 HitlStore 全连接挂起表推导（ChatStore.pendingMarkOf）。
       if (this.markOf(s.id) === 'question') {
         Text('待回答')
-          .fontSize(11)
+          .fontSize(10)
           .fontColor(this.c().markQuestion)
           .padding({ left: 6, right: 6, top: 2, bottom: 2 })
-          .borderRadius(7)
+          .borderRadius(8)
           .backgroundColor(this.c().markQuestionBg)
       } else if (this.markOf(s.id) === 'approval') {
         Text('待审批')
-          .fontSize(11)
+          .fontSize(10)
           .fontColor(this.c().brand)
           .padding({ left: 6, right: 6, top: 2, bottom: 2 })
-          .borderRadius(7)
+          .borderRadius(8)
           .border({ width: 1, color: this.c().brand })
       }
     }
@@ -265,6 +268,7 @@ export struct SessionsDrawer {
     .borderRadius(10)
     .backgroundColor(this.current() === s.id
       ? this.c().chipSelectedBg : Color.Transparent)
+    .accessibilityText('待审批')
     .onClick(() => {
       this.open(s);
     })

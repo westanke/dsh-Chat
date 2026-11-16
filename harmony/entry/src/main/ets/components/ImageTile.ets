@@ -72,6 +72,7 @@ export struct ImageTile {
           .objectFit(ImageFit.Cover)
           .width(260)
           .borderRadius(DsSpacing.codeBlockRadius)
+          .accessibilityText('查看大图')
           .onClick(() => {
             this.coverOpen = true;
           })
@@ -100,6 +101,7 @@ export struct ImageTile {
         .justifyContent(FlexAlign.Center)
         .borderRadius(DsSpacing.codeBlockRadius)
         .backgroundColor(this.c().mdCodeBlockBg)
+        .accessibilityText('图片加载失败，点按重试')
         .onClick(() => {
           if (!this.loading && this.error !== '') {
             this.reload();
@@ -112,6 +114,7 @@ export struct ImageTile {
           .width('100%')
           .height('100%')
           .backgroundColor(Color.Black)
+          .accessibilityText('关闭大图')
           .onClick(() => {
             this.coverOpen = false;
           })

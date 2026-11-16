@@ -38,34 +38,35 @@ export struct MdCodeBlock {
     });
   }
 
-  /// Atom One Light 对照（暗色下统一偏亮，对照安卓 synPlain 语义）。
+  /// Atom One 对照色一律走 DsPalette token（亮/暗两套，iOS/安卓同源）；
+  /// 组件内不留颜色字面量（宪法 §7 + 鸿蒙 R003/R008 双套色要求）。
   private spanColor(cls: string): string {
     if (this.dark) {
       if (cls === 'kw') {
-        return '#cc99cd';
+        return DsPalette.synDarkKeyword;
       }
       if (cls === 'str') {
-        return '#7ec699';
+        return DsPalette.synDarkString;
       }
       if (cls === 'num') {
-        return '#7ec699';
+        return DsPalette.synDarkNumber;
       }
       if (cls === 'comment') {
-        return '#999999';
+        return DsPalette.synDarkComment;
       }
-      return '#d4d4d4';
+      return DsPalette.synDarkPlain;
     }
     if (cls === 'kw') {
-      return '#a626a4';
+      return DsPalette.synKeyword;
     }
     if (cls === 'str') {
-      return '#50a14f';
+      return DsPalette.synString;
     }
     if (cls === 'num') {
-      return '#4078f2';
+      return DsPalette.synNumber;
     }
     if (cls === 'comment') {
-      return '#a0a1a7';
+      return DsPalette.synComment;
     }
     return DsPalette.synPlain;
   }
@@ -91,6 +92,7 @@ export struct MdCodeBlock {
         }
         .padding({ left: 6, right: 6, top: 2, bottom: 2 })
         .borderRadius(4)
+        .accessibilityText(this.copied ? '已复制' : '复制代码')
         .onClick(() => this.copy())
       }
       .padding({

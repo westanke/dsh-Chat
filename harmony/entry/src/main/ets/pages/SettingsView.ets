@@ -171,6 +171,7 @@ export struct SettingsView {
         .width(40)
         .height(DsSpacing.topBarHeight)
         .textAlign(TextAlign.Center)
+        .accessibilityText('返回')
         .onClick(() => {
           if (this.onBack !== null) {
             this.onBack();
@@ -269,10 +270,11 @@ export struct SettingsView {
     Text(label)
       .fontSize(DsTypography.caption.size)
       .fontColor(this.themeMode === mode ? this.c().chipSelectedFg : this.c().labelSecondary)
-      .padding({ left: 12, right: 12, top: 7, bottom: 7 })
+      .padding({ left: 12, right: 12, top: 8, bottom: 8 })
       .margin({ right: DsSpacing.settingsChipGap, bottom: DsSpacing.settingsChipGap })
       .borderRadius(DsSpacing.chipRadius)
       .backgroundColor(this.themeMode === mode ? this.c().chipSelectedBg : this.c().inputFill)
+      .accessibilityText(label)
       .onClick(() => {
         AppStorage.setOrCreate('dshThemeMode', mode);
         PrefsStore.putString('dsh.themeMode', mode);
@@ -312,10 +314,11 @@ export struct SettingsView {
     Text(label)
       .fontSize(DsTypography.caption.size)
       .fontColor(this.busySend === mode ? this.c().chipSelectedFg : this.c().labelSecondary)
-      .padding({ left: 12, right: 12, top: 7, bottom: 7 })
+      .padding({ left: 12, right: 12, top: 8, bottom: 8 })
       .margin({ right: DsSpacing.settingsChipGap, bottom: DsSpacing.settingsChipGap })
       .borderRadius(DsSpacing.chipRadius)
       .backgroundColor(this.busySend === mode ? this.c().chipSelectedBg : this.c().inputFill)
+      .accessibilityText(label)
       .onClick(() => {
         AppStorage.setOrCreate('dshBusySend', mode);
         PrefsStore.putString('dsh.busySend', mode);
@@ -340,12 +343,13 @@ export struct SettingsView {
             .color(this.c().labelSecondary)
         } else {
           Text(this.updateNewTag.length > 0 ? '↗' : '⟳')
-            .fontSize(15)
+            .fontSize(16)
             .fontColor(this.c().labelSecondary)
         }
       }
       .width('100%')
       .padding({ top: DsSpacing.liGap, bottom: DsSpacing.liGap })
+      .accessibilityText('检查更新')
       .onClick(() => {
         if (this.updateNewTag.length > 0) {
           this.showUpdateDialog();
@@ -359,6 +363,7 @@ export struct SettingsView {
           .fontColor(this.updateNewTag.length > 0 ? this.c().brand : this.c().labelTertiary)
           .width('100%')
           .padding({ bottom: DsSpacing.liGap })
+          .accessibilityText('检查更新')
           .onClick(() => {
             if (this.updateNewTag.length > 0) {
               this.showUpdateDialog();
@@ -386,6 +391,7 @@ export struct SettingsView {
       .borderRadius(DsSpacing.bubbleRadius)
       .width('100%')
       .height(44)
+      .accessibilityText('断开连接')
       .onClick(() => {
         this.confirmDiscard = true;
       })
@@ -407,6 +413,7 @@ export struct SettingsView {
       .height('100%')
       .position({ x: 0, y: 0 })
       .backgroundColor(this.c().drawerScrim)
+      .accessibilityText('关闭对话框')
       .onClick(() => {
         this.confirmDiscard = false;
       })
@@ -424,6 +431,7 @@ export struct SettingsView {
           .fontColor(this.c().labelPrimary)
           .backgroundColor(this.c().inputFill)
           .layoutWeight(1)
+          .accessibilityText('关闭对话框')
           .onClick(() => {
             this.confirmDiscard = false;
           })
@@ -432,6 +440,7 @@ export struct SettingsView {
           .fontColor(this.c().onBrand)
           .backgroundColor(this.c().danger)
           .layoutWeight(1)
+          .accessibilityText('取消断开')
           .onClick(() => {
             this.confirmDiscard = false;
             if (this.onDisconnect !== null) {

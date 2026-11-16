@@ -71,6 +71,7 @@ export struct MdDocViewer {
           .width(40)
           .height(DsSpacing.topBarHeight)
           .textAlign(TextAlign.Center)
+          .accessibilityText('返回')
           .onClick(() => {
             if (this.onBack !== null) {
               this.onBack();
@@ -100,13 +101,14 @@ export struct MdDocViewer {
 
       if (this.error.length > 0) {
         Column({ space: 12 }) {
-          Text('📄').fontSize(32)
+          Text('📄').fontSize(30)
           Text(this.error)
             .fontSize(DsTypography.small.size)
             .fontColor(this.c().labelSecondary)
           Text('重试')
             .fontSize(DsTypography.small.size)
             .fontColor(this.c().brand)
+            .accessibilityText('重试')
             .onClick(() => {
               this.load();
             })

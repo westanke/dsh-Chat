@@ -469,3 +469,111 @@ BUILD SUCCESSFUL；签名装机后真机进入有长历史的会话，列表头�
 **顺带修的排障设施**：`harmony/build/ui.sh` 的 `dump` 分支原先直接
 `hdc file recv`，失败时**留下上一轮的 `ui.json`**，导致读到旧快照误判「滑动没生效」；
 改为先 `rm -f`、recv 后校验 `stat -c%s > 100`、失败重试 3 次。
+
+---
+
+## 阶段 5 第十一批：工具卡三层折叠（官方 web 式）+ 深度思考折叠 + 翻页不跳底（2026-11-16）
+
+**用户需求**（两条）
+- 「执行了那些命令，只显示了一条。要具体点，像官方那样，有时间，可折叠，命令 Bash 式显示。」
+  「所有工具类的都像官方 web 模式看起。」
+- 「思考未自动收缩，界面内容过多。」
+- 「点击『加载更早消息』自动跳转到最新消息了，应该位置不变。」
+
+**工具卡三层折叠**（对照安卓 `app/lib/ui/process_group.dart` 1-300 行）
+- 组头：`🔧` + 短语聚合（`修改了文件`）+ 总耗时（`20.1s`）+ `⌄/⌃`，点整组展开。
+- 第二层 `ToolRow`：`○/⊘`（成功/失败）+ `phrases.join('，')` + 路径摘要（monospace）+ `⌄/⌃`，
+  点行展开。
+- 第三层 `detailBlock`：灰底描边卡片（`bgLayer1` + `inputBorder` 1px + `codeBlockRadius`）——
+  卡片头 `call.name` monospace + 耗时 + `✓/✗`，分隔线，正文 bash 走
+  `MdCodeBlock({lang:'BASH'})`、否则「参数」`prettyArguments`，「输出」/「错误」+ `resultText`，
+  空结果非失败显「结果为空」。
+- `core/ToolCall.ts` 新增三个纯函数：`formatDuration(ms)`（<1000 用 ms、<60000 用
+  `x.xs`、否则 `Xm Ys`、负值/null 返 null）、`bashCommandOf(name, rawArguments)`
+  （只认 `bash`/`tools.bash`，从 arguments JSON 取 `command` 原样返多行）、
+  `prettyArguments(rawArguments)`（逐行 `k: v`，值超 200 字截断加 `…`，坏 JSON 原样返，`{}` 返 null）。
+  **坑**：遍历 Record 必须 `Object.keys(map)` 循环，`map.forEach` 在 ArkTS 上不可靠。
+
+**拆文件（宪法 §7 单文件 ≤500 行）**
+`MessageList.ets` 加完 ThinkBlock + ProcessGroup 后到 675 行 → 切出两个独立文件：
+`components/ThinkBlock.ets`（65 行）、`components/ProcessGroup.ets`（243 行，含
+`export struct ProcessGroup` 与 `export struct ToolRow`），`MessageList.ets` 回落到 404 行。
+**编译坑**：`ToolRow` 字段初值 `new ToolCallInfo('', '')` 报
+`10505001 Expected 8 arguments, but got 2`，须补全 8 参
+`new ToolCallInfo('', '', [], null, false, null, null, null)`。
+
+**深度思考折叠**（对照安卓 `chat_message_items.dart:232 _ThinkBlock`）
+`ThinkBlock` 的 `@Prop @Watch('onStreamingChange') streaming` —— `aboutToAppear` 里
+`expanded = streaming`（流式默认展开），`onStreamingChange` 只在 `!streaming && expanded` 时
+置 false（流式结束自动收起），用户手动展开后不再被强制折叠。文案 `深度思考中…` /
+`已深度思考`，展开走 `MdView small`，左侧缩进 `DsSpacing.thinkHMargin = 12`。
+
+**翻页跳底修复（两个根因叠加）**
+1. `ForEach` 的 key 含 `idx`（`` `${m.seq}-${idx}-${m.text.length}` ``）→ 翻页把旧消息插到数组
+   前部时 index 全体后移、key 全变、ArkUI 判定整列重建 → 滚动位置重置。改成
+   `` `${m.role}-${m.seq}-${m.text.length}` ``（去掉 idx）。
+2. 补滚动锚点：`firstIdx` 由 `.onScrollIndex` 维护，`loadOlder()` 触发前快照
+   `anchorIdx = firstIdx` / `anchorLen = msgs.length`，`syncVersion()` 的
+   `consumeHistoryPageJustLoaded()` 分支里 `added = msgs.length - anchorLen` →
+   `scrollToIndex(anchorIdx + added)`。
+
+**门禁**：`npm --prefix harmony/test test` → **227/227 全绿**（新增 `tool-detail.test.ts` 9 条）；
+`bash scripts/package.sh --no-test` BUILD SUCCESSFUL；签名装机后真机验证：进「安卓配对码连接失败」
+会话，顶部渲染 `🔧 [68,353][127,408]` + `修改了文件 [145,355][884,406]` + `20.1s [902,359][992,403]`
++ `⌄`；点开三条 `○ 修改了文件 <路径>` 行；再点第一条展开出 `edit` + `30ms` + `✓` + `参数` +
+`file_path: …`。三层折叠与官方 web 观感正常。
+
+## 阶段 5 第十二批：静态审查报告落地（P0/P1 全改）+ core 拆分（2026-11-16）
+
+用「鸿蒙开发台」插件（harmony_check review）对 `harmony/entry/src/main/ets/` 全量静态审查，
+报告落盘 `harmony/docs/REVIEW-20261116.md`；随后按报告把 P0/P1 全部改完。
+
+**P0（合规硬伤）**
+- `entryability/EntryAbility.ets` 的 7 处 `hilog.` 直调改走 `Dlog`（宪法 §7 要求 hilog 只在
+  `platform/Dlog.ets`）。原来 DOMAIN `0x0000` / TAG `DshChat` 与 Dlog 的 `0xD5C0` / `Dsh`
+  不一致，真机 `hilog -x | grep A0D5C0` 根本抓不到 Ability 生命周期日志。
+- `components/md/MdCodeBlock.ets` 的 `spanColor(cls)` 9 处颜色字面量全换 token：亮色分支用
+  既有 `DsPalette.synKeyword/synString/synNumber/synComment/synPlain`；暗色分支在
+  `ui/theme.ets` 新增 `synDarkKeyword '#CC99CD'` / `synDarkString '#7EC699'` /
+  `synDarkNumber '#7EC699'` / `synDarkComment '#999999'` / `synDarkPlain '#D4D4D4'`。
+- `ui/theme.ets` token 落位到官方刻度（**R023 允许字号集** =
+  `{8,9,10,12,14,16,18,20,22,24,28,30,36,38,46,48,56}`；**R003 允许间距/圆角集** =
+  `{0,2,4,6,8,10,12,14,16,18,20,22,24,26,32,36,40,56,64}`）：
+  `codeBlock/codeBlockLabel` 13→12、`table/tableHead` 15→16、`contentPadRight` 15→16、
+  `actionIconSize` 17→16、`codeBlockPadH` 15→16、`inlineCodePadH` 5→6、
+  `processIconSize` 15→16、`chipRadius` 15→16、`chipGap` 19→18、`settingsChipGap` 7→6。
+- 引用处批量落位（脚本 + 复查脚本验证 0 残留）：字号 `{13:12,15:16,11:10,17:16,32:30,40:38}`
+  共 **48 处 / 16 文件**；间距与圆角 `{7:8,3:4,1:2,11:12,9:10}` 共 **29 处 / 10 文件**；
+  `Composer.ets` TextArea `.borderRadius(0)`→`2`（圆角集不含 0）。
+
+**P1（规范项）**
+- 无障碍：批量插入 **59 处 `accessibilityText`**（19 文件）—— 顶栏三键、消息操作六键、
+  Composer 六处、HITL 四处、抽屉/面板/连接页/设置页各处；小热区放大：
+  `SessionsDrawer` 新建对话 34→40、`ChatView` 顶栏三图标 36→40（R009 触控 ≥40vp）。
+- `module.json5` deviceTypes 收窄为 `["phone"]` —— 未做 600/840vp 一多分档，声明 tablet/2in1
+  会过不了上架一致性核查；`string.json`（base + en_US）各删 3 条未使用的 `skeleton_*`。
+- 动效档位：`ChatView.ets` 抽屉 `duration: 240` → `200`（R017 档位 100/150/200/300/350）。
+
+**core 拆分（宪法 §7 单文件 ≤500 行）**
+拆前超限 3 个：`ChatStore.ts` 569、`GatewayClient.ts` 541、`GatewayApi.ts` 541。拆后：
+- `core/GatewayRest.ts`（277 行）：GatewayApi 的 REST 实现整体搬出（restHeaders/restJson/
+  encodePath + 13 个 REST 方法），`GatewayApi.ts` 留 13 个同名委托 → 365 行。
+- `core/ChatHitl.ts`（90 行）：`refreshPendingMarksIn` / `pendingMarkOfIn` / `answerQuestionIn` /
+  `cancelQuestionIn` / `decideApprovalIn` 五个 store 参数纯函数。
+- `core/ChatHistory.ts`（93 行）：`reloadHistoryIn`（本地命令卡灌回尾部）/ `loadOlderIn`
+  （beforeSeq=最小 seq、合并去重、跨会话结果丢弃）。
+- `core/GatewayRequests.ts`（约 190 行）：`requestWithTimeoutOn` / `requestOn` / `subscribeOn` /
+  `onFrameOn` 帧收发与分派。
+- 终态行数：`ChatStore.ts` 456、`GatewayClient.ts` 434、`HistoryPage.ts` 469 —— 全部 <500 ✓。
+- **三个踩坑**（详见 PORT-MAP）：①按行号区间剪段会静默带走区间内夹着的别的方法
+  （`setPermission` 被删 → 测试 `TypeError`）；②`onFrameOn` 拆出去时漏了 `kind==='hello'`
+  分支 → 所有客户端测试挂满 300s 超时（"Promise resolution is still pending"）；
+  ③script 拼 head+tail 会多/少一个类闭合括号，报 `Unexpected "}"` / `Expected identifier
+  but found end of file`。
+
+**门禁**：`npm --prefix harmony/test test` → **227/227 全绿**；
+`bash scripts/ci/docs-check.sh` → 通过；`bash scripts/package.sh --no-test` → BUILD SUCCESSFUL。
+
+**未修（P2 延后，报告里已列）**：R007 窗口宽度断点（600/840vp 一多分档，deviceTypes 已收窄到
+phone 规避）、R005 `LazyForEach`（长会话全量 ForEach）、R016 图片 `objectFit`、中文硬编码 92 处
+（未做 `$r('app.string')` 资源化）。

@@ -177,11 +177,12 @@ export struct TrajectorySheet {
                       .fontSize(DsTypography.caption.size)
                       .fontColor(this.c().labelTertiary)
                     Text(this.expandedSeq === n.seq ? '⌃' : '⌄')
-                      .fontSize(13)
+                      .fontSize(12)
                       .fontColor(this.c().labelSecondary)
                   }
                   .width('100%')
                   .padding({ top: DsSpacing.liGap, bottom: DsSpacing.liGap })
+                  .accessibilityText('第 ' + n.seq.toString() + ' 条' + (this.expandedSeq === n.seq ? '，收起' : '，展开'))
                   .onClick(() => {
                     this.expandedSeq = this.expandedSeq === n.seq ? -1 : n.seq;
                   })
@@ -345,33 +346,36 @@ export struct TeamSheet {
         Text('新建成员')
           .fontSize(DsTypography.caption.size)
           .fontColor(this.c().labelPrimary)
-          .padding({ left: 12, right: 12, top: 7, bottom: 7 })
+          .padding({ left: 12, right: 12, top: 8, bottom: 8 })
           .margin({ right: DsSpacing.settingsChipGap, bottom: DsSpacing.settingsChipGap })
           .borderRadius(DsSpacing.chipRadius)
           .backgroundColor(this.c().chipSelectedBg)
           .opacity(this.connected() ? 1 : 0.4)
+          .accessibilityText('新建成员')
           .onClick(() => {
             this.send('请新建一名团队成员，负责：');
           })
         Text('分配任务')
           .fontSize(DsTypography.caption.size)
           .fontColor(this.c().labelPrimary)
-          .padding({ left: 12, right: 12, top: 7, bottom: 7 })
+          .padding({ left: 12, right: 12, top: 8, bottom: 8 })
           .margin({ right: DsSpacing.settingsChipGap, bottom: DsSpacing.settingsChipGap })
           .borderRadius(DsSpacing.chipRadius)
           .backgroundColor(this.c().chipSelectedBg)
           .opacity(this.connected() ? 1 : 0.4)
+          .accessibilityText('分配任务')
           .onClick(() => {
             this.send('请给团队成员分配任务：');
           })
         Text('问进度')
           .fontSize(DsTypography.caption.size)
           .fontColor(this.c().labelPrimary)
-          .padding({ left: 12, right: 12, top: 7, bottom: 7 })
+          .padding({ left: 12, right: 12, top: 8, bottom: 8 })
           .margin({ right: DsSpacing.settingsChipGap, bottom: DsSpacing.settingsChipGap })
           .borderRadius(DsSpacing.chipRadius)
           .backgroundColor(this.c().chipSelectedBg)
           .opacity(this.connected() ? 1 : 0.4)
+          .accessibilityText('问进度')
           .onClick(() => {
             this.send('汇报一下团队当前的成员状态和任务进度。');
           })
@@ -458,7 +462,7 @@ export struct TodoSheet {
             ForEach(this.todos(), (t: TodoItem) => {
               Row({ space: DsSpacing.chipIconGap }) {
                 Text(t.isCompleted ? '☑' : (t.isInProgress ? '🕑' : '☐'))
-                  .fontSize(15)
+                  .fontSize(16)
                   .fontColor(t.isCompleted ? this.c().brand
                     : (t.isInProgress ? this.c().labelPrimary : this.c().labelTertiary))
                 Text(t.content)
