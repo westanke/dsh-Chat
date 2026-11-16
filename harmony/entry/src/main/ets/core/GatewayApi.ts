@@ -493,8 +493,15 @@ export class GatewayApi {
     });
   }
 
-  fetchImageHandoff(name: string): Promise<Uint8Array> {
-    const path: string = '/api/v1/image-handoff?name=' + GatewayApi.encodePath(name);
+  /**
+   * 取图片交接产物。**sessionId 必带**：bridge `attachmentsAndImage()` 对
+   * `/api/v1/image-handoff` 校验 `if (!name || !sessionId) throw ApiError(400,
+   * 'BODY_INVALID', 'name and sessionId query parameters are required.')`
+   * —— 只传 name 会 400（真机表现：用户气泡图片位显示「图片加载失败」）。
+   */
+  fetchImageHandoff(name: string, sessionId: string): Promise<Uint8Array> {
+    const path: string = '/api/v1/image-handoff?name=' + GatewayApi.encodePath(name)
+      + '&sessionId=' + GatewayApi.encodePath(sessionId);
     if (this.http === null) {
       return Promise.reject(new RequestException('NO_TRANSPORT', 'HTTP 传输未注入'));
     }

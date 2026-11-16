@@ -40,7 +40,16 @@ export struct ImageTile {
     this.loading = true;
     this.error = '';
     st.fetchImageBytes(ref).then((bytes: Uint8Array): void => {
-      const src: image.ImageSource = image.createImageSource(bytes);
+      // createImageSource(buf: ArrayBuffer) —— 传 Uint8Array 会因类型不符返回
+      // undefined（真机表现：Cannot read property createPixelMap of undefined），
+      // 必须先取底层 buffer。
+      const raw: ArrayBuffer = bytes.buffer as ArrayBuffer;
+      const src: image.ImageSource | undefined = image.createImageSource(raw);
+      if (src === undefined) {
+        this.loading = false;
+        this.error = '图片解码失败';
+        return;
+      }
       src.createPixelMap().then((pm: image.PixelMap): void => {
         this.pixels = pm;
         this.loading = false;

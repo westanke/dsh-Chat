@@ -16,12 +16,13 @@ export class ImageFetcher {
     if (cached !== undefined) {
       return Promise.resolve(cached);
     }
+    const sid: string = sessionId ?? '';
     let job: Promise<Uint8Array>;
     if (ref.attachmentId.length > 0) {
-      const sid: string = sessionId ?? '';
       job = api.fetchAttachment(ref.attachmentId, sid);
     } else {
-      job = api.fetchImageHandoff(ref.handoffName);
+      // 交接图也必须带 sessionId（bridge 校验 name + sessionId 同时存在）。
+      job = api.fetchImageHandoff(ref.handoffName, sid);
     }
     return job.then((bytes: Uint8Array): Uint8Array => {
       if (bytes.length === 0) {

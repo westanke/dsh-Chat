@@ -209,6 +209,38 @@
 - `切权限不刷投影` —— `permission` 帧只改服务端投影（`values.permissions.currentValue`），
   **不产生 chat 事件**，所以客户端不会自动重渲染。`setPermissionIn` 成功后必须显式
   `store.reloadHistory()`（同 `runCommandIn` 的收尾），否则 chip 永远停在旧档位。
+- `bindContentCover 不含安全区` —— `bindContentCover` 打开的全屏模态从屏幕物理顶起算，
+  不包含系统状态栏安全区（真机现象：`MdDocViewer` 顶栏标题压在状态栏下、返回键 `‹`
+  只剩 16px 高）。修法：`pages/MdDocViewer.ets` 的 `aboutToAppear()` 里
+  `window.getLastWindow(getContext(this)).then((win) => { const avoid =
+  win.getWindowAvoidArea(window.AvoidAreaType.TYPE_SYSTEM);
+  this.topInset = px2vp(avoid.topRect.height); })`，根 `Column` 加
+  `.padding({ top: this.topInset })`。
+- `image-handoff 缺 sessionId` —— bridge 的 `attachmentsAndImage()`（`lib/index.js:10731-10735`）
+  强制校验 `if (!name || !sessionId) throw new ApiError(400, "BODY_INVALID", "name and
+  sessionId query parameters are required.")`。`core/GatewayApi.ts` 的
+  `fetchImageHandoff(name)` 只拼 name → **恒 400**，图片永远「加载失败」。修法：签名加
+  `sessionId: string`，path 拼 `'&sessionId=' + GatewayApi.encodePath(sessionId)`；
+  `core/ImageFetcher.ts` 里把 `const sid: string = sessionId ?? ''` 提到分支外，
+  `api.fetchImageHandoff(ref.handoffName, sid)`（`fetchAttachment` 本来就传了，交接图漏了）。
+  安卓 `app/lib/bridge/gateway_api.dart:140` 同款漏传，属两端共有的潜在缺陷。
+- `createImageSource 要 ArrayBuffer` —— `image.createImageSource(buf)` 的重载是
+  `(buf: ArrayBuffer)`；传 `Uint8Array` 类型不符，运行时返回 `undefined`，紧接着
+  `src.createPixelMap()` 抛 `TypeError: Cannot read property 'createPixelMap' of
+  undefined` 直接崩进程（真机：一进含图会话就闪退）。修法：`const raw: ArrayBuffer =
+  bytes.buffer as ArrayBuffer; const src: image.ImageSource | undefined =
+  image.createImageSource(raw);` 再判 `undefined` 走「图片解码失败」分支。
+- `TTS 建引擎要探测参数` —— 真机实测同一 SDK 版本下建引擎参数容错极差：
+  `{language:'zh-CN', person:0, online:0}` 报 `{"code":1002300005,"message":"create
+  engine error!"}`；再补 `extraParams: {style:'interaction-broadcast', locate:'CN',
+  name:'zff'}` 报 `{"code":202,"message":"this is not systemCap!"}`（`extraParams` 里
+  有未声明 key 会整体校验失败）。修法：`platform/Tts.ets` 加 `probeParams()` 候选序列
+  `[{zh-CN,0,online:1}, {zh-CN,1,online:1}, {zh-CN,0,online:0}, {zh-CN,1,online:0},
+  {en-US,0,online:0}]`，`ensureEngine` 里逐个 `await createEngine(params)`，首个成功
+  即缓存。排障手法：把 `JSON.stringify(err)` 拼进 `flash()` 提示再用 dumpLayout 读回，
+  一轮拿到准确错误码（定位后记得改回固定文案）。
+  **不产生 chat 事件**，所以客户端不会自动重渲染。`setPermissionIn` 成功后必须显式
+  `store.reloadHistory()`（同 `runCommandIn` 的收尾），否则 chip 永远停在旧档位。
 
 
 **阶段 4 已记偏差（2026-11-16）**：①@s 文件补全多根下钻/删除确认照搬；②设置页「字号跟随系统」开关与 Slider 鸿蒙版延后阶段 5（fontScale 真机定）；③诊断日志开关不移植（Dlog.ets hilog 直写不落文件）；④子会话历史页（subagent_history_page）与 subagentHistory REST 已有，入口延后阶段 5；⑤会话目录选择（session_location_sheet）延后阶段 5；⑥表格下载/展开、推挤抽屉动画、自绘品牌标延后。

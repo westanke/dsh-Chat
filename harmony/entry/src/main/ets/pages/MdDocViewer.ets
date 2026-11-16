@@ -4,6 +4,7 @@
  * 失败中心图标 + 重试。入口=交付文件卡点 .md（chat_message_items 口径）。
  */
 
+import { window } from '@kit.ArkUI';
 import { ChatStore } from '../core/ChatStore';
 import { DsColors, DsTypography, DsSpacing } from '../ui/theme';
 import { MdView } from '../components/md/MdView';
@@ -19,6 +20,8 @@ export struct MdDocViewer {
   @State sizeLabel: string = '';
   @State error: string = '';
   @State loaded: boolean = false;
+  /** 状态栏高度（vp）：bindContentCover 全屏模态不自动避让状态栏，须自己让。 */
+  @State topInset: number = 0;
 
   private c(): DsColors {
     return new DsColors(this.dark);
@@ -26,6 +29,14 @@ export struct MdDocViewer {
 
   aboutToAppear(): void {
     this.load();
+    // 全屏模态（bindContentCover）内容从屏幕顶起，不含系统安全区；取状态栏高度补顶部内边距，
+    // 否则标题与返回键被状态栏盖住（真机实证）。
+    window.getLastWindow(getContext(this)).then((win: window.Window): void => {
+      const avoid: window.AvoidArea = win.getWindowAvoidArea(window.AvoidAreaType.TYPE_SYSTEM);
+      this.topInset = px2vp(avoid.topRect.height);
+    }).catch((): void => {
+      // 拿不到就退回 0，不影响正文渲染。
+    });
   }
 
   load(): void {
@@ -126,6 +137,7 @@ export struct MdDocViewer {
     }
     .width('100%')
     .height('100%')
+    .padding({ top: this.topInset })
     .backgroundColor(this.c().bgBase)
   }
 }

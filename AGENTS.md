@@ -303,4 +303,8 @@ CI 构建没人用（理由见 ci.yml 头注释）；鸿蒙构建需 DevEco 工�
 - `发送键白底看不见` —— 禁用态不能用 `inputFill`（浅色主题等于白底白箭头），走 `sendDisabledBg/sendDisabledFg` 浅灰底 + 中灰箭头。
 - `会话列表待回答标记靠 REST` —— bridge 的 sessions 列表只下发 `pendingInteraction:'approval'`（挂起审批），**挂起提问不发**；非当前会话的 HITL 帧也不补推。标记必须靠 `GET /chat/sessions/{sid}/questions` + `/approvals` 逐会话探测，结果抄进 `@State` 数组（Map 不触发 ArkUI）。
 - `GatewayApi 忘注入 HTTP transport` —— `new GatewayApi(gateway, null)` 会让所有 REST 功能（附件/图片交接/根列表/文件全文/挂起项）报 `NO_TRANSPORT`；两条连接路径（ConnectView 与 Index.autoConnect）都必须传 `new HttpTransportImpl()`。
+- `bindContentCover 不含安全区` —— 全屏模态的内容从屏幕顶起算，顶栏会压在状态栏下（返回键只剩 16px 高）；`aboutToAppear` 里取 `win.getWindowAvoidArea(AvoidAreaType.TYPE_SYSTEM).topRect.height` 转 `px2vp` 存 `@State topInset`，根容器加 `.padding({ top: this.topInset })`。
+- `image-handoff 缺 sessionId` —— bridge `attachmentsAndImage()` 强制要求 `name` 与 `sessionId` 两个 query 参数，缺一即 400 `BODY_INVALID`；`fetchImageHandoff(name)` 必须加 sessionId 实参（安卓 `gateway_api.dart:140` 漏传，同款潜在缺陷）。
+- `createImageSource 要 ArrayBuffer` —— 传 `Uint8Array` 类型不符返回 undefined，随后 `createPixelMap` 抛 `Cannot read property 'createPixelMap' of undefined` 崩进程；先 `bytes.buffer as ArrayBuffer` 再建源并判空。
+- `TTS 建引擎要探测参数` —— 真机 `{language:'zh-CN',person:0,online:0}` 报 `1002300005 create engine error`，加 `extraParams:{style,locate,name}` 报 `202 this is not systemCap`（未声明的 key 全校验失败）；按 `probeParams()` 依次试 `(online,person)` 组合，首个成功即缓存引擎。
 - `命令卡被 reloadHistory 冲掉` —— 本地注入的 `role='command'、seq=-1` 消息不在服务端历史里，`reloadHistory` 整体替换 messages 会把它冲掉；替换前要收集 seq<0 的命令卡再拼回尾部（安卓 chat_history_actions.dart:36-40 同口径）。

@@ -243,9 +243,29 @@ Flex 链式 .alignItems 不存在（构造参数里传）。
 | 图片缩略图（bug⑯） | 183/183 含 2 条 `stripBridgeImageNote` 用例；事件流证明 content 是两个 text 块 | 用户气泡应只剩原文 + 「看不到图...」说明段消失 + 出现缩略图 |
 | 审批卡（bug⑭） | ws 探针抓到 `chat.approval.requested`/`resolved`；`HitlPanel` 已改 `@Prop` | 真机触发一次升级审批，看卡片出现/回答后消失 |
 
-**尚未冒烟**：TTS 朗读与系统分享面板（`platform/Tts.ets`、`platform/Share.ets` 代码已就绪，未经真机点击）；深色模式整屏；`@` 引用文件；历史分页（`mergeOlderMessages`）；断线重连退避（1→2→4→8→16s）；检查更新跳转。
+**尚未冒烟**：深色模式整屏；`@` 引用文件；历史分页（`mergeOlderMessages`）；断线重连退避（1→2→4→8→16s）；检查更新跳转。
 
-**设备状态**：2026-11-16 16:10 起 hdc 掉线（`hdc list targets` 为 `[Empty]`、`lsusb` 无华为设备、WiFi 也 ping 不通 192.168.1.211），需重新插线并确认调试授权后继续上面的「待真机复验」三项。
+## 阶段 5 第五批：设备恢复后真机复验（2026-11-16 17:20）
+
+设备（3AX0225103005398）恢复后逐项复验第四批遗留三项 + 两个平台层通点，**过程中又抓到四个真机级 bug**：
+
+| 项 | 结果 | 说明 |
+|---|---|---|
+| 文件卡渲染 | ✅ | 会话「用present工具交付测试文件」→ `📄 hello-deliverable.md` + 描述「交付测试文件，内容为…」渲染在 assistant 收尾正文之后（落位正确） |
+| 文件卡 → 文档页 | ✅ | 点卡片打开 `MdDocViewer`：标题 `hello-deliverable.md`、`1 KB`、正文「交付测试：文件卡验收用」；点 `‹` 返回会话 |
+| 图片缩略图（bug⑯） | ✅ | 用户气泡只剩原文「发图测试」，bridge 注入的「🖼️ 图片 1…」说明段与 `[Image: source: …]` 占位都不显示，缩略图正常渲染原截图 |
+| TTS 朗读 | ✅ | 点 🔊 → 提示「正在朗读」、图标变 ⏹ 品牌色；约 20s 读完自动复位 |
+| 系统分享面板 | ✅ | 点 ⤴ → 弹出系统「分享」面板（文本预览 + 华为分享/微信/电子邮件/UC浏览器/复制/小艺帮记/打印） |
+| 推挤式抽屉 | ✅ | 抽屉宽 864px（80%），聊天页整体右推，「⚙️ 设置」行仅在末尾一处 |
+
+**本轮修的真机级 bug（4 个）**：
+
+1. **文档页顶栏被状态栏盖住**（`pages/MdDocViewer.ets`）：`bindContentCover` 全屏模态内容从屏幕顶开始，不含系统安全区，标题与 `‹` 返回键压在状态栏下（真机截图实证）。修法：`aboutToAppear` 里 `window.getLastWindow(...)` → `win.getWindowAvoidArea(window.AvoidAreaType.TYPE_SYSTEM)` 取 `topRect.height`，`px2vp` 转 vp 存 `@State topInset`，根 `Column` 加 `.padding({ top: this.topInset })`。
+2. **`/api/v1/image-handoff` 缺 sessionId**（`core/GatewayApi.ts` + `core/ImageFetcher.ts`）：bridge `attachmentsAndImage()` 对该路由校验 `if (!name || !sessionId) throw ApiError(400,'BODY_INVALID','name and sessionId query parameters are required.')`，原实现只传 `name` → 恒 400，真机表现「图片加载失败」。修法：`fetchImageHandoff(name, sessionId)` 双参，`ImageFetcher.fetch` 把已有的 `sid` 一起传下去（`fetchAttachment` 早就传了 sessionId，交接图漏了）。
+3. **`createImageSource` 传 Uint8Array 返回 undefined**（`components/ImageTile.ets`）：SDK 重载是 `createImageSource(buf: ArrayBuffer)`，传 `Uint8Array` 类型不符 → 返回 undefined → `Cannot read property createPixelMap of undefined`。修法：`image.createImageSource(bytes.buffer as ArrayBuffer)` + 判 undefined 走「解码失败」分支。
+4. **TTS 建引擎参数不合法**（`platform/Tts.ets`）：`{language:'zh-CN', person:0, online:0}` 真机报 `1002300005 create engine failed`；加 `extraParams.style/locate/name` 报 `202 this is not systemCap`（extraParams 未声明 key 全校验失败）。修法：`probeParams()` 依次试 `(online, person)` 组合（`0/1` × `person 0/1`，外加 `en-US` 兜底），首个成功即缓存；全失败才回「朗读暂不可用」。
+
+**顺带清理**：`MessageActions.ets` 去掉调试期把 `lastTtsError` 拼进提示的代码（改回固定文案「朗读暂不可用」）；`platform/Tts.ets` 的 `lastTtsError` 不再 `export`，改由 `ttsLastError()` 读取（排障用）。183/183 用例全绿。
 
 ## 阶段 5 收尾：TTS / 分享面板代码修正（设备离线期，2026-11-16）
 

@@ -13,6 +13,13 @@ import { textToSpeech } from '@kit.CoreSpeechKit';
 let engine: textToSpeech.TextToSpeechEngine | null = null;
 /** 当前朗读的 requestId；用于忽略过期的完成回调。 */
 let currentRequestId: string = '';
+/** 最近一次失败原因（内部诊断用；空=无错）。 */
+let lastTtsError: string = '';
+
+/** 最近一次建引擎/朗读失败的原因（排障用；成功时为空串）。 */
+export function ttsLastError(): string {
+  return lastTtsError;
+}
 /**
  * 朗读状态观察者（UI 用来切「朗读中/朗读」图标）。
  * 用**多观察者列表**而不是单个槽位：聊天页每条助手消息都挂一个 MessageActions，
@@ -43,17 +50,44 @@ function notifyBusy(busy: boolean): void {
   }
 }
 
+/**
+ * 建引擎候选参数（真机实证）：`{language:'zh-CN', person:0, online:0}` 报
+ * 1002300005 create engine failed；带 `extraParams.style/locate/name` 报 202
+ * this is not systemCap（extraParams 里有未声明的 key 全校验失败）。
+ * 目前已知可行形态是最小参数 + person 换值，逐个试，首个成功即用。
+ */
+function probeParams(): textToSpeech.CreateEngineParams[] {
+  const out: textToSpeech.CreateEngineParams[] = [];
+  out.push({ language: 'zh-CN', person: 0, online: 1 });
+  out.push({ language: 'zh-CN', person: 1, online: 1 });
+  out.push({ language: 'zh-CN', person: 0, online: 0 });
+  out.push({ language: 'zh-CN', person: 1, online: 0 });
+  out.push({ language: 'en-US', person: 0, online: 0 });
+  return out;
+}
+
 /** 首次朗读时建引擎并装监听；之后复用。 */
 async function ensureEngine(requestId: string): Promise<textToSpeech.TextToSpeechEngine> {
   if (engine !== null) {
     return engine;
   }
-  const params: textToSpeech.CreateEngineParams = {
-    language: 'zh-CN',
-    person: 0,
-    online: 0
-  };
-  const eng: textToSpeech.TextToSpeechEngine = await textToSpeech.createEngine(params);
+  // 建引擎参数探测：真机对不同组合反应不同（1002300005 create failed / 202 校验失败），
+  // 依次试 (online, person) 组合，第一个成功的缓存下来。
+  const attempts: textToSpeech.CreateEngineParams[] = probeParams();
+  let eng: textToSpeech.TextToSpeechEngine | null = null;
+  let lastErr: string = '';
+  for (const params of attempts) {
+    try {
+      eng = await textToSpeech.createEngine(params);
+      break;
+    } catch (e) {
+      lastErr = JSON.stringify(e);
+      eng = null;
+    }
+  }
+  if (eng === null) {
+    throw new Error('create engine failed: ' + lastErr);
+  }
   const listener: textToSpeech.SpeakListener = {
     onStart: (rid: string, response: textToSpeech.StartResponse): void => {
       if (rid === currentRequestId) {
@@ -91,6 +125,7 @@ export async function speak(context: common.UIAbilityContext, text: string): Pro
     return false;
   }
   const requestId: string = 'dsh-' + Date.now().toString();
+  lastTtsError = '';
   try {
     const eng: textToSpeech.TextToSpeechEngine = await ensureEngine(requestId);
     currentRequestId = requestId;
@@ -107,6 +142,7 @@ export async function speak(context: common.UIAbilityContext, text: string): Pro
     return true;
   } catch (err) {
     currentRequestId = '';
+    lastTtsError = 'ERR:' + JSON.stringify(err);
     return false;
   }
 }

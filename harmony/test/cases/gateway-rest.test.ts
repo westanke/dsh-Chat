@@ -88,10 +88,11 @@ test('fetchImageHandoff: name encode', async () => {
   const http: FakeHttp = new FakeHttp();
   const api: GatewayApi = await makeApi(http);
   http.pushBytes(200, new Uint8Array([9, 8, 7, 6]));
-  const data: Uint8Array = await api.fetchImageHandoff('abc.png?raw=1');
+  const data: Uint8Array = await api.fetchImageHandoff('abc.png?raw=1', 's1');
   assert.equal(data.length, 4);
+  // sessionId 必带（bridge 校验 name + sessionId 同时存在，缺则 400 BODY_INVALID）。
   assert.equal(http.requests[0].url,
-    'http://192.168.1.10:8765/api/v1/image-handoff?name=abc.png%3Fraw%3D1');
+    'http://192.168.1.10:8765/api/v1/image-handoff?name=abc.png%3Fraw%3D1&sessionId=s1');
   assert.ok(data instanceof Uint8Array);
   assert.equal(data.length, 4);
 });
@@ -102,6 +103,6 @@ test('http 未注入 → NO_TRANSPORT（不发请求）', async () => {
     (e as RequestException).code === 'NO_TRANSPORT');
   await assert.rejects(api.fetchAttachment('a', 'b'), (e: Error): boolean =>
     (e as RequestException).code === 'NO_TRANSPORT');
-  await assert.rejects(api.fetchImageHandoff('a'), (e: Error): boolean =>
+  await assert.rejects(api.fetchImageHandoff('a', 'b'), (e: Error): boolean =>
     (e as RequestException).code === 'NO_TRANSPORT');
 });
