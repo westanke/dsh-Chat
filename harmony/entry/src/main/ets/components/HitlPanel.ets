@@ -294,7 +294,7 @@ export struct HitlPanel {
       .backgroundColor(this.c().inputFill)
       .border({ width: 1, color: this.c().inputBorder })
       .borderRadius(DsSpacing.codeBlockRadius)
-      .height(36)
+      .height(40)
       .width('100%')
       .onChange((value: string) => {
         this.setCustom(item.id, value);

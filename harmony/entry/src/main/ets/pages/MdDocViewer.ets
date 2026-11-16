@@ -118,7 +118,7 @@ export struct MdDocViewer {
         .justifyContent(FlexAlign.Center)
       } else if (!this.loaded) {
         Column() {
-          LoadingProgress().width(32).height(32).color(this.c().brand)
+          LoadingProgress().width(40).height(40).color(this.c().brand)
         }
         .width('100%')
         .layoutWeight(1)

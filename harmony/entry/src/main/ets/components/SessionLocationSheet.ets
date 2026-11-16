@@ -268,7 +268,8 @@ export struct SessionLocationSheet {
       Text('‹')
         .fontSize(20)
         .fontColor(this.c().brand)
-        .width(36)
+        .width(40)
+        .height(40)
         .textAlign(TextAlign.Center)
         .accessibilityText('返回上级目录')
         .onClick((): void => {

@@ -80,8 +80,8 @@ export struct ImageTile {
         Column({ space: 6 }) {
           if (this.loading) {
             LoadingProgress()
-              .width(20)
-              .height(20)
+              .width(40)
+              .height(40)
               .color(this.c().labelTertiary)
           } else {
             Text('🖼')
