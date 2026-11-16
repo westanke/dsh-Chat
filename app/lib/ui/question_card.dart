@@ -67,7 +67,15 @@ class HitlPanel extends StatelessWidget {
 
 // ---------- 审批卡 ----------
 
-class _ApprovalCard extends StatelessWidget {
+/// 审批卡（官方 approval 包语义）：
+/// - 顶部 strip 状态条（小圆点 + 「等待审批」），决定提交后按钮全禁用
+///   （官方 answered 态 disabled + aria-busy）；
+/// - full-access 越权标题「工具 {toolName} 请求越权执行」，standard 保持
+///   「DSH 请求使用 {toolName}」；
+/// - reason 用代码等宽字体（官方 detail 是 command 代码字体）；
+/// - 只有「拒绝」「允许一次」两键（协议 decideApproval 只收 allow bool，
+///   官方亦无「始终允许」第三键）。
+class _ApprovalCard extends StatefulWidget {
   const _ApprovalCard({
     required this.approval,
     required this.colors,
@@ -79,7 +87,21 @@ class _ApprovalCard extends StatelessWidget {
   final void Function(PendingApproval, bool) onDecide;
 
   @override
+  State<_ApprovalCard> createState() => _ApprovalCardState();
+}
+
+class _ApprovalCardState extends State<_ApprovalCard> {
+  /// 本地 answered 态：决定已提交（等待 resolved 摘表）期间按钮全禁用。
+  bool _answered = false;
+
+  @override
   Widget build(BuildContext context) {
+    final approval = widget.approval;
+    final c = widget.colors;
+    final title = approval.risk == 'full-access'
+        ? '工具 ${approval.toolName} 请求越权执行'
+        : 'DSH 请求使用 ${approval.toolName}';
+    final reason = approval.reason;
     return Container(
       margin: const EdgeInsets.fromLTRB(
         DsSpacing.screenPad,
@@ -89,7 +111,7 @@ class _ApprovalCard extends StatelessWidget {
       ),
       padding: const EdgeInsets.all(DsSpacing.codeBlockPad),
       decoration: BoxDecoration(
-        color: colors.settingsWarnBg,
+        color: c.settingsWarnBg,
         borderRadius: BorderRadius.circular(DsSpacing.codeBlockRadius),
       ),
       child: Column(
@@ -97,29 +119,48 @@ class _ApprovalCard extends StatelessWidget {
         children: [
           Row(
             children: [
+              Container(
+                width: DsSpacing.liGap,
+                height: DsSpacing.liGap,
+                decoration: BoxDecoration(
+                  color: c.settingsWarnFg,
+                  shape: BoxShape.circle,
+                ),
+              ),
+              const SizedBox(width: DsSpacing.chipIconGap),
+              Text(
+                '等待审批',
+                style: DsTypography.caption.copyWith(color: c.settingsWarnFg),
+              ),
+            ],
+          ),
+          const SizedBox(height: DsSpacing.liGap),
+          Row(
+            children: [
               Icon(
                 Icons.gavel,
                 size: DsSpacing.processIconSize,
-                color: colors.settingsWarnFg,
+                color: c.settingsWarnFg,
               ),
               const SizedBox(width: DsSpacing.processIconGap),
               Expanded(
                 child: Text(
-                  'DSH 请求使用 ${approval.toolName}',
+                  title,
                   style: DsTypography.smallStrong.copyWith(
-                    color: colors.settingsWarnFg,
+                    color: c.settingsWarnFg,
                   ),
                 ),
               ),
             ],
           ),
-          if (approval.reason != null && approval.reason!.isNotEmpty)
+          if (reason != null && reason.isNotEmpty)
             Padding(
               padding: const EdgeInsets.only(top: DsSpacing.liGap),
               child: Text(
-                approval.reason!,
-                style: DsTypography.caption.copyWith(
-                  color: colors.settingsWarnFg,
+                reason,
+                // 官方 detail 用代码等宽字体展示命令文本。
+                style: DsTypography.codeBlockLabel.copyWith(
+                  color: c.settingsWarnFg,
                 ),
               ),
             ),
@@ -129,19 +170,31 @@ class _ApprovalCard extends StatelessWidget {
               children: [
                 const Spacer(),
                 TextButton(
-                  onPressed: () => onDecide(approval, false),
+                  onPressed: _answered
+                      ? null
+                      : () {
+                          setState(() => _answered = true);
+                          widget.onDecide(approval, false);
+                        },
                   child: Text(
                     '拒绝',
-                    style: DsTypography.small.copyWith(color: colors.danger),
+                    style: DsTypography.small.copyWith(
+                      color: _answered ? c.labelTertiary : c.danger,
+                    ),
                   ),
                 ),
                 const SizedBox(width: DsSpacing.chipGap),
                 FilledButton(
                   style: FilledButton.styleFrom(
-                    backgroundColor: colors.link,
-                    foregroundColor: colors.onBrand,
+                    backgroundColor: c.link,
+                    foregroundColor: c.onBrand,
                   ),
-                  onPressed: () => onDecide(approval, true),
+                  onPressed: _answered
+                      ? null
+                      : () {
+                          setState(() => _answered = true);
+                          widget.onDecide(approval, true);
+                        },
                   child: const Text('允许一次'),
                 ),
               ],

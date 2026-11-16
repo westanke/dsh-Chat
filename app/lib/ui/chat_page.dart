@@ -31,6 +31,7 @@ import 'stats_sheet.dart';
 import 'work_steps.dart';
 import 'work_view_sheet.dart';
 
+part 'chat_message_blocks.dart';
 part 'chat_message_items.dart';
 part 'chat_message_list.dart';
 

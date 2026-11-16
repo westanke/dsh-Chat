@@ -114,6 +114,32 @@ enum FoldedReplies {
       );
 }
 
+/// 「工作步骤展示」四档的组聚合方式（官方 Web policy 逆向）：
+/// collapsed=组折叠行+可展开列表（standard）；history=同 collapsed 且行带
+/// 详情（detailed）；none=逐条平铺无组标题（verbose）。
+enum WorkStepGrouping { collapsed, history, none }
+
+/// 「工作步骤展示」四档在会话页的落地参数（官方 Web policy 逐档核对）。
+/// 派生 getter，不持久化——持久化只存官方 token（jsonName）。
+extension WorkStepsDetailPolicy on WorkStepsDetail {
+  /// 组聚合方式（none 时会话页按平铺逐条工具行渲染）。
+  WorkStepGrouping get stepGrouping => switch (this) {
+    WorkStepsDetail.verbose => WorkStepGrouping.none,
+    WorkStepsDetail.detailed => WorkStepGrouping.history,
+    _ => WorkStepGrouping.collapsed,
+  };
+
+  /// 运行中过程组标题是否附加「 · 细节」（官方 concise/verbose 均 false）。
+  bool get liveProcessDetail =>
+      this == WorkStepsDetail.standard || this == WorkStepsDetail.detailed;
+
+  /// 已完成轮的「深度思考」折叠行是否显示一行正文预览（concise 只留标题）。
+  bool get settledReasoningPreview => this != WorkStepsDetail.concise;
+
+  /// 已完成的轮是否折叠工作步骤（verbose 平铺，无组可折叠）。
+  bool get foldCompletedTurns => this != WorkStepsDetail.verbose;
+}
+
 /// 顶层纯函数：NaN/Inf → 1.0，否则夹到 [0.8, 1.5]（对齐 AppPreferences.kt:213）。
 double normalizeFontScale(double value) =>
     value.isFinite ? value.clamp(0.8, 1.5).toDouble() : 1.0;

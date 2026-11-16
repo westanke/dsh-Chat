@@ -21,6 +21,34 @@ class _MessageItem extends StatelessWidget {
   /// 助手消息文本里的 image-handoff 占位（纯文本模型发图回路）。
   DsImageRef? get _handoff => handoffRefOf(message.text);
 
+  /// ask_user_question 的 answerable：HITL 挂起表里还有同 callId 的提问
+  /// （官方 AskQuestionRow 的 answerable 口径；不把整个 HitlState 塞进来）。
+  bool _answerable(String callId) => state.hitl
+      .sessionQuestions(state.sessionId)
+      .any((q) => q.callId == callId);
+
+  /// [index] 所在轮（不在任何轮里返回 null）。
+  TurnRange? _turnOfIndex(int index) {
+    for (final turn in turnsOf(state.messages)) {
+      if (turn.contains(index)) return turn;
+    }
+    return null;
+  }
+
+  /// 运行中组标题的思考流兜底：组之前（同轮内）最近一条带 reasoning 的
+  /// 助手消息的最后一段非空文本（官方取组内 thinking 项；我们的过程组
+  /// 不携带 reasoning，由上层传）。
+  String? _reasoningHint(TurnRange? turn, int index) {
+    if (turn == null) return null;
+    for (var i = index - 1; i > turn.start; i--) {
+      final m = state.messages[i];
+      if (m.role == 'assistant' && m.reasoning.trim().isNotEmpty) {
+        return m.reasoning;
+      }
+    }
+    return null;
+  }
+
   /// 双击复制整条消息（对照 companion ChatMessageItems.kt 的
   /// combinedClickable onDoubleClick + ClipboardManager）。
   Future<void> _copyAll(BuildContext context) async {
@@ -34,17 +62,51 @@ class _MessageItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // 工具调用过程组：折叠成一行，点开展开明细。
+    // 工具调用过程组：折叠成聚合标题行（官方 Web 词表，tool_present.dart），
+    // 点开展开明细；verbose 平铺逐条 DsToolRow，运行中轮的组 forceOpen。
     if (message.isProcess) {
+      final detail = appSettings.workStepsDetail;
+      if (detail.stepGrouping == WorkStepGrouping.none) {
+        // verbose 完全展开：无组标题，逐条工具行（每条自带详情展开）。
+        final calls = message.toolCalls;
+        if (calls.isEmpty) return const SizedBox.shrink();
+        return Padding(
+          padding: const EdgeInsets.only(top: DsSpacing.blockGap),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              for (final call in calls)
+                DsToolRow(
+                  call: call,
+                  colors: colors,
+                  allowDetail: true,
+                  answerable: _answerable,
+                ),
+            ],
+          ),
+        );
+      }
       // 展开态托管在 ChatState（key=首个 callId，跨 reload 稳定）；
-      // detail 四档由「通用设置 · 工作步骤展示」决定。
+      // 运行中轮的组默认展开（官方 alwaysOpen），用户收起过则不再强推。
       final key = processGroupKeyOf(message);
+      final turn = _turnOfIndex(index);
+      final turnRunning = turn != null &&
+          turnIsRunning(state.messages, turn, state.streaming);
+      final forceOpen = turnRunning &&
+          detail.foldCompletedTurns &&
+          !state.isForceOpenDismissed(key);
       return DsProcessGroup(
         group: message,
         colors: colors,
-        detail: appSettings.workStepsDetail,
+        detail: detail,
         expanded: state.isGroupExpanded(key),
-        onToggle: () => state.toggleGroup(key),
+        forceOpen: forceOpen,
+        onToggle: () => state.toggleProcessGroup(
+          key,
+          open: state.isGroupExpanded(key) || forceOpen,
+        ),
+        reasoningHint: _reasoningHint(turn, index),
+        answerable: _answerable,
       );
     }
     // 文件卡（第四轮反馈 6）：present 工具交付的文件列表。
@@ -179,7 +241,13 @@ class _MessageItem extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 if (message.reasoning.isNotEmpty)
-                  _ThinkBlock(text: message.reasoning, colors: colors),
+                  _ThinkBlock(
+                    text: message.reasoning,
+                    colors: colors,
+                    // concise 档折叠态只留标题，不显示正文预览。
+                    showPreview: appSettings
+                        .workStepsDetail.settledReasoningPreview,
+                  ),
                 // 纯文本模型的图片交接（反馈第 8 条手机端显示回路）：
                 // 文本里的 [Image: source: .../<sha256>.<ext>] 占位换成取回的图。
                 if (_handoff != null)
@@ -232,74 +300,6 @@ class _StreamingItem extends StatelessWidget {
             colors: colors,
             streaming: true,
           ),
-        ],
-      ),
-    );
-  }
-}
-
-/// 思考流：官方「已深度思考」可折叠小字块。
-/// [streaming] 为 true 时默认展开并显示「深度思考中…」（真机反馈第五轮
-/// m03759：有思考时流式展示思考过程，而非折叠藏起来）；历史消息保持折叠。
-class _ThinkBlock extends StatefulWidget {
-  const _ThinkBlock({required this.text, required this.colors, this.streaming = false});
-
-  final String text;
-  final DsColors colors;
-  final bool streaming;
-
-  @override
-  State<_ThinkBlock> createState() => _ThinkBlockState();
-}
-
-class _ThinkBlockState extends State<_ThinkBlock> {
-  late bool _expanded = widget.streaming;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = widget.colors;
-    return Padding(
-      padding: const EdgeInsets.only(bottom: DsSpacing.thinkHMargin),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          InkWell(
-            onTap: () => setState(() => _expanded = !_expanded),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 4),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    Icons.explore_outlined,
-                    size: 14,
-                    color: c.labelSecondary,
-                  ),
-                  const SizedBox(width: 4),
-                  Text(
-                    _expanded
-                        ? '收起深度思考'
-                        : widget.streaming
-                            ? '深度思考中…'
-                            : '已深度思考',
-                    style: DsTypography.smallStrong.copyWith(
-                      color: c.labelSecondary,
-                    ),
-                  ),
-                  Icon(
-                    _expanded ? Icons.expand_less : Icons.expand_more,
-                    size: 16,
-                    color: c.labelSecondary,
-                  ),
-                ],
-              ),
-            ),
-          ),
-          if (_expanded)
-            Padding(
-              padding: const EdgeInsets.only(left: DsSpacing.thinkHMargin),
-              child: DsMarkdownView(text: widget.text, colors: c, small: true),
-            ),
         ],
       ),
     );

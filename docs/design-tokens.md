@@ -265,6 +265,20 @@ App 实测墨迹高（density 3.0）：H1 71px、H2 61px、H3 57px、正文 45px
 
 同一抽屉的轨迹段（复用 §4.7 运行轨迹面板）、Agent 预设列表（名称/描述/默认标记/当前勾选）与底部说明，全部复用既有语义 token（`bgLayer1`/`labelPrimary`/`labelSecondary`/`labelTertiary`/`brand`/`settingsSurface`/`chipSelectedBg`），无新增色值/字号/间距。diff 代码块沿用 `DsTypography.codeBlock`/`codeBlockPad`/`codeBlockRadius`，仅行前景/底色按上表。
 
+## 4.10 工具调用展示与审批卡 · 复用既有 token（2026-11-17 官方 Web 对齐批次，无新增色值）
+
+工具行五态（`DsToolRow`）、聚合标题、详情特化（`process_detail.dart`）与审批卡 strip/verdict 全部复用既有语义 token：
+
+| 元素 | token |
+|---|---|
+| 工具行标题 / 摘要 / 状态字「运行中」 | `labelPrimary` / `codeBlockLabel` / `labelTertiary` + `DsTypography.small/caption` |
+| 失败图标与「失败」状态字、错误输出、diff 后缀 `-M` | `DsColors.danger` / `DsColors.diffRemove` |
+| diff 后缀 `+N`、diff 详情行色 | `DsColors.diffAdd` / `DsColors.diffRemove`（+ 对应 *Bg，见 §4.9） |
+| 审批卡 strip 圆点与「等待审批」 | `DsColors.settingsWarnFg`（黄底沿用 `settingsWarnBg`） |
+| kind 图标 / 折叠行箭头 / 耗时与「显示 N 行中的 M 行」 | `labelSecondary` / `labelTertiary` + `DsSpacing.processIconSize/processRowHeight` |
+| 代码块（BASH/CODE/read 正文/diff 行） | `DsTypography.codeBlock` + `mdCodeBlockBg`/`mdCodeBlockText`/`codeBlockRadius` |
+
+
 ## 5. 截图资产（ref/）
 - official-login-page.png 登录页（+86 152 1388 0002 / 验证码输入 / 发送验证码按钮）
 - official-welcome.png 欢迎引导页（开启对话主按钮）
