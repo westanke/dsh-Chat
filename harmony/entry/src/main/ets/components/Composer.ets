@@ -98,6 +98,11 @@ export struct Composer {
 
   private onChanged(v: string): void {
     this.draft = v;
+    // 光标兜底：onChange 先于 onTextSelectionChange 触发，刚敲下 '@' 那一帧
+    // this.cursor 还停在上一次的位置（初值 0），parseAtMentionDraft('@', 0)
+    // 永远返回 null —— 面板要等下一次输入才弹。输入必然把光标推到插入点之后，
+    // 这里按「末尾」估一次先算面板；随后 onTextSelectionChange 拿真位置再校正。
+    this.cursor = v.length;
     this.updatePanel();
   }
 
@@ -168,14 +173,22 @@ export struct Composer {
     this.atFailed = false;
     const roots: GatewayRoot[] = this.atRoots;
     const dir: string = this.atDir;
+    // 逐根拉取并各自容错：某个根下没有同名子目录（404）不该拖垮整张面板
+    // （实测：下钻到 workspace/.dhs-diff 时另两个根 404 → Promise.all 整批 reject
+    //  → 面板显示「目录加载失败」）。全失败才算失败。
     const jobs: Promise<GatewayEntry[]>[] = [];
     for (let i = 0; i < roots.length; i++) {
-      jobs.push(st.api.listEntriesRest(roots[i].id, dir));
+      jobs.push(st.api.listEntriesRest(roots[i].id, dir)
+        .catch((e: Error): GatewayEntry[] => new Array<GatewayEntry>()));
     }
     Promise.all(jobs).then((lists: GatewayEntry[][]): void => {
       const merged: AtEntry[] = [];
+      let okRoots: number = 0;
       for (let i = 0; i < lists.length; i++) {
         const label: string = roots.length > 1 ? roots[i].label + '/' : '';
+        if (lists[i].length > 0 || dir.length === 0) {
+          okRoots = okRoots + 1;
+        }
         for (const e of lists[i]) {
           const name: string = label + e.path;
           if (query.length === 0 || name.toLowerCase().indexOf(query.toLowerCase()) === 0) {
@@ -190,6 +203,9 @@ export struct Composer {
       }
       this.atEntries = merged;
       this.atLoading = false;
+      if (okRoots === 0 && dir.length > 0) {
+        this.atFailed = true; // 所有根都没这个目录：确实失败
+      }
     }).catch((): void => {
       this.atLoading = false;
       this.atFailed = true;
@@ -349,7 +365,12 @@ export struct Composer {
           this.onChanged(v);
         })
         .onTextSelectionChange((start: number, end: number) => {
-          this.cursor = start;
+          // 光标真值回填：与 onChange 的「末尾估计」不同才重算面板
+          // （中途点击/方向键移动光标时，@ 片段解析依赖真实位置）。
+          if (start !== this.cursor) {
+            this.cursor = start;
+            this.updatePanel();
+          }
         })
         .enabled(this.connected())
       if (this.pendingImage !== null) {

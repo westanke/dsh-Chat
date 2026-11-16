@@ -17,6 +17,7 @@ import {
 } from './GatewayEvents';
 import { ChatMessage, HistoryPage } from './HistoryPage';
 import { ensureMobileWorkspace, oldestSeqOf, prepareSessionFor } from './MobileWorkspace';
+import { SessionLocation } from './SessionLocation';
 import { mergeOlderMessages } from './HistoryPage';
 import { sessionTitleOf, deviceLabelOf, connectionLabelOf } from './ChatLabels';
 import { PromptPart } from './Content';
@@ -54,6 +55,12 @@ export class ChatStore {
   // 切换中的会话 id（createSession 应答未落时收推送用；prepareSessionFor 写）
   pendingSessionId: string | null = null;
   mobileWorkspaceId: string | null = null;
+  /**
+   * 新建会话的待定工作目录 —— null = 落「手机会话」工作区（默认）；
+   * 选中某授权根下目录后，首条消息走 session-create{rootId,cwd}。
+   * 会话建好即清空（目录随会话定死，历史会话不受影响）。
+   */
+  pendingLocation: SessionLocation | null = null;
   private refreshScheduled: boolean = false;
   private notify: (() => void) | null = null;
 

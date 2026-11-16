@@ -307,3 +307,32 @@ Flex 链式 .alignItems 不存在（构造参数里传）。
 
 **门禁**：`npm --prefix harmony/test test` → **193/193 全绿**；`bash scripts/ci/docs-check.sh` 通过；`bash scripts/package.sh --no-test` BUILD SUCCESSFUL；签名装机真机验证。
 **文档**：`docs/STRUCTURE.md` 登记两个新 core 文件；`AGENTS.md` §11 +3 条坑位；`harmony/docs/PORT-MAP.md` §3 同 3 条详版。
+
+## 阶段 5 第七批：@ 引用面板修复 + 新建会话可选工作目录（2026-11-16）
+
+**两处 @ 面板 bug**（用户反馈「@ 引用不弹面板」）：
+- `@` 面板不弹：`components/Composer.ets` 的 `onChanged` 里 `cursor` 还是旧值（`onChange` 先于
+  `onTextSelectionChange` 触发，初值 0），`parseAtMentionDraft('@', 0)` 返回 null。修法：`onChanged`
+  里先 `this.cursor = v.length` 再 `updatePanel()`；`onTextSelectionChange` 里位置变了才回填重算。
+- 面板永远卡「正在加载目录…」：`components/ComposerPanels.ets` 的 `CommandPanel.commands` 与
+  `AtFilePanel` 的 `entries/loading/failed/dirPath` 是**普通成员**（父层 @State 换新值不重建子组件）。
+  全部改 `@Prop`。
+- 下钻 404 拖垮整面板：`Composer.ets` 的 `loadAtEntries()` 裸 `Promise.all` 在多根下一根 404 即整批 reject。
+  逐根 `.catch(() => [])` 容错，统计 `okRoots`，全部为空才置失败。
+
+**新建会话可选工作目录**（用户要求「安卓新建会话有默认目录，可选目录」）：
+- 新增纯逻辑 `core/SessionLocation.ts`：`SessionLocation(rootId,cwd,label)` + `key` 契约串、
+  `locationLabel`（''=根目录）、`recentLocations`（历史会话 (rootId,cwd) 去重保序、跳过无根会话）、
+  `locationSubtitle`（优先 cwdAbsolute 退回 rootId）、`parentPath`、`locationChipLabel`。
+- 新增 `components/SessionLocationSheet.ets`：默认「手机会话」项 + 最近使用列表 + 授权根逐级浏览
+  （空根自动跳到下一个有子目录的根、多根可点标题切换、面包屑「用此目录」）；选中写 `store.pendingLocation`。
+- `core/ChatStore.ts` 新增 `pendingLocation: SessionLocation | null`；`core/MobileWorkspace.ts` 的
+  `prepareSessionFor` 优先走 `createSessionAt(rootId,cwd)`（会话落「未分组」），失败显式报错不静默回退。
+- `pages/ChatView.ets` 空态加「工作目录：…」chip（`@State pendingLocView` 快照 + `locSheet` 面板分支）。
+- 真机验收：空态 chip 显示「工作目录：手机会话（默认）」→ 面板列出最近 4 个目录（含绝对路径）→
+  浏览授权根自动跳过空 `default-workspace` 落到 `workspace` → 下钻 `.dhs-diff` 选「用此目录」→
+  chip 变「工作目录：.dhs-diff」→ 发消息后 REST 确认 `cwd=dsh-Chat / cwdAbsolute=/media/wangke/OFFICE/workspace/dsh-Chat`（另一次 `.dhs-diff`）→ 新建对话后 chip 回默认。
+
+**门禁**：`npm --prefix harmony/test test` → **200/200 全绿**（新增 `session-location.test.ts` 7 条）；
+`bash scripts/ci/docs-check.sh` 通过；`bash scripts/package.sh --no-test` BUILD SUCCESSFUL；签名装机真机验证。
+**文档**：`docs/STRUCTURE.md` 登记两个新文件；`AGENTS.md` §11 +4 条坑位（`@ 面板/命令面板不刷新`/`@ 下钻整面板报错`/`新建会话没目录选项`/`目录浏览显示空根`）。

@@ -6,6 +6,8 @@
 import { ChatMessage } from './HistoryPage';
 import { DshWorkspace } from './Models';
 import { GatewayApi } from './GatewayApi';
+import { SessionLocation } from './SessionLocation';
+import { RequestException } from './GatewayEvents';
 import type { ChatStore } from './ChatStore';
 
 export const MOBILE_WORKSPACE_DIR: string = '.dsh-mobile';
@@ -81,6 +83,23 @@ export function prepareSessionFor(store: ChatStore): Promise<void> {
     return Promise.resolve();
   }
   const self: ChatStore = store;
+  // 选了工作目录 → session-create{rootId,cwd}（会话落「未分组」）；
+  // 失败必须显式报错、不静默回退手机会话（等于建到了用户没选的地方）。
+  const loc: SessionLocation | null = store.pendingLocation;
+  if (loc !== null) {
+    store.pendingLocation = null; // 目录已随会话落位，历史会话不受影响
+    return store.api.createSessionAt(loc.rootId, loc.cwd).then((sid: string): void => {
+      self.sessionId = sid;
+      self.pendingSessionId = sid;
+    }).catch((e: Error): void => {
+      if (e instanceof RequestException) {
+        self.lastError = '新建会话失败：' + e.message;
+        self.changed();
+        return;
+      }
+      throw e;
+    });
+  }
   return ensureMobileWorkspace(store.api, store.mobileWorkspaceId)
     .then((wsId: string | null): Promise<void> => {
       if (wsId === null) {

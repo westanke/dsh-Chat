@@ -15,6 +15,8 @@ import { Composer } from '../components/Composer';
 import { HitlPanel } from '../components/HitlPanel';
 import { PendingQuestion, PendingApproval, QuestionAnswerItem } from '../core/Questions';
 import { SessionsDrawer } from '../components/SessionsDrawer';
+import { SessionLocationSheet } from '../components/SessionLocationSheet';
+import { SessionLocation, locationChipLabel } from '../core/SessionLocation';
 import { ModelSheet } from '../components/ModelSheet';
 import { StatsSheet, TrajectorySheet, TeamSheet, TodoSheet } from '../components/ProjectionSheets';
 
@@ -37,6 +39,10 @@ export struct ChatView {
   @State questionsView: PendingQuestion[] = [];
   @State approvalsView: PendingApproval[] = [];
   @State drawerOpen: boolean = false;
+  /** 新建会话工作目录面板（空态 chip 打开）。 */
+  @State locSheet: boolean = false;
+  /** store.pendingLocation 的快照（ArkUI 只观察 build 里读到的 @State）。 */
+  @State pendingLocView: SessionLocation | null = null;
   @State menuOpen: boolean = false;
   @State statsSheet: boolean = false;
   @State trajectorySheet: boolean = false;
@@ -61,6 +67,7 @@ export struct ChatView {
       // 贴底时机由 MessageList 的 List scroller 处理，这里只驱动重渲染。
       this.version += 1;
       this.emptyView = st.isEmpty;
+      this.syncPendingLoc();
       this.titleView = st.sessionTitle;
       this.questionsView = st.pendingQuestions;
       this.approvalsView = st.pendingApprovals;
@@ -166,13 +173,14 @@ export struct ChatView {
         this.teamSheet = false;
         this.todoSheet = false;
         this.modelSheet = false;
+        this.locSheet = false;
       }
     })
   }
 
   private sheetOpen(): boolean {
     return this.statsSheet || this.trajectorySheet || this.teamSheet || this.todoSheet
-      || this.modelSheet;
+      || this.modelSheet || this.locSheet;
   }
 
   private sheetTitle(): string {
@@ -190,6 +198,9 @@ export struct ChatView {
     }
     if (this.modelSheet) {
       return '调整模型';
+    }
+    if (this.locSheet) {
+      return '会话工作目录';
     }
     return '';
   }
@@ -270,6 +281,14 @@ export struct ChatView {
       ModelSheet({
         store: this.store, onDone: (): void => {
           this.modelSheet = false;
+        }
+      })
+    } else if (this.locSheet) {
+      SessionLocationSheet({
+        store: this.store, current: this.pendingLocView,
+        onClose: (): void => {
+          this.locSheet = false;
+          this.syncPendingLoc();
         }
       })
     }
@@ -354,11 +373,41 @@ export struct ChatView {
       Text(this.greetingHost())
         .fontSize(13)
         .fontColor(this.c().labelTertiary)
+      // 工作目录选择（对照安卓空态「工作目录」chip）：默认手机会话，
+      // 发首条消息前可换成授权根下的指定目录；建好后随会话定死。
+      Row({ space: 6 }) {
+        Text(this.pendingLocView === null ? '📱' : '📁')
+          .fontSize(13)
+        Text(locationChipLabel(this.pendingLocView))
+          .fontSize(13)
+          .fontColor(this.c().labelPrimary)
+          .maxLines(1)
+          .textOverflow({ overflow: TextOverflow.Ellipsis })
+        Text('⌄')
+          .fontSize(12)
+          .fontColor(this.c().labelTertiary)
+      }
+      .padding({ left: 14, right: 14, top: 8, bottom: 8 })
+      .borderRadius(18)
+      .backgroundColor(this.c().bgLayer1)
+      .border({ width: 1, color: this.c().inputBorder })
+      .constraintSize({ maxWidth: 300 })
+      .margin({ top: 4 })
+      .onClick(() => {
+        this.syncPendingLoc();
+        this.locSheet = true;
+      })
     }
     .width('100%')
     .layoutWeight(1)
     .justifyContent(FlexAlign.Center)
     .alignItems(HorizontalAlign.Center)
+  }
+
+  /** store.pendingLocation → @State 快照（普通成员变更不触发重渲染）。 */
+  private syncPendingLoc(): void {
+    const st: ChatStore | null = this.store;
+    this.pendingLocView = st === null ? null : st.pendingLocation;
   }
 
   private greetingHost(): string {

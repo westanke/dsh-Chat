@@ -19,7 +19,9 @@ export class AtEntry {
 /** 命令补全面板。 */
 @Component
 export struct CommandPanel {
-  commands: SlashCommand[] = [];
+  /** @Prop：普通成员只在首次创建时赋值，父层 @State 换新数组不重建子组件
+   * （实测表现：命令清单回来了面板仍显示空/旧候选）。 */
+  @Prop commands: SlashCommand[] = [];
   onPick: (cmd: SlashCommand) => void = (): void => {};
   @StorageProp('dshDark') dark: boolean = false;
 
@@ -74,10 +76,12 @@ export struct CommandPanel {
 /** @ 文件面板（空态三态：加载中 / 失败点按重试 / 没有匹配）。 */
 @Component
 export struct AtFilePanel {
-  entries: AtEntry[] = [];
-  loading: boolean = false;
-  failed: boolean = false;
-  dirPath: string = '';
+  /** @Prop 四件套：普通成员不随父层 @State 更新 —— 实测 @ 面板永远停在
+   * 「正在加载目录…」（entries 已到、loading 却不再变）。 */
+  @Prop entries: AtEntry[] = [];
+  @Prop loading: boolean = false;
+  @Prop failed: boolean = false;
+  @Prop dirPath: string = '';
   onPick: (e: AtEntry) => void = (): void => {};
   onRetry: () => void = (): void => {};
   @StorageProp('dshDark') dark: boolean = false;

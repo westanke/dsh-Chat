@@ -185,6 +185,31 @@
   content})` → `new ShareController(data).show(context, {selectionMode:
   SelectionMode.SINGLE, previewMode: SharePreviewMode.DEFAULT})`；ShareKit 不可用
   时再退回 Want 隐式拉起。
+- `@ 面板/命令面板不刷新` —— `components/ComposerPanels.ets` 里 `CommandPanel.commands` 与
+  `AtFilePanel.entries/loading/failed/dirPath` 原写成**普通成员**：这类字段只在组件首次
+  创建时赋值一次，父层 `@State` 换新数组/新布尔不会重建子组件，表现就是 `@` 面板永远停在
+  「正在加载目录…」（entries 早已到、loading 却不翻）。全部改 `@Prop` 即好。
+  同源坑还有 `HitlPanel.questions/approvals`（见上）。
+- `@ 下钻整面板报错` —— `components/Composer.ets` 的 `loadAtEntries()` 原用裸
+  `Promise.all(jobs)` 并发拉所有授权根：下钻到只在某一个根里存在的目录（如
+  `workspace/.dhs-diff`）时，另外两个根 `GET /roots/{id}/entries?path=…` 返回 404，
+  整批 reject → 面板显示「目录加载失败，点按重试」。修法：每个 `listEntriesRest` 各自
+  `.catch((e: Error): GatewayEntry[] => new Array<GatewayEntry>())` 容错；同时统计
+  `okRoots`（`lists[i].length > 0 || dir.length === 0`），只有 `okRoots === 0 && dir.length > 0`
+  才算真失败。注意空根（`default-workspace`）返回 200 + 空数组，别误判成失败。
+- `新建会话没目录选项` —— 安卓空态有「工作目录」chip（`app/lib/ui/chat_page.dart` 的
+  `_Greeting`），默认「手机会话」，可换成授权根下任意目录，走
+  `session-create{rootId,cwd}`（`gateway_api.dart:52 createSessionAt`），会话落「未分组」。
+  鸿蒙版补法：`core/SessionLocation.ts` 放纯逻辑（`SessionLocation`/`recentLocations`/
+  `locationSubtitle`/`parentPath`/`locationChipLabel`），`components/SessionLocationSheet.ets`
+  是面板（默认项 + 最近使用 + 授权根浏览），`ChatStore.pendingLocation` 存待定目录，
+  `MobileWorkspace.prepareSessionFor` 里优先走 `api.createSessionAt(rootId, cwd)` 且
+  失败**显式报错不静默回退**（回退等于建到用户没选的地方）；`ChatView` 空态渲染 chip，
+  快照到 `@State pendingLocView` 才有观察。
+- `目录浏览显示空根` —— 授权根列表里第一个常是空的 `default-workspace`
+  （`GET /roots` 顺序即此，`/entries` 返回 200 + `entries:[]`），而安卓走 file-list 的
+  「首个授权根」语义可以隐式跳空根。REST 必须显式给 `rootId`，因此浏览时要在**根层**
+  `dirs.length === 0` 就自动换下一个根（下钻层不跳），并允许点标题手动切根。
 - `发送键白底看不见` —— 禁用态底色若用 `inputFill`（浅色主题=纯白），白底 + 浅灰箭头在
   浅色界面上几乎不可见（用户反馈）。改用 token `sendDisabledBg`（亮 `#EBEEF2` / 暗
   `c800`）+ `sendDisabledFg`（亮 `c500` / 暗 `c400`）；可用态走实心 `brand` + `onBrand`
