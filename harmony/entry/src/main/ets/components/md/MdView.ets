@@ -53,9 +53,11 @@ export struct MdView {
 
   build() {
     Column() {
-      ForEach(this.blocks, (b: MdBlock, idx: number) => {
-        this.renderBlock(b, idx)
-      }, (b: MdBlock, idx: number) => idx + '-' + b.type + '-' + b.text.length)
+      Repeat<MdBlock>(this.blocks)
+        .each((entry: RepeatItem<MdBlock>) => {
+          this.renderBlock(entry.item, entry.index)
+        })
+        .key((entry: MdBlock, index: number) => index.toString() + '-' + entry.type + '-' + entry.text.length.toString())
     }
     .alignItems(HorizontalAlign.Start)
     .width('100%')
@@ -65,9 +67,11 @@ export struct MdView {
   renderBlock(b: MdBlock, idx: number) {
     if (b.type === 'h') {
       Text() {
-        ForEach(b.segs, (s: InlineSeg) => {
-          this.inlineSpan(s)
-        }, (s: InlineSeg, i: number) => idx + '-h-' + i + '-' + s.text.length)
+        Repeat<InlineSeg>(b.segs)
+          .each((entry: RepeatItem<InlineSeg>) => {
+            this.inlineSpan(entry.item)
+          })
+          .key((entry: InlineSeg, index: number) => index.toString() + '-' + entry.text.length.toString())
       }
       .fontSize(this.headFont(b.level).size)
       .fontWeight(FontWeight.Bold)
@@ -105,9 +109,11 @@ export struct MdView {
       MdLatexView({ node: parseLatex(b.text), inline: false })
     } else if (b.type === 'ul' || b.type === 'ol') {
       Column() {
-        ForEach(b.items, (item: MdListItem, itemIdx: number) => {
-          this.renderListItem(b.type, item, idx, itemIdx)
-        }, (item: MdListItem, i: number) => idx + '-li-' + i + '-' + item.text.length)
+        Repeat<MdListItem>(b.items)
+          .each((entry: RepeatItem<MdListItem>) => {
+            this.renderListItem(b.type, entry.item, idx, entry.index)
+          })
+          .key((entry: MdListItem, index: number) => index.toString() + '-' + entry.text.length.toString())
       }
       .width('100%')
       .margin({ top: 4, bottom: 4 })
@@ -153,7 +159,16 @@ export struct MdView {
   /// latex 片段（$ 包裹）单独 MdLatexView。
   @Builder
   inlineFlow(segs: InlineSeg[], blockIdx: number) {
-    ForEach(segs, (s: InlineSeg, i: number) => {
+    Repeat<InlineSeg>(segs)
+      .each((entry: RepeatItem<InlineSeg>) => {
+        this.inlineSegView(entry.item, blockIdx)
+      })
+      .key((entry: InlineSeg, index: number) => index.toString() + '-' + entry.text.length.toString())
+  }
+
+  /** 单个行内片段（latex / 链接 / 普通 Span 混排）。抽 @Builder 让 Repeat 帧只剩一行调用。 */
+  @Builder
+  inlineSegView(s: InlineSeg, blockIdx: number) {
       if (s.text.startsWith('$') && s.text.lastIndexOf('$') > 0) {
         MdLatexView({ node: this.latexNodeOf(s.text), inline: true })
       } else if (s.link.length > 0) {
@@ -180,7 +195,6 @@ export struct MdView {
         }
         .margin({ right: s.code ? 4 : 0 })
       }
-    }, (s: InlineSeg, i: number) => blockIdx + '-seg-' + i + '-' + s.text.length)
   }
 
   @Builder

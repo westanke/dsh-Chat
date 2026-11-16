@@ -10,11 +10,15 @@ import { JsonMap } from '../core/JsonAccess';
 import { SessionModels, ModelProviderGroup, ModelView, ModelSelection,
   ModelReasoningEffort, reasoningEffortLabel } from '../core/ModelsView';
 import { DsColors, DsTypography, DsSpacing } from '../ui/theme';
+import { mediaquery } from '@kit.ArkUI';
+import { BP_SM, BP_QUERY_MD, BP_QUERY_LG, breakpointOf, atLeastMd } from '../core/Breakpoints';
 
 @Component
 export struct ModelSheet {
   store: ChatStore | null = null;
   @StorageProp('dshDark') dark: boolean = false;
+  /** 窗口宽度断点（R007 一多）：确认键等固定高度在宽屏放大一档。 */
+  @StorageProp('dshBreakpoint') bp: string = BP_SM;
   /** 确认成功后由父层关 sheet（ArkTS @Link 绑不便传，改回调）。 */
   onDone: (() => void) | null = null;
   @State models: SessionModels | null = null;
@@ -26,12 +30,32 @@ export struct ModelSheet {
   @State expanded: string[] = [];
   private loadedSid: string = '';
 
+  /** 窗口断点自读（R007 一多）。 */
+  private refreshBreakpoint(): void {
+    try {
+      const md: mediaquery.MediaQueryListener = this.getUIContext().getMediaQuery().matchMediaSync(BP_QUERY_MD);
+      const lg: mediaquery.MediaQueryListener = this.getUIContext().getMediaQuery().matchMediaSync(BP_QUERY_LG);
+      const next: string = breakpointOf(md.matches, lg.matches);
+      if (next !== this.bp) {
+        this.bp = next;
+        AppStorage.setOrCreate('dshBreakpoint', next);
+      }
+    } catch (e) {
+      // 拿不到 mediaquery 时按手机档渲染。
+    }
+  }
+
+  private atLeastMd(): boolean {
+    return atLeastMd(this.bp);
+  }
+
   private c(): DsColors {
     return new DsColors(this.dark);
   }
 
   /** 挂载即拉清单（缺此调用会永远停在「加载中…」）。 */
   aboutToAppear(): void {
+    this.refreshBreakpoint();
     this.load();
   }
 
@@ -132,9 +156,11 @@ export struct ModelSheet {
         this.toggleExpanded(g.id);
       })
       if (this.expanded.indexOf(g.id) >= 0) {
-        ForEach(g.models, (m: ModelView) => {
-          this.modelRow(g, m)
-        }, (m: ModelView) => m.id)
+        Repeat<ModelView>(g.models)
+          .each((item: RepeatItem<ModelView>) => {
+            this.modelRow(g, item.item)
+          })
+          .key((item: ModelView) => item.id)
       } else if (this.pendingProvider === g.id && this.pendingModel.length > 0) {
         // 折叠组里当前 pending 模型提示一行。
         Text(this.pendingModelName(g))
@@ -180,21 +206,24 @@ export struct ModelSheet {
       // 推理档位 ChoiceChips。
       if (m.reasoning !== null && m.reasoning.efforts.length > 0) {
         Flex({ wrap: FlexWrap.Wrap }) {
-          ForEach(m.reasoning.efforts, (e: ModelReasoningEffort) => {
-            Text(reasoningEffortLabel(e.id))
-              .fontSize(DsTypography.caption.size)
-              .margin({ right: 6, bottom: 4 })
-              .fontColor(this.isPending(g, m) && this.pendingEffort === e.id
-                ? this.c().chipSelectedFg : this.c().labelSecondary)
-              .padding({ left: 10, right: 10, top: 4, bottom: 4 })
-              .borderRadius(DsSpacing.chipRadius)
-              .backgroundColor(this.isPending(g, m) && this.pendingEffort === e.id
-                ? this.c().chipSelectedBg : this.c().inputFill)
-              .accessibilityText(reasoningEffortLabel(e.id) + (this.isPending(g, m) && this.pendingEffort === e.id ? '，当前选择' : ''))
-              .onClick(() => {
-                this.pick(g, m, e.id);
-              })
-          }, (e: ModelReasoningEffort) => e.id)
+          Repeat<ModelReasoningEffort>(m.reasoning.efforts)
+            .each((entry: RepeatItem<ModelReasoningEffort>) => {
+              Text(reasoningEffortLabel(entry.item.id))
+                .fontSize(DsTypography.caption.size)
+                .margin({ right: 6, bottom: 4 })
+                .fontColor(this.isPending(g, m) && this.pendingEffort === entry.item.id
+                  ? this.c().chipSelectedFg : this.c().labelSecondary)
+                .padding({ left: 10, right: 10, top: 4, bottom: 4 })
+                .borderRadius(DsSpacing.chipRadius)
+                .backgroundColor(this.isPending(g, m) && this.pendingEffort === entry.item.id
+                  ? this.c().chipSelectedBg : this.c().inputFill)
+                .accessibilityText(reasoningEffortLabel(entry.item.id) +
+                  (this.isPending(g, m) && this.pendingEffort === entry.item.id ? '，当前选择' : ''))
+                .onClick(() => {
+                  this.pick(g, m, entry.item.id);
+                })
+            })
+            .key((entry: ModelReasoningEffort) => entry.id)
         }
         .width('100%')
         .padding({ left: DsSpacing.settingsCardPadH + 24, right: DsSpacing.settingsCardPadH,
@@ -233,9 +262,11 @@ export struct ModelSheet {
               .fontColor(this.c().labelSecondary)
               .padding(DsSpacing.settingsCardPadH)
           } else {
-            ForEach(this.models.groups, (g: ModelProviderGroup) => {
-              this.groupSection(g)
-            }, (g: ModelProviderGroup) => g.id)
+            Repeat<ModelProviderGroup>(this.models.groups)
+              .each((entry: RepeatItem<ModelProviderGroup>) => {
+                this.groupSection(entry.item)
+              })
+              .key((entry: ModelProviderGroup) => entry.id)
             if (this.models !== null && this.models.failures.length > 0) {
               Text('以下服务暂不可用：' + this.failureNames())
                 .fontSize(DsTypography.small.size)
@@ -250,7 +281,7 @@ export struct ModelSheet {
       .align(Alignment.Top)
       Button('确认切换')
         .width('100%')
-        .height(48)
+        .height(this.atLeastMd() ? 56 : 48)
         .backgroundColor(this.c().brand)
         .fontColor(this.c().onBrand)
         .fontSize(DsTypography.baseStrong.size)

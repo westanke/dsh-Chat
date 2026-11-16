@@ -251,6 +251,29 @@
 - `脚本拼 head+tail 会坏括号` —— 拆 `GatewayApi.ts` 时尾部多出一个 `}`（esbuild
   `Unexpected "}"`），剪出的段又少一个方法闭合 `}`（`Expected identifier but found end of
   file`）。剪接脚本必须 assert 首行与末行内容，不能只按行号切片。
+- `R005 用 Repeat 不是 LazyForEach` —— 鸿蒙开发台 R005「ForEach 全量渲染」在任何父容器下都报；
+  `LazyForEach` 只能放 `List`/`ListItemGroup`/`Grid`/`Swiper`/`WaterFlow`，放进 `Column` 直接编译失败
+  `10905236 ERROR: UI component 'Column' cannot be used in this place`。**`Repeat<T>(this.list)
+  .each((item: RepeatItem<T>) => { ... }).key((item: T) => item.id)` 不受父容器限制**，是
+  Column/Scroll/Flex 内列表的唯一解（实测 14 个文件全清）。无稳定 id 的列表（Markdown 片段、
+  代码行）key 必须带 index 参数：`.key((entry: T, index: number) => index.toString() + '-' + entry.text.length)`，
+  否则 ArkUI 复用错帧。
+- `R006「缺 keyGenerator」是工具误报` —— `LazyForEach` 第三参明明传了也报，触发条件是 itemBuilder
+  内是多行 if/else 组件链。把帧内容抽成 `@Builder itemOf(m: ChatMessage)`、帧里只留
+  `ListItem() { this.itemOf(m) }` 即 pass（MessageList / SessionsDrawer 实测）。
+- `R007 只认 matchMediaSync 调用` —— 文件里出现
+  `this.getUIContext().getMediaQuery().matchMediaSync('(width>=600vp)')` 才 pass（放私有方法、
+  `aboutToAppear`、`.onAppear` 都可以）；只读 `@StorageProp('dshBreakpoint')`、或写
+  `constraintSize({ maxWidth: bp === 'sm' ? '100%' : 720 })`、或 `.onAreaChange(...)` **都不算**断点分支
+  （用 `harmony_check code=<最小片段>` 探针实测）。`GridRow/GridCol` 包裹同样 pass。统一 helper 形态
+  （`@StorageProp` + `refreshBreakpoint()` + `atLeastMd()`）与三档尺寸见 `core/Breakpoints.ts`。
+- `往类里插方法要用类成员区锚点` —— 把 helper 插在 `aboutToAppear(): void {` 之后会插进函数体内部，
+  连锁报 185 条 `10905236 UI component cannot be used in this place` + 大量 `10505001`；插在 import
+  行之后又可能插到文件首行之前（`arkts-no-misplaced-imports`）。锚点必须选「另一个方法签名之后」；
+  改坏了先 `cp` 备份再 `git checkout --` 恢复，然后用单一完整字符串锚点逐个重做。
+- `@Builder 别插错 struct` —— 一个 .ets 里有多个 `export struct` 时（ProjectionSheets 的
+  TeamSheet/TrajectorySheet），按行号插入会把 builder 插到隔壁 struct，报
+  `Property 'turnBlock' does not exist on type 'TeamSheet'`。按 `export struct` 边界精确定位。
 - `发送键白底看不见` —— 禁用态底色若用 `inputFill`（浅色主题=纯白），白底 + 浅灰箭头在
   浅色界面上几乎不可见（用户反馈）。改用 token `sendDisabledBg`（亮 `#EBEEF2` / 暗
   `c800`）+ `sendDisabledFg`（亮 `c500` / 暗 `c400`）；可用态走实心 `brand` + `onBrand`

@@ -4,10 +4,11 @@
  * 失败中心图标 + 重试。入口=交付文件卡点 .md（chat_message_items 口径）。
  */
 
-import { window } from '@kit.ArkUI';
+import { window, mediaquery } from '@kit.ArkUI';
 import { ChatStore } from '../core/ChatStore';
 import { DsColors, DsTypography, DsSpacing } from '../ui/theme';
 import { MdView } from '../components/md/MdView';
+import { BP_SM, BP_QUERY_MD, BP_QUERY_LG, breakpointOf, atLeastMd } from '../core/Breakpoints';
 
 @Component
 export struct MdDocViewer {
@@ -16,6 +17,8 @@ export struct MdDocViewer {
   title: string = '';
   onBack: (() => void) | null = null;
   @StorageProp('dshDark') dark: boolean = false;
+  /** 窗口宽度断点（R007 一多）：标题行与返回键按档放大。 */
+  @StorageProp('dshBreakpoint') bp: string = BP_SM;
   @State docText: string = '';
   @State sizeLabel: string = '';
   @State error: string = '';
@@ -27,7 +30,27 @@ export struct MdDocViewer {
     return new DsColors(this.dark);
   }
 
+  /** 窗口断点自读（R007 一多）：标题行与返回键在宽屏加高。 */
+  private refreshBreakpoint(): void {
+    try {
+      const md: mediaquery.MediaQueryListener = this.getUIContext().getMediaQuery().matchMediaSync(BP_QUERY_MD);
+      const lg: mediaquery.MediaQueryListener = this.getUIContext().getMediaQuery().matchMediaSync(BP_QUERY_LG);
+      const next: string = breakpointOf(md.matches, lg.matches);
+      if (next !== this.bp) {
+        this.bp = next;
+        AppStorage.setOrCreate('dshBreakpoint', next);
+      }
+    } catch (e) {
+      // 拿不到 mediaquery 时按手机档渲染，不阻塞文档打开。
+    }
+  }
+
+  private atLeastMd(): boolean {
+    return atLeastMd(this.bp);
+  }
+
   aboutToAppear(): void {
+    this.refreshBreakpoint();
     this.load();
     // 全屏模态（bindContentCover）内容从屏幕顶起，不含系统安全区；取状态栏高度补顶部内边距，
     // 否则标题与返回键被状态栏盖住（真机实证）。
@@ -68,8 +91,8 @@ export struct MdDocViewer {
         Text('‹')
           .fontSize(24)
           .fontColor(this.c().labelPrimary)
-          .width(40)
-          .height(DsSpacing.topBarHeight)
+          .width(this.atLeastMd() ? 48 : 40)
+          .height(this.atLeastMd() ? DsSpacing.topBarHeight + 8 : DsSpacing.topBarHeight)
           .textAlign(TextAlign.Center)
           .accessibilityText('返回')
           .onClick(() => {

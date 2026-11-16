@@ -100,32 +100,35 @@ export struct PermissionSheet {
         .fontWeight(FontWeight.Medium)
         .fontColor(this.c().labelPrimary)
         .padding({ left: 16, right: 16, top: 14, bottom: 8 })
-      ForEach(this.options, (o: PermissionOption) => {
-        Row({ space: 10 }) {
-          Text(this.current === o.value ? '✓' : '○')
-            .fontSize(16)
-            .fontColor(this.current === o.value ? this.c().brand : this.c().labelTertiary)
-          Column({ space: 2 }) {
-            Text(o.label)
-              .fontSize(14)
-              .fontWeight(FontWeight.Medium)
-              .fontColor(this.c().labelPrimary)
-            if (o.descriptionLabel !== null) {
-              Text(o.descriptionLabel)
-                .fontSize(12)
-                .fontColor(this.c().labelTertiary)
+      Repeat<PermissionOption>(this.options)
+        .each((item: RepeatItem<PermissionOption>) => {
+          Row({ space: 10 }) {
+            Text(this.current === item.item.value ? '✓' : '○')
+              .fontSize(16)
+              .fontColor(this.current === item.item.value ? this.c().brand : this.c().labelTertiary)
+            Column({ space: 2 }) {
+              Text(item.item.label)
+                .fontSize(14)
+                .fontWeight(FontWeight.Medium)
+                .fontColor(this.c().labelPrimary)
+              if (item.item.descriptionLabel !== null) {
+                Text(item.item.descriptionLabel)
+                  .fontSize(12)
+                  .fontColor(this.c().labelTertiary)
+              }
             }
+            .alignItems(HorizontalAlign.Start)
+            .layoutWeight(1)
           }
-          .alignItems(HorizontalAlign.Start)
-          .layoutWeight(1)
-        }
-        .width('100%')
-        .padding({ left: 16, right: 16, top: 12, bottom: 12 })
-        .accessibilityText(o.label + (o.descriptionLabel !== null ? '：' + o.descriptionLabel : ''))
-        .onClick(() => {
-          this.pick(o.value);
+          .width('100%')
+          .padding({ left: 16, right: 16, top: 12, bottom: 12 })
+          .accessibilityText(item.item.label +
+            (item.item.descriptionLabel !== null ? '：' + item.item.descriptionLabel : ''))
+          .onClick(() => {
+            this.pick(item.item.value);
+          })
         })
-      }, (o: PermissionOption) => o.value)
+        .key((item: PermissionOption) => item.value)
     }
     .width('100%')
     .backgroundColor(this.c().bgBase)

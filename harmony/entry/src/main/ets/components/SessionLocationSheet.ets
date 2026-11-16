@@ -14,6 +14,8 @@ import {
   SessionLocation, locationLabel, locationSubtitle, parentPath, recentLocations,
 } from '../core/SessionLocation';
 import { DsColors, DsTypography, DsSpacing } from '../ui/theme';
+import { mediaquery } from '@kit.ArkUI';
+import { BP_SM, BP_QUERY_MD, BP_QUERY_LG, breakpointOf, atLeastMd } from '../core/Breakpoints';
 
 @Component
 export struct SessionLocationSheet {
@@ -21,6 +23,8 @@ export struct SessionLocationSheet {
   /** 关闭面板（选完/点遮罩都要回）。 */
   onClose: () => void = (): void => {};
   @StorageProp('dshDark') dark: boolean = false;
+  /** 窗口宽度断点（R007 一多）：固定尺寸按档放大。 */
+  @StorageProp('dshBreakpoint') bp: string = BP_SM;
 
   /** 当前选择（父层传下来的快照）。 */
   @Prop current: SessionLocation | null = null;
@@ -43,7 +47,27 @@ export struct SessionLocationSheet {
     return new DsColors(this.dark);
   }
 
+  /** 窗口断点自读（R007 一多）：固定尺寸在宽屏放大一档。 */
+  private refreshBreakpoint(): void {
+    try {
+      const md: mediaquery.MediaQueryListener = this.getUIContext().getMediaQuery().matchMediaSync(BP_QUERY_MD);
+      const lg: mediaquery.MediaQueryListener = this.getUIContext().getMediaQuery().matchMediaSync(BP_QUERY_LG);
+      const next: string = breakpointOf(md.matches, lg.matches);
+      if (next !== this.bp) {
+        this.bp = next;
+        AppStorage.setOrCreate('dshBreakpoint', next);
+      }
+    } catch (e) {
+      // 拿不到 mediaquery 时按手机档渲染。
+    }
+  }
+
+  private atLeastMd(): boolean {
+    return atLeastMd(this.bp);
+  }
+
   aboutToAppear(): void {
+    this.refreshBreakpoint();
     this.syncRecents();
     this.loadRootsIfNeeded();
   }
@@ -153,6 +177,41 @@ export struct SessionLocationSheet {
   }
 
   /** 主列表项（默认 / 最近 / 浏览入口）。 */
+  /** 最近使用里排除当前已选项（当前项在主列表已有 ✓ 行）。 */
+  private recentRows(): SessionLocation[] {
+    const out: SessionLocation[] = [];
+    for (let i = 0; i < this.recentsView.length; i++) {
+      const item: SessionLocation = this.recentsView[i];
+      if (this.current === null || this.current.key !== item.key) {
+        out.push(item);
+      }
+    }
+    return out;
+  }
+
+  @Builder
+  entryRow(e: GatewayEntry) {
+    Row({ space: 10 }) {
+      Text('📁')
+        .fontSize(16)
+      Text(e.name)
+        .fontSize(DsTypography.base.size)
+        .fontColor(this.c().labelPrimary)
+        .maxLines(1)
+        .textOverflow({ overflow: TextOverflow.Ellipsis })
+        .layoutWeight(1)
+      Text('›')
+        .fontSize(16)
+        .fontColor(this.c().labelTertiary)
+    }
+    .width('100%')
+    .padding({ left: DsSpacing.screenPad, right: DsSpacing.screenPad, top: 12, bottom: 12 })
+    .accessibilityText('进入 ' + e.name)
+    .onClick((): void => {
+      this.browse(e.path);
+    })
+  }
+
   @Builder
   choiceRow(icon: string, title: string, subtitle: string, picked: boolean,
     onTap: () => void) {
@@ -240,13 +299,13 @@ export struct SessionLocationSheet {
         .fontColor(this.c().labelTertiary)
         .width('100%')
         .padding({ left: DsSpacing.screenPad, right: DsSpacing.screenPad, top: 8, bottom: 4 })
-      ForEach(this.recentsView, (item: SessionLocation) => {
-        if (this.current === null || this.current.key !== item.key) {
-          this.choiceRow('📁', item.label, this.subtitleOf(item), false, (): void => {
-            this.pick(item);
+      Repeat<SessionLocation>(this.recentRows())
+        .each((entry: RepeatItem<SessionLocation>) => {
+          this.choiceRow('📁', entry.item.label, this.subtitleOf(entry.item), false, (): void => {
+            this.pick(entry.item);
           })
-        }
-      }, (item: SessionLocation) => item.key)
+        })
+        .key((entry: SessionLocation) => entry.key)
     }
     this.choiceRow('📂', '浏览授权根目录…', '', false, (): void => {
       this.browsing = true;
@@ -268,8 +327,8 @@ export struct SessionLocationSheet {
       Text('‹')
         .fontSize(20)
         .fontColor(this.c().brand)
-        .width(40)
-        .height(40)
+        .width(this.atLeastMd() ? 48 : 40)
+        .height(this.atLeastMd() ? 48 : 40)
         .textAlign(TextAlign.Center)
         .accessibilityText('返回上级目录')
         .onClick((): void => {
@@ -338,27 +397,11 @@ export struct SessionLocationSheet {
         .width('100%')
         .padding(16)
     } else {
-      ForEach(this.entriesView, (e: GatewayEntry) => {
-        Row({ space: 10 }) {
-          Text('📁')
-            .fontSize(16)
-          Text(e.name)
-            .fontSize(DsTypography.base.size)
-            .fontColor(this.c().labelPrimary)
-            .maxLines(1)
-            .textOverflow({ overflow: TextOverflow.Ellipsis })
-            .layoutWeight(1)
-          Text('›')
-            .fontSize(16)
-            .fontColor(this.c().labelTertiary)
-        }
-        .width('100%')
-        .padding({ left: DsSpacing.screenPad, right: DsSpacing.screenPad, top: 12, bottom: 12 })
-        .accessibilityText('进入 ' + e.name)
-        .onClick((): void => {
-          this.browse(e.path);
+      Repeat<GatewayEntry>(this.entriesView)
+        .each((entry: RepeatItem<GatewayEntry>) => {
+          this.entryRow(entry.item)
         })
-      }, (e: GatewayEntry) => e.path)
+        .key((entry: GatewayEntry) => entry.path)
     }
   }
 }

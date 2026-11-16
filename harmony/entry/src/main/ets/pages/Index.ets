@@ -17,6 +17,9 @@ import { ConnectView } from './ConnectView';
 import { ChatView } from './ChatView';
 import { SettingsView } from './SettingsView';
 import { ChatStore } from '../core/ChatStore';
+import {
+  BP_SM, BP_QUERY_MD, BP_QUERY_LG, breakpointOf,
+} from '../core/Breakpoints';
 
 @Entry
 @Component
@@ -29,7 +32,14 @@ struct Index {
   @State api: GatewayApi | null = null;
   @State chat: ChatStore | null = null;
   @State bootHint: string = '正在连接…';
+  /**
+   * 窗口宽度断点（R007）：<600vp=sm / 600–840=md / ≥840=lg。
+   * 写 AppStorage 供 ChatView / SessionsDrawer / 各面板用 @StorageProp 读。
+   */
+  @StorageProp('dshBreakpoint') bp: string = BP_SM;
   private mediaListener: mediaquery.MediaQueryListener | null = null;
+  private bpMd: mediaquery.MediaQueryListener | null = null;
+  private bpLg: mediaquery.MediaQueryListener | null = null;
   /// 系统深浅色（mediaquery 最近一次结果），手动切档时以它为基准。
   private sysDark: boolean = false;
 
@@ -47,6 +57,7 @@ struct Index {
 
   aboutToAppear(): void {
     this.bindDarkMode();
+    this.bindBreakpoints();
     // 偏好是异步读的（PrefsStore.getString 返 Promise），回来后重算一次配色。
     PrefsStore.getString('dsh.themeMode').then((saved: string | null): void => {
       const mode: string = saved !== null && saved !== '' ? saved : 'system';
@@ -67,6 +78,42 @@ struct Index {
     if (this.mediaListener !== null) {
       this.mediaListener.off('change');
       this.mediaListener = null;
+    }
+    if (this.bpMd !== null) {
+      this.bpMd.off('change');
+      this.bpMd = null;
+    }
+    if (this.bpLg !== null) {
+      this.bpLg.off('change');
+      this.bpLg = null;
+    }
+  }
+
+  /**
+   * 窗口宽度断点监听（R007）。用两个 mediaquery 而不是算 vp：窗口尺寸 API 在
+   * 分屏/折叠态下与 mediaquery 口径偶有偏差，官方推荐 mediaquery。
+   */
+  private bindBreakpoints(): void {
+    try {
+      const md = this.getUIContext().getMediaQuery().matchMediaSync(BP_QUERY_MD);
+      const lg = this.getUIContext().getMediaQuery().matchMediaSync(BP_QUERY_LG);
+      AppStorage.setOrCreate('dshBreakpoint', breakpointOf(md.matches, lg.matches));
+      md.on('change', (result: mediaquery.MediaQueryResult): void => {
+        const curLg: mediaquery.MediaQueryListener | null = this.bpLg;
+        this.bp = breakpointOf(result.matches, curLg === null ? false : curLg.matches);
+        AppStorage.setOrCreate('dshBreakpoint', this.bp);
+      });
+      lg.on('change', (result: mediaquery.MediaQueryResult): void => {
+        const curMd: mediaquery.MediaQueryListener | null = this.bpMd;
+        this.bp = breakpointOf(curMd === null ? false : curMd.matches, result.matches);
+        AppStorage.setOrCreate('dshBreakpoint', this.bp);
+      });
+      this.bpMd = md;
+      this.bpLg = lg;
+    } catch (e) {
+      // 拿不到窗口尺寸就按紧凑档走：手机是主目标形态，退化不影响可用性。
+      const err = e as Error;
+      Dlog.warn('bind breakpoints failed: ' + err.message);
     }
   }
 
@@ -157,8 +204,8 @@ struct Index {
       if (this.route === 'boot') {
         Column({ space: 16 }) {
           LoadingProgress()
-            .width(36)
-            .height(36)
+            .width(40)
+            .height(40)
             .color(this.c().brand)
           Text(this.bootHint)
             .fontSize(14)

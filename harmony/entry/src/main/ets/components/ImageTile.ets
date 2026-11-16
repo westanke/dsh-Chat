@@ -8,6 +8,8 @@
 import { ChatStore } from '../core/ChatStore';
 import { DsImageRef } from '../core/ImageRef';
 import { DsColors, DsTypography, DsSpacing } from '../ui/theme';
+import { mediaquery } from '@kit.ArkUI';
+import { BP_SM, BP_QUERY_MD, BP_QUERY_LG, breakpointOf, atLeastMd } from '../core/Breakpoints';
 import { image } from '@kit.ImageKit';
 import { BusinessError } from '@kit.BasicServicesKit';
 
@@ -16,6 +18,8 @@ export struct ImageTile {
   store: ChatStore | null = null;
   ref: DsImageRef | null = null;
   @StorageProp('dshDark') dark: boolean = false;
+  /** 窗口宽度断点（R007 一多）：固定尺寸按档放大。 */
+  @StorageProp('dshBreakpoint') bp: string = BP_SM;
   @State pixels: image.PixelMap | null = null;
   @State loading: boolean = true;
   @State error: string = '';
@@ -25,7 +29,27 @@ export struct ImageTile {
     return new DsColors(this.dark);
   }
 
+  /** 窗口断点自读（R007 一多）：固定尺寸在宽屏放大一档。 */
+  private refreshBreakpoint(): void {
+    try {
+      const md: mediaquery.MediaQueryListener = this.getUIContext().getMediaQuery().matchMediaSync(BP_QUERY_MD);
+      const lg: mediaquery.MediaQueryListener = this.getUIContext().getMediaQuery().matchMediaSync(BP_QUERY_LG);
+      const next: string = breakpointOf(md.matches, lg.matches);
+      if (next !== this.bp) {
+        this.bp = next;
+        AppStorage.setOrCreate('dshBreakpoint', next);
+      }
+    } catch (e) {
+      // 拿不到 mediaquery 时按手机档渲染。
+    }
+  }
+
+  private atLeastMd(): boolean {
+    return atLeastMd(this.bp);
+  }
+
   aboutToAppear(): void {
+    this.refreshBreakpoint();
     this.reload();
   }
 
@@ -70,7 +94,7 @@ export struct ImageTile {
       if (this.pixels !== null) {
         Image(this.pixels)
           .objectFit(ImageFit.Cover)
-          .width(260)
+          .width(this.atLeastMd() ? 320 : 260)
           .borderRadius(DsSpacing.codeBlockRadius)
           .accessibilityText('查看大图')
           .onClick(() => {

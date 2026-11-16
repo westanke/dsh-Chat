@@ -156,6 +156,7 @@
 | `ets/components/md/MdCodeBlock.ets` | 代码块：banner 语言名+复制（pasteboard）+ 1px 分隔线 + 横滚 + SimpleHighlight 四类着色 |
 | `ets/components/md/MdTable.ets` | 表格：banner「表格」+复制（\t 连接）+ 表头 w500 + cellAlign l/c/r + cellMinWidth 100 |
 | `ets/components/md/MdLatex.ets` | 轻量 LaTeX 渲染：frac/sqrt/sup/sub/sym 分派（横线分子分母/√ 上边框/70% 字号偏移）；嵌套 smallArg 拍平 |
+| `ets/components/ArrayDataSource.ets` | `IDataSource` 的数组实现（MessageList/SessionsDrawer 的 LazyForEach 数据源）：totalCount/getData + 监听注册注销，reset(items) 广播 onDataReloaded（不做逐项 diff —— ChatStore.messages 每次 changed() 都是新数组） |
 | `ets/components/ToolBlock.ets` | 工具折叠组：摘要行（⚒ 短语）+ 展开逐条（✓/✗ 措辞/耗时）+ 单条 detail（bash 走 MdCodeBlock，其余 prettyArgs） |
 | `ets/components/ProcessGroup.ets` | 官方 web 式工具三层折叠（从 MessageList 切出，控行数）：组头 🔧+短语+总耗时 → ToolRow 逐行（○/⊘ + 短语 + 路径摘要）→ detailBlock 灰底描边卡片（call.name monospace + 耗时 + ✓/✗ + bash 走 MdCodeBlock / 参数 prettyArguments / 输出·错误 / 结果为空） |
 | `ets/components/ThinkBlock.ets` | 深度思考可折叠小块（从 MessageList 切出）：🧭 + 「深度思考中…/已深度思考」+ ⌃⌄；流式默认展开、流式结束自动收起、用户手动展开后不再强制折叠；展开走 MdView small |
@@ -163,8 +164,10 @@
 | `ets/components/ImageTile.ets` | 收图渲染四态（加载/像素/错误重试/全屏）：createImageSource→PixelMap→Image 260 Cover，点按 bindContentCover 全屏 |
 | `ets/components/MessageActions.ets` | 消息操作条：复制（pasteboard 回弹）/喜欢/朗读（Tts）/分享（Share）/⟳ 重新生成 |
 | `ets/components/ModelSheet.ets` | 调整模型 bindSheet：分组折叠（默认展开当前）+ pending 提示 + reasoning chips + 确认（st.selectModel） |
-| `ets/components/ProjectionSheets.ets` | 会话统计/运行轨迹/智能团队/待办任务四 sheet（骨架内联；团队三指挥 chip） |
+| `ets/components/ProjectionSheets.ets` | 会话统计/运行轨迹两 sheet（智能团队/待办已切出到 ProjectionTeamSheets，控行数） |
+| `ets/components/ProjectionTeamSheets.ets` | 智能团队/待办任务两 sheet（从 ProjectionSheets 切出）：团队三指挥 chip + 成员/任务/子代理行；待办状态圆点与删除线 |
 | `ets/components/PermissionSheet.ets` | 会话权限档位 sheet（从 Composer 拆出）：aboutToAppear 拉清单 + pick/apply + danger 二次确认 |
+| `ets/components/ComposerBanners.ets` | 输入条两条横幅（从 Composer 切出，控行数）：ErrorBanner（错误「点按查看」）与 HintBanner（提示可带 danger 色 + 关闭钮） |
 | `ets/components/ComposerPanels.ets` | 输入面板：命令补全（缓存切会话失效/前缀过滤）与 @ 文件补全（多根合并 label/ 前缀 + 目录下钻 + 失败重试） |
 | `ets/ui/theme.ets` | design-tokens.md 的鸿蒙翻译：DsPalette/DsColors（dark 构造语义别名）/DsTypography/DsSpacing；改样式先改 token 文档再改这里 |
 | `ets/platform/WsTransport.ets` | @ohos.web.websocket 实现 WebSocketTransport：header 小写键 + protocol 单值，connectTimeoutMs settled 防竞态 |
@@ -174,6 +177,7 @@
 | `ets/platform/PhotoPick.ets` | 系统图库选图（photoAccessHelper PhotoViewPicker）→ 临时文件读字节 + 魔数嗅探 mediaType |
 | `ets/platform/Tts.ets` | CoreSpeechKit 朗读（zh-CN，speak/stopSpeak，音量语速走 extraParams） |
 | `ets/platform/Share.ets` | 系统分享面板（Want ohos.want.action.sendData text/plain） |
+| `ets/core/Breakpoints.ts` | 窗口断点纯逻辑（R007 一多）：`breakpointOf` 归一 sm/md/lg + 三档尺寸查询（contentMaxWidth 0/720/840、drawerWidth 288/352/400、sheetMaxWidth 0/640/720、drawerFraction 0.8/0.4/0.32）；放 core 以便 node 直测 |
 | `ets/core/ChatStore.ts` | 会话状态机（chat_state.dart 全语义）：send 乐观上屏+手机工作区预建（ensureMobileWorkspace）、流式收束、committed assistant/user 分支、防抖重拉 800ms、loadOlder 翻页去重、isCurrent 空态防串台 |
 | `ets/core/MdParser.ts` | Markdown 块级解析（围栏/#/hr/引用/列表+任务项/表格/块公式/段落）：行扫描产 MdBlock；parseMarkdown 入口 |
 | `ets/core/MdInline.ts` | 行内解析：code/bold/italic/strike/link/裸 URL 最早匹配优先；snake_case 不误判 |

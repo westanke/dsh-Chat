@@ -82,9 +82,11 @@ export struct MdTable {
       // 表体（横向滚动；列宽按 flex 撑满）
       Scroll() {
         Column() {
-          ForEach(this.rows, (row: string[], rowIdx: number) => {
-            this.renderRow(row, rowIdx)
-          }, (row: string[], rowIdx: number) => rowIdx + '-' + row.length)
+          Repeat<string[]>(this.rows)
+            .each((entry: RepeatItem<string[]>) => {
+              this.renderRow(entry.item, entry.index)
+            })
+            .key((entry: string[], index: number) => index.toString() + '-' + entry.length.toString())
         }
       }
       .scrollable(ScrollDirection.Horizontal)
@@ -99,28 +101,36 @@ export struct MdTable {
     .margin({ top: DsSpacing.blockGap, bottom: DsSpacing.blockGap })
   }
 
+  /** 单元格。抽 @Builder 让 Repeat 帧里只有一行调用。 */
+  @Builder
+  cellView(row: string[], rowIdx: number, cell: string, colIdx: number) {
+    Text(cell.length > 0 ? cell : ' ')
+      .fontSize(rowIdx === 0 ? DsTypography.tableHead.size : DsTypography.table.size)
+      .fontWeight(rowIdx === 0 ? FontWeight.Medium : FontWeight.Normal)
+      .fontColor(this.c().labelPrimary)
+      .textAlign(this.cellAlign(colIdx))
+      .padding({
+        left: DsSpacing.cellPadH,
+        right: DsSpacing.cellPadH,
+        top: DsSpacing.cellPadV,
+        bottom: DsSpacing.cellPadV,
+      })
+      .constraintSize({ minWidth: DsSpacing.cellMinWidth })
+      .layoutWeight(1)
+      .border({
+        width: { right: colIdx < row.length - 1 ? 1 : 0, top: rowIdx === 0 ? 0 : 1 },
+        color: this.c().tableBorder,
+      })
+  }
+
   @Builder
   renderRow(row: string[], rowIdx: number) {
     Row() {
-      ForEach(row, (cell: string, colIdx: number) => {
-        Text(cell.length > 0 ? cell : ' ')
-          .fontSize(rowIdx === 0 ? DsTypography.tableHead.size : DsTypography.table.size)
-          .fontWeight(rowIdx === 0 ? FontWeight.Medium : FontWeight.Normal)
-          .fontColor(this.c().labelPrimary)
-          .textAlign(this.cellAlign(colIdx))
-          .padding({
-            left: DsSpacing.cellPadH,
-            right: DsSpacing.cellPadH,
-            top: DsSpacing.cellPadV,
-            bottom: DsSpacing.cellPadV,
-          })
-          .constraintSize({ minWidth: DsSpacing.cellMinWidth })
-          .layoutWeight(1)
-          .border({
-            width: { right: colIdx < row.length - 1 ? 1 : 0, top: rowIdx === 0 ? 0 : 1 },
-            color: this.c().tableBorder,
-          })
-      }, (cell: string, colIdx: number) => rowIdx + '-' + colIdx + '-' + cell.length)
+      Repeat<string>(row)
+        .each((entry: RepeatItem<string>) => {
+          this.cellView(row, rowIdx, entry.item, entry.index)
+        })
+        .key((entry: string, index: number) => index.toString() + '-' + entry.length.toString())
     }
     .alignItems(VerticalAlign.Center)
     .width('100%')

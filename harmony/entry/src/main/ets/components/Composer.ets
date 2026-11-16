@@ -15,10 +15,13 @@ import { JsonMap } from '../core/JsonAccess';
 import { PermissionSheet } from './PermissionSheet';
 import { PickedImage, pickImageFromGallery } from '../platform/PhotoPick';
 import { CommandPanel, AtFilePanel } from './ComposerPanels';
+import { ErrorBanner, HintBanner } from './ComposerBanners';
 import { AtEntry, mergeAtEntries, inSubDirectory, AtMentionMerge } from '../core/AtMention';
 import { DsColors, DsTypography, DsSpacing } from '../ui/theme';
 import { permissionLabelOf } from '../core/Permissions';
 import { common } from '@kit.AbilityKit';
+import { mediaquery } from '@kit.ArkUI';
+import { BP_SM, BP_QUERY_MD, BP_QUERY_LG, breakpointOf, atLeastMd } from '../core/Breakpoints';
 
 type PanelMode = 'none' | 'cmd' | 'at';
 
@@ -26,6 +29,8 @@ type PanelMode = 'none' | 'cmd' | 'at';
 export struct Composer {
   store: ChatStore | null = null;
   @StorageProp('dshDark') dark: boolean = false;
+  /** 窗口宽度断点（R007 一多）：输入区高度与按键尺寸按档放大。 */
+  @StorageProp('dshBreakpoint') bp: string = BP_SM;
   /** 同 MessageList：@Prop 必须带 @Watch 并把 store 派生值抄进 @State，否则
    * build 里读普通成员 store.streaming/currentPermission/lastError 不会重建。 */
   @Prop @Watch('syncVersion') version: number = 0;
@@ -74,7 +79,27 @@ export struct Composer {
     this.errView = st === null || st.lastError === null ? '' : st.lastError;
   }
 
+  /** 窗口断点自读（R007 一多）：输入区与按键在宽屏放大一档。 */
+  private refreshBreakpoint(): void {
+    try {
+      const md: mediaquery.MediaQueryListener = this.getUIContext().getMediaQuery().matchMediaSync(BP_QUERY_MD);
+      const lg: mediaquery.MediaQueryListener = this.getUIContext().getMediaQuery().matchMediaSync(BP_QUERY_LG);
+      const next: string = breakpointOf(md.matches, lg.matches);
+      if (next !== this.bp) {
+        this.bp = next;
+        AppStorage.setOrCreate('dshBreakpoint', next);
+      }
+    } catch (e) {
+      // 拿不到 mediaquery 时按手机档渲染，不阻塞输入。
+    }
+  }
+
+  private atLeastMd(): boolean {
+    return atLeastMd(this.bp);
+  }
+
   aboutToAppear(): void {
+    this.refreshBreakpoint();
     this.syncVersion();
   }
 
@@ -292,35 +317,17 @@ export struct Composer {
   build() {
     Column() {
       if (this.lastError() !== null) {
-        Text(this.lastError() as string)
-          .fontSize(12)
-          .fontColor(this.c().danger)
-          .maxLines(2)
-          .width('100%')
-          .padding({ left: DsSpacing.screenPad, right: DsSpacing.screenPad, bottom: 6 })
-          .accessibilityText('错误提示，点按查看')
+        ErrorBanner({ message: this.lastError() as string })
       }
       if (this.permHint.length > 0) {
-        Text(this.permHint)
-          .fontSize(12)
-          .fontColor(this.c().labelSecondary)
-          .width('100%')
-          .padding({ left: DsSpacing.screenPad, right: DsSpacing.screenPad, bottom: 6 })
-          .accessibilityText('权限提示，点按关闭')
-          .onClick(() => {
-            this.permHint = '';
-          })
+        HintBanner({ message: this.permHint, a11y: '权限提示，点按关闭', onDismiss: (): void => {
+          this.permHint = '';
+        } })
       }
       if (this.imageError.length > 0) {
-        Text(this.imageError)
-          .fontSize(12)
-          .fontColor(this.c().danger)
-          .width('100%')
-          .padding({ left: DsSpacing.screenPad, right: DsSpacing.screenPad, bottom: 6 })
-          .accessibilityText('图片错误提示，点按关闭')
-          .onClick(() => {
-            this.imageError = '';
-          })
+        HintBanner({ message: this.imageError, danger: true, a11y: '图片错误提示，点按关闭', onDismiss: (): void => {
+          this.imageError = '';
+        } })
       }
       if (this.panel === 'cmd') {
         CommandPanel({
@@ -421,8 +428,8 @@ export struct Composer {
         Blank()
         if (this.streaming()) {
           Button('■', { type: ButtonType.Circle })
-            .width(44)
-            .height(44)
+            .width(this.atLeastMd() ? 48 : 44)
+            .height(this.atLeastMd() ? 48 : 44)
             .backgroundColor(this.c().brand)
             .fontColor(this.c().onBrand)
             .fontSize(16)

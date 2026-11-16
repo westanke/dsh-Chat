@@ -7,6 +7,7 @@
  */
 
 import { ChatStore } from '../core/ChatStore';
+import { BP_SM, drawerWidth, drawerFraction } from '../core/Breakpoints';
 import { GatewayState } from '../core/GatewayEvents';
 import { DshSession } from '../core/Models';
 import { DsColors, DsTypography, DsSpacing } from '../ui/theme';
@@ -18,7 +19,8 @@ import { SessionsDrawer } from '../components/SessionsDrawer';
 import { SessionLocationSheet } from '../components/SessionLocationSheet';
 import { SessionLocation, locationChipLabel } from '../core/SessionLocation';
 import { ModelSheet } from '../components/ModelSheet';
-import { StatsSheet, TrajectorySheet, TeamSheet, TodoSheet } from '../components/ProjectionSheets';
+import { StatsSheet, TrajectorySheet } from '../components/ProjectionSheets';
+import { TeamSheet, TodoSheet } from '../components/ProjectionTeamSheets';
 
 @Component
 export struct ChatView {
@@ -26,6 +28,8 @@ export struct ChatView {
   onExit: (() => void) | null = null;
   onOpenSettings: (() => void) | null = null;
   @StorageProp('dshDark') dark: boolean = false;
+  /** 窗口宽度断点（@StorageProp 由 Index 的 mediaquery 写）：抽屉宽度/推挤比例按档。 */
+  @StorageProp('dshBreakpoint') bp: string = BP_SM;
   @State version: number = 0;
   /**
    * 空态/标题快照。ArkUI 的 if 分支只按 @State/@Prop 依赖求值：store 是普通成员，
@@ -49,6 +53,15 @@ export struct ChatView {
   @State teamSheet: boolean = false;
   @State todoSheet: boolean = false;
   @State modelSheet: boolean = false;
+
+  /**
+   * 抽屉推挤位移（R007 一多）：手机上推 80%（安卓同口径，抽屉占 80% 屏宽），
+   * 大屏抽屉定宽后按「抽屉宽 / 屏宽」换算，避免推挤过头露出空白。
+   */
+  private drawerShift(): string {
+    const fraction: number = drawerFraction(this.bp);
+    return (fraction * 100).toFixed(0) + '%';
+  }
 
   private c(): DsColors {
     return new DsColors(this.dark);
@@ -91,7 +104,7 @@ export struct ChatView {
       }
       .width('100%')
       .height('100%')
-      .translate({ x: this.drawerOpen ? '80%' : '0%' })
+      .translate({ x: this.drawerOpen ? this.drawerShift() : '0%' })
       // 动效取官方档位 200ms（R017 档位 100/150/200/300/350）。
       .animation({ duration: 200, curve: Curve.EaseOut })
       if (this.drawerOpen) {
@@ -105,7 +118,9 @@ export struct ChatView {
             this.drawerOpen = false;
           })
         SessionsDrawer({
-          store: this.store, onClose: (): void => {
+          store: this.store,
+          panelWidth: drawerWidth(this.bp),
+          onClose: (): void => {
             this.drawerOpen = false;
           }, onOpenSettings: (): void => {
             if (this.onOpenSettings !== null) {

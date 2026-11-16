@@ -25,35 +25,38 @@ export struct CommandPanel {
   build() {
     Scroll() {
       Column() {
-        ForEach(this.commands, (cmd: SlashCommand, idx: number) => {
-          Row({ space: 8 }) {
-            Text('›')
-              .fontSize(16)
-              .fontColor(this.c().chipSelectedFg)
-            Text('/' + cmd.name)
-              .fontSize(14)
-              .fontWeight(FontWeight.Medium)
-              .fontColor(this.c().labelPrimary)
-              .maxLines(1)
-            if (cmd.description.length > 0) {
-              Text(cmd.description)
-                .fontSize(12)
-                .fontColor(this.c().labelTertiary)
+        Repeat<SlashCommand>(this.commands)
+          .each((item: RepeatItem<SlashCommand>) => {
+            Row({ space: 8 }) {
+              Text('›')
+                .fontSize(16)
+                .fontColor(this.c().chipSelectedFg)
+              Text('/' + item.item.name)
+                .fontSize(14)
+                .fontWeight(FontWeight.Medium)
+                .fontColor(this.c().labelPrimary)
                 .maxLines(1)
-                .textOverflow({ overflow: TextOverflow.Ellipsis })
-                .layoutWeight(1)
-            } else {
-              Blank().layoutWeight(1)
+              if (item.item.description.length > 0) {
+                Text(item.item.description)
+                  .fontSize(12)
+                  .fontColor(this.c().labelTertiary)
+                  .maxLines(1)
+                  .textOverflow({ overflow: TextOverflow.Ellipsis })
+                  .layoutWeight(1)
+              } else {
+                Blank().layoutWeight(1)
+              }
             }
-          }
-          .width('100%')
-          .padding({ left: 12, right: 12, top: 10, bottom: 10 })
-          .backgroundColor(idx === 0 ? this.c().chipSelectedBg : Color.Transparent)
-          .accessibilityText('/' + cmd.name + (cmd.description.length > 0 ? '：' + cmd.description : ''))
-          .onClick(() => {
-            this.onPick(cmd);
+            .width('100%')
+            .padding({ left: 12, right: 12, top: 10, bottom: 10 })
+            .backgroundColor(item.index === 0 ? this.c().chipSelectedBg : Color.Transparent)
+            .accessibilityText('/' + item.item.name +
+              (item.item.description.length > 0 ? '：' + item.item.description : ''))
+            .onClick(() => {
+              this.onPick(item.item);
+            })
           })
-        }, (cmd: SlashCommand) => cmd.name)
+          .key((item: SlashCommand) => item.name)
       }
       .width('100%')
     }
@@ -104,26 +107,28 @@ export struct AtFilePanel {
             .fontSize(12).fontColor(this.c().labelTertiary)
             .width('100%').padding(12)
         } else {
-          ForEach(this.entries, (e: AtEntry, idx: number) => {
-            Row({ space: 8 }) {
-              Text(e.isDirectory ? '📁' : '📄')
-                .fontSize(14)
-              Text(e.name)
-                .fontSize(14)
-                .fontWeight(FontWeight.Medium)
-                .fontColor(this.c().labelPrimary)
-                .maxLines(1)
-                .textOverflow({ overflow: TextOverflow.Ellipsis })
-                .layoutWeight(1)
-            }
-            .width('100%')
-            .padding({ left: 12, right: 12, top: 10, bottom: 10 })
-            .backgroundColor(idx === 0 ? this.c().chipSelectedBg : Color.Transparent)
-            .accessibilityText('/' + e.path)
-            .onClick(() => {
-              this.onPick(e);
+          Repeat<AtEntry>(this.entries)
+            .each((item: RepeatItem<AtEntry>) => {
+              Row({ space: 8 }) {
+                Text(item.item.isDirectory ? '📁' : '📄')
+                  .fontSize(14)
+                Text(item.item.name)
+                  .fontSize(14)
+                  .fontWeight(FontWeight.Medium)
+                  .fontColor(this.c().labelPrimary)
+                  .maxLines(1)
+                  .textOverflow({ overflow: TextOverflow.Ellipsis })
+                  .layoutWeight(1)
+              }
+              .width('100%')
+              .padding({ left: 12, right: 12, top: 10, bottom: 10 })
+              .backgroundColor(item.index === 0 ? this.c().chipSelectedBg : Color.Transparent)
+              .accessibilityText('/' + item.item.path)
+              .onClick(() => {
+                this.onPick(item.item);
+              })
             })
-          }, (e: AtEntry) => e.kind + ':' + e.path)
+            .key((item: AtEntry) => item.kind + ':' + item.path)
         }
       }
       .width('100%')
@@ -157,32 +162,35 @@ export struct PermissionPanel {
         .fontWeight(FontWeight.Medium)
         .fontColor(this.c().labelPrimary)
         .padding({ left: 16, right: 16, top: 14, bottom: 8 })
-      ForEach(this.options, (o: PermissionOption) => {
-        Row({ space: 10 }) {
-          Text(this.current === o.value ? '✓' : '○')
-            .fontSize(16)
-            .fontColor(this.current === o.value ? this.c().brand : this.c().labelTertiary)
-          Column({ space: 2 }) {
-            Text(o.label)
-              .fontSize(14)
-              .fontWeight(FontWeight.Medium)
-              .fontColor(this.c().labelPrimary)
-            if (o.descriptionLabel !== null) {
-              Text(o.descriptionLabel)
-                .fontSize(12)
-                .fontColor(this.c().labelTertiary)
+      Repeat<PermissionOption>(this.options)
+        .each((item: RepeatItem<PermissionOption>) => {
+          Row({ space: 10 }) {
+            Text(this.current === item.item.value ? '✓' : '○')
+              .fontSize(16)
+              .fontColor(this.current === item.item.value ? this.c().brand : this.c().labelTertiary)
+            Column({ space: 2 }) {
+              Text(item.item.label)
+                .fontSize(14)
+                .fontWeight(FontWeight.Medium)
+                .fontColor(this.c().labelPrimary)
+              if (item.item.descriptionLabel !== null) {
+                Text(item.item.descriptionLabel)
+                  .fontSize(12)
+                  .fontColor(this.c().labelTertiary)
+              }
             }
+            .alignItems(HorizontalAlign.Start)
+            .layoutWeight(1)
           }
-          .alignItems(HorizontalAlign.Start)
-          .layoutWeight(1)
-        }
-        .width('100%')
-        .padding({ left: 16, right: 16, top: 12, bottom: 12 })
-        .accessibilityText(o.label + (o.descriptionLabel !== null ? '：' + o.descriptionLabel : ''))
-        .onClick(() => {
-          this.onPick(o.value);
+          .width('100%')
+          .padding({ left: 16, right: 16, top: 12, bottom: 12 })
+          .accessibilityText(item.item.label +
+            (item.item.descriptionLabel !== null ? '：' + item.item.descriptionLabel : ''))
+          .onClick(() => {
+            this.onPick(item.item.value);
+          })
         })
-      }, (o: PermissionOption) => o.value)
+        .key((item: PermissionOption) => item.value)
     }
     .width('100%')
     .backgroundColor(this.c().bgBase)

@@ -5,6 +5,8 @@
 /// 审批卡：允许一次 / 拒绝两键（协议无「始终允许」）。
 import { PendingQuestion, PendingApproval, QuestionAnswerItem, UserQuestion, UserQuestionOption } from '../core/Questions';
 import { DsColors, DsTypography, DsSpacing } from '../ui/theme';
+import { mediaquery } from '@kit.ArkUI';
+import { BP_SM, BP_QUERY_MD, BP_QUERY_LG, breakpointOf, atLeastMd } from '../core/Breakpoints';
 
 @Component
 export struct HitlPanel {
@@ -17,6 +19,8 @@ export struct HitlPanel {
   onDecide: (a: PendingApproval, allow: boolean) => void =
     (_a: PendingApproval, _allow: boolean) => {};
   @StorageProp('dshDark') dark: boolean = false;
+  /** 窗口宽度断点（R007 一多）：自定义回答输入框高度按档放大。 */
+  @StorageProp('dshBreakpoint') bp: string = BP_SM;
   /**
    * 已选 label 集，编码成 `questionId + '\u0001' + label` 的字符串数组。
    * **不能用 Map**：ArkUI 对 Map 内部变更不建立观察依赖，`version++` 也不会让
@@ -26,6 +30,29 @@ export struct HitlPanel {
   @State picked: string[] = [];
   /** 每题自定义回答（同样用 @State 数组：`qid + '\u0001' + text`）。 */
   @State customs: string[] = [];
+
+  /** 窗口断点自读（R007 一多）：自定义回答输入框在宽屏加高。 */
+  private refreshBreakpoint(): void {
+    try {
+      const md: mediaquery.MediaQueryListener = this.getUIContext().getMediaQuery().matchMediaSync(BP_QUERY_MD);
+      const lg: mediaquery.MediaQueryListener = this.getUIContext().getMediaQuery().matchMediaSync(BP_QUERY_LG);
+      const next: string = breakpointOf(md.matches, lg.matches);
+      if (next !== this.bp) {
+        this.bp = next;
+        AppStorage.setOrCreate('dshBreakpoint', next);
+      }
+    } catch (e) {
+      // 拿不到 mediaquery 时按手机档渲染。
+    }
+  }
+
+  private atLeastMd(): boolean {
+    return atLeastMd(this.bp);
+  }
+
+  aboutToAppear(): void {
+    this.refreshBreakpoint();
+  }
 
   /** 普通方法而非 getter：@Builder/ForEach 生成器里 `private get c()` 取到 undefined
    * （真机 TypeError: Cannot read property 'labelPrimary' of undefined 整进程崩）。 */
@@ -130,12 +157,16 @@ export struct HitlPanel {
   build() {
     Scroll() {
       Column() {
-        ForEach(this.approvals, (a: PendingApproval, idx: number) => {
-          this.approvalCard(a, idx)
-        }, (a: PendingApproval, i: number) => 'a' + i + '-' + a.approvalId)
-        ForEach(this.questions, (q: PendingQuestion, idx: number) => {
-          this.questionCard(q, idx)
-        }, (q: PendingQuestion, i: number) => 'q' + i + '-' + q.callId)
+        Repeat<PendingApproval>(this.approvals)
+          .each((entry: RepeatItem<PendingApproval>) => {
+            this.approvalCard(entry.item, entry.index)
+          })
+          .key((entry: PendingApproval) => entry.approvalId)
+        Repeat<PendingQuestion>(this.questions)
+          .each((entry: RepeatItem<PendingQuestion>) => {
+            this.questionCard(entry.item, entry.index)
+          })
+          .key((entry: PendingQuestion) => entry.callId)
       }
       .width('100%')
     }
@@ -199,9 +230,11 @@ export struct HitlPanel {
   @Builder
   questionCard(q: PendingQuestion, qIdx: number) {
     Column() {
-      ForEach(q.questions, (item: UserQuestion, idx: number) => {
-        this.oneQuestion(item, qIdx, idx)
-      }, (item: UserQuestion, i: number) => q.callId + '-' + i + '-' + item.question.length)
+      Repeat<UserQuestion>(q.questions)
+        .each((entry: RepeatItem<UserQuestion>) => {
+          this.oneQuestion(entry.item, qIdx, entry.index)
+        })
+        .key((entry: UserQuestion) => entry.id + '-' + entry.question.length.toString())
       Row() {
         Blank()
         Text('提交')
@@ -254,9 +287,11 @@ export struct HitlPanel {
         this.customField(item, qIdx, idx)
       } else {
         Flex({ wrap: FlexWrap.Wrap }) {
-          ForEach(item.options, (opt: UserQuestionOption, oi: number) => {
-            this.optionChip(item, opt, qIdx, idx, oi)
-          }, (opt: UserQuestionOption, i: number) => item.id + '-' + i)
+          Repeat<UserQuestionOption>(item.options)
+            .each((entry: RepeatItem<UserQuestionOption>) => {
+              this.optionChip(item, entry.item, qIdx, idx, entry.index)
+            })
+            .key((entry: UserQuestionOption) => entry.label)
         }
         .width('100%')
         .margin({ top: DsSpacing.chipIconGap })
@@ -294,7 +329,7 @@ export struct HitlPanel {
       .backgroundColor(this.c().inputFill)
       .border({ width: 1, color: this.c().inputBorder })
       .borderRadius(DsSpacing.codeBlockRadius)
-      .height(40)
+      .height(this.atLeastMd() ? 48 : 40)
       .width('100%')
       .onChange((value: string) => {
         this.setCustom(item.id, value);

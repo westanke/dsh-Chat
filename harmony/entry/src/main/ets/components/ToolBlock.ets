@@ -57,9 +57,12 @@ export struct ToolBlock {
 
       if (this.expanded) {
         Column() {
-          ForEach(this.group, (t: ToolCallInfo, idx: number) => {
-            this.toolRow(t, idx)
-          }, (t: ToolCallInfo, i: number) => i + '-' + t.name + '-' + (t.resultText === null ? 0 : t.resultText.length))
+          Repeat<ToolCallInfo>(this.group)
+            .each((item: RepeatItem<ToolCallInfo>) => {
+              this.toolRow(item.item, item.index)
+            })
+            .key((item: ToolCallInfo) => item.callId + '-' + item.name + '-' +
+              (item.resultText === null ? '0' : item.resultText.length.toString()))
         }
         .width('100%')
         .margin({ top: 4, bottom: 4 })

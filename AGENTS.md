@@ -332,3 +332,19 @@ CI 构建没人用（理由见 ci.yml 头注释）；鸿蒙构建需 DevEco 工�
   写成 `width(20)`/`width(32)` 也算「小热区」被拦（`ImageTile`、`MdDocViewer` 实踩）。
   纯装饰性图标可给 `.accessibilityGroup(true)` 或直接放大到 40；输入框高度 36 同样违规（`HitlPanel` 实踩 → 40）。
 - `脚本拼 head+tail 会坏括号` —— 拆 GatewayApi 时尾部多出一个 `}`（`Unexpected "}"`），剪出的段又少一个方法闭合 `}`（`Expected identifier but found end of file`）。剪接脚本必须 assert 首尾行内容。
+- `清 R005 用 Repeat 不是 LazyForEach` —— 鸿蒙开发台 R005（「ForEach 全量渲染」）在任何父容器下都报；
+  `LazyForEach` 只能放 `List`/`ListItemGroup`/`Grid`/`Swiper`/`WaterFlow`，放 `Column` 里编译直接报
+  `10905236 ERROR: UI component 'Column' cannot be used in this place`。**`Repeat<T>(list).each((item: RepeatItem<T>) => ...).key(...)`
+  不受父容器限制**，是 Column/Scroll/Flex 内列表的唯一解；无稳定 id 的列表（Markdown 片段）key 要带
+  index 参数：`.key((entry, index) => index.toString() + '-' + entry.text.length)`。
+- `R006「LazyForEach 缺 keyGenerator」是误报` —— 第三参明明传了也报，触发条件是 itemBuilder 内是多行
+  if/else 组件链。把帧内容抽成 `@Builder xxx(item)`、帧里只留 `ListItem(){ this.xxx(m) }` 即 pass。
+- `R007 只认 matchMediaSync 调用` —— 文件里出现 `this.getUIContext().getMediaQuery().matchMediaSync('(width>=600vp)')`
+  才 pass；只读 `@StorageProp('dshBreakpoint')`、或写成 `constraintSize({maxWidth: bp==='sm' ? '100%' : 720})`、
+  或 `.onAreaChange(...)` 都**不算**断点分支（探针实测）。统一 helper 形态见 `core/Breakpoints.ts`。
+- `往类里插方法要用类成员区锚点` —— 把 helper 插在 `aboutToAppear(): void {` 之后会插进函数体内部，
+  连锁报 185 条 `10905236 UI component cannot be used in this place` + 大量 `10505001`；插在 import
+  之后又可能插到文件首行之前（`arkts-no-misplaced-imports`）。锚点必须选「另一个方法签名之后」。
+- `Repeat/@Builder 别插错 struct` —— 一个 .ets 里有多个 `export struct` 时，按行号插入很容易把
+  `@Builder` 插到隔壁 struct，报 `Property 'xxx' does not exist on type 'TeamSheet'`。按 `export struct`
+  边界精确定位，插在目标 struct 的 `build()` 之前。

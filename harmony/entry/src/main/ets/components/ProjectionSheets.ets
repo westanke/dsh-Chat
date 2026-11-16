@@ -4,12 +4,12 @@
  * 子会话 + 三枚指挥话术）/ 待办任务 / 会话统计。全部本地只读，不发请求。
  * 各面板由 ChatView 挂 bindSheet。骨架（title+subtitle+内容区）每件内联
  * （ArkTS @BuilderParam 传 lambda 不可靠，不用）。
+ * 智能团队 / 待办任务已切到 ProjectionTeamSheets.ets（单文件 ≤500 行）。
  */
 
 import { ChatStore } from '../core/ChatStore';
-import { TrajectoryTurn, TrajectoryNode, TrajectoryNodeKind, trajectoryOf, TodoItem,
-  todoItems, AgentTeamProjection, agentTeamProjectionOf, prettyJson, chatStatsOf,
-  TeamMemberRow, TeamTaskRow, SubagentRow } from '../core/Projections';
+import { TrajectoryTurn, TrajectoryNode, TrajectoryNodeKind, trajectoryOf,
+  prettyJson, chatStatsOf } from '../core/Projections';
 import { ChatMessage } from '../core/HistoryPage';
 import { GatewayState } from '../core/GatewayEvents';
 import { DsColors, DsTypography, DsSpacing } from '../ui/theme';
@@ -43,20 +43,22 @@ export struct StatsSheet {
         .fontColor(this.c().labelSecondary)
         .width('100%')
         .margin({ top: DsSpacing.liGap })
-      ForEach(this.keys, (k: string) => {
-        Row() {
-          Text(k)
-            .fontSize(DsTypography.small.size)
-            .fontColor(this.c().labelSecondary)
-            .layoutWeight(1)
-          Text(this.countOf(k).toString())
-            .fontSize(DsTypography.smallStrong.size)
-            .fontWeight(FontWeight.Medium)
-            .fontColor(this.c().labelPrimary)
-        }
-        .width('100%')
-        .padding({ top: DsSpacing.liGap, bottom: DsSpacing.liGap })
-      }, (k: string) => k)
+      Repeat<string>(this.keys)
+        .each((item: RepeatItem<string>) => {
+          Row() {
+            Text(item.item)
+              .fontSize(DsTypography.small.size)
+              .fontColor(this.c().labelSecondary)
+              .layoutWeight(1)
+            Text(this.countOf(item.item).toString())
+              .fontSize(DsTypography.smallStrong.size)
+              .fontWeight(FontWeight.Medium)
+              .fontColor(this.c().labelPrimary)
+          }
+          .width('100%')
+          .padding({ top: DsSpacing.liGap, bottom: DsSpacing.liGap })
+        })
+        .key((item: string) => item)
     }
     .width('100%')
     .padding({ left: DsSpacing.screenPad, right: DsSpacing.screenPad,
@@ -140,8 +142,29 @@ export struct TrajectorySheet {
               .padding({ top: DsSpacing.blockGap, bottom: DsSpacing.blockGap })
               .width('100%')
           }
-          ForEach(this.turns(), (t: TrajectoryTurn) => {
-            Column() {
+          Repeat<TrajectoryTurn>(this.turns())
+            .each((entry: RepeatItem<TrajectoryTurn>) => {
+              this.turnBlock(entry.item)
+            })
+            .key((entry: TrajectoryTurn) => 'turn' + entry.turn.toString() + '-' + entry.nodes.length.toString())
+        }
+        .width('100%')
+      }
+      .align(Alignment.Top)
+      .width('100%')
+      .margin({ top: DsSpacing.blockGap })
+    }
+    .width('100%')
+    .padding({ left: DsSpacing.screenPad, right: DsSpacing.screenPad,
+      top: DsSpacing.blockGap, bottom: DsSpacing.blockGap })
+    .backgroundColor(this.c().bgLayer1)
+  }
+
+  /** 单个轮次（标题行 + 节点列表）。抽 @Builder 降嵌套深度（R014）并把
+   * 内层 if 链从帧里移走，避免静态审计误判 LazyForEach/Repeat 形态。 */
+  @Builder
+  turnBlock(t: TrajectoryTurn) {
+    Column() {
               Row({ space: DsSpacing.chipIconGap }) {
                 Text('📈').fontSize(14)
                 Text(t.isUnknown ? '轮次之间' : '轮次 ' + t.turn.toString())
@@ -162,32 +185,33 @@ export struct TrajectorySheet {
               }
               .width('100%')
               .padding({ top: DsSpacing.blockGap })
-              ForEach(t.nodes, (n: TrajectoryNode) => {
+              Repeat<TrajectoryNode>(t.nodes)
+                .each((entry: RepeatItem<TrajectoryNode>) => {
                 Column() {
                   Row({ space: DsSpacing.liGap }) {
-                    Text(this.nodeIcon(n))
+                    Text(this.nodeIcon(entry.item))
                       .fontSize(12)
-                    Text(this.nodeLabel(n))
+                    Text(this.nodeLabel(entry.item))
                       .fontSize(DsTypography.small.size)
                       .fontColor(this.c().labelPrimary)
                       .layoutWeight(1)
                       .maxLines(1)
                       .textOverflow({ overflow: TextOverflow.Ellipsis })
-                    Text('#' + n.seq.toString())
+                    Text('#' + entry.item.seq.toString())
                       .fontSize(DsTypography.caption.size)
                       .fontColor(this.c().labelTertiary)
-                    Text(this.expandedSeq === n.seq ? '⌃' : '⌄')
+                    Text(this.expandedSeq === entry.item.seq ? '⌃' : '⌄')
                       .fontSize(12)
                       .fontColor(this.c().labelSecondary)
                   }
                   .width('100%')
                   .padding({ top: DsSpacing.liGap, bottom: DsSpacing.liGap })
-                  .accessibilityText('第 ' + n.seq.toString() + ' 条' + (this.expandedSeq === n.seq ? '，收起' : '，展开'))
+                  .accessibilityText('第 ' + entry.item.seq.toString() + ' 条' + (this.expandedSeq === entry.item.seq ? '，收起' : '，展开'))
                   .onClick(() => {
-                    this.expandedSeq = this.expandedSeq === n.seq ? -1 : n.seq;
+                    this.expandedSeq = this.expandedSeq === entry.item.seq ? -1 : entry.item.seq;
                   })
-                  if (this.expandedSeq === n.seq && n.raw !== null) {
-                    Text(prettyJson(n.raw))
+                  if (this.expandedSeq === entry.item.seq && entry.item.raw !== null) {
+                    Text(prettyJson(entry.item.raw))
                       .fontSize(DsTypography.codeBlock.size)
                       .fontColor(this.c().mdCodeBlockText)
                       .padding(DsSpacing.codeBlockPad)
@@ -198,296 +222,11 @@ export struct TrajectorySheet {
                 }
                 .width('100%')
                 .padding({ left: DsSpacing.thinkHMargin })
-              }, (n: TrajectoryNode) => n.seq.toString() + '-' + n.type)
-            }
-            .width('100%')
-          }, (t: TrajectoryTurn) => 'turn' + t.turn.toString() + '-' + t.nodes.length.toString())
-        }
-        .width('100%')
-      }
-      .align(Alignment.Top)
-      .width('100%')
-      .margin({ top: DsSpacing.blockGap })
+                })
+                .key((entry: TrajectoryNode) => entry.seq.toString() + '-' + entry.type)
     }
     .width('100%')
-    .padding({ left: DsSpacing.screenPad, right: DsSpacing.screenPad,
-      top: DsSpacing.blockGap, bottom: DsSpacing.blockGap })
-    .backgroundColor(this.c().bgLayer1)
   }
+
 }
 
-@Component
-export struct TeamSheet {
-  store: ChatStore | null = null;
-  @StorageProp('dshDark') dark: boolean = false;
-
-  private c(): DsColors {
-    return new DsColors(this.dark);
-  }
-
-  private team(): AgentTeamProjection | null {
-    const st: ChatStore | null = this.store;
-    return st === null ? null : agentTeamProjectionOf(st.projections);
-  }
-
-  private connected(): boolean {
-    const st: ChatStore | null = this.store;
-    return st !== null && st.connectionState === GatewayState.READY;
-  }
-
-  private send(text: string): void {
-    const st: ChatStore | null = this.store;
-    if (st !== null && this.connected()) {
-      st.send(text);
-    }
-  }
-
-  private memberLeft(m: TeamMemberRow): string {
-    return m.name + (m.isLead ? ' · 负责人' : '');
-  }
-
-  private memberRight(m: TeamMemberRow): string {
-    let s: string = m.role + ' · ' + m.phase;
-    if (m.error.length > 0) {
-      s = s + ' · ' + m.error;
-    }
-    return s;
-  }
-
-  private taskLeft(t: TeamTaskRow): string {
-    return (t.subject.length > 0 ? t.subject : t.id) +
-      (t.ownerName.length > 0 ? ' · ' + t.ownerName : '');
-  }
-
-  private subLeft(s: SubagentRow): string {
-    return s.label.length > 0 ? s.label : s.id;
-  }
-
-  private subRight(s: SubagentRow): string {
-    return s.mode.length > 0 ? s.mode : 'subagent';
-  }
-
-  build() {
-    Column() {
-      Text('智能团队')
-        .fontSize(DsTypography.h4.size)
-        .fontWeight(FontWeight.Medium)
-        .fontColor(this.c().labelPrimary)
-        .width('100%')
-      Text('成员 / 任务 / 子会话来自服务端 projections.values.agentTeam（只读展示）。')
-        .fontSize(DsTypography.small.size)
-        .fontColor(this.c().labelSecondary)
-        .width('100%')
-        .margin({ top: DsSpacing.liGap })
-      Scroll() {
-        Column() {
-          if (this.team() === null) {
-            Text('这个会话还没有智能团队数据。\n直接在聊天里发消息让负责人组建团队即可。')
-              .fontSize(DsTypography.small.size)
-              .fontColor(this.c().labelSecondary)
-              .padding({ top: DsSpacing.blockGap, bottom: DsSpacing.blockGap })
-              .width('100%')
-          } else {
-            this.teamRows()
-          }
-        }
-        .width('100%')
-      }
-      .align(Alignment.Top)
-      .width('100%')
-      .margin({ top: DsSpacing.blockGap })
-    }
-    .width('100%')
-    .padding({ left: DsSpacing.screenPad, right: DsSpacing.screenPad,
-      top: DsSpacing.blockGap, bottom: DsSpacing.blockGap })
-    .backgroundColor(this.c().bgLayer1)
-  }
-
-  @Builder
-  teamRows() {
-    Column() {
-      if ((this.team() as AgentTeamProjection).failure !== null) {
-        Text((this.team() as AgentTeamProjection).failure as string)
-          .fontSize(DsTypography.small.size)
-          .fontColor(this.c().danger)
-          .width('100%')
-          .padding({ bottom: DsSpacing.liGap })
-      }
-      Text('成员（' + (this.team() as AgentTeamProjection).members.length.toString() + '）')
-        .fontSize(DsTypography.smallStrong.size)
-        .fontWeight(FontWeight.Medium)
-        .fontColor(this.c().labelPrimary)
-        .width('100%')
-        .padding({ top: DsSpacing.blockGap })
-      ForEach((this.team() as AgentTeamProjection).members, (m: TeamMemberRow) => {
-        this.pairRow(this.memberLeft(m), this.memberRight(m))
-      }, (m: TeamMemberRow) => m.id)
-      Text('任务（' + (this.team() as AgentTeamProjection).completedTasks.toString() + '/' +
-        (this.team() as AgentTeamProjection).tasks.length.toString() + ' 完成）')
-        .fontSize(DsTypography.smallStrong.size)
-        .fontWeight(FontWeight.Medium)
-        .fontColor(this.c().labelPrimary)
-        .width('100%')
-        .padding({ top: DsSpacing.blockGap })
-      ForEach((this.team() as AgentTeamProjection).tasks, (t: TeamTaskRow) => {
-        this.pairRow(this.taskLeft(t), t.status)
-      }, (t: TeamTaskRow) => t.id)
-      Text('子会话（' + (this.team() as AgentTeamProjection).subagents.length.toString() + '）')
-        .fontSize(DsTypography.smallStrong.size)
-        .fontWeight(FontWeight.Medium)
-        .fontColor(this.c().labelPrimary)
-        .width('100%')
-        .padding({ top: DsSpacing.blockGap })
-      ForEach((this.team() as AgentTeamProjection).subagents, (s: SubagentRow) => {
-        this.pairRow(this.subLeft(s), this.subRight(s))
-      }, (s: SubagentRow) => s.id)
-      Blank().height(DsSpacing.blockGap)
-      Flex({ wrap: FlexWrap.Wrap }) {
-        Text('新建成员')
-          .fontSize(DsTypography.caption.size)
-          .fontColor(this.c().labelPrimary)
-          .padding({ left: 12, right: 12, top: 8, bottom: 8 })
-          .margin({ right: DsSpacing.settingsChipGap, bottom: DsSpacing.settingsChipGap })
-          .borderRadius(DsSpacing.chipRadius)
-          .backgroundColor(this.c().chipSelectedBg)
-          .opacity(this.connected() ? 1 : 0.4)
-          .accessibilityText('新建成员')
-          .onClick(() => {
-            this.send('请新建一名团队成员，负责：');
-          })
-        Text('分配任务')
-          .fontSize(DsTypography.caption.size)
-          .fontColor(this.c().labelPrimary)
-          .padding({ left: 12, right: 12, top: 8, bottom: 8 })
-          .margin({ right: DsSpacing.settingsChipGap, bottom: DsSpacing.settingsChipGap })
-          .borderRadius(DsSpacing.chipRadius)
-          .backgroundColor(this.c().chipSelectedBg)
-          .opacity(this.connected() ? 1 : 0.4)
-          .accessibilityText('分配任务')
-          .onClick(() => {
-            this.send('请给团队成员分配任务：');
-          })
-        Text('问进度')
-          .fontSize(DsTypography.caption.size)
-          .fontColor(this.c().labelPrimary)
-          .padding({ left: 12, right: 12, top: 8, bottom: 8 })
-          .margin({ right: DsSpacing.settingsChipGap, bottom: DsSpacing.settingsChipGap })
-          .borderRadius(DsSpacing.chipRadius)
-          .backgroundColor(this.c().chipSelectedBg)
-          .opacity(this.connected() ? 1 : 0.4)
-          .accessibilityText('问进度')
-          .onClick(() => {
-            this.send('汇报一下团队当前的成员状态和任务进度。');
-          })
-      }
-      .width('100%')
-    }
-    .width('100%')
-  }
-
-  @Builder
-  pairRow(left: string, right: string) {
-    Row() {
-      Text(left)
-        .fontSize(DsTypography.small.size)
-        .fontColor(this.c().labelSecondary)
-        .layoutWeight(1)
-      Text(right)
-        .fontSize(DsTypography.smallStrong.size)
-        .fontWeight(FontWeight.Medium)
-        .fontColor(this.c().labelPrimary)
-    }
-    .width('100%')
-    .padding({ top: DsSpacing.liGap, bottom: DsSpacing.liGap })
-  }
-}
-
-@Component
-export struct TodoSheet {
-  store: ChatStore | null = null;
-  @StorageProp('dshDark') dark: boolean = false;
-
-  private c(): DsColors {
-    return new DsColors(this.dark);
-  }
-
-  private todos(): TodoItem[] {
-    const st: ChatStore | null = this.store;
-    return st === null ? [] : todoItems(st.projections);
-  }
-
-  private completed(): number {
-    let n: number = 0;
-    for (const t of this.todos()) {
-      if (t.isCompleted) {
-        n++;
-      }
-    }
-    return n;
-  }
-
-  build() {
-    Column() {
-      Text('待办任务')
-        .fontSize(DsTypography.h4.size)
-        .fontWeight(FontWeight.Medium)
-        .fontColor(this.c().labelPrimary)
-        .width('100%')
-      Text('列表来自服务端 projections.values.todos（只读展示，可能尚未产生）。')
-        .fontSize(DsTypography.small.size)
-        .fontColor(this.c().labelSecondary)
-        .width('100%')
-        .margin({ top: DsSpacing.liGap })
-      Scroll() {
-        Column() {
-          if (this.todos().length === 0) {
-            Text('这个会话还没有待办任务。')
-              .fontSize(DsTypography.small.size)
-              .fontColor(this.c().labelSecondary)
-              .padding({ top: DsSpacing.blockGap, bottom: DsSpacing.blockGap })
-              .width('100%')
-          } else {
-            Row() {
-              Text('进度')
-                .fontSize(DsTypography.small.size)
-                .fontColor(this.c().labelSecondary)
-                .layoutWeight(1)
-              Text('已完成 ' + this.completed().toString() + '/' + this.todos().length.toString())
-                .fontSize(DsTypography.smallStrong.size)
-                .fontWeight(FontWeight.Medium)
-                .fontColor(this.c().labelPrimary)
-            }
-            .width('100%')
-            .padding({ top: DsSpacing.liGap, bottom: DsSpacing.liGap })
-            ForEach(this.todos(), (t: TodoItem) => {
-              Row({ space: DsSpacing.chipIconGap }) {
-                Text(t.isCompleted ? '☑' : (t.isInProgress ? '🕑' : '☐'))
-                  .fontSize(16)
-                  .fontColor(t.isCompleted ? this.c().brand
-                    : (t.isInProgress ? this.c().labelPrimary : this.c().labelTertiary))
-                Text(t.content)
-                  .fontSize(DsTypography.small.size)
-                  .fontColor(this.c().labelPrimary)
-                  .layoutWeight(1)
-                Text(t.status)
-                  .fontSize(DsTypography.caption.size)
-                  .fontColor(t.isCompleted ? this.c().brand
-                    : (t.isInProgress ? this.c().labelPrimary : this.c().labelTertiary))
-              }
-              .width('100%')
-              .padding({ top: DsSpacing.liGap, bottom: DsSpacing.liGap })
-            }, (t: TodoItem) => t.content)
-          }
-        }
-        .width('100%')
-      }
-      .align(Alignment.Top)
-      .width('100%')
-      .margin({ top: DsSpacing.blockGap })
-    }
-    .width('100%')
-    .padding({ left: DsSpacing.screenPad, right: DsSpacing.screenPad,
-      top: DsSpacing.blockGap, bottom: DsSpacing.blockGap })
-    .backgroundColor(this.c().bgLayer1)
-  }
-}

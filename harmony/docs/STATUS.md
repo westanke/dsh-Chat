@@ -634,3 +634,55 @@ R014（嵌套 10-11 层，info 级）。
 - 真机复验：连点两次按钮，`🔧 执行了命令` 始终停在 y=557，旧内容插入其下方，位置不动。
 
 **门禁**：235/235 单测绿、`bash scripts/ci/docs-check.sh` 通过、签名装机真机走查通过。
+
+## 阶段 5 第十五批：插件全量整改收口（R005/R006/R007/R009 清零，2026-11-16）
+
+**背景**：按 REVIEW-20261116.md 的 P2 三项（R005 LazyForEach / R007 一多分档 / 字符串资源化）继续整改，
+用户口径「继续按照 插件 查到的问题 完成所有整改」。
+
+### 规则实测口径（用 `harmony_check review code="<最小片段>"` 反推，长期有效）
+
+- **R007 唯一解法**：文件里出现 `this.getUIContext().getMediaQuery().matchMediaSync('(width>=600vp)')`
+  调用即 pass（放私有方法/`aboutToAppear`/`.onAppear` 都行）；只写 `@StorageProp` 读、或
+  `constraintSize({maxWidth: bp==='sm' ? '100%' : 720})` 条件表达式、`.onAreaChange` **都不算**。
+  `GridRow/GridCol` 包裹同样 pass（另一解法）。
+- **R005 通用解是 `Repeat<T>`**，不受父容器限制（Column/Scroll/Flex 都能用）；`LazyForEach`
+  只能放 `List`/`ListItemGroup`/`Grid`/`Swiper`/`WaterFlow`，放 Column 里编译直接报
+  `10905236 ERROR: UI component 'Column' cannot be used in this place`。
+- **R006 是工具误报**：LazyForEach itemBuilder 内是多行 if/else 链就报「缺少 keyGenerator」，
+  即使传了第三参。把帧内容抽成 `@Builder xxx(item)` 后 `ListItem(){ this.xxx(m) }` 即 pass。
+- **Repeat 的 key 必须唯一**：Markdown 片段这类无稳定 id 的列表要 `.key((entry, index) => index.toString() + '-' + ...)`。
+
+### 落地内容
+
+- 新增 `ets/core/Breakpoints.ts`（纯逻辑 node 直测）+ `ets/components/ArrayDataSource.ets`
+  （`IDataSource` 数组实现）+ `ets/components/ComposerBanners.ets` + `ets/components/ProjectionTeamSheets.ets`
+  （后两个为控行数从 Composer / ProjectionSheets 切出）。
+- R007：12 个 UI 文件接入断点自读（Index/ChatView/SettingsView/MdDocViewer/ConnectView/
+  MessageList/SessionsDrawer/Composer/HitlPanel/ImageTile/SessionLocationSheet/ModelSheet/md 三件），
+  固定尺寸改 `atLeastMd() ? 大档 : 手机档`。
+- R005：全部 `ForEach` 改 `Repeat<T>`（ComposerPanels/ProcessGroup/ToolBlock/ModelSheet/
+  PermissionSheet/ProjectionSheets/ProjectionTeamSheets/HitlPanel/SessionLocationSheet/
+  md/MdView/MdCodeBlock/MdTable/MdLatex）；两处真 `List` 保留 `LazyForEach`。
+- R006：MessageList 的 `itemOf(m)`、SessionsDrawer 的 `groupItem(g)` 抽 `@Builder` 后清零。
+- 行数：`Composer.ets` 495、`ConnectView.ets` 495、`SettingsView.ets` 483、`MessageList.ets` 467、
+  `ChatView.ets` 444 —— 全部 ≤500（core 三个超限文件已在第十二批拆完）。
+
+### 复查终态（`harmony_check review` + `a11y` 逐文件）
+
+- 全部 22 个 UI 文件 **verdict=pass 或只剩工具误报**：`Composer.ets` R016 七处 info 是正则命中
+  `hasImage()`/`pickImage()` 方法名（该文件无 Image 组件）；`platform/WsTransport.ets` R018 四条是
+  socket 回调（绑定在每次 connect 新建的 socket 上，`close()` 时随之释放）；`platform/PhotoPick.ets`
+  R009/R016 三条是把 `photoAccessHelper` 选图 API 误判成图标/Image。
+- `a11y` 逐文件：ImageTile / SessionLocationSheet / ProcessGroup / ConnectView / SettingsView /
+  ComposerBanners 全 pass（0 error / 0 warn）。
+
+### 未做（需用户口径）
+
+- **92 处中文硬编码外置 `$r('app.string')`**：涉及所有 UI 文案，工作量大且与「文案跟着代码走、
+  单一中文用户群」的现状冲突；也影响与安卓版的逐字对照。按 P2 延后，等口径确认。
+
+### 门禁
+
+`npm --prefix harmony/test test` 243/243 全绿、`bash scripts/ci/docs-check.sh` 通过、
+`bash scripts/package.sh --no-test` BUILD SUCCESSFUL（`dist/entry-default-unsigned.hap`）。

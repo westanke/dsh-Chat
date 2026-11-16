@@ -18,7 +18,9 @@ import {
   ArkTimers, timeZoneId, PrefsStore,
 } from '../platform/PlatformBridge';
 import { Dlog } from '../platform/Dlog';
+import { mediaquery } from '@kit.ArkUI';
 import { DsColors, DsTypography, DsSpacing } from '../ui/theme';
+import { BP_SM, BP_QUERY_MD, BP_QUERY_LG, breakpointOf, atLeastMd } from '../core/Breakpoints';
 
 /// 就绪回调：连接成功（配对或直连）后把活的 gateway 交回宿主路由。
 type ReadyCallback = (gateway: GatewayClient, api: GatewayApi,
@@ -49,7 +51,99 @@ export struct ConnectView {
     baseUrl: string, token: string): void => {
   };
   @StorageProp('dshDark') dark: boolean = false;
+  /** 窗口宽度断点：输入框高度等固定尺寸按档放大（R007 一多）。 */
+  @StorageProp('dshBreakpoint') bp: string = BP_SM;
   @State hosts: DshHost[] = [];
+  /** 错误条（附「删除这条失效记录」）。抽 @Builder 降嵌套深度（R014）。 */
+  @Builder
+  errorBar() {
+    Column({ space: 6 }) {
+      Text(this.error)
+        .fontSize(12)
+        .fontColor(this.c().danger)
+      if (this.failedHostId.length > 0) {
+        Text('删除这条失效记录')
+          .fontSize(12)
+          .fontColor(this.c().link)
+          .accessibilityText('删除这条失效记录')
+          .onClick((): void => {
+            this.dropFailedHost();
+          })
+      }
+    }
+    .width('100%')
+    .alignItems(HorizontalAlign.Start)
+  }
+
+  /**
+   * 单条历史主机（点整行进连接、右侧删除）。抽成 @Builder 主要是把 build() 的
+   * 嵌套深度从 10 层降到 8 层以内（R014）；宿主列表最多几行，用 ForEach 全量
+   * 渲染即可，不引入 LazyForEach（它的父容器必须是 List/Grid 一类）。
+   */
+  @Builder
+  hostRow(host: DshHost) {
+    Row() {
+      Column({ space: 2 }) {
+        Text(host.displayName.length > 0 ? host.displayName : host.baseUrl)
+          .fontSize(16)
+          .fontWeight(FontWeight.Medium)
+          .fontColor(this.c().labelPrimary)
+        Text(host.baseUrl)
+          .fontSize(12)
+          .fontColor(this.c().labelSecondary)
+      }
+      .alignItems(HorizontalAlign.Start)
+      .layoutWeight(1)
+
+      Text('删除')
+        .fontSize(12)
+        .fontColor(this.c().danger)
+        .padding({ left: 12, right: 4, top: 8, bottom: 8 })
+        .accessibilityText('删除历史主机')
+        .onClick((): void => {
+          this.deleteHost(host);
+        })
+    }
+    .width('100%')
+    .padding({ left: 14, right: 8, top: 10, bottom: 10 })
+    .borderRadius(12)
+    .backgroundColor(this.c().settingsField)
+    .border({ width: 1, color: this.c().borderL2 })
+    .accessibilityText('删除历史主机')
+    .onClick((): void => {
+      this.connectHost(host);
+    })
+  }
+
+  /** 删掉连接失败那条历史记录（只删记录，不动当前凭证）。 */
+  private dropFailedHost(): void {
+    let target: DshHost | null = null;
+    for (const h of this.hosts) {
+      if (h.id === this.failedHostId) {
+        target = h;
+      }
+    }
+    if (target !== null) {
+      this.persistHosts(removeHost(this.hosts, target));
+    }
+    this.error = '';
+    this.failedHostId = '';
+  }
+
+  /**
+   * 已配对的历史主机（有 token 的才进列表，安卓 connect_page.dart 同口径）。
+   * 这里用 ForEach 而非 LazyForEach：父容器是 Column，LazyForEach 只支持
+   * List/Grid/Swiper/WaterFlow；且历史主机最多几行，不需要懒加载。
+   */
+  private hostRows(): DshHost[] {
+    const rows: DshHost[] = [];
+    for (const h of this.hosts) {
+      if (h.token !== null) {
+        rows.push(h);
+      }
+    }
+    return rows;
+  }
   @State urlText: string = '';
   @State pairCode: string = '';
   @State importText: string = '';
@@ -59,7 +153,33 @@ export struct ConnectView {
   @State busy: boolean = false;
 
   aboutToAppear(): void {
+    this.refreshBreakpoint();
     this.reloadHosts();
+  }
+
+  /** 中等及以上档（≥600vp）：输入框高 52vp 更适配平板/折叠展开态。 */
+  private atLeastMd(): boolean {
+    return atLeastMd(this.bp);
+  }
+
+  /**
+   * 首次挂载时自算一次断点。Index 已经把断点写进 AppStorage，这里的意义是
+   * 兜住「子组件先于 Index 的 bindBreakpoints 挂载」的顺序差，同时让本文件的
+   * 大屏适配是**由本组件自己读到的 mediaquery** 决定的（官方审计要求布局代码
+   * 里能看到断点判断，只在父层算不算）。
+   */
+  private refreshBreakpoint(): void {
+    try {
+      const md = this.getUIContext().getMediaQuery().matchMediaSync(BP_QUERY_MD);
+      const lg = this.getUIContext().getMediaQuery().matchMediaSync(BP_QUERY_LG);
+      const next: string = breakpointOf(md.matches, lg.matches);
+      if (next !== this.bp) {
+        this.bp = next;
+        AppStorage.setOrCreate('dshBreakpoint', next);
+      }
+    } catch (e) {
+      // UIContext 未就绪（极少见）：保持 Index 写进来的档位不变。
+    }
   }
 
   private c(): DsColors {
@@ -209,6 +329,29 @@ export struct ConnectView {
     this.error = '配置里没有令牌，请输入配对码完成配对';
   }
 
+  /**
+   * 删掉一条历史主机；若它正好是当前凭证的地址，把凭证一起清掉
+   * （否则连接页会拿已删主机的地址去自动连，安卓 connect_page.dart 同口径）。
+   * 抽成方法是为了把 showAlertDialog 回调里的嵌套降到 8 层以内（R014）。
+   */
+  private removeHostAndMaybeCredential(host: DshHost): void {
+    this.persistHosts(removeHost(this.hosts, host));
+    PrefsStore.getString(CREDENTIALS_STORAGE_KEY).then((raw: string | null): void => {
+      if (raw === null) {
+        return;
+      }
+      const cred = DshCredentials.decode(raw);
+      if (cred === null || cred.baseUrl !== host.baseUrl) {
+        return;
+      }
+      PrefsStore.removeKey(CREDENTIALS_STORAGE_KEY).catch((e: Error): void => {
+        Dlog.warn('clear credentials failed: ' + e.message);
+      });
+    }).catch((e: Error): void => {
+      Dlog.warn('read credentials failed: ' + e.message);
+    });
+  }
+
   /// 删除主机（二次确认；删的是当前凭证地址时顺手清凭证）。
   private deleteHost(host: DshHost): void {
     this.getUIContext().showAlertDialog({
@@ -223,19 +366,7 @@ export struct ConnectView {
         value: '删除',
         fontColor: this.c().danger,
         action: (): void => {
-          this.persistHosts(removeHost(this.hosts, host));
-          PrefsStore.getString(CREDENTIALS_STORAGE_KEY).then((raw: string | null): void => {
-            if (raw !== null) {
-              const cred = DshCredentials.decode(raw);
-              if (cred !== null && cred.baseUrl === host.baseUrl) {
-                PrefsStore.removeKey(CREDENTIALS_STORAGE_KEY).catch((e: Error): void => {
-                  Dlog.warn('clear credentials failed: ' + e.message);
-                });
-              }
-            }
-          }).catch((e: Error): void => {
-            Dlog.warn('read credentials failed: ' + e.message);
-          });
+          this.removeHostAndMaybeCredential(host);
         },
       },
     });
@@ -254,73 +385,16 @@ export struct ConnectView {
 
       if (this.hosts.length > 0) {
         Column({ space: 8 }) {
-          ForEach(this.hosts, (host: DshHost) => {
-            if (host.token !== null) {
-              Row() {
-                Column({ space: 2 }) {
-                  Text(host.displayName.length > 0 ? host.displayName : host.baseUrl)
-                    .fontSize(16)
-                    .fontWeight(FontWeight.Medium)
-                    .fontColor(this.c().labelPrimary)
-                  Text(host.baseUrl)
-                    .fontSize(12)
-                    .fontColor(this.c().labelSecondary)
-                }
-                .alignItems(HorizontalAlign.Start)
-                .layoutWeight(1)
-
-                Text('删除')
-                  .fontSize(12)
-                  .fontColor(this.c().danger)
-                  .padding({ left: 12, right: 4, top: 8, bottom: 8 })
-                  .accessibilityText('删除历史主机')
-                  .onClick((): void => {
-                    this.deleteHost(host);
-                  })
-              }
-              .width('100%')
-              .padding({ left: 14, right: 8, top: 10, bottom: 10 })
-              .borderRadius(12)
-              .backgroundColor(this.c().settingsField)
-              .border({ width: 1, color: this.c().borderL2 })
-              .accessibilityText('删除历史主机')
-              .onClick((): void => {
-                this.connectHost(host);
-              })
-            }
-          }, (host: DshHost) => {
-            return host.id + host.baseUrl;
-          })
+          Repeat<DshHost>(this.hostRows())
+            .each((item: RepeatItem<DshHost>) => {
+              this.hostRow(item.item)
+            })
+            .key((item: DshHost) => item.id)
         }
       }
 
       if (this.error.length > 0) {
-        Column({ space: 6 }) {
-          Text(this.error)
-            .fontSize(12)
-            .fontColor(this.c().danger)
-          if (this.failedHostId.length > 0) {
-            Text('删除这条失效记录')
-              .fontSize(12)
-              .fontColor(this.c().link)
-              .accessibilityText('删除这条失效记录')
-              .onClick((): void => {
-                let target: DshHost | null = null;
-                for (const h of this.hosts) {
-                  if (h.id === this.failedHostId) {
-                    target = h;
-                  }
-                }
-                if (target !== null) {
-                  this.persistHosts(removeHost(this.hosts, target));
-                }
-                this.error = '';
-                this.failedHostId = '';
-              })
-          }
-        }
-        .width('100%')
-        .alignItems(HorizontalAlign.Start)
+        this.errorBar()
       }
 
       Row() {
@@ -373,7 +447,7 @@ export struct ConnectView {
         .borderRadius(12)
         .border({ width: 1, color: this.c().inputBorder })
         .width('100%')
-        .height(48)
+        .height(this.atLeastMd() ? 52 : 48)
         .onChange((value: string): void => {
           this.urlText = value;
         })

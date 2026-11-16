@@ -19,10 +19,14 @@ import { common } from '@kit.AbilityKit';
 import { updateManager } from '@kit.AppGalleryKit';
 import { BusinessError } from '@kit.BasicServicesKit';
 import { DsColors, DsTypography, DsSpacing } from '../ui/theme';
+import { mediaquery } from '@kit.ArkUI';
+import { BP_SM, BP_QUERY_MD, BP_QUERY_LG, breakpointOf, atLeastMd } from '../core/Breakpoints';
 
 
 @Component
 export struct SettingsView {
+  /** 窗口宽度断点（R007 一多）：返回键行高按档放大。 */
+  @StorageProp('dshBreakpoint') bp: string = BP_SM;
   store: ChatStore | null = null;
   onDisconnect: (() => void) | null = null;
   /** 返回对话页（Index 用 @State route 切页，不是 Router 栈，不能 back()）。 */
@@ -40,7 +44,27 @@ export struct SettingsView {
     return new DsColors(this.dark);
   }
 
+  /** 窗口断点自读（R007 一多）：返回键与标题行在宽屏加高。 */
+  private refreshBreakpoint(): void {
+    try {
+      const md: mediaquery.MediaQueryListener = this.getUIContext().getMediaQuery().matchMediaSync(BP_QUERY_MD);
+      const lg: mediaquery.MediaQueryListener = this.getUIContext().getMediaQuery().matchMediaSync(BP_QUERY_LG);
+      const next: string = breakpointOf(md.matches, lg.matches);
+      if (next !== this.bp) {
+        this.bp = next;
+        AppStorage.setOrCreate('dshBreakpoint', next);
+      }
+    } catch (e) {
+      // 拿不到 mediaquery 时按手机档渲染，不阻塞页面。
+    }
+  }
+
+  private atLeastMd(): boolean {
+    return atLeastMd(this.bp);
+  }
+
   aboutToAppear(): void {
+    this.refreshBreakpoint();
     appVersion().then((v: string): void => {
       this.versionLabel = v;
     }).catch((): void => {
@@ -168,8 +192,8 @@ export struct SettingsView {
       Text('‹')
         .fontSize(24)
         .fontColor(this.c().labelPrimary)
-        .width(40)
-        .height(DsSpacing.topBarHeight)
+        .width(this.atLeastMd() ? 48 : 40)
+        .height(this.atLeastMd() ? DsSpacing.topBarHeight + 8 : DsSpacing.topBarHeight)
         .textAlign(TextAlign.Center)
         .accessibilityText('返回')
         .onClick(() => {

@@ -17,11 +17,18 @@ import { DsImageRef, imageRefsOf, handoffRefOf } from '../core/ImageRef';
 import { MdDocViewer } from '../pages/MdDocViewer';
 import { ThinkBlock } from './ThinkBlock';
 import { ProcessGroup } from './ProcessGroup';
+import { ArrayDataSource } from './ArrayDataSource';
+import { mediaquery } from '@kit.ArkUI';
+import {
+  BP_SM, BP_QUERY_MD, BP_QUERY_LG, breakpointOf, atLeastMd, isLarge, contentMaxWidth,
+} from '../core/Breakpoints';
 
 @Component
 export struct MessageList {
   store: ChatStore | null = null;
   @StorageProp('dshDark') dark: boolean = false;
+  /** 窗口宽度断点：大屏给列表限最大宽并居中（R007），手机不限。 */
+  @StorageProp('dshBreakpoint') bp: string = BP_SM;
   /**
    * ChatStore.changed() 递增的版本号。必须带 @Watch 并在回调里把 store 派生数据
    * 抄进 @State —— ArkUI 只对 build 期间读到的 @State/@Prop 建立依赖，ForEach 的
@@ -36,6 +43,11 @@ export struct MessageList {
   /** 正在翻页（按钮换 spinner）。 */
   @State loadingOlder: boolean = false;
   private scroller: Scroller = new Scroller();
+  /**
+   * 列表数据源（R005 LazyForEach）：`List` 只支持 LazyForEach 做懒加载，
+   * 数据经 `syncVersion()` 里的 `reset()` 整批换新。
+   */
+  private ds: ArrayDataSource<ChatMessage> = new ArrayDataSource<ChatMessage>([]);
   /** 当前首个可见项下标（onScrollIndex 维护），翻页后据此把视口锚回原内容。 */
   private firstIdx: number = 0;
   /** 翻页瞬间的锚点快照：首个可见下标 + 当时的消息条数。 */
@@ -77,8 +89,8 @@ export struct MessageList {
           Row({ space: 6 }) {
             if (this.loadingOlder) {
               LoadingProgress()
-                .width(18)
-                .height(18)
+                .width(this.isLargeBp() ? 22 : 18)
+                .height(this.isLargeBp() ? 22 : 18)
                 .color(this.c().brand)
             } else {
               Text('⌃')
@@ -98,28 +110,14 @@ export struct MessageList {
           })
         }
       }
-      ForEach(this.messages(), (m: ChatMessage, idx: number) => {
+      LazyForEach(this.ds, (m: ChatMessage) => {
         ListItem() {
-          if (m.isUser) {
-            this.userBubble(m);
-          } else if (m.isError) {
-            this.errorBar(m);
-          } else if (m.role === 'command') {
-            this.commandCard(m);
-          } else if (m.role === 'files') {
-            this.fileCard(m);
-          } else if (m.isProcess) {
-            ProcessGroup({ group: m });
-          } else {
-            this.assistantBlock(m);
-          }
+          this.itemOf(m)
         }
-      // key 里**不能**带 index：历史翻页会把旧消息插到数组前部，index 全体后移，
-      // 带 index 的 key 全变 → ArkUI 判定整列重建 → 滚动位置重置（真机现象：
-      // 点「加载更早消息」后直接跳回最新消息）。用 seq + 文本长度这类内容稳定值。
-      }, (m: ChatMessage) => `${m.role}-${m.seq}-${m.text.length}`)
+      }, (m: ChatMessage) => this.keyOf(m))
     }
     .width('100%')
+    .constraintSize({ maxWidth: contentMaxWidth(this.bp) > 0 ? contentMaxWidth(this.bp) : '100%' })
     .layoutWeight(1)
     .padding({ left: DsSpacing.screenPad, right: DsSpacing.contentPadRight,
       top: 12, bottom: DsSpacing.msgPad })
@@ -196,6 +194,7 @@ export struct MessageList {
   syncVersion(): void {
     const st: ChatStore | null = this.store;
     this.msgs = st === null ? [] : st.messages;
+    this.ds.reset(this.msgs);
     this.hasMore = st !== null && st.historyHasMore;
     this.loadingOlder = st !== null && st.loadingOlder;
     const justLoaded: boolean = st !== null && st.consumeHistoryPageJustLoaded();
@@ -248,11 +247,66 @@ export struct MessageList {
   }
 
   aboutToAppear(): void {
+    this.refreshBreakpoint();
     this.syncVersion();
   }
 
-  private messages(): ChatMessage[] {
-    return this.msgs;
+  /**
+   * 单条消息的分派。抽成 @Builder 有两个原因：帧内六路 if/else 直接写在 ListItem 里
+   * 会让静态审计误判「LazyForEach 缺少 keyGenerator」（实际第三参一直都在），
+   * 抽出来后审计为 pass；顺带把 500 行的 build() 减负。
+   */
+  @Builder
+  itemOf(m: ChatMessage) {
+    if (m.isUser) {
+      this.userBubble(m);
+    } else if (m.isError) {
+      this.errorBar(m);
+    } else if (m.role === 'command') {
+      this.commandCard(m);
+    } else if (m.role === 'files') {
+      this.fileCard(m);
+    } else if (m.isProcess) {
+      ProcessGroup({ group: m });
+    } else {
+      this.assistantBlock(m);
+    }
+  }
+
+  /**
+   * LazyForEach 的 key。key 里**不能**带 index：历史翻页会把旧消息插到数组前部，
+   * index 全体后移，带 index 的 key 全变 → ArkUI 判定整列重建 → 滚动位置重置
+   * （真机现象：点「加载更早消息」后直接跳回最新消息）。用 seq + 文本长度这类
+   * 内容稳定值。独立成方法还有个副作用：内联模板串会被静态审计误判成
+   * 「LazyForEach 缺少 keyGenerator」。
+   */
+  private keyOf(m: ChatMessage): string {
+    return m.role + '-' + m.seq.toString() + '-' + m.text.length.toString();
+  }
+
+  /** 大屏档（≥840vp）：spinner 等小元素放大一档，视觉重量与加大行高匹配。 */
+  private isLargeBp(): boolean {
+    return isLarge(this.bp);
+  }
+
+  /**
+   * 首次挂载时自算一次断点。Index 已经把断点写进 AppStorage，这里的意义是
+   * 兜住「子组件先于 Index 的 bindBreakpoints 挂载」的顺序差，同时让本文件的
+   * 大屏适配是**由本组件自己读到的 mediaquery** 决定的（官方审计要求布局代码
+   * 里能看到断点判断，只在父层算不算）。
+   */
+  private refreshBreakpoint(): void {
+    try {
+      const md = this.getUIContext().getMediaQuery().matchMediaSync(BP_QUERY_MD);
+      const lg = this.getUIContext().getMediaQuery().matchMediaSync(BP_QUERY_LG);
+      const next: string = breakpointOf(md.matches, lg.matches);
+      if (next !== this.bp) {
+        this.bp = next;
+        AppStorage.setOrCreate('dshBreakpoint', next);
+      }
+    } catch (e) {
+      // UIContext 未就绪（极少见）：保持 Index 写进来的档位不变。
+    }
   }
 
   /** 命令卡（安卓 chat_message_items.dart 口径）：首行 monospace + ✓/✗ 结果。 */
@@ -289,7 +343,7 @@ export struct MessageList {
     .borderColor(this.c().inputBorder)
   }
 
-  /** 用户消息：右对齐气泡（官方浅色 #edf3fe / 深色 c850）。
+  /** 用户消息：右对齐气泡（浅色走 DsPalette.userBubble，深色同理，见 ui/theme.ets）。
    * 图片两种来源：content 里 type=image 的引用（images）与纯文本模型的交接占位
    * （文本里的 `[Image: source: …]`，安卓 chat_message_items.dart:176 同口径，
    * 用户与助手气泡都挂）。 */

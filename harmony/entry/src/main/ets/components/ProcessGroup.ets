@@ -67,9 +67,11 @@ export struct ProcessGroup {
       })
       if (this.expanded) {
         Column() {
-          ForEach(this.group.toolCalls, (t: ToolCallInfo) => {
-            ToolRow({ call: t })
-          }, (t: ToolCallInfo) => t.callId)
+          Repeat<ToolCallInfo>(this.group.toolCalls)
+            .each((item: RepeatItem<ToolCallInfo>) => {
+              ToolRow({ call: item.item })
+            })
+            .key((item: ToolCallInfo) => item.callId)
         }
         .width('100%')
         .alignItems(HorizontalAlign.Start)

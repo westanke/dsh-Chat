@@ -108,9 +108,11 @@ export struct MdCodeBlock {
       // 代码正文（水平滚动）
       Scroll() {
         Column() {
-          ForEach(this.rows, (row: HlSpan[], lineIdx: number) => {
-            this.renderLine(row, lineIdx)
-          }, (row: HlSpan[], lineIdx: number) => lineIdx + '-' + row.length)
+          Repeat<HlSpan[]>(this.rows)
+            .each((entry: RepeatItem<HlSpan[]>) => {
+              this.renderLine(entry.item, entry.index)
+            })
+            .key((entry: HlSpan[], index: number) => index.toString() + '-' + entry.length.toString())
         }
         .alignItems(HorizontalAlign.Start)
       }
@@ -139,12 +141,14 @@ export struct MdCodeBlock {
           .fontFamily(DsTypography.codeFamily)
       } else {
         Text() {
-          ForEach(row, (s: HlSpan) => {
-            Span(s.text)
-              .fontColor(this.spanColor(s.cls))
-              .fontSize(DsTypography.codeBlock.size)
-              .fontFamily(DsTypography.codeFamily)
-          }, (s: HlSpan, idx: number) => lineIdx + '-' + idx + '-' + s.text.length)
+          Repeat<HlSpan>(row)
+            .each((entry: RepeatItem<HlSpan>) => {
+              Span(entry.item.text)
+                .fontColor(this.spanColor(entry.item.cls))
+                .fontSize(DsTypography.codeBlock.size)
+                .fontFamily(DsTypography.codeFamily)
+            })
+            .key((entry: HlSpan, index: number) => index.toString() + '-' + entry.text.length.toString())
         }
       }
     }

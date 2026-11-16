@@ -2,12 +2,39 @@
 /// 块级公式居中；行内公式随文本基线。解析在 core/LatexLite.ts，本组件只画。
 import { LatexNode } from '../../core/LatexLite';
 import { DsColors, DsTypography } from '../../ui/theme';
+import { mediaquery } from '@kit.ArkUI';
+import { BP_SM, BP_QUERY_MD, BP_QUERY_LG, breakpointOf, atLeastMd } from '../../core/Breakpoints';
 
 @Component
 export struct MdLatexView {
   node: LatexNode = new LatexNode();
   inline: boolean = false;
   @StorageProp('dshDark') dark: boolean = false;
+  /** 窗口宽度断点（R007 一多）：分式横线等固定高度在宽屏放大一档。 */
+  @StorageProp('dshBreakpoint') bp: string = BP_SM;
+
+  /** 窗口断点自读（R007 一多）：分式/根式的固定高度在宽屏放大一档。 */
+  private refreshBreakpoint(): void {
+    try {
+      const md: mediaquery.MediaQueryListener = this.getUIContext().getMediaQuery().matchMediaSync(BP_QUERY_MD);
+      const lg: mediaquery.MediaQueryListener = this.getUIContext().getMediaQuery().matchMediaSync(BP_QUERY_LG);
+      const next: string = breakpointOf(md.matches, lg.matches);
+      if (next !== this.bp) {
+        this.bp = next;
+        AppStorage.setOrCreate('dshBreakpoint', next);
+      }
+    } catch (e) {
+      // 拿不到 mediaquery 时按手机档渲染。
+    }
+  }
+
+  private atLeastMd(): boolean {
+    return atLeastMd(this.bp);
+  }
+
+  aboutToAppear(): void {
+    this.refreshBreakpoint();
+  }
 
   /** 普通方法而非 getter：@Builder/ForEach 生成器里 `private get c()` 取到 undefined
    * （真机 TypeError: Cannot read property 'labelPrimary' of undefined 整进程崩）。 */
@@ -34,9 +61,11 @@ export struct MdLatexView {
         .fontFamily(DsTypography.codeFamily)
     } else if (n.kind === 'row') {
       Row() {
-        ForEach(n.children, (c: LatexNode) => {
-          this.renderNode(c)
-        }, (c: LatexNode, idx: number) => idx + '-' + c.kind)
+        Repeat<LatexNode>(n.children)
+          .each((entry: RepeatItem<LatexNode>) => {
+            this.renderNode(entry.item)
+          })
+          .key((entry: LatexNode, index: number) => index.toString() + '-' + entry.kind)
       }
       .alignItems(VerticalAlign.Center)
     } else if (n.kind === 'frac') {
@@ -45,7 +74,7 @@ export struct MdLatexView {
         Column() {
           this.renderNode(n.num === null ? emptyNode() : n.num)
         }
-        .constraintSize({ minHeight: 18 })
+        .constraintSize({ minHeight: this.atLeastMd() ? 22 : 18 })
         Column()
           .width('100%')
           .height(1)
@@ -53,7 +82,7 @@ export struct MdLatexView {
         Column() {
           this.renderNode(n.den === null ? emptyNode() : n.den)
         }
-        .constraintSize({ minHeight: 18 })
+        .constraintSize({ minHeight: this.atLeastMd() ? 22 : 18 })
       }
       .alignItems(HorizontalAlign.Center)
       .padding({ left: 2, right: 2 })
