@@ -198,24 +198,31 @@ export struct MessageList {
     this.msgs = st === null ? [] : st.messages;
     this.hasMore = st !== null && st.historyHasMore;
     this.loadingOlder = st !== null && st.loadingOlder;
-    if (st !== null && st.consumeHistoryPageJustLoaded()) {
+    const justLoaded: boolean = st !== null && st.consumeHistoryPageJustLoaded();
+    if (!justLoaded && (this.loadingOlder || this.anchorIdx >= 0)) {
+      // 翻页期间一律不贴底：点按钮那一帧会先 changed() 一次（loadingOlder=true），
+      // 页面数据到达后 .finally 还会再 changed() 一次，这两次都走不到这里的话
+      // 会在 30ms 后把视口拉到最新消息 —— 真机现象就是「点加载更早消息跳到最新」。
+      return;
+    }
+    if (justLoaded) {
       // 翻页 prepend：用户意图是往上读旧内容，既不能跳底、也不该被顶到最早一条。
       // ArkUI 没有 Flutter「prepend 保持 pixels」的语义，只能自己补偿：
       // 记下点击瞬间的首个可见下标，翻页后把同一条消息重新滚回同一位置。
       const added: number = this.anchorIdx >= 0 ? this.msgs.length - this.anchorLen : 0;
-      if (this.anchorIdx >= 0 && added > 0) {
-        const target: number = this.anchorIdx + added;
+      const target: number = this.anchorIdx >= 0 ? this.anchorIdx + added : added;
+      // 推迟到布局完成之后（0ms 时 List 还没按新数据排完，scrollToIndex 会被夹到首尾）。
+      setTimeout((): void => {
         this.anchorIdx = -1;
-        setTimeout((): void => {
-          try {
-            this.scroller.scrollToIndex(target);
-          } catch (e) {
-            // 未挂载/索引越界时忽略：宁可不动也别跳底。
-          }
-        }, 0);
-      } else {
-        this.anchorIdx = -1;
-      }
+        if (target <= 0) {
+          return; // 原本就在顶部，无需补偿。
+        }
+        try {
+          this.scroller.scrollToIndex(target, false, ScrollAlign.START);
+        } catch (e) {
+          // 未挂载/索引越界时忽略：宁可不动也别跳底。
+        }
+      }, 60);
       return;
     }
     // 新消息/流式增量到达后贴底（等一帧让 List 先按新数据布局）。

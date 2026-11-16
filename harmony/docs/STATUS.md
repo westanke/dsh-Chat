@@ -600,3 +600,37 @@ R005（`ForEach` 全量渲染 → LazyForEach，涉及 MessageList/SessionsDrawe
 ProjectionSheets/MdCodeBlock/ConnectView，列表规模受 `HISTORY_MAX_MESSAGES=200` 与
 会话数约束，暂不引入 IDataSource）、R007（无窗口宽度断点，deviceTypes 已收窄为 phone）、
 R014（嵌套 10-11 层，info 级）。
+
+---
+
+## 阶段 5 第十四批：真机走查 + 翻页跳位修复（2026-11-16）
+
+**背景**：静态审查 P0/P1 落地并重新装机后做视觉走查，逐项过用户可见路径。
+
+**走查通过项**
+- 空态：`DSH` logo、问候语、设备名、「工作目录：手机会话（默认）」chip、权限 chip、发送键齐全。
+- 抽屉（推挤式）：`DSH Chat` 标题 + 端点 + `+ 新对话`；分组「今天 / 昨天 / 更早」正确；
+  超 2 天折叠 `28 条 · 展开` ↔ `28 条 · 收起`。
+- 工具卡三层折叠：组头（🔧 + 短语 + 耗时 + ⌄）→ 行（○ + 短语 + ⌄）→ 详情卡
+  （`web_search` / `6.3s` / ✓ / 参数 / 输出），与官方 web 观感一致。
+- 思考块：`🧭 已深度思考 ⌄` → 点开变「收起深度思考 ⌃」并展开灰底正文。
+- 深色模式：设置页切「深色」后**整屏**生效（vision 复核：背景深、文字清晰、无低对比区块）；
+  切回「浅色」正常。此前的 `@Watch` 修复真机确认有效。
+- @ 引用：敲 `@` 立即列根目录条目 → 下钻 `workspace/.dhs-diff/new` → 选文件插入
+  `@workspace/.dhs-diff/new/deepseek-ai-dsh-0.2.2-rc.1.tgz`。
+- 图片消息：「图片发送功能测试」会话里 `Image [68,308][881,1938]`（813×1630，与源图
+  1080×2440 等比）正常显示手机截图内容，无占位/转圈/错误。
+
+**修掉的问题：点「加载更早消息」视口跳位**
+- 现象：点按钮后视口跳到列表最顶（用户 m09196 报「跳到最新消息」）。
+- 根因两条：①`core/ChatHistory.ts` 的 `loadOlderIn` 会 `changed()` 两次（开头置
+  `loadingOlder=true`、`.finally` 清），只有中间那次带 `historyPageJustLoaded`，另两次走
+  「新消息贴底」分支，30ms 后 `jumpToBottom` 把补偿好的位置拉走；②`ForEach` key 含 `idx`，
+  prepend 后 index 全体后移 → key 全变 → ArkUI 整列重建 → 滚动位置重置。
+- 修法（`components/MessageList.ets`）：`syncVersion()` 里翻页期间
+  （`loadingOlder || anchorIdx >= 0`）一律 `return` 不贴底；补偿改用
+  `scrollToIndex(target, false, ScrollAlign.START)` 并推迟 60ms；key 改为
+  `` `${m.role}-${m.seq}-${m.text.length}` ``。
+- 真机复验：连点两次按钮，`🔧 执行了命令` 始终停在 y=557，旧内容插入其下方，位置不动。
+
+**门禁**：235/235 单测绿、`bash scripts/ci/docs-check.sh` 通过、签名装机真机走查通过。

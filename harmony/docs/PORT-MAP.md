@@ -390,6 +390,21 @@
   （安卓 `chat_message_list.dart:147-158` 同口径注释）。
   教训：**单测绿不等于功能可达**。冒烟清单要按「用户能不能点到」验，不能按「core 类有没有
   这个方法」验。
+- `翻页后跳底/跳顶` —— 真机复验「加载更早消息」时，点了之后视口直接跳到列表最顶（新插入的
+  旧内容第一条贴到标题栏下），用户原始反馈是「跳到最新消息」（m09196）。两条根因叠一起：
+  ①`core/ChatHistory.ts` 的 `loadOlderIn` 会 `changed()` **两次** —— 开头置
+  `store.loadingOlder = true` 后一次、`.finally` 清标志后又一次，只有中间那次带
+  `historyPageJustLoaded`；第一次和第三次都走到「新消息贴底」分支，
+  `setTimeout(() => jumpToBottom(false), 30)` 把刚补偿好的位置又拉走。
+  ②`ForEach` 的 key 写成 `` `${m.seq}-${idx}-${m.text.length}` ``，含 idx；翻页把旧消息
+  prepend 到数组前部时 index 全体后移、key 全变，ArkUI 判定整列重建 → 滚动位置重置。
+  修法（`components/MessageList.ets`）：`syncVersion()` 里先取
+  `justLoaded = st.consumeHistoryPageJustLoaded()`，再
+  `if (!justLoaded && (this.loadingOlder || this.anchorIdx >= 0)) { return; }`（翻页期间一律
+  不贴底）；补偿分支用 `this.scroller.scrollToIndex(target, false, ScrollAlign.START)` 并把
+  `setTimeout` 从 0 挪到 **60ms**（0ms 时 List 还没按新数据排完，索引会被夹到首尾）；
+  key 改成 `` `${m.role}-${m.seq}-${m.text.length}` ``（只用稳定业务字段）。
+  真机复验：点两次「加载更早消息」，`🔧 执行了命令` 始终停在 y=557，新内容出现在其下方。
 - `历史分页验证的桥侧基线` —— 直连 WS 探针 `/home/wangke/probe-history.cjs`（require
   `/home/wangke/.dsh/profiles/web/node_modules/ws/index.js`，内置全局 WebSocket 不认 headers）：
   客户端帧是**扁平** `{type:'history', sessionId, beforeSeq?, maxMessages?}`
