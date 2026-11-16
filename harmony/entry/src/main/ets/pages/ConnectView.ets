@@ -9,7 +9,7 @@ import { GatewayApi } from '../core/GatewayApi';
 import { RequestException } from '../core/GatewayEvents';
 import { DshCredentials, CREDENTIALS_STORAGE_KEY } from '../core/Credentials';
 import {
-  DshHost, decodeDsh1, upsertHost, removeHost,
+  DshHost, decodeDsh1, upsertHost, removeHost, stableId,
   parseHosts, encodeHosts, HOSTS_STORAGE_KEY,
 } from '../core/Hosts';
 import { WsTransport } from '../platform/WsTransport';
@@ -123,12 +123,15 @@ export struct ConnectView {
       .catch((e: Error): void => {
         Dlog.warn('save credentials failed: ' + e.message);
       });
+    // 主机记录必须落盘（安卓 _enterWith 同口径）：不写的话下次启动历史列表为空，
+    // 用户每次都得重贴 DSH1。stableId 以 baseUrl 为键，同址重复连接会覆盖。
     const host: DshHost = new DshHost();
     host.baseUrl = baseUrl;
     host.token = token;
     host.displayName = 'DSH Bridge';
     host.lastUsedAt = Date.now();
-    host.id = '';
+    host.id = stableId(baseUrl);
+    this.persistHosts(upsertHost(this.hosts, host));
     const api = new GatewayApi(gateway, new HttpTransportImpl());
     this.onReady(gateway, api, baseUrl, token);
     this.busy = false;

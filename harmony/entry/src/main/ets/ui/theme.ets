@@ -168,6 +168,16 @@ export class DsColors {
     return this.dark ? DsPalette.chipSelectedFgDark : DsPalette.chipSelectedFgLight;
   }
 
+  /// 发送键禁用态底/前景：官方是浅灰圆底 + 中灰箭头（浅色主题下不能用纯白底，
+  /// 白底白箭头等于看不见，2026-11-16 真机反馈）。
+  get sendDisabledBg(): string {
+    return this.dark ? DsPalette.c800 : DsPalette.c100;
+  }
+
+  get sendDisabledFg(): string {
+    return this.dark ? DsPalette.c400 : DsPalette.c500;
+  }
+
   /// 品牌实心控件上的前景（白，两套主题一致）。
   get onBrand(): string {
     return DsPalette.c00;

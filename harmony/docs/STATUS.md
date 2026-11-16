@@ -174,3 +174,23 @@ Flex 链式 .alignItems 不存在（构造参数里传）。
 **冒烟已验证**：主对话页（气泡/Markdown/操作行）、会话抽屉（分组+切会话）、设置页六分区、权限四档切换（chip 与面板 ✓ 同步）、📊会话统计、🧭运行轨迹（轮次/事件节点可展开）、🧠智能团队、✅待办任务、🎛️调整模型（六分组 + effort chips + 确认切换）、`/` 命令补全列表、发消息端到端（reasoning + 正文）。
 
 **测试**：`npm --prefix harmony/test test` 179/179；`setPermission` 用例补 `respondHistory` 应答（修复后多了一次重拉 history）。
+
+## 阶段 5 第三批：全功能冒烟修复与体验对齐（2026-11-16）
+
+**bug⑫ HITL 提问卡不渲染 / bug⑬ 选项选中态不更新**：`pages/ChatView.ets` 原给 `HitlPanel` 传 `store.pendingQuestions`（直读 store 普通成员，ArkUI 观察失效）→ 改为 `@State questionsView/approvalsView` 快照，在 `st.setNotify()` 与 `aboutToAppear()` 同步。`components/HitlPanel.ets` 原用 `private selected: Map<string,string[]>` + `version++` —— ArkUI 对 Map 内部变更不建观察依赖，chip 样式表达式不重新求值（真机：点选项无高亮、提交键恒灰）→ 删 Map 与 version，改两个 `@State` 数组 `picked` / `customs`（每项编码 `qid + '\u0001' + label`），`toggleOption` 整体替换数组（多选取并、单选替换、再点取消）。真机闭环：提问卡渲染 → 点「蓝色」高亮、提交键变蓝 → 提交 → bridge 收答案 → 助手回「你选了**蓝色**，已经记下来了。」+ Markdown 表格。
+
+**bug⑭ 审批卡不出现 / 提卡提交后不消失**：`components/HitlPanel.ets` 的 `questions` / `approvals` 是普通成员，只在组件首次创建时赋值，父层 `@State` 换新数组不会重建子组件 → 改 `@Prop`。bridge 审批链路经 ws 探针确认真实可用（`chat.approval.requested {sessionId,approvalId,toolName,risk}` / `chat.approval.resolved`）。
+
+**键盘遮挡输入框发送键**：`entryability/EntryAbility.ets` 的 `onWindowStageCreate` 原只 `loadContent`，默认 OFFSET 避让整页上移压住 composer → 在 `loadContent` 回调里 `getMainWindowSync().getUIContext().setKeyboardAvoidMode(KeyboardAvoidMode.RESIZE)`（`import { window, KeyboardAvoidMode } from '@kit.ArkUI'`）。RESIZE 压缩页面高度，`Column(height 100%)` 随之收缩、List 的 `layoutWeight` 吃多余空间。真机验证：键盘弹出后整页 1355px，＋/🛡 权限/↑ 全部可见可点，键盘下发消息正常收回复。
+
+**连接历史不保存**：`pages/ConnectView.ets` 的 `enterWith()` 只写 `dsh.credentials` 不写 `dsh.hosts`（构造了 `DshHost` 却从未 persist）→ 按安卓 `connect_page.dart:55` 口径补 `host.id = stableId(baseUrl); this.persistHosts(upsertHost(this.hosts, host));`。真机验证：设备偏好文件出现 `dsh.hosts` 条目（id `0e184924befd1b3a`），`aa force-stop` 后重启自动连接直达对话页。
+
+**发送键配色**：原禁用态 `inputFill`（浅色主题纯白）+ `labelTertiary` 浅灰箭头几乎不可见 → `ui/theme.ets` 新增 `sendDisabledBg`（亮 `#EBEEF2` / 暗 `c800`）与 `sendDisabledFg`（亮 `c500` / 暗 `c400`）；可用态实心 `brand` + `onBrand` 白箭头、字号 20 加粗、去描边。截图比对与官方一致。
+
+**权限中文化**：`components/Composer.ets` 的 `syncVersion()` 直接把投影 ASCII 值上屏（显示 `workspace-write`）→ 改 `this.permView = permissionLabelOf(perm)`（`core/Permissions.ts:144` 已有映射：仅可查看 / 工作区读写 / 完全权限 / 自动审查）。
+
+**第二版输入框与官方对齐**（`components/Composer.ets`）：TextArea 与底部按钮行包进同一外层 `Column`，该 Column 承担 `inputFill` 底色 + `borderRadius(24)` + `inputBorder` 描边 + `padding({left:10,right:10,top:6,bottom:8})`，即「＋ / 🛡 权限 chip / 圆形 ↑」全在同一个圆角悬浮输入框内部；TextArea 透明底、`constraintSize({minHeight:44,maxHeight:120})`。用户明确要求不做识图与模型选择入口。
+
+**自动贴底**：`components/MessageList.ets` 的 `syncVersion()` 末尾 `setTimeout(() => this.jumpToBottom(false), 30)`，新消息与流式增量后自动滚到底。
+
+**测试**：`npm --prefix harmony/test test` 179/179；`bash scripts/ci/docs-check.sh` 通过。

@@ -16,6 +16,7 @@ import { PermissionSheet } from './PermissionSheet';
 import { PickedImage, pickImageFromGallery } from '../platform/PhotoPick';
 import { CommandPanel, AtFilePanel, AtEntry } from './ComposerPanels';
 import { DsColors, DsTypography, DsSpacing } from '../ui/theme';
+import { permissionLabelOf } from '../core/Permissions';
 import { common } from '@kit.AbilityKit';
 
 type PanelMode = 'none' | 'cmd' | 'at';
@@ -66,7 +67,9 @@ export struct Composer {
     this.connectedView = st !== null && st.connectionState === GatewayState.READY;
     this.streamingView = st !== null && st.streaming;
     const perm: string | null = st === null ? null : st.currentPermission;
-    this.permView = perm === null ? '权限未设置' : perm;
+    // 服务端原始值是 read-only/workspace-write/danger-full-access 之类的 ASCII 档位名，
+    // 界面一律显示中文标签（permissionLabelOf 未识别时原样返回，不杜撰档位）。
+    this.permView = permissionLabelOf(perm);
     this.errView = st === null || st.lastError === null ? '' : st.lastError;
   }
 
@@ -328,19 +331,20 @@ export struct Composer {
           onRetry: (): void => this.retryAt(),
         })
       }
+      // 官方输入框：文本框 + 底部按钮行（＋ / 权限 / 发送）共处一个圆角容器内。
+      Column({ space: 0 }) {
       TextArea({ text: this.draft, placeholder: '发消息或创建任务，/ 调用指令，@ 文件或对话',
         controller: new TextAreaController() })
         .placeholderFont(DsTypography.inputPlaceholder)
         .fontColor(this.c().labelPrimary)
         .placeholderColor(this.c().inputHintText)
-        .backgroundColor(this.c().inputFill)
-        .borderRadius(22)
-        .border({ width: 1, color: this.c().inputBorder })
+        .backgroundColor(Color.Transparent)
+        .borderRadius(0)
         .fontSize(16)
         .caretColor(this.c().brand)
-        .constraintSize({ minHeight: 44, maxHeight: 132 })
+        .constraintSize({ minHeight: 44, maxHeight: 120 })
         .width('100%')
-        .padding({ left: 14, right: 12, top: 11, bottom: 11 })
+        .padding({ left: 6, right: 6, top: 12, bottom: 2 })
         .onChange((v: string) => {
           this.onChanged(v);
         })
@@ -410,13 +414,16 @@ export struct Composer {
               this.stop();
             })
         } else {
+          // 发送键对齐官方：实心品牌色圆 + 白色向上箭头（字号 20、加粗，官方图标是
+          // 线宽较粗的 arrow-up）；禁用态浅灰底 + 中灰箭头，不再用纯白底（
+          // 白底 + 浅灰箭头在浅色主题下几乎看不见，2026-11-16 用户反馈）。
           Button('↑', { type: ButtonType.Circle })
             .width(44)
             .height(44)
-            .backgroundColor(this.sendEnabled() ? this.c().brand : this.c().inputFill)
-            .fontColor(this.sendEnabled() ? this.c().onBrand : this.c().labelTertiary)
-            .fontSize(18)
-            .border({ width: this.sendEnabled() ? 0 : 1, color: this.c().borderL2 })
+            .backgroundColor(this.sendEnabled() ? this.c().brand : this.c().sendDisabledBg)
+            .fontColor(this.sendEnabled() ? this.c().onBrand : this.c().sendDisabledFg)
+            .fontSize(20)
+            .fontWeight(this.sendEnabled() ? FontWeight.Bold : FontWeight.Medium)
             .enabled(this.sendEnabled())
             .onClick(() => {
               this.send();
@@ -424,8 +431,15 @@ export struct Composer {
         }
       }
       .width('100%')
-      .margin({ top: 6 })
-      .padding({ left: DsSpacing.screenPad, right: DsSpacing.screenPad, bottom: 10 })
+      .margin({ top: 2 })
+      .padding({ left: 2, right: 2, bottom: 2 })
+      }
+      .width('100%')
+      .padding({ left: 10, right: 10, top: 6, bottom: 8 })
+      .backgroundColor(this.c().inputFill)
+      .borderRadius(24)
+      .border({ width: 1, color: this.c().inputBorder })
+      .margin({ left: DsSpacing.screenPad, right: DsSpacing.screenPad })
       if (!this.streaming()) {
         Text('回答由 AI 生成，仅供参考')
           .fontSize(11)

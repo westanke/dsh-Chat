@@ -8,18 +8,24 @@ import { DsColors, DsTypography, DsSpacing } from '../ui/theme';
 
 @Component
 export struct HitlPanel {
-  questions: PendingQuestion[] = [];
-  approvals: PendingApproval[] = [];
+  /** 必须 @Prop：普通成员只在首次创建时赋值，父层 @State 换新数组不会重建子组件
+   * （真机现象：提交后提问卡不消失、审批卡根本不出现）。 */
+  @Prop questions: PendingQuestion[] = [];
+  @Prop approvals: PendingApproval[] = [];
   onAnswer: (q: PendingQuestion, answers: QuestionAnswerItem[]) => void =
     (_q: PendingQuestion, _a: QuestionAnswerItem[]) => {};
   onDecide: (a: PendingApproval, allow: boolean) => void =
     (_a: PendingApproval, _allow: boolean) => {};
   @StorageProp('dshDark') dark: boolean = false;
-  /** 每题已选 label 集（key=question.id；Map 不可深观察，用 version 触发重渲染）。 */
-  private selected: Map<string, string[]> = new Map<string, string[]>();
-  /** 每题自定义回答（key=question.id）。 */
-  private custom: Map<string, string> = new Map<string, string>();
-  @State version: number = 0;
+  /**
+   * 已选 label 集，编码成 `questionId + '\u0001' + label` 的字符串数组。
+   * **不能用 Map**：ArkUI 对 Map 内部变更不建立观察依赖，`version++` 也不会让
+   * chip 的样式表达式重新求值（真机现象：点选项无高亮、提交键恒灰）。
+   * 用 @State 数组整体替换即可驱动重建。
+   */
+  @State picked: string[] = [];
+  /** 每题自定义回答（同样用 @State 数组：`qid + '\u0001' + text`）。 */
+  @State customs: string[] = [];
 
   /** 普通方法而非 getter：@Builder/ForEach 生成器里 `private get c()` 取到 undefined
    * （真机 TypeError: Cannot read property 'labelPrimary' of undefined 整进程崩）。 */
@@ -27,14 +33,42 @@ export struct HitlPanel {
     return new DsColors(this.dark);
   }
 
+  /** 该题已选 label 列表（从 @State picked 解出）。 */
   private pickedOf(qid: string): string[] {
-    const got: string[] | undefined = this.selected.get(qid);
-    if (got === undefined) {
-      const fresh: string[] = [];
-      this.selected.set(qid, fresh);
-      return fresh;
+    const out: string[] = [];
+    const prefix: string = qid + '\u0001';
+    for (const entry of this.picked) {
+      if (entry.startsWith(prefix)) {
+        out.push(entry.substring(prefix.length));
+      }
     }
-    return got;
+    return out;
+  }
+
+  /** 该题的自定义回答（无则 ''）。 */
+  private customOf(qid: string): string {
+    const prefix: string = qid + '\u0001';
+    for (const entry of this.customs) {
+      if (entry.startsWith(prefix)) {
+        return entry.substring(prefix.length);
+      }
+    }
+    return '';
+  }
+
+  /** 写自定义回答（整体替换 @State 数组触发重建）。 */
+  private setCustom(qid: string, text: string): void {
+    const prefix: string = qid + '\u0001';
+    const next: string[] = [];
+    for (const entry of this.customs) {
+      if (!entry.startsWith(prefix)) {
+        next.push(entry);
+      }
+    }
+    if (text.length > 0) {
+      next.push(prefix + text);
+    }
+    this.customs = next;
   }
 
   /// 能否提交：每题都要有选择（选项或自定义文本）。
@@ -42,8 +76,7 @@ export struct HitlPanel {
     for (const q of this.questions) {
       for (const item of q.questions) {
         const picked: string[] = this.pickedOf(item.id);
-        const raw: string | undefined = this.custom.get(item.id);
-        const text: string = raw === undefined ? '' : raw.trim();
+        const text: string = this.customOf(item.id).trim();
         if (picked.length === 0 && text.length === 0) {
           return false;
         }
@@ -53,27 +86,42 @@ export struct HitlPanel {
   }
 
   private toggleOption(item: UserQuestion, label: string): void {
-    const picked = this.pickedOf(item.id);
-    const at = picked.indexOf(label);
+    const prefix: string = item.id + '\u0001';
+    const current: string[] = this.pickedOf(item.id);
+    const at: number = current.indexOf(label);
+    const next: string[] = [];
     if (at >= 0) {
-      picked.splice(at, 1);
-    } else {
-      if (!item.multiSelect) {
-        // 单选题新选一个时清掉旧的（bridge 每题独立 multiSelect）。
-        picked.splice(0, picked.length);
+      // 再点一次取消。
+      for (const l of current) {
+        if (l !== label) {
+          next.push(prefix + l);
+        }
       }
-      picked.push(label);
+    } else if (item.multiSelect) {
+      for (const l of current) {
+        next.push(prefix + l);
+      }
+      next.push(prefix + label);
+    } else {
+      // 单选：新选替换旧的。
+      next.push(prefix + label);
     }
-    this.version++;
+    // 保留其它题的已选项，整体替换本题的。
+    const merged: string[] = [];
+    for (const entry of this.picked) {
+      if (!entry.startsWith(prefix)) {
+        merged.push(entry);
+      }
+    }
+    this.picked = merged.concat(next);
   }
 
   private submit(): void {
     const answers: QuestionAnswerItem[] = [];
     for (const q of this.questions) {
       for (const item of q.questions) {
-        const raw: string | undefined = this.custom.get(item.id);
-        const text: string = raw === undefined ? '' : raw.trim();
-        answers.push(new QuestionAnswerItem(item.id, this.pickedOf(item.id), text));
+        answers.push(new QuestionAnswerItem(item.id, this.pickedOf(item.id),
+          this.customOf(item.id).trim()));
       }
     }
     this.onAnswer(this.questions[0], answers);
@@ -233,7 +281,7 @@ export struct HitlPanel {
   @Builder
   customField(item: UserQuestion, qIdx: number, idx: number) {
     TextInput({
-      text: this.custom.has(item.id) ? this.custom.get(item.id) as string : '',
+      text: this.customOf(item.id),
       placeholder: '或输入自定义回答…',
     })
       .fontSize(DsTypography.small.size)
@@ -245,8 +293,7 @@ export struct HitlPanel {
       .height(36)
       .width('100%')
       .onChange((value: string) => {
-        this.custom.set(item.id, value);
-        this.version++;
+        this.setCustom(item.id, value);
       })
   }
 }

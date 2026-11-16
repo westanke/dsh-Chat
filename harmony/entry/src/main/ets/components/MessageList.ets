@@ -143,10 +143,14 @@ export struct MessageList {
     .width('100%')
   }
 
-  /** version 变化 → 重抄 store 派生数据（@Prop @Watch 回调）。 */
+  /** version 变化 → 重抄 store 派生数据（@Prop @Watch 回调）+ 跟随贴底。 */
   syncVersion(): void {
     const st: ChatStore | null = this.store;
     this.msgs = st === null ? [] : st.messages;
+    // 新消息/流式增量到达后贴底（等一帧让 List 先按新数据布局）。
+    setTimeout((): void => {
+      this.jumpToBottom(false);
+    }, 30);
   }
 
   aboutToAppear(): void {

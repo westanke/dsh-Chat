@@ -1,7 +1,7 @@
 import { AbilityConstant, Configuration, ConfigurationConstant, UIAbility, Want } from '@kit.AbilityKit';
 import { BusinessError } from '@kit.BasicServicesKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
-import { window } from '@kit.ArkUI';
+import { window, KeyboardAvoidMode } from '@kit.ArkUI';
 import { PrefsStore } from '../platform/PlatformBridge';
 
 const DOMAIN: number = 0x0000;
@@ -51,6 +51,17 @@ export default class EntryAbility extends UIAbility {
       if (err.code) {
         hilog.error(DOMAIN, TAG, 'loadContent failed: %{public}s', JSON.stringify(err));
         return;
+      }
+      // 键盘避让：默认 OFFSET 会整页上移，底部输入框连带被推出/压住（真机实证）。
+      // RESIZE 压缩页面高度，Column(height 100%) 的聊天页随之收缩，composer 停在
+      // 键盘上沿；List 的 layoutWeight 吃掉多余空间。必须在 loadContent 之后拿
+      // UIContext（在此之前还没有 UI 实例）。
+      try {
+        windowStage.getMainWindowSync().getUIContext()
+          .setKeyboardAvoidMode(KeyboardAvoidMode.RESIZE);
+      } catch (e) {
+        const err = e as BusinessError;
+        hilog.warn(DOMAIN, TAG, 'setKeyboardAvoidMode failed: %{public}s', JSON.stringify(err));
       }
       hilog.info(DOMAIN, TAG, 'loadContent succeeded');
     });

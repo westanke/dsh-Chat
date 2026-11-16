@@ -135,6 +135,28 @@
 - `私有方法只定义没调用` —— ArkTS 编译器**不报未使用私有方法**。`ModelSheet.load()` 无
   `aboutToAppear` 调用 → 面板永远停在「加载中…」；`Composer.ensureCommands()` 无调用点 →
   输入 `/` 永远没有补全候选。新写组件的 `load()/ensureXxx()` 必须确认有挂载点。
+- `子组件普通成员收数组` —— `HitlPanel` 的 `questions: PendingQuestion[]` / `approvals:
+  PendingApproval[]` 写成普通成员时，组件只在**首次创建**时取一次值；父层 `@State` 换新
+  数组不会重建子组件（真机现象：提交提问卡后卡片不消失、审批卡根本不出现）。接收父层
+  数组一律 `@Prop`（`@Prop questions` / `@Prop approvals`）。
+- `键盘遮输入框` —— 不设置避让模式时默认 OFFSET：键盘弹起整页上移，底部输入框连带被
+  推出屏幕（真机现象：键盘弹出后 ＋/权限/↑ 全看不见）。修法：`EntryAbility.onWindowStageCreate`
+  的 `loadContent` 回调里 `windowStage.getMainWindowSync().getUIContext()
+  .setKeyboardAvoidMode(KeyboardAvoidMode.RESIZE)`（`import { window, KeyboardAvoidMode }
+  from '@kit.ArkUI'`）；RESIZE 压缩页面高度，`Column(height 100%)` 随之收缩、List 的
+  `layoutWeight` 吃多余空间，composer 停在键盘上沿。必须在 loadContent 之后取 UIContext。
+- `连接历史不落盘` —— `ConnectView.enterWith()` 只写 `dsh.credentials`、不写 `dsh.hosts`，
+  于是会话抽屉/连接页的历史主机永远是空、每次打开都要重输连接码。按安卓
+  `connect_page.dart:55` 口径补：`host.id = stableId(baseUrl);
+  this.persistHosts(upsertHost(this.hosts, host));`。
+- `权限显示英文档位` —— 投影 `values.permissions.currentValue` 是 `workspace-write` /
+  `danger-full-access` 这类 ASCII 名，直接上屏就是英文。必须过
+  `core/Permissions.ts` 的 `permissionLabelOf(value)`（仅可查看/工作区读写/完全权限/
+  自动审查；未识别原样返回，不杜撰档位）。
+- `发送键白底看不见` —— 禁用态底色若用 `inputFill`（浅色主题=纯白），白底 + 浅灰箭头在
+  浅色界面上几乎不可见（用户反馈）。改用 token `sendDisabledBg`（亮 `#EBEEF2` / 暗
+  `c800`）+ `sendDisabledFg`（亮 `c500` / 暗 `c400`）；可用态走实心 `brand` + `onBrand`
+  白箭头、字号 20 加粗。
 - `切权限不刷投影` —— `permission` 帧只改服务端投影（`values.permissions.currentValue`），
   **不产生 chat 事件**，所以客户端不会自动重渲染。`setPermissionIn` 成功后必须显式
   `store.reloadHistory()`（同 `runCommandIn` 的收尾），否则 chip 永远停在旧档位。

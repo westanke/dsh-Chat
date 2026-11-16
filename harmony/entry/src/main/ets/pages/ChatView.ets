@@ -33,6 +33,9 @@ export struct ChatView {
    */
   @State emptyView: boolean = true;
   @State titleView: string = '';
+  /** HITL 挂起卡快照（直读 store 普通成员不会触发重渲染，同 @Prop 观察铁律）。 */
+  @State questionsView: PendingQuestion[] = [];
+  @State approvalsView: PendingApproval[] = [];
   @State drawerOpen: boolean = false;
   @State menuOpen: boolean = false;
   @State statsSheet: boolean = false;
@@ -59,11 +62,15 @@ export struct ChatView {
       this.version += 1;
       this.emptyView = st.isEmpty;
       this.titleView = st.sessionTitle;
+      this.questionsView = st.pendingQuestions;
+      this.approvalsView = st.pendingApprovals;
       st.consumeHistoryPageJustLoaded();
     });
     // 首帧快照（重连/复用组件时 store 可能已就绪）。
     this.emptyView = st.isEmpty;
     this.titleView = st.sessionTitle;
+    this.questionsView = st.pendingQuestions;
+    this.approvalsView = st.pendingApprovals;
     st.loadSessions();
   }
 
@@ -115,8 +122,8 @@ export struct ChatView {
       // HITL 挂起面板（提问/审批；无挂起项不占空间；限高屏 50% 可滚动）
       if (!this.emptyView) {
         HitlPanel({
-          questions: this.store !== null ? this.store.pendingQuestions : [],
-          approvals: this.store !== null ? this.store.pendingApprovals : [],
+          questions: this.questionsView,
+          approvals: this.approvalsView,
           onAnswer: (q: PendingQuestion, answers: QuestionAnswerItem[]): void => {
             if (this.store !== null) {
               this.store.answerQuestion(q, answers).catch((): void => {});

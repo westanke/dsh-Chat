@@ -292,3 +292,8 @@ CI 构建没人用（理由见 ci.yml 头注释）；鸿蒙构建需 DevEco 工�
 - `getRouter().back() 退应用` —— 本项目用 `@State route` 切页不是 Router 栈，back() 会退出应用；返回一律传回调给父组件。
 - `私有方法只定义没调用` —— ArkTS 不报未使用告警，`load()`/`ensureCommands()` 漏调用会静默卡「加载中…」/无补全；新组件挂载点自查 `aboutToAppear`。
 - `切权限不刷投影` —— permission 帧只改服务端投影、不产生 chat 事件，成功后必须 `reloadHistory()` 才能更新 chip。
+- `子组件普通成员收数组` —— `HitlPanel` 的 `questions/approvals` 写成普通成员，父层 @State 换新数组不重建子组件（提问卡提交后不消失、审批卡不出现）；接收父层数组一律 `@Prop`。
+- `键盘遮输入框` —— 默认 OFFSET 避让会整页上移压住 composer；`onWindowStageCreate` 的 `loadContent` 回调里 `getMainWindowSync().getUIContext().setKeyboardAvoidMode(KeyboardAvoidMode.RESIZE)`。
+- `连接历史不落盘` —— `enterWith` 只存 credentials 不存 hosts，`reloadHosts()` 永远空；按安卓口径补 `host.id = stableId(baseUrl)` + `persistHosts(upsertHost(...))`。
+- `权限显示英文档位` —— 投影 `currentValue` 是 `workspace-write` 这类 ASCII 名，界面必须过 `permissionLabelOf()` 转中文（仅可查看/工作区读写/完全权限/自动审查）。
+- `发送键白底看不见` —— 禁用态不能用 `inputFill`（浅色主题等于白底白箭头），走 `sendDisabledBg/sendDisabledFg` 浅灰底 + 中灰箭头。
