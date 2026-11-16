@@ -82,8 +82,8 @@ class ChatState extends ChangeNotifier {
   }
 
   /// 会话分组：实现在 session_groups.dart（顶层纯函数，宪法 500 行拆分）。
-  Map<String, List<DshSession>> get sessionGroups =>
-      groupSessionsByWorkspace(sessions);
+  /// 真机反馈 2026-11-16：时间优先分桶（今天/昨天/更早），超 2 天折叠。
+  List<SessionGroup> get sessionGroups => groupSessionsByTime(sessions);
 
   String? sessionId;
   String? _pendingSessionId;

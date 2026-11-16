@@ -372,6 +372,11 @@ class DsSpacing {
   /// 分组标题与首个条目间距。
   static const drawerGroupGap = 0.0;
 
+  /// 工作区小节标题行距（真机反馈 2026-11-16：时间优先分组后，桶内按
+  /// 工作区聚簇、小节标题「左 20 / 上 8 / 下 2」；左距复用 drawerItemPadH）。
+  static const drawerSectionPadTop = 8.0;
+  static const drawerSectionPadBottom = 2.0;
+
   /// 会话条目左距：x65px ≈ 22dp。
   static const drawerItemPadH = 20.0;
 

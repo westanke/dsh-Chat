@@ -150,6 +150,8 @@ App 实测墨迹高（density 3.0）：H1 71px、H2 61px、H3 57px、正文 45px
 | 搜索占位文字 | 墨 x156..451、墨高 13dp（14sp） | `DsTypography.small` + `drawerGroupLabel` |
 | 分组标题 | 「昨天」墨 y310..344、x64..136；右侧 tune 图标右距 22.7dp | `drawerGroupPadH = 21`、`drawerGroupPadV = 15`、`Icons.tune size: 16` |
 | 会话条目 | 墨 y415..448（顶 138.3dp）、x65..、纯文字无 card | `drawerItemPadH = 20`、`drawerItemPadV = 12`、`DsTypography.base` + 行高 `drawerLineHeight = 24` |
+| 工作区小节标题（2026-11-16 反馈：时间优先分组） | 桶内同工作区聚簇、首个会话上方显示工作区名（「未分组」兜底），左距复用条目左距 | `drawerSectionPadTop = 8`、`drawerSectionPadBottom = 2` + `DsTypography.caption` 染 `drawerGroupLabel`（安卓用 12sp caption，鸿蒙 11 号，PORT-MAP 记差异） |
+| 「更早」折叠组标题（2026-11-16 反馈：超 2 天收缩） | 标题右侧「N 条 · 展开/收起」，整行可点切换；搜索时该组自动展开 | `DsTypography.caption` 染 `DsColors.labelTertiary`，padding 沿用 `drawerGroupPadH/PadV/Gap` |
 | 底部账号栏 | 头像 x44..131（左 14.7dp、直径 29.3dp）+ 号码 x162..814 + 三点 x770..814 | `drawerFooterPadH = 15`、`drawerAvatarSize = 29`、`drawerAvatarGap = 10` |
 
 ## 4.3 终验结论（官方 6 屏逐项）

@@ -8,6 +8,7 @@ import '../bridge/gateway.dart';
 import '../bridge/models.dart';
 import '../design/tokens.dart';
 import 'chat_state.dart';
+import 'session_groups.dart';
 
 class SessionsDrawer extends StatefulWidget {
   const SessionsDrawer({
@@ -33,6 +34,10 @@ class SessionsDrawer extends StatefulWidget {
 class SessionsDrawerState extends State<SessionsDrawer> {
   final _search = TextEditingController();
 
+  /// 「更早」分组展开态（默认收起）。真机反馈 2026-11-16：超过 2 天的
+  /// 会话收起来，点分组标题展开/收起。
+  bool _olderExpanded = false;
+
   @override
   void dispose() {
     _search.dispose();
@@ -46,11 +51,6 @@ class SessionsDrawerState extends State<SessionsDrawer> {
     // 官方抽屉：顶部搜索框（圆角胶囊灰底）→ 日期分组标题 → 会话条目 → 底部账号栏。
     final groups = state.sessionGroups;
     final q = _search.text.trim().toLowerCase();
-    // 「待回答/待审批」角标（与电脑端会话列表 status.compact.* 同口径）：
-    // 数据来自全连接挂起表（WS replay + REST 合流），按会话 id 派生；
-    // hitl 变更经 ChatState.notifyUi 直达本页重建。
-    final qSids = state.hitlState.pendingQuestionSessionIds;
-    final aSids = state.hitlState.pendingApprovalSessionIds;
     return Drawer(
       width: DsSpacing.drawerWidth,
       backgroundColor: c.bgLayer1,
@@ -116,47 +116,9 @@ class SessionsDrawerState extends State<SessionsDrawer> {
                   : ListView(
                       padding: EdgeInsets.zero,
                       children: [
-                        for (final entry in groups.entries) ...[
-                          Padding(
-                            padding: const EdgeInsets.fromLTRB(
-                              DsSpacing.drawerGroupPadH,
-                              DsSpacing.drawerGroupPadV,
-                              DsSpacing.drawerGroupPadH,
-                              DsSpacing.drawerGroupGap,
-                            ),
-                            child: Row(
-                              children: [
-                                Text(
-                                  entry.key,
-                                  style: DsTypography.small.copyWith(
-                                    color: c.drawerGroupLabel,
-                                  ),
-                                ),
-                                const Spacer(),
-                                Icon(
-                                  Icons.tune,
-                                  size: 16,
-                                  color: c.drawerGroupLabel,
-                                ),
-                              ],
-                            ),
-                          ),
-                          for (final s in entry.value)
-                            if (q.isEmpty ||
-                                s.displayTitle.toLowerCase().contains(q))
-                              SessionsDrawerItem(
-                                session: s,
-                                selected: s.id == state.sessionId,
-                                badge: qSids.contains(s.id)
-                                    ? '待回答'
-                                    : (aSids.contains(s.id) ? '待审批' : null),
-                                colors: c,
-                                onTap: () {
-                                  widget.onClose();
-                                  state.openSession(s);
-                                },
-                              ),
-                        ],
+                        // 时间分组（今天/昨天/更早），桶内按工作区聚簇；
+                        // 渲染拆进 _sectionWidgets（宪法 500 行拆分）。
+                        for (final g in groups) ..._sectionWidgets(g, q, c, state),
                       ],
                     ),
             ),
@@ -171,6 +133,103 @@ class SessionsDrawerState extends State<SessionsDrawer> {
           ],
         ),
       ),
+    );
+  }
+
+  /// 一个时间分组的渲染件：分组标题 + 桶内行（工作区小节标题只在聚簇
+  /// 首行显示；「更早」默认收起，搜索时自动展开并按输入过滤、过滤后
+  /// 重算小节标题——同工作区只在第一条可见行前显示）。
+  List<Widget> _sectionWidgets(SessionGroup g, String q, DsColors c, ChatState state) {
+    final searching = q.isNotEmpty;
+    final rows = searching
+        ? g.rows
+              .where((r) => r.session.displayTitle.toLowerCase().contains(q))
+              .toList()
+        : g.rows;
+    if (searching && rows.isEmpty) return const [];
+    final display = <SessionRow>[];
+    if (searching) {
+      String? prev;
+      for (final r in rows) {
+        final w = workspaceLabelOf(r.session);
+        display.add(SessionRow(r.session, w == prev ? null : w));
+        prev = w;
+      }
+    } else {
+      display.addAll(g.rows);
+    }
+    return [
+      _groupHeader(g, c),
+      // 收起态不渲染行；搜索时展开全部组（visibleRowsOf 与分桶语义同源）。
+      if (visibleRowsOf(g, _olderExpanded || searching).isNotEmpty)
+        for (final r in display) ...[
+          if (r.sectionLabel != null)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                DsSpacing.drawerItemPadH,
+                DsSpacing.drawerSectionPadTop,
+                DsSpacing.drawerItemPadH,
+                DsSpacing.drawerSectionPadBottom,
+              ),
+              child: Text(
+                r.sectionLabel!,
+                style: DsTypography.caption.copyWith(color: c.drawerGroupLabel),
+              ),
+            ),
+          SessionsDrawerItem(
+            session: r.session,
+            selected: r.session.id == state.sessionId,
+            // 「待回答/待审批」角标（与电脑端会话列表 status.compact.* 同口径）：
+            // 数据来自全连接挂起表（WS replay + REST 合流），按会话 id 派生；
+            // hitl 变更经 ChatState.notifyUi 直达本页重建。
+            badge: state.hitlState.pendingQuestionSessionIds.contains(r.session.id)
+                ? '待回答'
+                : (state.hitlState.pendingApprovalSessionIds.contains(r.session.id)
+                      ? '待审批'
+                      : null),
+            colors: c,
+            onTap: () {
+              widget.onClose();
+              state.openSession(r.session);
+            },
+          ),
+        ],
+    ];
+  }
+
+  /// 分组标题行：「更早」右侧显示「N 条 · 展开/收起」并整行可点切换；
+  /// 普通分组保持官方 tune 图标样式。
+  Widget _groupHeader(SessionGroup g, DsColors c) {
+    final row = Row(
+      children: [
+        Expanded(
+          child: Text(
+            g.label,
+            style: DsTypography.small.copyWith(color: c.drawerGroupLabel),
+          ),
+        ),
+        if (g.collapsible)
+          Text(
+            '${g.count} 条 · ${_olderExpanded ? '收起' : '展开'}',
+            style: DsTypography.caption.copyWith(color: c.labelTertiary),
+          )
+        else
+          Icon(Icons.tune, size: 16, color: c.drawerGroupLabel),
+      ],
+    );
+    final padded = Padding(
+      padding: const EdgeInsets.fromLTRB(
+        DsSpacing.drawerGroupPadH,
+        DsSpacing.drawerGroupPadV,
+        DsSpacing.drawerGroupPadH,
+        DsSpacing.drawerGroupGap,
+      ),
+      child: row,
+    );
+    if (!g.collapsible) return padded;
+    return InkWell(
+      onTap: () => setState(() => _olderExpanded = !_olderExpanded),
+      child: padded,
     );
   }
 }
