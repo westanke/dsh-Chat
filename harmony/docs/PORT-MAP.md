@@ -243,4 +243,44 @@
   `store.reloadHistory()`（同 `runCommandIn` 的收尾），否则 chip 永远停在旧档位。
 
 
+- `切界面风格不生效` —— `SettingsView` 的 `themeChip` 只写 `AppStorage.setOrCreate('dshThemeMode', mode)`
+  + `PrefsStore.putString('dsh.themeMode', mode)`，但全工程没有任何地方监听这个键：
+  `Index` 的 `applyTheme` 只在 `bindDarkMode()` 的 mediaquery `on('change')` 回调里被调，
+  所以点「深色」chip 只会让 chip 自己变色，整页配色不动。修法：`pages/Index.ets` 加
+  `@StorageProp('dshThemeMode') @Watch('onThemeModeChange') themeMode: string = 'system';`
+  + 私有字段 `sysDark: boolean`（mediaquery 最近一次结果），`onThemeModeChange()` 里
+  `this.applyTheme(this.sysDark)`；`bindDarkMode()` 每次回调都先存 `this.sysDark`；
+  `aboutToAppear()` 里异步读回偏好：`PrefsStore.getString('dsh.themeMode').then(...)`
+  再 `AppStorage.setOrCreate` + `applyTheme`。**坑**：`PrefsStore.getString` 返
+  `Promise<string | null>`，直接 `?? 'system'` 会是 `string | Promise<string>`，
+  ArkTS 报 `10505001 Declaration or statement expected` 类错（实际信息是
+  `Type '"system" | Promise<string>' is not assignable to type 'string'`），必须进 then。
+  真机验证：设置页点「深色」→ 整页转深色；重启后保持。
+- `应用更新走市场` —— 鸿蒙应用只能由华为应用市场分发，系统不允许应用自更新；照搬安卓
+  `core/ReleaseCheck.ts` 的 Gitee→GitHub Release 检查既拿不到鸿蒙包也不合规。用户
+  2026-11-16 要求改口径：`pages/SettingsView.ets` 的 `checkUpdate` 改调
+  `@kit.AppGalleryKit` 的 `updateManager.checkAppUpdate(ctx)`（`updateAvailable === 1`
+  即 `UpdateAvailableCode.LATER_VERSION_EXIST`），有新版时点「检查更新」调
+  `updateManager.showUpdateDialog(ctx)` 由系统弹官方更新对话框。ctx 取
+  `this.getUIContext().getHostContext() as common.UIAbilityContext`。错误码
+  1009400001 SA 连接失败 / 1009400002 请求异常 / 1009400003 网络 / 1009400004 不在前台 /
+  1009400005 未同意隐私协议 / 1009400006 限频 / 1009400007 其它，映射在
+  `core/AppUpdate.ts` 的 `updateErrorMessage()`（纯函数，node 直测）。`ReleaseCheck.ts`
+  保留给安卓侧与历史测试，鸿蒙入口不再引用（`projections-release.test.ts` 已移除相关用例）。
+  真机验证：点「检查更新」→「已是最新版本」（本机为调试签名、未上架，市场仍回 0）。
+- `会话列表时间优先` —— 用户 2026-11-16 口径：抽屉列表**先按时间、再按工作区**排，
+  超过 2 天的会话收进可折叠「更早」。安卓 `app/lib/ui/session_groups.dart` 是
+  「工作区优先，组内再分今天/昨天/更早」，本版据此反转（PORT-MAP 决策差异）。
+  实现：`core/SessionGroups.ts` 纯函数 —— `dayBucketOf(updatedAt, nowMs)` 按**本地日历天**
+  分桶（用 `new Date(y,m,d).getTime()` 比零点，避免 23:59/00:01 跨天误判；`updatedAt<=0`
+  归更早）、`groupSessionsByTime(sessions, nowMs)` 产出 今天/昨天/更早 三组、组内先按
+  `updatedAt` 倒序再用 `workspaceLabelOf` 把同工作区聚成连续小节（`SessionRow.sectionLabel`
+  首行非空、后续空串，抽屉据此只显示一次小节名）、`visibleRowsOf(group, earlierOpen)`
+  处理收起态；`COLLAPSE_AFTER_DAYS = 2`、`GROUP_KEY_EARLIER = 'earlier'`。
+  `components/SessionsDrawer.ets` 用 `@State groupsView: SessionGroup[]`
+  （`syncVersion()` 里 `groupSessionsByTime(this.sessionsView, Date.now())`）+ `@State earlierOpen`
+  （点分组标题切换），`ForEach(this.groupsView)` → `ForEach(this.rowsOf(g))`。
+  真机验证：抽屉显示「今天 / workspace / 未分组 / 手机会话」多层小节，滚到底「更早 28 条 · 展开」，
+  点一下变「28 条 · 收起」并展开。
+
 **阶段 4 已记偏差（2026-11-16）**：①@s 文件补全多根下钻/删除确认照搬；②设置页「字号跟随系统」开关与 Slider 鸿蒙版延后阶段 5（fontScale 真机定）；③诊断日志开关不移植（Dlog.ets hilog 直写不落文件）；④子会话历史页（subagent_history_page）与 subagentHistory REST 已有，入口延后阶段 5；⑤会话目录选择（session_location_sheet）延后阶段 5；⑥表格下载/展开、推挤抽屉动画、自绘品牌标延后。

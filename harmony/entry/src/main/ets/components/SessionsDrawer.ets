@@ -7,6 +7,9 @@
 
 import { ChatStore } from '../core/ChatStore';
 import { DshSession } from '../core/Models';
+import {
+  GROUP_KEY_EARLIER, SessionGroup, SessionRow, groupSessionsByTime, visibleRowsOf,
+} from '../core/SessionGroups';
 import { DsColors, DsTypography, DsSpacing } from '../ui/theme';
 
 @Component
@@ -24,6 +27,13 @@ export struct SessionsDrawer {
    * 变更不触发重渲染（HitlPanel 踩过同样的坑）。每条编码 `id + '\u0001' + mark`。
    */
   @State marksView: string[] = [];
+  /**
+   * 「更早」分组展开态（默认收起）。用户口径：超过 2 天的会话收起来，
+   * 点分组标题展开/收起。@State 保证点一下立刻重渲染。
+   */
+  @State earlierOpen: boolean = false;
+  /** 分组快照（@State 数组：ForEach 只能观察被 build 读到的 @State）。 */
+  @State groupsView: SessionGroup[] = [];
   onClose: (() => void) | null = null;
   onOpenSettings: (() => void) | null = null;
 
@@ -50,6 +60,7 @@ export struct SessionsDrawer {
       }
     }
     this.marksView = next;
+    this.groupsView = groupSessionsByTime(this.sessionsView, Date.now());
   }
 
   /** 某会话的挂起标记（'question' / 'approval' / ''）。 */
@@ -80,29 +91,9 @@ export struct SessionsDrawer {
     }
   }
 
-  /** 工作区分组标题顺序（未分组垫底，同安卓 session_groups.dart）。 */
-  private groups(): string[] {
-    const seen: string[] = [];
-    for (const s of this.sessionsView) {
-      const title: string = s.workspaceTitle === null || s.workspaceTitle === ''
-        ? '未分组' : s.workspaceTitle;
-      if (seen.indexOf(title) < 0) {
-        seen.push(title);
-      }
-    }
-    return seen;
-  }
-
-  private sessionsOf(groupTitle: string): DshSession[] {
-    const out: DshSession[] = [];
-    for (const s of this.sessionsView) {
-      const t: string = s.workspaceTitle === null || s.workspaceTitle === ''
-        ? '未分组' : s.workspaceTitle;
-      if (t === groupTitle) {
-        out.push(s);
-      }
-    }
-    return out;
+  /** 某个时间分组实际要渲染的行（「更早」收起时返回空）。 */
+  private rowsOf(g: SessionGroup): SessionRow[] {
+    return visibleRowsOf(g, this.earlierOpen);
   }
 
   private open(s: DshSession): void {
@@ -154,21 +145,43 @@ export struct SessionsDrawer {
       Divider().color(this.c().borderL1).strokeWidth(1)
 
       List() {
-        ForEach(this.groups(), (g: string) => {
+        ForEach(this.groupsView, (g: SessionGroup) => {
           ListItem() {
             Column() {
-              Text(g)
-                .fontSize(12)
-                .fontColor(this.c().drawerGroupLabel)
-                .width('100%')
-                .padding({ left: 16, top: 14, bottom: 6 })
-              ForEach(this.sessionsOf(g), (s: DshSession) => {
-                this.sessionRow(s)
-              }, (s: DshSession) => s.id)
+              // 分组标题：今天 / 昨天 / 更早（更早可点标题展开收起）。
+              Row({ space: 6 }) {
+                Text(g.title)
+                  .fontSize(12)
+                  .fontColor(this.c().drawerGroupLabel)
+                  .layoutWeight(1)
+                if (g.collapsible) {
+                  Text(this.earlierOpen ? (g.count().toString() + ' 条 · 收起') : (g.count().toString() + ' 条 · 展开'))
+                    .fontSize(11)
+                    .fontColor(this.c().labelTertiary)
+                }
+              }
+              .width('100%')
+              .padding({ left: 16, right: 16, top: 14, bottom: 6 })
+              .onClick(() => {
+                if (g.collapsible) {
+                  this.earlierOpen = !this.earlierOpen;
+                }
+              })
+              // 行内小节：同工作区只在第一行显示一次（sectionLabel 空串就跳过）。
+              ForEach(this.rowsOf(g), (r: SessionRow) => {
+                if (r.sectionLabel.length > 0) {
+                  Text(r.sectionLabel)
+                    .fontSize(11)
+                    .fontColor(this.c().drawerGroupLabel)
+                    .width('100%')
+                    .padding({ left: 20, top: 8, bottom: 2 })
+                }
+                this.sessionRow(r.session)
+              }, (r: SessionRow) => r.session.id)
             }
             .width('100%')
           }
-        }, (g: string) => g)
+        }, (g: SessionGroup) => g.key)
       }
       .layoutWeight(1)
       .scrollBar(BarState.Off)

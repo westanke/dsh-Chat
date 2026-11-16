@@ -280,3 +280,30 @@ Flex 链式 .alignItems 不存在（构造参数里传）。
 **朗读按钮接上状态**（`components/MessageActions.ets`）：光有 `watchSpeaking` 不接 UI 等于没做（本仓 `私有方法只定义没调用` 坑）。改为 🔊 与 ⏹ 双态——说话中显示 ⏹ 且用品牌色，再点一次 `stopSpeak()`；朗读自然结束/出错时由观察者回调复位。观察者**用列表不用单槽位**：聊天页每条助手消息都挂一个 `MessageActions`，单槽位会被最后挂载的覆盖，其余实例图标永不复位；组件 `aboutToAppear` 注册、`aboutToDisappear` 注销（传同一个函数引用）。
 
 **真机行为待设备恢复后验证**：🔊 点一次应出声且图标变 ⏹、读完自行复位、再点一次能中止；⤴ 点一次应弹系统分享面板。
+
+## 阶段 5 第六批：主题切换修复 + 会话列表时间优先 + 应用市场更新（2026-11-16）
+
+用户报「点深色不变」，加上两条新需求（会话列表排序口径、检查更新改走华为应用市场），一批完成并真机验收。
+
+**bug⑰ 切「深色」不生效**（`pages/Index.ets`）：`SettingsView` 的 `themeChip` 只做
+`AppStorage.setOrCreate('dshThemeMode', mode)` + `PrefsStore.putString`，但**全工程没有任何监听**——
+`applyTheme` 只在 `bindDarkMode()` 的 mediaquery `on('change')` 回调里被调，所以点深色只有 chip 自己变色、整页不动。
+修法：`Index` 加 `@StorageProp('dshThemeMode') @Watch('onThemeModeChange')` + 缓存 `sysDark`，
+回调里 `applyTheme(this.sysDark)`；`aboutToAppear` 异步读回偏好再重算。
+坑：`PrefsStore.getString` 返 `Promise<string | null>`，直接 `?? 'system'` 编译报 10505001，必须进 `.then()`。
+真机验收：点「深色」整页转深色，重启后保持。
+
+**会话列表按时间优先 + 超 2 天折叠**（用户口径）：新增纯逻辑 `core/SessionGroups.ts`（`COLLAPSE_AFTER_DAYS = 2`、
+`dayBucketOf` 按本地日历天分桶、`groupSessionsByTime` 今天/昨天/更早 + 桶内工作区聚合小节、`visibleRowsOf` 折叠），
+`components/SessionsDrawer.ets` 改 `@State groupsView` + `@State earlierOpen`。与安卓「工作区优先」相反，已记 PORT-MAP 偏差。
+测试 `harmony/test/cases/session-groups.test.ts` 10 条。真机验收：抽屉「今天 / workspace / 未分组 / 手机会话」多层小节，
+底部「更早 28 条 · 展开」↔「28 条 · 收起」。
+
+**检查更新改华为应用市场**（用户要求「不能走 gitee」）：新增纯逻辑 `core/AppUpdate.ts`（结果模型 + 错误码 1009400001~7 映射），
+`pages/SettingsView.ets` 改用 `@kit.AppGalleryKit` 的 `updateManager.checkAppUpdate(ctx)` / `showUpdateDialog(ctx)`，
+删掉 `ReleaseCheck`/`HttpTransport`/`GITEE_RELEASES_URL` 相关代码；`projections-release.test.ts` 移除 6 个 ReleaseCheck 用例（现 7 条 Projections）。
+原因：鸿蒙应用只能由华为应用市场分发，系统不允许自更新。
+测试 `harmony/test/cases/app-update.test.ts` 6 条。真机验收：点「检查更新」→「已是最新版本」（调试签名未上架，市场回 0）。
+
+**门禁**：`npm --prefix harmony/test test` → **193/193 全绿**；`bash scripts/ci/docs-check.sh` 通过；`bash scripts/package.sh --no-test` BUILD SUCCESSFUL；签名装机真机验证。
+**文档**：`docs/STRUCTURE.md` 登记两个新 core 文件；`AGENTS.md` §11 +3 条坑位；`harmony/docs/PORT-MAP.md` §3 同 3 条详版。

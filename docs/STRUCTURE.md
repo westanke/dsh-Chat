@@ -196,6 +196,8 @@
 | `ets/core/Permissions.ts` | permission-options 收敛（PermissionCatalog/Option）+ 本地中文标签（label/descriptionLabel/needsConfirm/isDerived）+ permissionLabelOf |
 | `ets/core/MobileWorkspace.ts` | 手机工作区约定：ensureMobileWorkspace（缓存→标题匹配→.dsh-mobile 建目录→REST 登记→改名，全失败回 null 不阻断）+ prepareSessionFor + oldestSeqOf |
 | `ets/core/ChatActions.ts` | 会话动作集（store 参数纯函数）：runCommandIn 命令卡（✓/✗ 就地改写）/regenerateAtIn 重生成/cancelTurnIn 停止/setPermissionIn（NO_SESSION 拒） |
+| `ets/core/SessionGroups.ts` | 会话抽屉分组纯函数：groupSessionsByTime 先按时间分桶（今天/昨天/更早，超 2 天折叠）、桶内按工作区聚合（同区只显示一次小节标题），visibleRowsOf 处理「更早」展开态；dayBucketOf 按本地日历天分桶 |
+| `ets/core/AppUpdate.ts` | 检查更新（华为应用市场口径）：UpdateCheckResult 结果对象 + updateErrorMessage SDK 错误码（1009400001~7/401）中文映射 + NOT_SUPPORTED_MESSAGE；平台调用在 SettingsView（updateManager.checkAppUpdate / showUpdateDialog） |
 | `ets/core/ChatLabels.ts` | 展示文案纯函数：sessionTitleOf/deviceLabelOf/connectionLabelOf/stateLabelOf（安卓 chat_labels 口径） |
 | `ets/core/HitlStore.ts` | HITL 挂起表：pendingQuestions/approvals Map + session 过滤 + onEvent 四分支（返回是否变化）+ answer/cancel/decide（api 参数，成功即本地摘卡） |
 | `ets/core/ImageRef.ts` | 收图引用：DsImageRef（attachmentId/handoffName 二选一 + cacheKey）+ imageRefsOf/handoffRefOf（交接占位正则复用 Content） |

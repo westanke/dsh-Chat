@@ -3,32 +3,23 @@
  * 六分区（连接/外观/发送/关于/断开连接；诊断区鸿蒙首版不摆——hilog 不落
  * 文件，PORT-MAP 偏差）。字号缩放不摆（ArkUI 无 per-app fontScale，
  * 不放无法生效的开关，同安卓「不摆无法生效的开关」原则）。
- * 更新检查：查新版 + 引导跳 Gitee（鸿蒙不能自安装 APK，下载/安装不移植）。
+ * 更新检查：走华为应用市场（AppGallery Kit `updateManager`）——
+ * 鸿蒙应用只能由 AppGallery 分发，不允许自更新（用户 2026-11-16 要求
+ * 从 Gitee 改为应用市场口径）。查新版 → 系统弹官方更新对话框。
  */
 
 import { ChatStore } from '../core/ChatStore';
 import { JsonAccess, JsonMap } from '../core/JsonAccess';
 import { GatewayState } from '../core/GatewayEvents';
-import { RELEASE_REPO, ReleaseInfo, fetchLatestRelease, isNewerVersion } from '../core/ReleaseCheck';
-import { HttpTransport } from '../core/Transport';
-import { HttpTransportImpl } from '../platform/HttpTransport';
+import {
+  NOT_SUPPORTED_MESSAGE, UPDATE_AVAILABLE_YES, UpdateCheckResult,
+} from '../core/AppUpdate';
 import { appVersion, PrefsStore } from '../platform/PlatformBridge';
-import { common, Want } from '@kit.AbilityKit';
+import { common } from '@kit.AbilityKit';
+import { updateManager } from '@kit.AppGalleryKit';
+import { BusinessError } from '@kit.BasicServicesKit';
 import { DsColors, DsTypography, DsSpacing } from '../ui/theme';
 
-const GITEE_RELEASES_URL: string = 'https://gitee.com/' + RELEASE_REPO + '/releases';
-
-/// 本机版本名 → 三段 number（解析失败回 [0,0,0]，不拿 0.0.0 误报）。
-function localVersionParts(name: string): number[] {
-  const clean: string = name.startsWith('v') ? name.substring(1) : name;
-  const segs: string[] = clean.split('.');
-  const out: number[] = [];
-  for (let i = 0; i < 3; i++) {
-    const n: number = i < segs.length ? parseInt(segs[i], 10) : 0;
-    out.push(Number.isNaN(n) ? 0 : n);
-  }
-  return out;
-}
 
 @Component
 export struct SettingsView {
@@ -101,50 +92,54 @@ export struct SettingsView {
     return name.length > 0 ? name : id;
   }
 
+  /**
+   * 检查更新 —— 走 AppGallery Kit（华为应用市场）。
+   * silent=true 时（进设置页自动）不显示「检查中/最新」文案，保持安静。
+   */
   private checkUpdate(silent: boolean): void {
     if (this.updateChecking) {
       return;
     }
     this.updateChecking = true;
     if (!silent) {
-      this.updateHint = '正在检查（Gitee → GitHub）…';
+      this.updateHint = '正在向华为应用市场查询…';
     }
-    const http: HttpTransport = new HttpTransportImpl();
-    fetchLatestRelease(http).then((rel: ReleaseInfo): void => {
+    const ctx = this.getUIContext().getHostContext() as common.UIAbilityContext;
+    updateManager.checkAppUpdate(ctx).then((res: updateManager.CheckUpdateResult): void => {
       this.updateChecking = false;
-      const cur: string = this.versionLabel;
-      const dash: number = cur.indexOf('+');
-      const curName: string = dash > 0 ? cur.substring(0, dash) : cur;
-      const parts: number[] = localVersionParts(curName);
-      if (parts[0] === 0 && parts[1] === 0 && parts[2] === 0) {
-        // 本机版本没读到，不拿 0.0.0 误报。
-        this.updateHint = silent ? '' : '本机版本读取失败，无法比较';
-        return;
-      }
-      if (isNewerVersion(rel.versionParts, parts)) {
-        this.updateNewTag = rel.tag;
-        this.updateHint = '发现新版本 ' + rel.tag + '，点此前往下载页';
+      if (res.updateAvailable === UPDATE_AVAILABLE_YES) {
+        this.updateHint = UpdateCheckResult.ofNew().message;
+        this.updateNewTag = 'new';
       } else {
         this.updateNewTag = '';
-        this.updateHint = silent ? '' : '已是最新版本（远端 ' + rel.tag + '）';
+        this.updateHint = silent ? '' : UpdateCheckResult.ofLatest().message;
       }
-    }).catch((): void => {
+    }).catch((e: BusinessError): void => {
       this.updateChecking = false;
       this.updateNewTag = '';
-      this.updateHint = silent ? '' : '检查失败：Gitee / GitHub 都连不上';
+      const code: string = e !== null && e.code !== undefined ? e.code.toString() : '';
+      // 能力不可用（开发者预览版系统 / 非市场安装）不当作错误刷屏。
+      if (code === '1009400007' || code === '1009400001') {
+        this.updateHint = silent ? '' : NOT_SUPPORTED_MESSAGE;
+        return;
+      }
+      this.updateHint = silent ? '' : UpdateCheckResult.ofError(code, e.message ?? '').message;
     });
   }
 
-  private openReleasePage(): void {
+  /** 有新版时点「检查更新」→ 系统弹官方更新对话框（升级在应用市场完成）。 */
+  private showUpdateDialog(): void {
     const ctx = this.getUIContext().getHostContext() as common.UIAbilityContext;
-    const want: Want = {
-      action: 'ohos.want.action.viewData',
-      entities: ['ohos.want.action.entity.view'],
-      uri: GITEE_RELEASES_URL
-    };
-    ctx.startAbility(want).catch((): void => {
+    updateManager.showUpdateDialog(ctx).then((code: updateManager.ShowUpdateResultCode): void => {
+      if (code !== updateManager.ShowUpdateResultCode.SHOW_DIALOG_SUCCESS) {
+        this.updateHint = '打开更新对话框失败，请到华为应用市场手动更新';
+      }
+    }).catch((e: BusinessError): void => {
+      const msg: string = e !== null && e.message !== undefined && e.message !== '' ? e.message : '';
+      this.updateHint = '打开应用市场失败' + (msg.length > 0 ? ('：' + msg) : '');
     });
   }
+
 
   build() {
     Column() {
@@ -353,7 +348,7 @@ export struct SettingsView {
       .padding({ top: DsSpacing.liGap, bottom: DsSpacing.liGap })
       .onClick(() => {
         if (this.updateNewTag.length > 0) {
-          this.openReleasePage();
+          this.showUpdateDialog();
         } else {
           this.checkUpdate(false);
         }
@@ -366,7 +361,7 @@ export struct SettingsView {
           .padding({ bottom: DsSpacing.liGap })
           .onClick(() => {
             if (this.updateNewTag.length > 0) {
-              this.openReleasePage();
+              this.showUpdateDialog();
             }
           })
       }

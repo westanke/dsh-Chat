@@ -22,12 +22,16 @@ import { ChatStore } from '../core/ChatStore';
 @Component
 struct Index {
   @StorageProp('dshDark') dark: boolean = false;
+  /// 界面风格偏好（system/light/dark）：设置页写入后这里 @Watch 重算 dshDark。
+  @StorageProp('dshThemeMode') @Watch('onThemeModeChange') themeMode: string = 'system';
   @State route: string = 'boot';
   @State gateway: GatewayClient | null = null;
   @State api: GatewayApi | null = null;
   @State chat: ChatStore | null = null;
   @State bootHint: string = '正在连接…';
   private mediaListener: mediaquery.MediaQueryListener | null = null;
+  /// 系统深浅色（mediaquery 最近一次结果），手动切档时以它为基准。
+  private sysDark: boolean = false;
 
   /** ChatStore 单例：同一条连接上换页不重建（状态保留）。 */
   private chatStore(): ChatStore {
@@ -43,7 +47,20 @@ struct Index {
 
   aboutToAppear(): void {
     this.bindDarkMode();
+    // 偏好是异步读的（PrefsStore.getString 返 Promise），回来后重算一次配色。
+    PrefsStore.getString('dsh.themeMode').then((saved: string | null): void => {
+      const mode: string = saved !== null && saved !== '' ? saved : 'system';
+      AppStorage.setOrCreate('dshThemeMode', mode);
+      this.themeMode = mode;
+      this.applyTheme(this.sysDark);
+    }).catch((): void => {
+    });
     this.autoConnect();
+  }
+
+  /// 设置页切换界面风格 → 立刻重算生效（只写 AppStorage 不会自动触发）。
+  onThemeModeChange(): void {
+    this.applyTheme(this.sysDark);
   }
 
   aboutToDisappear(): void {
@@ -58,8 +75,10 @@ struct Index {
     try {
       const listener = this.getUIContext().getMediaQuery()
         .matchMediaSync('(dark-mode: true)');
+      this.sysDark = listener.matches;
       this.applyTheme(listener.matches);
       listener.on('change', (result: mediaquery.MediaQueryResult): void => {
+        this.sysDark = result.matches;
         this.applyTheme(result.matches);
       });
       this.mediaListener = listener;
@@ -71,7 +90,7 @@ struct Index {
 
   /** 界面风格偏好落色：system 跟随系统，light/dark 直写（设置页写 dshThemeMode）。 */
   private applyTheme(sysDark: boolean): void {
-    const mode: string = AppStorage.get<string>('dshThemeMode') ?? 'system';
+    const mode: string = AppStorage.get<string>('dshThemeMode') ?? this.themeMode;
     let dark: boolean = sysDark;
     if (mode === 'light') {
       dark = false;

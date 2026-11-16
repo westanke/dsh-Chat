@@ -1,5 +1,7 @@
 /**
- * Projections/ReleaseCheck 测试 —— 对齐安卓 projections_test / release_check_test 口径。
+ * Projections 测试 —— 对齐安卓 projections_test 口径。
+ * （更新检查已改走华为应用市场 AppGallery Kit，见 cases/app-update.test.ts；
+ * ReleaseCheck 的 Gitee/GitHub 通道在鸿蒙版停用，仅安卓侧保留。）
  */
 
 import test from 'node:test';
@@ -10,12 +12,7 @@ import { TrajectoryNodeKind, TrajectoryTurn, trajectoryOf, todoItems,
   from '../../entry/src/main/ets/core/Projections.ts';
 import { ChatMessage } from '../../entry/src/main/ets/core/HistoryPage.ts';
 import { ToolCallInfo } from '../../entry/src/main/ets/core/ToolCall.ts';
-import { ReleaseInfo, releaseFromJson, isNewerVersion, RELEASE_REPO }
-  from '../../entry/src/main/ets/core/ReleaseCheck.ts';
 import { JsonAccess } from '../../entry/src/main/ets/core/JsonAccess.ts';
-import { fetchLatestRelease } from '../../entry/src/main/ets/core/ReleaseCheck.ts';
-import { FakeHttp } from '../helpers/fake-ws.ts';
-import { RequestException } from '../../entry/src/main/ets/core/GatewayEvents.ts';
 
 function map(text: string): Record<string, Object> | null {
   return JsonAccess.asMap(JsonAccess.parse(text));
@@ -137,53 +134,8 @@ test('prettyJson: null 文案 + 缩进序列化', () => {
   assert.ok(s.includes('"a": 1'));
 });
 
-test('ReleaseInfo: versionParts 三段补零 + v 前缀剥离', () => {
-  RELEASE_REPO; // 常量存在（= westanke/dsh-Chat）
-  const r: ReleaseInfo = new ReleaseInfo();
-  r.tag = 'v1.2';
-  assert.deepEqual(r.versionParts, [1, 2, 0]);
-  r.tag = '1.2.3';
-  assert.deepEqual(r.versionParts, [1, 2, 3]);
-  r.tag = 'vX.Y.Z';
-  assert.deepEqual(r.versionParts, [0, 0, 0]);
-});
 
-test('releaseFromJson: 双前缀放行/大小写/坏资产过滤/无 apk null', () => {
-  const body: Record<string, Object> | null = map(`{
-    "tag_name":"v1.0.3","body":"更新说明",
-    "assets":[
-      {"name":"README.txt","browser_download_url":"http://x/r"},
-      {"name":"other-app-1.0.apk","browser_download_url":"http://x/o"},
-      {"name":"dsh-Chat-v1.0.3.apk","browser_download_url":"http://x/a","size":12345}]}
-  `);
-  const rel: ReleaseInfo | null = releaseFromJson(body);
-  assert.notEqual(rel, null);
-  assert.equal((rel as ReleaseInfo).apkName, 'dsh-Chat-v1.0.3.apk');
-  assert.equal((rel as ReleaseInfo).size, 12345);
-  assert.equal((rel as ReleaseInfo).notes, '更新说明');
 
-  const alt: ReleaseInfo | null = releaseFromJson(map(`{
-    "tag_name":"v1.0.3",
-    "assets":[{"name":"DSHCHAT-2_10-android.apk","browser_download_url":"http://x/b"}]}`));
-  assert.equal((alt as ReleaseInfo).apkName, 'DSHCHAT-2_10-android.apk');
-  assert.equal((alt as ReleaseInfo).size, null); // 没给 size
-
-  const noUrl: ReleaseInfo | null = releaseFromJson(map(`{
-    "tag_name":"v1","assets":[{"name":"dsh-chat-1.apk"}]}`));
-  assert.equal(noUrl, null); // url 空
-  assert.equal(releaseFromJson(null), null);
-  assert.equal(releaseFromJson(map('{"tag_name":""}')), null);
-  assert.equal(releaseFromJson(map('{"tag_name":"v1","assets":[]}')), null);
-});
-
-test('isNewerVersion: 三段逐位比较', () => {
-  assert.equal(isNewerVersion([1, 0, 18], [1, 0, 17]), true);
-  assert.equal(isNewerVersion([1, 1, 0], [1, 0, 99]), true);
-  assert.equal(isNewerVersion([2, 0, 0], [1, 9, 9]), true);
-  assert.equal(isNewerVersion([1, 0, 17], [1, 0, 17]), false);
-  assert.equal(isNewerVersion([1, 0, 16], [1, 0, 17]), false);
-  assert.equal(isNewerVersion([0, 9, 9], [1, 0, 0]), false);
-});
 
 test('chatStatsOf: 七键统计口径', () => {
   const user: ChatMessage = new ChatMessage(null);
@@ -214,35 +166,5 @@ test('chatStatsOf: 空列表全零', () => {
   assert.equal(stats.get('思考块'), 0);
 });
 
-test('fetchLatestRelease: Gitee 优先', async () => {
-  const http: FakeHttp = new FakeHttp();
-  http.push(200, JSON.stringify({
-    tag_name: 'v1.0.18',
-    assets: [{ name: 'dsh-chat-1_0_18.apk', browser_download_url: 'http://x/a' }]
-  }));
-  const rel: ReleaseInfo = await fetchLatestRelease(http);
-  assert.equal(rel.tag, 'v1.0.18');
-  assert.equal(http.requests.length, 1);
-  assert.match(http.requests[0].url, /gitee/);
-});
 
-test('fetchLatestRelease: Gitee 无资产落 GitHub', async () => {
-  const http: FakeHttp = new FakeHttp();
-  http.push(200, JSON.stringify({ tag_name: 'v0.9.0', assets: [] })); // Gitee 解析不出 apk → null
-  http.push(200, JSON.stringify({
-    tag_name: 'v1.0.18',
-    assets: [{ name: 'dsh-chat-1_0_18.apk', browser_download_url: 'http://x/a' }]
-  }));
-  const rel: ReleaseInfo = await fetchLatestRelease(http);
-  assert.equal(rel.tag, 'v1.0.18');
-  assert.match(http.requests[1].url, /github/);
-});
 
-test('fetchLatestRelease: 双失败抛', async () => {
-  const http: FakeHttp = new FakeHttp();
-  http.push(404, '{}');
-  http.push(404, '{}');
-  await assert.rejects(fetchLatestRelease(http), (e: RequestException): boolean => {
-    return e.code === 'HTTP_404';
-  });
-});
