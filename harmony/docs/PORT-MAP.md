@@ -210,6 +210,20 @@
   （`GET /roots` 顺序即此，`/entries` 返回 200 + `entries:[]`），而安卓走 file-list 的
   「首个授权根」语义可以隐式跳空根。REST 必须显式给 `rootId`，因此浏览时要在**根层**
   `dirs.length === 0` 就自动换下一个根（下钻层不跳），并允许点标题手动切根。
+- `挂起提问只有 REST 有` —— 桥的 `chat.userQuestions/requested` 只在提问发生当时推送，
+  重连后 `server.ts` 的 `replayPendingInteractions` 只补 **open** 的交互；`state:'continued'`
+  （用户答过、助手还在续跑，但卡片状态仍未终）的那一类**只有** `GET /api/v1/chat/sessions/
+  {sid}/questions` 拉得到 —— 真机取证：会话「重启后验证提问确认」的 WS replay 什么都不推，
+  REST 返 `{"callId":"bridge-97c…","state":"continued"}`。安卓 35f9deb 即补这条路，鸿蒙 A 档对齐：
+  `ChatStore.openSession` 在 `subscribe` 后 `refreshPendingQuestions(sid).catch(()=>{})`，
+  `GatewayApi.fetchQuestions` 走 REST，`HitlStore.mergeQuestions` 按 callId upsert（REST 侧
+  `rpcId` 为空时**保留 WS 侧旧值** —— rpcId 是取消提问的关联键，丢了就取消不掉；空 callId 跳过），
+  合流有变再 `changed()`（鸿蒙 HitlStore 是纯数据类、无 listener，不自己通知 UI 不会刷）。
+  寿命口径随之改写（桥 56aa14c）：桌面端 delegate **未决就永不给卡片设超时**，只有 delegate
+  被拒（桌面端不在线）才起 10 分钟自愈；客户端**不持任何超时常量**，别照抄旧的「服务端 10 分钟」。
+- `REST 合流别用 JsonAccess.arr` —— `core/JsonAccess.ts:73` 的 `arr()` 返回 `Object[]`，
+  取字段要再强转；`fetchQuestions` 解析 `items` 必须用 `objArr()`（返 `JsonMap[]`），
+  否则每条都拿不到 `callId`、全部被当空值丢掉（面板静默空白，不报错）。
 - `发送键白底看不见` —— 禁用态底色若用 `inputFill`（浅色主题=纯白），白底 + 浅灰箭头在
   浅色界面上几乎不可见（用户反馈）。改用 token `sendDisabledBg`（亮 `#EBEEF2` / 暗
   `c800`）+ `sendDisabledFg`（亮 `c500` / 暗 `c400`）；可用态走实心 `brand` + `onBrand`

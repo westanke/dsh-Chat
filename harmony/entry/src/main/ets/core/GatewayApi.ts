@@ -15,7 +15,7 @@
 import { JsonAccess, JsonMap } from './JsonAccess';
 import { WireBuilder } from './Wire';
 import { DshSession, DshWorkspace, DshDirectoryPage, SessionWaitResult } from './Models';
-import { QuestionAnswerItem } from './Questions';
+import { PendingQuestion, QuestionAnswerItem } from './Questions';
 import { GatewayRoot, GatewayEntry, ResolvedFile } from './Files';
 import { HistoryPage } from './HistoryPage';
 import { RequestException } from './GatewayEvents';
@@ -421,6 +421,27 @@ export class GatewayApi {
   listRootsRest(): Promise<GatewayRoot[]> {
     return this.restJson('GET', '/api/v1/roots', null, [200]).then((data: JsonMap): GatewayRoot[] => {
       return GatewayRoot.listFrom(data, 'items');
+    });
+  }
+
+  /**
+   * 会话挂起提问清单（GET /chat/sessions/{sid}/questions，openapi §listUserQuestions）：
+   * 本桥前台挂起 + 内核 continued 合流，挂起的排前面。WS replay 只补本桥前台
+   * 那批，内核 continued 只有这里能拉到 —— 打开会话时兜底拉一次，合流进
+   * HitlStore（ChatStore.openSession）。需要 chat.read scope（设备默认含）。
+   */
+  fetchQuestions(sessionId: string): Promise<PendingQuestion[]> {
+    const path: string = '/api/v1/chat/sessions/' + GatewayApi.encodePath(sessionId) + '/questions';
+    return this.restJson('GET', path, null, [200]).then((data: JsonMap): PendingQuestion[] => {
+      const items: JsonMap[] = JsonAccess.objArr(data, 'items');
+      const out: PendingQuestion[] = [];
+      for (const item of items) {
+        const q: PendingQuestion = PendingQuestion.fromJson(sessionId, item);
+        if (q.callId.length > 0) {
+          out.push(q);
+        }
+      }
+      return out;
     });
   }
 

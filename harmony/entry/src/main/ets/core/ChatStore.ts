@@ -139,7 +139,27 @@ export class ChatStore {
     //（流式残留会以流式气泡挂在新会话页尾部，安卓 2026-11-15 反馈教训）。
     this.resetSessionView();
     this.gateway.subscribe(s.id);
+    // REST 兜底拉一次挂起提问（含内核 continued）：WS replay 只补本桥前台挂起表，
+    // 内核 continued（限时提问）只有 REST 看得到。fire-and-forget，失败静默
+    //（打断换会话的代价大于漏一张兜底卡）。
+    this.refreshPendingQuestions(s.id).catch((): void => {});
     return this.reloadHistory();
+  }
+
+  /**
+   * REST 拉会话挂起提问并合流进挂起表（见 GatewayApi.fetchQuestions）。
+   * 合流后必须自己 changed()：HitlStore 是纯数据类，没有通知通道，
+   * UI 快照只由 ChatStore.changed() 驱动重抄（安卓靠 hitl.addListener）。
+   */
+  refreshPendingQuestions(sessionId: string): Promise<void> {
+    if (sessionId === '') {
+      return Promise.resolve();
+    }
+    return this.api.fetchQuestions(sessionId).then((list: PendingQuestion[]): void => {
+      if (this.hitl.mergeQuestions(list)) {
+        this.changed();
+      }
+    });
   }
 
   newChat(): void {

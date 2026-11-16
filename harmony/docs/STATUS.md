@@ -336,3 +336,47 @@ Flex 链式 .alignItems 不存在（构造参数里传）。
 **门禁**：`npm --prefix harmony/test test` → **200/200 全绿**（新增 `session-location.test.ts` 7 条）；
 `bash scripts/ci/docs-check.sh` 通过；`bash scripts/package.sh --no-test` BUILD SUCCESSFUL；签名装机真机验证。
 **文档**：`docs/STRUCTURE.md` 登记两个新文件；`AGENTS.md` §11 +4 条坑位（`@ 面板/命令面板不刷新`/`@ 下钻整面板报错`/`新建会话没目录选项`/`目录浏览显示空根`）。
+
+## 阶段 5 第八批：挂起提问「寿命随桌面走」对齐（2026-11-16）
+
+**背景**：桥端 56aa14c 改了挂起提问寿命（桌面端 delegate 未决 → 不摘卡、不设超时；只有
+delegate 被拒即电脑端不在线，才起 10 分钟自愈），安卓 35f9deb 及配套补了「监听 HitlState、
+提问卡按会话过滤、抽屉角标、进会话 REST 补拉挂起提问」。鸿蒙对照跟进（用户选 A 档：必做项
+现在做，抽屉角标改由 hitl 表派生那部分延后）。
+
+**鸿蒙原本已对的**：`HitlPanel` 早就按会话过滤（`pages/ChatView.ets:140` 传
+`st.pendingQuestions`/`st.pendingApprovals`，`core/ChatStore.ts` 的 getter 最终走
+`hitl.sessionQuestions(this.sessionId)`），不是漏项。
+
+**本批补齐（A 档）**：
+- `core/HitlStore.ts` 新增 `pendingQuestionSessionIds()` / `pendingApprovalSessionIds()`
+  （返去重数组，`indexOf` 判重 —— core 层无 Set 先例）与 `mergeQuestions(incoming)`
+  （按 callId upsert；`old.rpcId` 有值且新条目 `rpcId` 为空时保留旧值 —— rpcId 是取消提问的
+  关联键；空 callId 直接跳过；有变更返 true）。
+- `core/GatewayApi.ts` 新增 `fetchQuestions(sessionId)`：REST `GET …/questions` →
+  `JsonAccess.objArr(data,'items')` → `PendingQuestion.fromJson`。**`arr()` 返 `Object[]`
+  拿不到字段，必须用 `objArr()`**。
+- `core/ChatStore.ts`：`openSession` 在 subscribe 后 `refreshPendingQuestions(s.id).catch(()=>{})`；
+  新增 `refreshPendingQuestions(sessionId)`（空串短路 → fetch → merge → 有变才 `changed()`）。
+  鸿蒙 HitlStore 是纯数据类没有 listener，不主动 `changed()` 卡片不会出现。
+- `core/Questions.ts` 头注释改新寿命口径（delegate 未决不设超时、rejected 才 10 分钟自愈、
+  客户端不持超时常量）。
+
+**为什么只做 A 档**：B 档要把抽屉角标彻底改成 hitl 表派生、删掉 `pendingMarks` /
+`refreshPendingMarks` / `countPending*` 与 `SessionsDrawer.aboutToAppear` 的逐会话 REST 探测。
+桥的 replay 已保证连接期补推，但**不想在没真机取证的前提下拆掉唯一兜底**（代价只是每会话
+2 个 REST 请求）。留待后续按实测再定。
+
+**真机取证（本轮实测）**：真实桥 `GET /api/v1/chat/sessions` 返 36 个会话、`pendingInteraction`
+全为 `None`；会话「重启后验证提问确认」（`session-c6413d15-…`）的 `/questions` 返
+`{"callId":"bridge-97ccedc7-…","state":"continued"}`、`/approvals` 返 `{"items":[]}` ——
+正是「WS replay 不补、只有 REST 有」的那一类。装机后进该会话：提问卡「重启验证 / 再次验证：
+本轮提问与答案回传是否正常？」带「验证通过 / 验证失败」两个选项与提交键**正常渲染**（由
+REST 兜底合流得到），点「验证通过」→ 提交 → 卡片消失、助手回「提问工具（ask_user_question）
+调用正常，答案已成功回传 … 验证完成 ✅」。**REST 合流 → 渲染 → 作答 → 摘卡 全链路通。**
+
+**门禁**：`npm --prefix harmony/test test` → **215/215 全绿**（新增 `hitl-store.test.ts` 10 条；
+`chat-store.test.ts` +3 条：openSession REST 合流/失败静默/保留 WS rpcId 与空 sessionId 短路；
+`gateway-rest.test.ts` +3 条：fetchQuestions 解析/宽容/403）。
+**文档**：`AGENTS.md` §11 +2 条（`挂起提问只有 REST 有` / `REST 合流别用 JsonAccess.arr`）；
+本文件 §3 同两条详版。

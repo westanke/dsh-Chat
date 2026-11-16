@@ -28,6 +28,53 @@ export class HitlStore {
     return out;
   }
 
+  /**
+   * 有挂起提问的会话 id 集（抽屉「待回答」角标用）。全连接视角，与电脑端
+   * 会话列表 status.compact.answer 同口径。
+   */
+  pendingQuestionSessionIds(): string[] {
+    const out: string[] = [];
+    this.pendingQuestions.forEach((q: PendingQuestion): void => {
+      if (out.indexOf(q.sessionId) < 0) {
+        out.push(q.sessionId);
+      }
+    });
+    return out;
+  }
+
+  /** 有挂起审批的会话 id 集（抽屉「待审批」角标用）。 */
+  pendingApprovalSessionIds(): string[] {
+    const out: string[] = [];
+    this.pendingApprovals.forEach((a: PendingApproval): void => {
+      if (out.indexOf(a.sessionId) < 0) {
+        out.push(a.sessionId);
+      }
+    });
+    return out;
+  }
+
+  /**
+   * REST 兜底合流（GET /chat/sessions/{id}/questions，打开会话时拉一次）：
+   * WS replay 只补本桥前台挂起表，内核 continued（限时提问）只有 REST 看得到。
+   * 按 callId upsert；已有条目带 rpcId 而新条目没有时保留旧 rpcId（WS 推送的
+   * 条目比 REST 镜像多 cancel 用的关联键）。返回 true = 表有变化。
+   */
+  mergeQuestions(incoming: PendingQuestion[]): boolean {
+    let changed: boolean = false;
+    for (const q of incoming) {
+      if (q.callId === '') {
+        continue;
+      }
+      const old: PendingQuestion | undefined = this.pendingQuestions.get(q.callId);
+      if (old !== undefined && old.rpcId.length > 0 && q.rpcId.length === 0) {
+        q.rpcId = old.rpcId;
+      }
+      this.pendingQuestions.set(q.callId, q);
+      changed = true;
+    }
+    return changed;
+  }
+
   /** [sessionId] 会话待决的审批。 */
   sessionApprovals(sessionId: string | null): PendingApproval[] {
     const out: PendingApproval[] = [];

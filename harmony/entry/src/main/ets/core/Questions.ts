@@ -3,8 +3,12 @@
  *
  * 协议形状（bridge 仓 openapi.yaml:1180-1216）：
  * questions: {id, question, header?, detail?, multiSelect?, options?: [{label, description?}]}
- * 挂起超时 10 分钟（服务端）；答题帧 question-answer、取消 question-cancel、
- * 审批应答 approval-response（应答 kind=question-response/approval-response）。
+ * 挂起寿命随电脑端走（bridge 2026-11-16 起，56aa14c）：delegate 未决 = 桌面那张卡
+ * 还能答 → 不设超时、两端同寿命；只有 delegate 被拒（NO_PROVIDER，手机是唯一界面）
+ * 才起 10 分钟自愈线。审批侧超时不变（等待承诺必须有超时）。客户端因此**不持任何
+ * 超时常量**——卡不会自己消失，只能被结算事件或桥的清扫摘掉。
+ * 答题帧 question-answer、取消 question-cancel、审批应答 approval-response
+ *（应答 kind=question-response/approval-response）。
  *
  * 宽容口径：fromJson 缺键/类型不符一律默认值，绝不抛异常（姊妹仓同款规矩）。
  */

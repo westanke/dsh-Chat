@@ -106,3 +106,47 @@ test('http 未注入 → NO_TRANSPORT（不发请求）', async () => {
   await assert.rejects(api.fetchImageHandoff('a', 'b'), (e: Error): boolean =>
     (e as RequestException).code === 'NO_TRANSPORT');
 });
+
+test('fetchQuestions: GET /chat/sessions/{sid}/questions，解析 items 并丢空 callId', async () => {
+  const http: FakeHttp = new FakeHttp();
+  http.push(200, JSON.stringify({ items: [
+    { callId: 'c1', rpcId: 'r1', state: 'open',
+      questions: [{ id: 'q1', question: '选哪个？' }] },
+    { callId: 'c2', questions: [] },
+    { callId: '', questions: [] },       // 空 callId 丢弃
+    'not-an-object',                      // 非对象项丢弃
+  ] }));
+  const api: GatewayApi = await makeApi(http);
+  const list = await api.fetchQuestions('s 1/2');
+  assert.equal(list.length, 2);
+  assert.equal(list[0].callId, 'c1');
+  assert.equal(list[0].sessionId, 's 1/2');
+  assert.equal(list[0].rpcId, 'r1');
+  assert.equal(list[0].state, 'open');
+  assert.equal(list[0].questions.length, 1);
+  assert.equal(list[0].questions[0].question, '选哪个？');
+  assert.equal(list[1].callId, 'c2');
+  assert.equal(list[1].rpcId, '');
+  assert.equal(list[1].state, 'open');   // 缺键回默认
+  // 路径段必须 percent-encode（含空格与斜杠）。
+  assert.equal(http.requests[0].url,
+    'http://192.168.1.10:8765/api/v1/chat/sessions/s%201%2F2/questions');
+  assert.equal(http.requests[0].headers.get('authorization'), 'Bearer tok-9');
+});
+
+test('fetchQuestions: items 缺失/非数组 → 空列表（宽容）', async () => {
+  const http: FakeHttp = new FakeHttp();
+  http.push(200, '{}');
+  const api: GatewayApi = await makeApi(http);
+  assert.equal((await api.fetchQuestions('s1')).length, 0);
+  http.push(200, '{"items":"nope"}');
+  assert.equal((await api.fetchQuestions('s1')).length, 0);
+});
+
+test('fetchQuestions: 403 → RequestException（scope 不足要被上层看见）', async () => {
+  const http: FakeHttp = new FakeHttp();
+  http.push(403, '{"error":{"code":"FORBIDDEN","message":"scope"}}');
+  const api: GatewayApi = await makeApi(http);
+  await assert.rejects(api.fetchQuestions('s1'),
+    (e: Error): boolean => (e as RequestException).code === 'HTTP_403');
+});

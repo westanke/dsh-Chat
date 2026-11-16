@@ -573,3 +573,72 @@ test('refreshPendingMarks：REST 探测挂起项 → pendingMarkOf 返 question/
   await drain();
   assert.equal(ctx.store.pendingMarkOf('s3'), 'question');
 });
+
+test('openSession：REST 兜底拉挂起提问 → 合流进 hitl 表 → 当前会话卡片可渲染', async () => {
+  const ctx: ReadyCtx = makeReady();
+  await ctx.p;
+  const s: DshSession = new DshSession(null);
+  s.id = 's1';
+  // openSession 先把 fetchQuestions 的 REST 请求发出去，再等历史应答。
+  // FakeHttp 队列式：先备好 questions 应答，再注历史。
+  ctx.http.push(200, JSON.stringify({ items: [
+    { callId: 'c-rest', rpcId: 'rpc-rest', state: 'continued',
+      questions: [{ id: 'q1', question: '继续吗？' }] },
+    { callId: '', questions: [] },   // 空 callId 必须被丢掉
+  ] }));
+  const pLoad: Promise<void> = ctx.store.openSession(s);
+  respondHistory(ctx.socket, [userItem(1, 'x')]);
+  await pLoad;
+  await drain();
+  const qs: PendingQuestion[] = ctx.store.pendingQuestions;
+  assert.equal(qs.length, 1);
+  assert.equal(qs[0].callId, 'c-rest');
+  assert.equal(qs[0].rpcId, 'rpc-rest');
+  assert.equal(qs[0].state, 'continued');
+  assert.equal(qs[0].sessionId, 's1');
+  assert.equal(qs[0].questions.length, 1);
+  assert.equal(qs[0].questions[0].question, '继续吗？');
+});
+
+test('openSession：REST 兜底失败静默（不写 lastError、不打断换会话）', async () => {
+  const ctx: ReadyCtx = makeReady();
+  await ctx.p;
+  const s: DshSession = new DshSession(null);
+  s.id = 's1';
+  ctx.http.push(403, JSON.stringify({ error: { code: 'FORBIDDEN', message: 'no scope' } }));
+  let notified: number = 0;
+  ctx.store.setNotify((): void => { notified += 1; });
+  const pLoad: Promise<void> = ctx.store.openSession(s);
+  respondHistory(ctx.socket, [userItem(1, 'x')]);
+  await pLoad;
+  await drain();
+  assert.equal(ctx.store.lastError, null);
+  assert.equal(ctx.store.messages.length, 1);
+  // 失败不触发额外通知洪水：openSession 自身的通知即可覆盖。
+  assert.ok(notified >= 1);
+});
+
+test('refreshPendingQuestions：不带 rpcId 时保留 WS 侧已有 rpcId', async () => {
+  const ctx: ReadyCtx = makeReady();
+  await ctx.p;
+  await openSession1(ctx, []);
+  // WS 先推一条带 rpcId 的。
+  ctx.socket.serverFrame({ kind: 'event', data: {
+    type: 'chat.userQuestions/requested', sessionId: 's1',
+    data: { type: 'userQuestions/requested', sessionId: 's1', callId: 'c1',
+      rpcId: 'rpc-ws', questions: [{ id: 'q1', question: '?' }] } } });
+  await drain();
+  assert.equal(ctx.store.pendingQuestions.length, 1);
+  assert.equal(ctx.store.pendingQuestions[0].rpcId, 'rpc-ws');
+  // REST 镜像同一条但不带 rpcId → 保留旧值。
+  ctx.http.push(200, JSON.stringify({ items: [
+    { callId: 'c1', questions: [{ id: 'q1', question: '?' }] },
+  ] }));
+  await ctx.store.refreshPendingQuestions('s1');
+  assert.equal(ctx.store.pendingQuestions.length, 1);
+  assert.equal(ctx.store.pendingQuestions[0].rpcId, 'rpc-ws');
+  // 空 sessionId 直接短路，不发请求。
+  const before: number = ctx.http.requests.length;
+  await ctx.store.refreshPendingQuestions('');
+  assert.equal(ctx.http.requests.length, before);
+});
