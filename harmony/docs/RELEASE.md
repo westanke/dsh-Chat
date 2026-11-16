@@ -13,12 +13,13 @@ harmony/scripts/package.sh        # 双闸门：node 单测 + hvigorw assembleHa
 
 ## 2. 用户侧待补材料（仅真机验收与发版前需要）
 
-| 材料 | 说明 |
+| 材料 | 状态（2026-11-16） |
 |---|---|
-| AGC 新建应用 | bundleName `com.dsh.dshchat`，与 AppScope/app.json5 一致 |
-| 调试证书 + 调试 Profile | Profile 需登记现有 HarmonyOS 6.0 真机 UDID（companion 那台） |
-| 发布证书 + 发布 Profile | 送审/上架用 |
-| 密钥库 p12 | hap-sign-tool 用；口令**绝不**写进任何入库文件 |
+| 密钥库 p12 + CSR | ✅ 已生成 `signing/dsh-chat-harmony.p12` + `.csr`（JDK17 keytool，ECC P-256 / SHA256withECDSA / 自签 9125 天；口令见 `signing/README.txt`，本目录已 .gitignore） |
+| AGC 新建应用 | ☐ 用户在 AGC 建：bundleName `com.dsh.dshchat`（与 AppScope/app.json5 一致），应用名勿用 DeepSeek 相似词（姊妹仓驳回教训） |
+| 调试证书 .cer | ☐ 用户把 `signing/dsh-chat-harmony.csr` 传 AGC 签发调试证书 |
+| 调试 Profile .p7b | ☐ 绑 `com.dsh.dshchat` + 真机 UDID（`hdc shell bm get --udid` 取） |
+| 发布证书 + 发布 Profile | 送审/上架前再办（可选） |
 
 材料落 `harmony/signing/`（已 .gitignore，**绝不入库**，泄露即证书作废）。
 
@@ -27,11 +28,11 @@ harmony/scripts/package.sh        # 双闸门：node 单测 + hvigorw assembleHa
 骨架阶段未拿到 p12/cer/p7b，命令模板先占位（照姊妹仓 RELEASE.md §④ 回填精确参数）：
 
 ```sh
-# 伪码占位 —— 材料齐后回填：
+# 材料齐后回填（口令在 harmony/signing/README.txt，别写进入库文件）：
 java -jar "$HARMONY_TOOLCHAIN/sdk/default/openharmony/toolchains/lib/hap-sign-tool.jar" \
-  sign-app -keystore harmony/signing/<key>.p12 -keystorePwd '<口令>' \
-  -appCertFile harmony/signing/<cert>.cer -profileFile harmony/signing/<profile>.p7b \
-  -inFile dist/entry-default-unsigned.hap -outFile dist/<产物名>.hap
+  sign-app -keystore harmony/signing/dsh-chat-harmony.p12 -keystorePwd '<口令>' \
+  -appCertFile harmony/signing/<调试证书>.cer -profileFile harmony/signing/<调试Profile>.p7b \
+  -inFile dist/entry-default-unsigned.hap -outFile dist/dsh-Chat-harmony-<ver>-debug.hap
 ```
 
 要点（姊妹仓实测）：
