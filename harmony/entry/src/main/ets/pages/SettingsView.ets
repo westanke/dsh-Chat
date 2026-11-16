@@ -354,7 +354,20 @@ export struct SettingsView {
     this.sectionTitle('关于')
     Column() {
       this.infoRow('DSH Chat', 'HarmonyOS client for dsh-remote-bridge')
-      this.infoRow('版本', this.versionLabel)
+      // 版本行必须内联：@Builder 按值传参（这里是字面量+@State 两参），
+      // versionLabel 异步就绪后不会重算，会永远停在初始 '…'（真机实证）。
+      Row() {
+        Text('版本')
+          .fontSize(DsTypography.small.size)
+          .fontColor(this.c().labelSecondary)
+          .layoutWeight(1)
+        Text(this.versionLabel)
+          .fontSize(DsTypography.small.size)
+          .fontColor(this.c().labelPrimary)
+          .textAlign(TextAlign.End)
+      }
+      .width('100%')
+      .padding({ top: DsSpacing.liGap, bottom: DsSpacing.liGap })
       Row() {
         Text('检查更新')
           .fontSize(DsTypography.small.size)

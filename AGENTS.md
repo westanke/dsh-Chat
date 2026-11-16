@@ -348,3 +348,12 @@ CI 构建没人用（理由见 ci.yml 头注释）；鸿蒙构建需 DevEco 工�
 - `Repeat/@Builder 别插错 struct` —— 一个 .ets 里有多个 `export struct` 时，按行号插入很容易把
   `@Builder` 插到隔壁 struct，报 `Property 'xxx' does not exist on type 'TeamSheet'`。按 `export struct`
   边界精确定位，插在目标 struct 的 `build()` 之前。
+- `带参 @Builder 不随 @State 刷新` —— ArkUI 的 `@Builder xxx(a, b)` 只要**带参数**（哪怕参数是稳定
+  字符串 id、值全程不变），父组件重跑也不会重跑 builder，builder 内部读 `this.<@State>` 一律拿不到新值。
+  真机实证两轮：①先按值传 `glyph/color/label` 不刷新；②改成只传稳定 id + builder 里 `this.glyphOf(id)`
+  仍不刷新。**修法：显示值随状态变的部分一律内联到 `build()` 里**（`Text(this.speaking ? '⏹' : '🔊')`），
+  或改成**无参** @Builder。症状特征：父层提示文案（如「正在朗读」）已出现、按钮图标/颜色纹丝不动。
+- `bm dump 的版本段看错地方` —— `hdc shell "bm dump -n <bundle>"` 开头
+  `applicationInfo.appQuickFix` 段是 `versionCode: 0` / `versionName: ""` / `bundleName: ""`（不是真实值），
+  真正的版本在后面的 bundle 段（`versionCode: 1000000` / `versionName: "1.0.0"`）。别据此判「版本读不到」；
+  `bundleManager.getBundleInfoForSelf(GET_BUNDLE_INFO_WITH_APPLICATION)` 本身是好的。

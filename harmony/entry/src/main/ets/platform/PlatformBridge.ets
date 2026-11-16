@@ -11,6 +11,7 @@ import { BusinessError } from '@kit.BasicServicesKit';
 import { bundleManager } from '@kit.AbilityKit';
 import { i18n } from '@kit.LocalizationKit';
 import type { TimerBridge } from '../core/Transport';
+import { Dlog } from './Dlog';
 
 export class ArkTimers implements TimerBridge {
   schedule(delayMs: number, action: () => void): number {
@@ -67,6 +68,8 @@ export async function appVersion(): Promise<string> {
     const code: number = info.versionCode;
     return name + '+' + code.toString();
   } catch (err) {
+    const e = err as BusinessError;
+    Dlog.warn('[ver] failed code=' + e.code.toString() + ' msg=' + e.message);
     return '…';
   }
 }

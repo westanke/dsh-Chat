@@ -686,3 +686,45 @@ R014（嵌套 10-11 层，info 级）。
 
 `npm --prefix harmony/test test` 243/243 全绿、`bash scripts/ci/docs-check.sh` 通过、
 `bash scripts/package.sh --no-test` BUILD SUCCESSFUL（`dist/entry-default-unsigned.hap`）。
+
+---
+
+## 阶段 5 第十六批：真机走查 + 两个「静态渲染」缺陷修复（2026-11-16）
+
+第二轮真机走查（Repeat/断点/R005-R007 整改后回归）结论：**无回归**。
+
+### 走查通过项
+
+1. 空态：DSH 标记、问候语、设备名、工作目录 chip、权限 chip、发送键、免责声明齐全。
+2. 抽屉推挤式：今天/昨天/更早三段，「更早 28 条」点开变「28 条 · 收起」并展开，底部设置行可达。
+3. **翻页不跳位**（上批修复复验）：连点两次「加载更早消息」，首行 `🔧 执行了命令` 始终停在 y≈557，
+   只有摘要文字在变 —— 视口完全不跳。
+4. 工具三层折叠（组 → 行 → 详情卡）正常，耗时/参数/输出齐全。
+5. 思考块折叠正常：默认「已深度思考 ⌄」，点开变「收起深度思考 ⌃」+ 灰底正文。
+6. @ 引用面板：根层列目录 → 下钻 `.dhs-diff/new` → 选中 tgz，输入框追加到
+   `'@workspace/.dhs-diff/new/deepseek-ai-dsh-0.2.2-rc.1.tgz '`。
+7. 设置页六分区在手机档无错位；深色模式整屏跟随、chip 高亮、对比正常。
+
+### 缺陷 A：设置页「版本」恒显示 `…`
+
+- 现象：`版本` 行右侧永远是 `…`，重启不变。
+- 定位过程：先怀疑 `appVersion()` 读不到版本 → 加 `Dlog.info('[ver] name=… code=…')` 后 hilog 出
+  `[ver] name=1.0.0 code=1000000`，**读取本来是好的**；`bm dump` 开头段的 `versionCode: 0` 是
+  `applicationInfo.appQuickFix` 段，不是真实值（真实值在后段）。
+- 真因：`SettingsView.ets` 用 `@Builder infoRow(label, value)` 渲染，`@State versionLabel` 异步更新后
+  builder 不重跑（带参 @Builder 是静态子树）。
+- 修法：版本行内联成 `Row(){ Text('版本'); Text(this.versionLabel) }`。
+
+### 缺陷 B：消息操作条图标不随状态变
+
+- 现象：点 🔊 后提示「正在朗读」已出现，图标仍 `🔊`，`⏹` 不出现；复制 `⧉`→`✓` 同理。
+- 定位：`MessageActions.ets` 的 `@Builder icon(glyph, color, label, tap)` 带参不重跑。第二轮改传
+  稳定 id + builder 内 `this.glyphOf(id)` 读 @State，**仍不刷新** —— 结论：带参 @Builder 内部读 @State
+  一律不可靠。
+- 修法：删 `icon` builder 与三个 `*Of` 辅助，五个图标全部内联成 `Text(...)`，各带 `accessibilityText`。
+
+### 门禁
+
+`npm --prefix harmony/test test` 243/243 全绿、`bash scripts/ci/docs-check.sh` 通过、
+`bash scripts/package.sh --no-test` BUILD SUCCESSFUL、签名装机真机复验通过
+（版本 `1.0.0+1000000`、朗读图标 `🔊↔⏹`、复制 `⧉→✓`）。

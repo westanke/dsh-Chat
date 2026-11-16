@@ -102,43 +102,60 @@ export struct MessageActions {
     });
   }
 
-  @Builder
-  icon(glyph: string, color: ResourceColor, label: string, tap: () => void) {
-    Text(glyph)
-      .fontSize(16)
-      .fontColor(color)
-      .padding({ right: DsSpacing.actionIconGap })
-      .accessibilityText(label)
-      .onClick(() => {
-        tap();
-      })
-  }
+  /**
+   * 操作图标全部内联，**不走 @Builder**：ArkUI 的 @Builder 只要带参数
+   * （哪怕只是稳定的 id 字符串），参数不变时就不会重跑，builder 内部读
+   * @State 也取不到新值 —— 点朗读后提示已出现、图标却停在 🔊 不变
+   * （真机实证两轮：先试按值传 glyph/color，再试传稳定 id，都不刷新）。
+   * 只有把 Text 直接写进 build() 才会随 @State 重算。
+   */
 
   build() {
     Column() {
       Row() {
-        this.icon(this.copied ? '✓' : '⧉', this.c().labelTertiary,
-          this.copied ? '已复制' : '复制回答', (): void => {
-          this.copy();
-        })
-        this.icon(this.liked ? '👍' : '👍', this.liked ? this.c().brand : this.c().labelTertiary,
-          this.liked ? '取消喜欢' : '喜欢', (): void => {
+        Text(this.copied ? '✓' : '⧉')
+          .fontSize(16)
+          .fontColor(this.c().labelTertiary)
+          .padding({ right: DsSpacing.actionIconGap })
+          .accessibilityText(this.copied ? '已复制' : '复制回答')
+          .onClick(() => {
+            this.copy();
+          })
+        Text('👍')
+          .fontSize(16)
+          .fontColor(this.liked ? this.c().brand : this.c().labelTertiary)
+          .padding({ right: DsSpacing.actionIconGap })
+          .accessibilityText(this.liked ? '取消喜欢' : '喜欢')
+          .onClick(() => {
             this.liked = !this.liked;
           })
-        this.icon(this.speaking ? '⏹' : '🔊',
-          this.speaking ? this.c().brand : this.c().labelTertiary,
-          this.speaking ? '停止朗读' : '朗读回答', (): void => {
+        Text(this.speaking ? '⏹' : '🔊')
+          .fontSize(16)
+          .fontColor(this.speaking ? this.c().brand : this.c().labelTertiary)
+          .padding({ right: DsSpacing.actionIconGap })
+          .accessibilityText(this.speaking ? '停止朗读' : '朗读回答')
+          .onClick(() => {
             this.toggleSpeak();
           })
-        this.icon('⤴', this.c().labelTertiary, '分享回答', (): void => {
-          this.share();
-        })
+        Text('⤴')
+          .fontSize(16)
+          .fontColor(this.c().labelTertiary)
+          .padding({ right: DsSpacing.actionIconGap })
+          .accessibilityText('分享回答')
+          .onClick(() => {
+            this.share();
+          })
         Blank()
-        this.icon('⟳', this.c().labelTertiary, '重新生成', (): void => {
-          if (this.onRegenerate !== null) {
-            this.onRegenerate();
-          }
-        })
+        Text('⟳')
+          .fontSize(16)
+          .fontColor(this.c().labelTertiary)
+          .padding({ right: DsSpacing.actionIconGap })
+          .accessibilityText('重新生成')
+          .onClick(() => {
+            if (this.onRegenerate !== null) {
+              this.onRegenerate();
+            }
+          })
       }
       .width('100%')
       .margin({ top: 10, bottom: 4 })

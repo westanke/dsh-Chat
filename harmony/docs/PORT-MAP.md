@@ -274,6 +274,23 @@
 - `@Builder 别插错 struct` —— 一个 .ets 里有多个 `export struct` 时（ProjectionSheets 的
   TeamSheet/TrajectorySheet），按行号插入会把 builder 插到隔壁 struct，报
   `Property 'turnBlock' does not exist on type 'TeamSheet'`。按 `export struct` 边界精确定位。
+- `带参 @Builder 不随 @State 刷新` —— 现象：点消息下的 🔊 朗读，父层提示「正在朗读」已经出现
+  （说明父组件 build 重跑了），但图标始终停在 `🔊`，`⏹` 永远不出现；复制按钮同理，`⧉` 不变 `✓`；
+  设置页「版本」行同理，`@State versionLabel` 从 `'…'` 异步变成 `'1.0.0+1000000'` 后界面纹丝不动。
+  机理：ArkUI 的 `@Builder xxx(a, b)` **只要带参数**，父组件重跑时不会重跑 builder，builder 内部读
+  `this.<@State>` 一律拿不到新值 —— 参数是「稳定字符串 id」「全程不变的布尔」也一样。
+  真机两轮实证：①`@Builder icon(glyph: string, color: ResourceColor, label: string, tap)` 按值传，
+  不刷新；②改成只传稳定 id `this.icon('speak', ...)` + builder 里 `this.glyphOf(id)` 读 @State，
+  **仍不刷新**。修法：显示值随状态变的部分一律内联进 `build()`（
+  `Text(this.speaking ? '⏹' : '🔊').fontColor(this.speaking ? this.c().brand : this.c().labelTertiary)`），
+  或改成**无参** @Builder。回退不行：`@Builder` 加参数是 ArkUI 的「静态子树」优化语义，不是 bug，
+  官方文档也这么写；唯一可靠的替代是 `@Component` 子组件 + `@Prop`（但要为每个图标建一个文件，不值得）。
+- `bm dump 的版本段看错地方` —— `hdc shell "bm dump -n com.dsh.dshchat"` 开头
+  `applicationInfo.appQuickFix` 段会显示 `versionCode: 0` / `versionName: ""` / `bundleName: ""`，
+  容易被误判成「工程没配版本」；真正的版本在后面的 bundle 段
+  （`versionCode: 1000000` / `versionName: "1.0.0"`，grep 一下 `^  versionCode` 才是对的那个）。
+  实测 `bundleManager.getBundleInfoForSelf(bundleManager.BundleFlag.GET_BUNDLE_INFO_WITH_APPLICATION)`
+  返回值是对的（`versionName=1.0.0`、`versionCode=1000000`），所以先怀疑 UI 的刷新语义，别改 Version 读取。
 - `发送键白底看不见` —— 禁用态底色若用 `inputFill`（浅色主题=纯白），白底 + 浅灰箭头在
   浅色界面上几乎不可见（用户反馈）。改用 token `sendDisabledBg`（亮 `#EBEEF2` / 暗
   `c800`）+ `sendDisabledFg`（亮 `c500` / 暗 `c400`）；可用态走实心 `brand` + `onBrand`
