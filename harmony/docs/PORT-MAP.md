@@ -269,8 +269,8 @@
   保留给安卓侧与历史测试，鸿蒙入口不再引用（`projections-release.test.ts` 已移除相关用例）。
   真机验证：点「检查更新」→「已是最新版本」（本机为调试签名、未上架，市场仍回 0）。
 - `会话列表时间优先` —— 用户 2026-11-16 口径：抽屉列表**先按时间、再按工作区**排，
-  超过 2 天的会话收进可折叠「更早」。安卓 `app/lib/ui/session_groups.dart` 是
-  「工作区优先，组内再分今天/昨天/更早」，本版据此反转（PORT-MAP 决策差异）。
+  超过 2 天的会话收进可折叠「更早」。安卓 `app/lib/ui/session_groups.dart` 已同口径
+  （a91c1d9：`groupSessionsByTime` 今天/昨天/更早 + 桶内工作区聚簇），两端一致。
   实现：`core/SessionGroups.ts` 纯函数 —— `dayBucketOf(updatedAt, nowMs)` 按**本地日历天**
   分桶（用 `new Date(y,m,d).getTime()` 比零点，避免 23:59/00:01 跨天误判；`updatedAt<=0`
   归更早）、`groupSessionsByTime(sessions, nowMs)` 产出 今天/昨天/更早 三组、组内先按

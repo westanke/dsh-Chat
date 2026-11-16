@@ -300,7 +300,7 @@ CI 构建没人用（理由见 ci.yml 头注释）；鸿蒙构建需 DevEco 工�
 - `覆盖式抽屉漏边` —— 官方抽屉是推挤式（聊天页整体右移一抽屉宽），覆盖式会在抽屉右缘漏出输入框；`translate({x: open ? '80%' : '0%'})` 用百分比别用像素。
 - `切界面风格不生效` —— 设置页只 `AppStorage.setOrCreate('dshThemeMode')` + `PrefsStore.putString`，但没人监听：`applyTheme` 只在 mediaquery 变化时被调。修法：Index 加 `@StorageProp('dshThemeMode') @Watch('onThemeModeChange')` + 缓存 `sysDark`，回调里 `applyTheme(this.sysDark)`；启动时异步读偏好回来再重算（`PrefsStore.getString` 返 Promise，`?? 'system'` 会编译成 `string | Promise<string>` 报 10505001）。
 - `应用更新走市场` —— 鸿蒙应用只能 AppGallery 分发、不允许自更新；不要照搬安卓 Gitee/GitHub Release 检查，改 `@kit.AppGalleryKit` 的 `updateManager.checkAppUpdate(ctx)`（`updateAvailable===1` 有新版）/ `showUpdateDialog(ctx)`（系统弹官方更新框）。错误码 1009400001~7 见 `core/AppUpdate.ts`。
-- `会话列表时间优先` —— 用户口径（2026-11-16）：先按时间（今天/昨天/更早）分桶、桶内再按工作区聚合，超过 2 天收进可折叠「更早」；与安卓「工作区优先 + 组内分今天/昨天/更早」不同（PORT-MAP 已记偏差）。纯函数在 `core/SessionGroups.ts`。
+- `会话列表时间优先` —— 用户口径（2026-11-16）：先按时间（今天/昨天/更早）分桶、桶内再按工作区聚合，超过 2 天收进可折叠「更早」；安卓同口径（`app/lib/ui/session_groups.dart` 的 `groupSessionsByTime`，a91c1d9），两端一致。纯函数在 `core/SessionGroups.ts`。
 - `TTS 必须先 setListener` —— CoreSpeechKit 不先 `setListener` 就 `speak`，onStart/onComplete/onError 全部收不到（引擎照读但无回调、无法判断结束）；`CreateEngineParams.online` 是 **0=在线 / 1=离线**，别当布尔用；引擎是进程级单例，Ability `onDestroy` 要 `shutdownTts()` 释放音频焦点。
 - `分享要先 ShareKit` —— 只用 Want `action:ohos.want.action.sendData` 不一定弹系统分享面板；首选 `@kit.ShareKit` 的 `systemShare.SharedData`（UTD `general.plain-text` + content）→ `ShareController(data).show(context, {selectionMode: SINGLE, previewMode: DEFAULT})`，拿不到再退 Want。
 - `发送键白底看不见` —— 禁用态不能用 `inputFill`（浅色主题等于白底白箭头），走 `sendDisabledBg/sendDisabledFg` 浅灰底 + 中灰箭头。
