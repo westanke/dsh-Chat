@@ -1,9 +1,7 @@
 /**
- * 消息列表 —— 对照安卓 chat_message_items.dart / chat_message_list.dart 的
- * 阶段 2/3 基础版：用户气泡 / 助手平铺 + Markdown 富渲染（MdView）/ 过程组
- * 短语行 / 错误条 / 流式块。
- * 布局 token：docs/design-tokens.md（msgPad 30 / bubbleRadius 16 / user 气泡
- * 最大宽 86.4%）。
+ * 消息列表 —— 对照安卓 chat_message_items.dart / chat_message_list.dart 的阶段 2/3
+ * 基础版：用户气泡 / 助手平铺 + Markdown 富渲染（MdView）/ 过程组短语行 / 错误条 /
+ * 流式块。布局 token：docs/design-tokens.md（msgPad 30 / bubbleRadius 16 / user 气泡最大宽 86.4%）。
  */
 
 import { ChatStore } from '../core/ChatStore';
@@ -17,12 +15,12 @@ import { DsImageRef, imageRefsOf, handoffRefOf } from '../core/ImageRef';
 import { MdDocViewer } from '../pages/MdDocViewer';
 import { ThinkBlock } from './ThinkBlock';
 import { ProcessGroup } from './ProcessGroup';
+import { ToolBlock } from './ToolBlock';
 import { ArrayDataSource } from './ArrayDataSource';
-import { visibleMessagesOf, parseFoldedReplies } from '../core/WorkSteps';
+import { visibleMessagesOf, parseFoldedReplies, parseWorkStepsDetail } from '../core/WorkSteps';
+import { policyOf, STEP_GROUPING_NONE } from '../core/ToolDetails';
 import { mediaquery } from '@kit.ArkUI';
-import {
-  BP_SM, BP_QUERY_MD, BP_QUERY_LG, breakpointOf, atLeastMd, isLarge, contentMaxWidth,
-} from '../core/Breakpoints';
+import { BP_SM, BP_QUERY_MD, BP_QUERY_LG, breakpointOf, atLeastMd, isLarge, contentMaxWidth } from '../core/Breakpoints';
 
 @Component
 export struct MessageList {
@@ -36,6 +34,14 @@ export struct MessageList {
    * 档位在设置页切换 → AppStorage 直写 → @Watch 重抄消息（同 version 链路）。
    */
   @StorageProp('dshFoldedReplies') @Watch('syncVersion') foldedRepliesProp: string = 'all';
+  /**
+   * 「工作步骤展示」档（通用设置①，官方 token concise|standard|detailed|verbose）。
+   * verbose 平铺：过程组不折叠成组，逐条工具行渲染（ToolBlock，无组标题、
+   * 默认展开、单条可展开详情）；其余档走 ProcessGroup（组标题 + 折叠层）。
+   * 另经 policyOf 派生：liveProcessDetail（组标题 detail 附加）、
+   * settledReasoningPreview（已完成轮 ThinkBlock 收起预览）。
+   */
+  @StorageProp('dshWorkStepsDetail') detailProp: string = 'detailed';
   /**
    * ChatStore.changed() 递增的版本号。必须带 @Watch 并在回调里把 store 派生数据
    * 抄进 @State —— ArkUI 只对 build 期间读到的 @State/@Prop 建立依赖，ForEach 的
@@ -60,7 +66,6 @@ export struct MessageList {
   /** 翻页瞬间的锚点快照：首个可见下标 + 当时的消息条数。 */
   private anchorIdx: number = -1;
   private anchorLen: number = 0;
-
   private c(): DsColors {
     return new DsColors(this.dark);
   }
@@ -68,13 +73,11 @@ export struct MessageList {
   @State docOpen: boolean = false;
   @State docPath: string = '';
   @State docTitle: string = '';
-
   /** .md / .markdown 判定（安卓 _isMarkdown 口径）。 */
   private isMarkdown(path: string): boolean {
     const lower: string = path.toLowerCase();
     return lower.endsWith('.md') || lower.endsWith('.markdown');
   }
-
   /** 消息气泡最大宽（官方 user 气泡约 86.4% 屏宽）。 */
   private bubbleMaxWidth(): Length {
     return '86.4%';
@@ -85,7 +88,6 @@ export struct MessageList {
       this.renderList();
     }
   }
-
   @Builder
   renderList() {
     List({ scroller: this.scroller, space: 14 }) {
@@ -142,7 +144,6 @@ export struct MessageList {
       }
     })
   }
-
   @Builder
   docViewer() {
     MdDocViewer({
@@ -152,7 +153,6 @@ export struct MessageList {
       },
     })
   }
-
   /** 交付文件卡（安卓 _DeliverableStrip 口径）：.md 走站内查看器，其余交系统。 */
   @Builder
   fileCard(m: ChatMessage) {
@@ -196,7 +196,6 @@ export struct MessageList {
     }
     .width('100%')
   }
-
   /** version 变化 → 重抄 store 派生数据（@Prop @Watch 回调）+ 跟随贴底。 */
   syncVersion(): void {
     const st: ChatStore | null = this.store;
@@ -239,7 +238,6 @@ export struct MessageList {
       this.jumpToBottom(false);
     }, 30);
   }
-
   /** 点「加载更早消息」：翻页 + 失败只提示不打断（store 侧写 lastError）。 */
   private loadOlder(): void {
     const st: ChatStore | null = this.store;
@@ -277,11 +275,41 @@ export struct MessageList {
     } else if (m.role === 'files') {
       this.fileCard(m);
     } else if (m.isProcess) {
-      ProcessGroup({ group: m, store: this.store });
+      if (this.detailProp === STEP_GROUPING_NONE) {
+        // verbose 平铺：无组标题、无折叠层，逐条工具行（默认收起详情，可展开）。
+        this.flatToolRows(m);
+      } else {
+        ProcessGroup({ group: m, store: this.store });
+      }
     } else {
       this.assistantBlock(m);
     }
   }
+  /** verbose 档平铺工具行（ForEach 带 keyGenerator，非 LazyForEach）。 */
+  @Builder
+  flatToolRows(m: ChatMessage) {
+    Column() {
+      ForEach(m.toolCalls, (c: ToolCallInfo) => {
+        ToolBlock({ call: c, answerable: this.answerableOf })
+      }, (c: ToolCallInfo) => c.callId)
+    }
+    .width('100%')
+    .alignItems(HorizontalAlign.Start)
+    .margin({ top: DsSpacing.blockGap })
+  }
+  /** 挂起询问回调：挂起表有同 callId → 可回答（ToolBlock ask 五态用）。 */
+  private answerableOf = (callId: string): boolean => {
+    const st: ChatStore | null = this.store;
+    if (st === null) {
+      return false;
+    }
+    for (const q of st.pendingQuestions) {
+      if (q.callId === callId) {
+        return true;
+      }
+    }
+    return false;
+  };
 
   /**
    * LazyForEach 的 key。key 里**不能**带 index：历史翻页会把旧消息插到数组前部，
@@ -293,7 +321,6 @@ export struct MessageList {
   private keyOf(m: ChatMessage): string {
     return m.role + '-' + m.seq.toString() + '-' + m.text.length.toString();
   }
-
   /** 大屏档（≥840vp）：spinner 等小元素放大一档，视觉重量与加大行高匹配。 */
   private isLargeBp(): boolean {
     return isLarge(this.bp);
@@ -318,7 +345,6 @@ export struct MessageList {
       // UIContext 未就绪（极少见）：保持 Index 写进来的档位不变。
     }
   }
-
   /** 命令卡（安卓 chat_message_items.dart 口径）：首行 monospace + ✓/✗ 结果。 */
   @Builder
   commandCard(m: ChatMessage) {
@@ -352,7 +378,6 @@ export struct MessageList {
     .borderWidth(1)
     .borderColor(this.c().inputBorder)
   }
-
   /** 用户消息：右对齐气泡（浅色走 DsPalette.userBubble，深色同理，见 ui/theme.ets）。
    * 图片两种来源：content 里 type=image 的引用（images）与纯文本模型的交接占位
    * （文本里的 `[Image: source: …]`，安卓 chat_message_items.dart:176 同口径，
@@ -378,7 +403,6 @@ export struct MessageList {
     }
     .width('100%')
   }
-
   /** 用户消息图片块（发送即带引用）。 */
   @Builder
   userImages(m: ChatMessage) {
@@ -392,23 +416,23 @@ export struct MessageList {
       .constraintSize({ maxWidth: this.bubbleMaxWidth() })
     }
   }
-
   /** 用户气泡里的交接图引用（没有回 null；气泡布局用）。 */
   private userHandoff(m: ChatMessage): DsImageRef | null {
     return handoffRefOf(this.rawTextOf(m));
   }
-
   /** 取交接图用的原文：清洗过的消息把原文留在 rawText 里。 */
   private rawTextOf(m: ChatMessage): string {
     return m.rawText !== '' ? m.rawText : m.text;
   }
-
   /** 助手消息：全宽平铺文本 + 前置过程组短语行 + reasoning 灰字。 */
   @Builder
   assistantBlock(m: ChatMessage) {
     Column() {
       if (m.reasoning !== '') {
-        ThinkBlock({ text: m.reasoning, streaming: m.streaming })
+        ThinkBlock({
+          text: m.reasoning, streaming: m.streaming,
+          showPreview: policyOf(parseWorkStepsDetail(this.detailProp)).settledReasoningPreview
+        })
       }
       if (m.text === '') {
         Text(' ')
@@ -438,7 +462,6 @@ export struct MessageList {
     .width('100%')
     .alignItems(HorizontalAlign.Start)
   }
-
   /** 消息在数组中的下标（regenerateAt 用）。 */
   private indexOf(m: ChatMessage): number {
     const st: ChatStore | null = this.store;
@@ -452,7 +475,6 @@ export struct MessageList {
     }
     return 0;
   }
-
   /** 错误条（turn 失败）：红字轻背景。 */
   @Builder
   errorBar(m: ChatMessage) {
@@ -465,7 +487,6 @@ export struct MessageList {
       .backgroundColor(this.c().borderL1)
       .borderRadius(10)
   }
-
   /** 版本变化后贴底（streaming / 新历史到达时由 ChatView 触发）。 */
   jumpToBottom(animate: boolean): void {
     try {

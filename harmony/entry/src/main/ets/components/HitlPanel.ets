@@ -30,6 +30,8 @@ export struct HitlPanel {
   @State picked: string[] = [];
   /** 每题自定义回答（同样用 @State 数组：`qid + '\u0001' + text`）。 */
   @State customs: string[] = [];
+  /** 已提交决定的审批 id（提交后按钮禁用，官方 answered 态）。 */
+  @State decided: string[] = [];
 
   /** 窗口断点自读（R007 一多）：自定义回答输入框在宽屏加高。 */
   private refreshBreakpoint(): void {
@@ -178,12 +180,22 @@ export struct HitlPanel {
   @Builder
   approvalCard(a: PendingApproval, idx: number) {
     Column() {
+      // 顶部状态条：小圆点 + 「等待审批」（官方审批卡 strip；决定提交后整卡变 answered，
+      // 按钮禁用）。注意协议只有「允许一次」，没有「始终允许」键（server 侧不存该状态）。
+      Row({ space: 4 }) {
+        Circle({ width: 6, height: 6 }).fill(this.c().settingsWarnFg)
+        Text(this.decided.includes(a.approvalId) ? '已处理' : '等待审批')
+          .fontSize(DsTypography.caption.size)
+          .fontColor(this.c().settingsWarnFg)
+      }
+      .width('100%')
+      .margin({ bottom: DsSpacing.liGap })
       Row() {
         Text('⚖')
           .fontSize(DsSpacing.processIconSize)
           .fontColor(this.c().settingsWarnFg)
           .margin({ right: DsSpacing.processIconGap })
-        Text('DSH 请求使用 ' + a.toolName)
+        Text(this.approvalTitle(a))
           .fontSize(DsTypography.smallStrong.size)
           .fontWeight(DsTypography.smallStrong.weight)
           .fontColor(this.c().settingsWarnFg)
@@ -194,6 +206,7 @@ export struct HitlPanel {
       if (a.reason !== null && a.reason.length > 0) {
         Text(a.reason)
           .fontSize(DsTypography.caption.size)
+          .fontFamily('monospace')
           .fontColor(this.c().settingsWarnFg)
           .margin({ top: DsSpacing.liGap })
           .width('100%')
@@ -203,18 +216,20 @@ export struct HitlPanel {
         Text('拒绝')
           .fontSize(DsTypography.small.size)
           .fontColor(this.c().danger)
+          .opacity(this.allowDecide(a) ? 1 : 0.5)
           .padding({ left: 14, right: 14, top: 8, bottom: 8 })
-          .accessibilityText('拒绝本次审批')
-          .onClick(() => this.onDecide(a, false))
+          .accessibilityText(this.allowDecide(a) ? '拒绝本次审批' : '已处理，不可重复操作')
+          .onClick(() => this.decide(a, false))
         Text('允许一次')
           .fontSize(DsTypography.small.size)
           .fontColor(this.c().onBrand)
-          .backgroundColor(this.c().link)
+          .backgroundColor(this.allowDecide(a) ? this.c().link : this.c().drawerGroupLabel)
           .borderRadius(DsSpacing.chipRadius)
+          .opacity(this.allowDecide(a) ? 1 : 0.5)
           .padding({ left: 14, right: 14, top: 8, bottom: 8 })
           .margin({ left: DsSpacing.chipGap })
-          .accessibilityText('允许本次审批')
-          .onClick(() => this.onDecide(a, true))
+          .accessibilityText(this.allowDecide(a) ? '允许本次审批' : '已处理，不可重复操作')
+          .onClick(() => this.decide(a, true))
       }
       .height(DsSpacing.composerButtonSize)
       .width('100%')
@@ -225,6 +240,27 @@ export struct HitlPanel {
     .borderRadius(DsSpacing.codeBlockRadius)
     .padding(DsSpacing.codeBlockPad)
     .margin({ top: DsSpacing.blockGap })
+  }
+
+  /** 审批标题：越权（risk=full-access）与普通授权不同文案（官方 escalation 口径）。 */
+  private approvalTitle(a: PendingApproval): string {
+    if (a.risk === 'full-access') {
+      return '工具 ' + a.toolName + ' 请求越权执行';
+    }
+    return 'DSH 请求使用 ' + a.toolName;
+  }
+
+  /** 同一审批只允许决定一次：提交后禁用两键（重复点击直接忽略）。 */
+  private allowDecide(a: PendingApproval): boolean {
+    return !this.decided.includes(a.approvalId);
+  }
+
+  private decide(a: PendingApproval, allow: boolean): void {
+    if (!this.allowDecide(a)) {
+      return;
+    }
+    this.decided = this.decided.concat([a.approvalId]);
+    this.onDecide(a, allow);
   }
 
   @Builder

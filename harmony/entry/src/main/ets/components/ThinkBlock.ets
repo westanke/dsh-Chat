@@ -1,17 +1,23 @@
 /// 思考流块 —— 与 MessageList 拆开（宪法 §7 单文件 ≤500 行）。
 import { DsColors, DsTypography, DsSpacing } from '../ui/theme';
 import { MdView } from './md/MdView';
+import { reasoningPreviewOf } from '../core/ToolPresent';
 /**
  * 思考流块 —— 对齐安卓 `app/lib/ui/chat_message_items.dart:232 _ThinkBlock`：
  * 官方「已深度思考」可折叠小字块。流式时默认展开并显示「深度思考中…」（用户口径
  * m03759：有思考时要能看到过程，不能折叠藏起来），历史消息默认折叠。
  * 展开时内容走 MdView(small=true)，与安卓 `DsMarkdownView(small: true)` 同口径。
+ *
+ * settledReasoningPreview（展示档 policy，core/ToolDetails）：已完成轮收起时
+ * 显示 reasoning 首行预览（弱化小字）；concise 档为 false → 不显示预览。
  */
 @Component
 export struct ThinkBlock {
   text: string = '';
   /** 流式态：true 期间默认展开，转为 false 时自动收起（用户口径 2026-11-16）。 */
   @Prop @Watch('onStreamingChange') streaming: boolean = false;
+  /** 收起预览开关（MessageList 按 policyOf(档位).settledReasoningPreview 传入）。 */
+  @Prop showPreview: boolean = true;
   @StorageProp('dshDark') dark: boolean = false;
   @State expanded: boolean = false;
 
@@ -51,6 +57,15 @@ export struct ThinkBlock {
       .onClick((): void => {
         this.expanded = !this.expanded;
       })
+      if (!this.expanded && !this.streaming && this.showPreview) {
+        Text(reasoningPreviewOf(this.text))
+          .fontSize(DsTypography.caption.size)
+          .fontColor(this.c().labelTertiary)
+          .maxLines(1)
+          .textOverflow({ overflow: TextOverflow.Ellipsis })
+          .width('100%')
+          .padding({ left: DsSpacing.thinkHMargin })
+      }
       if (this.expanded) {
         Column() {
           MdView({ text: this.text, small: true })
@@ -64,3 +79,4 @@ export struct ThinkBlock {
     .padding({ bottom: DsSpacing.thinkHMargin })
   }
 }
+

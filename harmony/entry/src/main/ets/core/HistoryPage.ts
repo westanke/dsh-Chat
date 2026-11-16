@@ -169,6 +169,9 @@ export class HistoryPage {
     const pending: Map<string, RawToolCall> = new Map(); // callId → 调用信息（等 result 补全）
     let groupStart: number | null = null;
     let groupEnd: number | null = null;
+    // 组内 reasoning 累积（官方口径：进行中组无 running 工具时，标题取组内
+    // 最后一条 reasoning 的尾段 —— core/ToolPresent.reasoningTailOf）。
+    let groupReasoning: string = '';
 
     // 文件卡暂存：内核在 present 工具 result 成功的**当场**追加
     // deliverables/presented（seq 落在收尾正文之前）——按事件序内联插卡会卡在
@@ -188,11 +191,13 @@ export class HistoryPage {
       msg.toolCalls = groupCalls.slice(); // 拷贝：缓冲复用（安卓 List.unmodifiable 同口径）
       msg.startedAt = groupStart;
       msg.finishedAt = groupEnd;
+      msg.reasoning = groupReasoning;
       items.push(msg);
       groupCalls.length = 0;
       pending.clear();
       groupStart = null;
       groupEnd = null;
+      groupReasoning = '';
     };
 
     const flushFileCards = (): void => {
@@ -269,6 +274,12 @@ export class HistoryPage {
             // 去重：内核对同一次调用会发两遍 —— 内嵌在 assistant/message
             // content 里（type=tool-call）+ 独立 tool/call 事件。以独立事件为准，
             // 这里只记「有调用发生」，明细等 tool/call 事件补全。
+            // reasoning 一并挂进组（flushGroup 时落到组消息上，供组标题兜底）。
+            if (parts.reasoning !== '') {
+              groupReasoning = groupReasoning === ''
+                ? parts.reasoning
+                : groupReasoning + '\n\n' + parts.reasoning;
+            }
             for (const c of calls) {
               pending.set(c.callId, c);
               let dup: boolean = false;

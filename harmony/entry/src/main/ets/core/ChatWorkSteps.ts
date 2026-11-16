@@ -16,7 +16,8 @@
  */
 
 import { ChatMessage } from './HistoryPage';
-import { WorkStepsDetail, CollapseTiming, groupKeysOfTurn, lastTurnOf } from './WorkSteps';
+import { WorkStepsDetail, CollapseTiming, groupKeysOfTurn, lastTurnOf, turnsOf } from './WorkSteps';
+import { policyOf, STEP_GROUPING_HISTORY } from './ToolDetails';
 import { AgentPreset } from './AgentPresets';
 import { RequestException } from './GatewayEvents';
 import { ChatStore } from './ChatStore';
@@ -103,17 +104,50 @@ export class ChatWorkSteps {
     this.bump();
   }
 
-  /** completion 时机：轮 committed（流式结束分支）后收起该轮全部组。 */
+  /**
+   * completion 时机：轮 committed（流式结束分支）后收起该轮全部组。
+   * detailed（stepGrouping=history）按官方 deferCollapse 语义：轮结束且该轮
+   * 不再是最新轮（turnLocation.status!=='open'）才折叠——当前提交的轮就是最新轮，
+   * 保持展开，只收更早的历史轮。
+   */
   collapseTurnOnCompletion(messages: ChatMessage[]): void {
-    if (this.detail === 'verbose') {
+    if (policyOf(this.detail).stepGrouping === STEP_GROUPING_HISTORY) {
+      // 历史轮全收、最新一轮（含刚提交的这轮）保持展开。
+      const turns: ChatMessage[][] = turnsOf(messages);
+      const keys: string[] = [];
+      for (let t = 0; t + 1 < turns.length; t++) {
+        const groupKeys: string[] = groupKeysOfTurn(turns[t]);
+        for (let i = 0; i < groupKeys.length; i++) {
+          keys.push(groupKeys[i]);
+        }
+      }
+      this.collapseKeys(keys);
       return;
     }
     this.collapseKeys(groupKeysOfTurn(lastTurnOf(messages)));
   }
 
-  /** next-input 时机：send() 时收起当前展开的全部组。 */
+  /**
+   * next-input 时机：send() 时收起当前展开的全部组（verbose 永不自动收；
+   * completion 时机不动——收起点只挂 COMMITTED assistant 分支）。
+   * detailed 档例外：send 意味着新轮开始，上一轮已不再是「open」的 turnLocation，
+   * 无论收起时机如何都要按 deferCollapse 收历史轮（此刻展开的组全属历史轮）。
+   */
   collapseOnSend(): void {
     if (this.detail === 'verbose') {
+      return;
+    }
+    if (this.detail === 'detailed') {
+      const keys: string[] = [];
+      this.expanded.forEach((v: boolean, k: string) => {
+        if (v) {
+          keys.push(k);
+        }
+      });
+      this.collapseKeys(keys);
+      return;
+    }
+    if (this.timing !== 'next-input') {
       return;
     }
     const keys: string[] = [];
