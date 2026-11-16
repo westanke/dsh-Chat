@@ -11,11 +11,14 @@ export struct MdTable {
   @StorageProp('dshDark') dark: boolean = false;
   @State copied: boolean = false;
 
-  private get c(): DsColors {
+  /** 普通方法而非 getter：@Builder/ForEach 生成器里 `private get c()` 取到 undefined
+   * （真机 TypeError: Cannot read property 'labelPrimary' of undefined 整进程崩）。 */
+  private c(): DsColors {
     return new DsColors(this.dark);
   }
 
-  private get columns(): number {
+  /** 同样避开 getter（@Builder 内 getter 取值不可靠）。 */
+  private columns(): number {
     let max = 0;
     for (const row of this.rows) {
       if (row.length > max) {
@@ -55,14 +58,14 @@ export struct MdTable {
       Row() {
         Text('表格')
           .fontSize(DsTypography.codeBlockLabel.size)
-          .fontColor(this.c.labelTertiary)
+          .fontColor(this.c().labelTertiary)
           .layoutWeight(1)
         Text(this.copied ? '✓' : '⧉')
           .fontSize(15)
-          .fontColor(this.c.labelTertiary)
+          .fontColor(this.c().labelTertiary)
         Text(this.copied ? '已复制' : '复制')
           .fontSize(DsTypography.codeBlockLabel.size)
-          .fontColor(this.c.labelTertiary)
+          .fontColor(this.c().labelTertiary)
           .margin({ left: 4 })
           .onClick(() => this.copy())
       }
@@ -73,7 +76,7 @@ export struct MdTable {
         bottom: DsSpacing.codeBlockBannerPadV,
       })
       Divider()
-        .color(this.c.tableBorder)
+        .color(this.c().tableBorder)
         .strokeWidth(1)
       // 表体（横向滚动；列宽按 flex 撑满）
       Scroll() {
@@ -87,10 +90,10 @@ export struct MdTable {
       .scrollBar(BarState.Off)
     }
     .constraintSize({ minWidth: '100%' })
-    .backgroundColor(this.c.mdCodeBlockBg)
+    .backgroundColor(this.c().mdCodeBlockBg)
     .borderRadius(DsSpacing.codeBlockRadius)
     .borderWidth(1)
-    .borderColor(this.c.tableBorder)
+    .borderColor(this.c().tableBorder)
     .clip(true)
     .margin({ top: DsSpacing.blockGap, bottom: DsSpacing.blockGap })
   }
@@ -102,7 +105,7 @@ export struct MdTable {
         Text(cell.length > 0 ? cell : ' ')
           .fontSize(rowIdx === 0 ? DsTypography.tableHead.size : DsTypography.table.size)
           .fontWeight(rowIdx === 0 ? FontWeight.Medium : FontWeight.Normal)
-          .fontColor(this.c.labelPrimary)
+          .fontColor(this.c().labelPrimary)
           .textAlign(this.cellAlign(colIdx))
           .padding({
             left: DsSpacing.cellPadH,
@@ -114,7 +117,7 @@ export struct MdTable {
           .layoutWeight(1)
           .border({
             width: { right: colIdx < row.length - 1 ? 1 : 0, top: rowIdx === 0 ? 0 : 1 },
-            color: this.c.tableBorder,
+            color: this.c().tableBorder,
           })
       }, (cell: string, colIdx: number) => rowIdx + '-' + colIdx + '-' + cell.length)
     }

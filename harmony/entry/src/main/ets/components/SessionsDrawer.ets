@@ -13,7 +13,11 @@ import { DsColors, DsTypography, DsSpacing } from '../ui/theme';
 export struct SessionsDrawer {
   store: ChatStore | null = null;
   @StorageProp('dshDark') dark: boolean = false;
-  @Prop version: number = 0;
+  /** 同 MessageList：必须 @Watch + @State 快照，否则 ForEach 数据源不重新求值。 */
+  @Prop @Watch('syncVersion') version: number = 0;
+  /** 会话列表快照（唯一被观察的数据源）。 */
+  @State sessionsView: DshSession[] = [];
+  @State currentView: string = '';
   onClose: (() => void) | null = null;
   onOpenSettings: (() => void) | null = null;
 
@@ -25,14 +29,21 @@ export struct SessionsDrawer {
     return this.store;
   }
 
+  /** version 变化 → 重抄 store 派生数据（@Prop @Watch 回调）。 */
+  syncVersion(): void {
+    const st: ChatStore | null = this.store;
+    this.sessionsView = st === null ? [] : st.sessions;
+    this.currentView = st === null || st.sessionId === null ? '' : st.sessionId;
+  }
+
+  aboutToAppear(): void {
+    this.syncVersion();
+  }
+
   /** 工作区分组标题顺序（未分组垫底，同安卓 session_groups.dart）。 */
   private groups(): string[] {
-    const st: ChatStore | null = this.store;
-    if (st === null) {
-      return [];
-    }
     const seen: string[] = [];
-    for (const s of st.sessions) {
+    for (const s of this.sessionsView) {
       const title: string = s.workspaceTitle === null || s.workspaceTitle === ''
         ? '未分组' : s.workspaceTitle;
       if (seen.indexOf(title) < 0) {
@@ -43,12 +54,8 @@ export struct SessionsDrawer {
   }
 
   private sessionsOf(groupTitle: string): DshSession[] {
-    const st: ChatStore | null = this.store;
-    if (st === null) {
-      return [];
-    }
     const out: DshSession[] = [];
-    for (const s of st.sessions) {
+    for (const s of this.sessionsView) {
       const t: string = s.workspaceTitle === null || s.workspaceTitle === ''
         ? '未分组' : s.workspaceTitle;
       if (t === groupTitle) {
@@ -189,7 +196,6 @@ export struct SessionsDrawer {
   }
 
   private current(): string {
-    const st: ChatStore | null = this.store;
-    return st === null ? '' : (st.sessionId === null ? '' : st.sessionId);
+    return this.currentView;
   }
 }

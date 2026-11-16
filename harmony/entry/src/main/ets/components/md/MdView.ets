@@ -18,7 +18,9 @@ export struct MdView {
   @StorageProp('dshDark') dark: boolean = false;
   @State blocks: MdBlock[] = [];
 
-  private get c(): DsColors {
+  /** 普通方法而非 getter：@Builder/ForEach 生成器里 `private get c()` 取到 undefined
+   * （真机 TypeError: Cannot read property 'labelPrimary' of undefined 整进程崩）。 */
+  private c(): DsColors {
     return new DsColors(this.dark);
   }
 
@@ -69,7 +71,7 @@ export struct MdView {
       }
       .fontSize(this.headFont(b.level).size)
       .fontWeight(FontWeight.Bold)
-      .fontColor(this.c.labelPrimary)
+      .fontColor(this.c().labelPrimary)
       .width('100%')
       .margin({ top: b.level <= 3 ? DsSpacing.blockGap : DsSpacing.blockGap / 2, bottom: 8 })
     } else if (b.type === 'p' || b.type === 'quote') {
@@ -78,7 +80,7 @@ export struct MdView {
           Column()
             .width(DsSpacing.quoteBarWidth)
             .height('100%')
-            .backgroundColor(this.c.quoteBar)
+            .backgroundColor(this.c().quoteBar)
           Flex({ wrap: FlexWrap.Wrap, alignItems: ItemAlign.Center }) {
             this.inlineFlow(b.segs, idx)
           }
@@ -111,7 +113,7 @@ export struct MdView {
       .margin({ top: 4, bottom: 4 })
     } else if (b.type === 'hr') {
       Divider()
-        .color(this.c.borderL2)
+        .color(this.c().borderL2)
         .strokeWidth(1)
         .margin({ top: DsSpacing.blockGap, bottom: DsSpacing.blockGap })
     }
@@ -124,17 +126,17 @@ export struct MdView {
         // 任务项：勾选框（官方「☑ 已完成」观感，无圆点）
         Text(item.checked === 1 ? '☑' : '☐')
           .fontSize(18)
-          .fontColor(item.checked === 1 ? this.c.brand : this.c.listMarker)
+          .fontColor(item.checked === 1 ? this.c().brand : this.c().listMarker)
           .margin({ right: 6, top: 1 })
       } else if (kind === 'ul') {
         Text('•')
           .fontSize(this.segFont().size)
-          .fontColor(this.c.listMarker)
+          .fontColor(this.c().listMarker)
           .margin({ right: 8 })
       } else {
         Text((itemIdx + 1) + '.')
           .fontSize(this.segFont().size)
-          .fontColor(this.c.listMarker)
+          .fontColor(this.c().listMarker)
           .margin({ right: 6 })
       }
       Flex({ wrap: FlexWrap.Wrap, alignItems: ItemAlign.Center }) {
@@ -157,7 +159,7 @@ export struct MdView {
       } else if (s.link.length > 0) {
         Text(s.text)
           .fontSize(this.segFont().size)
-          .fontColor(this.c.link)
+          .fontColor(this.c().link)
           .decoration({ type: TextDecorationType.None })
           .onClick(() => openExternal(s.link))
           .margin({ right: 2 })
@@ -165,15 +167,15 @@ export struct MdView {
         Text() {
           Span(s.text)
             .fontSize(this.segFont().size)
-            .fontColor(this.c.labelPrimary)
+            .fontColor(this.c().labelPrimary)
             .fontWeight(s.bold ? FontWeight.Bold : this.segFont().weight)
             .fontStyle(s.italic ? FontStyle.Italic : FontStyle.Normal)
             .decoration({
               type: s.strike ? TextDecorationType.LineThrough : TextDecorationType.None,
-              color: this.c.labelPrimary,
+              color: this.c().labelPrimary,
             })
             .fontFamily(s.code ? DsTypography.codeFamily : undefined)
-            .backgroundColor(s.code ? this.c.mdInlineCodeBg : Color.Transparent)
+            .backgroundColor(s.code ? this.c().mdInlineCodeBg : Color.Transparent)
         }
         .margin({ right: s.code ? 4 : 0 })
       }
@@ -183,7 +185,7 @@ export struct MdView {
   @Builder
   inlineSpan(s: InlineSeg) {
     Span(s.text)
-      .fontColor(this.c.labelPrimary)
+      .fontColor(this.c().labelPrimary)
   }
 
   private latexNodeOf(wrapped: string): LatexNode {

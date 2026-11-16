@@ -281,3 +281,10 @@ CI 构建没人用（理由见 ci.yml 头注释）；鸿蒙构建需 DevEco 工�
 - `分层图标覆盖` —— AppScope 与 entry 的图标资源名必须不同，否则后者覆盖前者。
 - `AGC 图标 1024` —— AGC 上架审核拒收非 1024×1024 应用图标（姊妹仓实踩）。
 - `npm ci 无 lock` —— harmony/test 要提交 package-lock.json，否则 CI `npm ci` 直接失败。
+- `ArkUI getter 崩进程` —— `@Builder`/`ForEach` 里 `private get c()` 取到 undefined → TypeError → AMS 杀进程；一律用普通方法 `private c()`。
+- `@Prop 无 @Watch 不重渲染` —— ArkUI 只认 build 期间读到的 @State/@Prop；store 派生值必须在 setNotify 里抄进 @State，@Prop version 配 @Watch。
+- `hilog 抓 JS 崩溃栈` —— 先 `hilog -G 16M`（上限 16M）再 `hilog -r` 复现，`grep -iE 'JsError|Stacktrace|TypeError'` 才能拿到 .ets:行:列。
+- `hilog 读不到应用日志` —— 域 0xD5C0 在真机 hilog 取不到；排障走 mock bridge 抓帧 / REST 直查。
+- `node WebSocket 无 header` —— 探针要打 Authorization 头必须 require ws 包，内置全局 WebSocket 不认 headers。
+- `uitest inputText 是追加` —— 不清空会双拼（DSH1 报「配置文本无法识别」）。
+- `设备上无 sed -i` —— 报 `sed: no temp file`；改设备文件用 `hdc file send` + `hdc shell cp`。

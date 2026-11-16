@@ -16,12 +16,14 @@ export struct ToolBlock {
   /** 单条详情展开的下标（-1 = 全收起）。 */
   @State detailIdx: number = -1;
 
-  private get c(): DsColors {
+  /** 普通方法而非 getter：@Builder/ForEach 生成器里 `private get c()` 取到 undefined
+   * （真机 TypeError: Cannot read property 'labelPrimary' of undefined 整进程崩）。 */
+  private c(): DsColors {
     return new DsColors(this.dark);
   }
 
   private headColor(): ResourceColor {
-    return this.failed ? this.c.labelTertiary : this.c.labelSecondary;
+    return this.failed ? this.c().labelTertiary : this.c().labelSecondary;
   }
 
   build() {
@@ -73,16 +75,16 @@ export struct ToolBlock {
       Row() {
         Text(t.failed ? '✗' : '✓')
           .fontSize(DsSpacing.processIconSize)
-          .fontColor(t.failed ? this.c.labelTertiary : this.c.labelSecondary)
+          .fontColor(t.failed ? this.c().labelTertiary : this.c().labelSecondary)
           .margin({ right: DsSpacing.processIconGap, top: 3 })
         Column() {
           Text(t.phrases.join('，'))
             .fontSize(DsTypography.small.size)
-            .fontColor(t.failed ? this.c.labelTertiary : this.c.labelSecondary)
+            .fontColor(t.failed ? this.c().labelTertiary : this.c().labelSecondary)
           if (t.summary !== null) {
             Text(t.summary)
               .fontSize(DsTypography.codeBlockLabel.size)
-              .fontColor(this.c.labelTertiary)
+              .fontColor(this.c().labelTertiary)
               .maxLines(2)
               .textOverflow({ overflow: TextOverflow.Ellipsis })
           }
@@ -92,7 +94,7 @@ export struct ToolBlock {
         if (this.hasDetail(t)) {
           Text(this.detailIdx === idx ? '⌃' : '⌄')
             .fontSize(12)
-            .fontColor(this.c.labelTertiary)
+            .fontColor(this.c().labelTertiary)
         }
       }
       .alignItems(VerticalAlign.Top)
@@ -122,7 +124,7 @@ export struct ToolBlock {
       if (this.durationText(t) !== null) {
         Text('耗时 ' + this.durationText(t))
           .fontSize(DsTypography.caption.size)
-          .fontColor(this.c.labelTertiary)
+          .fontColor(this.c().labelTertiary)
           .margin({ bottom: 4 })
       }
       if (this.bashCommand(t) !== null) {
@@ -130,26 +132,26 @@ export struct ToolBlock {
       } else if (this.prettyArgs(t) !== null) {
         Text('输入')
           .fontSize(DsTypography.caption.size)
-          .fontColor(this.c.labelTertiary)
+          .fontColor(this.c().labelTertiary)
         Text(this.prettyArgs(t) as string)
           .fontSize(DsTypography.codeBlock.size)
-          .fontColor(this.c.labelSecondary)
+          .fontColor(this.c().labelSecondary)
           .margin({ top: 2, bottom: 6 })
       }
       if (t.resultText !== null) {
         Text(t.failed ? '错误' : '输出')
           .fontSize(DsTypography.caption.size)
-          .fontColor(this.c.labelTertiary)
+          .fontColor(this.c().labelTertiary)
         Text(t.resultText)
           .fontSize(DsTypography.codeBlock.size)
-          .fontColor(t.failed ? this.c.danger : this.c.labelSecondary)
+          .fontColor(t.failed ? this.c().danger : this.c().labelSecondary)
           .maxLines(24)
           .textOverflow({ overflow: TextOverflow.Ellipsis })
           .margin({ top: 2 })
       } else if (!t.failed && t.durationMs !== null) {
         Text('结果为空')
           .fontSize(DsTypography.caption.size)
-          .fontColor(this.c.labelTertiary)
+          .fontColor(this.c().labelTertiary)
       }
     }
     .width('100%')

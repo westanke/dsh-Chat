@@ -25,6 +25,14 @@ export struct ChatView {
   onOpenSettings: (() => void) | null = null;
   @StorageProp('dshDark') dark: boolean = false;
   @State version: number = 0;
+  /**
+   * 空态/标题快照。ArkUI 的 if 分支只按 @State/@Prop 依赖求值：store 是普通成员，
+   * 它的 messages 变化不会让 `if (this.isEmpty())` 重新判定，页面会永远停在初始
+   * 分支（真机现象：version 已涨到 73、messages=2，界面仍只显示空态问候）。
+   * 故把 store 派生值在 notify 里同步到 @State。
+   */
+  @State emptyView: boolean = true;
+  @State titleView: string = '';
   @State drawerOpen: boolean = false;
   @State menuOpen: boolean = false;
   @State statsSheet: boolean = false;
@@ -49,8 +57,13 @@ export struct ChatView {
     st.setNotify((): void => {
       // 贴底时机由 MessageList 的 List scroller 处理，这里只驱动重渲染。
       this.version += 1;
+      this.emptyView = st.isEmpty;
+      this.titleView = st.sessionTitle;
       st.consumeHistoryPageJustLoaded();
     });
+    // 首帧快照（重连/复用组件时 store 可能已就绪）。
+    this.emptyView = st.isEmpty;
+    this.titleView = st.sessionTitle;
     st.loadSessions();
   }
 
@@ -88,7 +101,7 @@ export struct ChatView {
     Column() {
       this.topBar()
       // HITL 挂起面板（提问/审批；无挂起项不占空间；限高屏 50% 可滚动）
-      if (!this.isEmpty()) {
+      if (!this.emptyView) {
         HitlPanel({
           questions: this.store !== null ? this.store.pendingQuestions : [],
           approvals: this.store !== null ? this.store.pendingApprovals : [],
@@ -104,7 +117,7 @@ export struct ChatView {
           },
         })
       }
-      if (this.isEmpty()) {
+      if (this.emptyView) {
         this.greeting()
       } else {
         MessageList({
@@ -303,8 +316,7 @@ export struct ChatView {
   }
 
   private title(): string {
-    const st: ChatStore | null = this.store;
-    return st === null ? '' : st.sessionTitle;
+    return this.titleView;
   }
 
   /** 空态问候（品牌标 + 问候语；工作目录 chip 阶段 4）。 */

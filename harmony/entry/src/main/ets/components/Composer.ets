@@ -24,7 +24,13 @@ type PanelMode = 'none' | 'cmd' | 'at';
 export struct Composer {
   store: ChatStore | null = null;
   @StorageProp('dshDark') dark: boolean = false;
-  @Prop version: number = 0;
+  /** 同 MessageList：@Prop 必须带 @Watch 并把 store 派生值抄进 @State，否则
+   * build 里读普通成员 store.streaming/currentPermission/lastError 不会重建。 */
+  @Prop @Watch('syncVersion') version: number = 0;
+  @State connectedView: boolean = false;
+  @State streamingView: boolean = false;
+  @State permView: string = '权限未设置';
+  @State errView: string = '';
   /** 受控草稿（发完清空）。 */
   @State draft: string = '';
   /** 光标位置（@ 片段解析用）。 */
@@ -52,14 +58,26 @@ export struct Composer {
     return this.store;
   }
 
-  private connected(): boolean {
+  /** version 变化 → 重抄 store 派生值（@Prop @Watch 回调）。 */
+  syncVersion(): void {
     const st: ChatStore | null = this.store;
-    return st !== null && st.connectionState === GatewayState.READY;
+    this.connectedView = st !== null && st.connectionState === GatewayState.READY;
+    this.streamingView = st !== null && st.streaming;
+    const perm: string | null = st === null ? null : st.currentPermission;
+    this.permView = perm === null ? '权限未设置' : perm;
+    this.errView = st === null || st.lastError === null ? '' : st.lastError;
+  }
+
+  aboutToAppear(): void {
+    this.syncVersion();
+  }
+
+  private connected(): boolean {
+    return this.connectedView;
   }
 
   private streaming(): boolean {
-    const st: ChatStore | null = this.store;
-    return st !== null && st.streaming;
+    return this.streamingView;
   }
 
   private sid(): string {
@@ -408,16 +426,10 @@ export struct Composer {
   }
 
   private permissionLabel(): string {
-    const st: ChatStore | null = this.store;
-    if (st === null) {
-      return '权限';
-    }
-    const v: string | null = st.currentPermission;
-    return v === null ? '权限未设置' : v;
+    return this.permView;
   }
 
   private lastError(): string | null {
-    const st: ChatStore | null = this.store;
-    return st === null ? null : st.lastError;
+    return this.errView.length === 0 ? null : this.errView;
   }
 }

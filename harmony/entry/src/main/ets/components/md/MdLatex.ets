@@ -9,7 +9,9 @@ export struct MdLatexView {
   inline: boolean = false;
   @StorageProp('dshDark') dark: boolean = false;
 
-  private get c(): DsColors {
+  /** 普通方法而非 getter：@Builder/ForEach 生成器里 `private get c()` 取到 undefined
+   * （真机 TypeError: Cannot read property 'labelPrimary' of undefined 整进程崩）。 */
+  private c(): DsColors {
     return new DsColors(this.dark);
   }
 
@@ -28,7 +30,7 @@ export struct MdLatexView {
     if (n.kind === 'text' || n.kind === 'sym') {
       Text(n.text)
         .fontSize(DsTypography.base.size)
-        .fontColor(this.c.labelPrimary)
+        .fontColor(this.c().labelPrimary)
         .fontFamily(DsTypography.codeFamily)
     } else if (n.kind === 'row') {
       Row() {
@@ -47,7 +49,7 @@ export struct MdLatexView {
         Column()
           .width('100%')
           .height(1)
-          .backgroundColor(this.c.labelPrimary)
+          .backgroundColor(this.c().labelPrimary)
         Column() {
           this.renderNode(n.den === null ? emptyNode() : n.den)
         }
@@ -60,12 +62,12 @@ export struct MdLatexView {
       Row() {
         Text('√')
           .fontSize(DsTypography.base.size)
-          .fontColor(this.c.labelPrimary)
+          .fontColor(this.c().labelPrimary)
         Column() {
           this.renderNode(n.arg === null ? emptyNode() : n.arg)
         }
         .borderWidth({ top: 1 })
-        .borderColor(this.c.labelPrimary)
+        .borderColor(this.c().labelPrimary)
         .padding({ left: 2, right: 2, top: 1 })
         .alignItems(HorizontalAlign.Center)
       }
@@ -73,19 +75,19 @@ export struct MdLatexView {
     } else if (n.kind === 'sup') {
       Text(this.smallArg(n))
         .fontSize((DsTypography.base.size as number) * 0.7)
-        .fontColor(this.c.labelPrimary)
+        .fontColor(this.c().labelPrimary)
         .fontFamily(DsTypography.codeFamily)
         .offset({ y: -6 })
     } else if (n.kind === 'sub') {
       Text(this.smallArg(n))
         .fontSize((DsTypography.base.size as number) * 0.7)
-        .fontColor(this.c.labelPrimary)
+        .fontColor(this.c().labelPrimary)
         .fontFamily(DsTypography.codeFamily)
         .offset({ y: 6 })
     } else {
       Text(n.text)
         .fontSize(DsTypography.base.size)
-        .fontColor(this.c.labelPrimary)
+        .fontColor(this.c().labelPrimary)
     }
   }
 

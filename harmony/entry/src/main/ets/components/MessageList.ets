@@ -19,8 +19,15 @@ import { MdDocViewer } from '../pages/MdDocViewer';
 export struct MessageList {
   store: ChatStore | null = null;
   @StorageProp('dshDark') dark: boolean = false;
-  /** ChatStore.changed() 递增的版本号，驱动本组件重渲染。 */
-  @Prop version: number = 0;
+  /**
+   * ChatStore.changed() 递增的版本号。必须带 @Watch 并在回调里把 store 派生数据
+   * 抄进 @State —— ArkUI 只对 build 期间读到的 @State/@Prop 建立依赖，ForEach 的
+   * 数据源若直接读普通成员 store.messages，永远不重新求值（真机现象：List 渲染
+   * 出来但子项恒为 0，即使 store.messages 已有 2 条）。
+   */
+  @Prop @Watch('syncVersion') version: number = 0;
+  /** store 派生消息快照（唯一被观察的数据源）。 */
+  @State msgs: ChatMessage[] = [];
   private scroller: Scroller = new Scroller();
 
   private c(): DsColors {
@@ -75,9 +82,18 @@ export struct MessageList {
     })
   }
 
-  private messages(): ChatMessage[] {
+  /** version 变化 → 重抄 store 派生数据（@Prop @Watch 回调）。 */
+  syncVersion(): void {
     const st: ChatStore | null = this.store;
-    return st === null ? [] : st.messages;
+    this.msgs = st === null ? [] : st.messages;
+  }
+
+  aboutToAppear(): void {
+    this.syncVersion();
+  }
+
+  private messages(): ChatMessage[] {
+    return this.msgs;
   }
 
   /** 命令卡（安卓 chat_message_items.dart 口径）：首行 monospace + ✓/✗ 结果。 */

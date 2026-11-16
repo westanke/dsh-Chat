@@ -12,7 +12,9 @@ export struct MdCodeBlock {
   @State copied: boolean = false;
   @State rows: HlSpan[][] = [];
 
-  private get c(): DsColors {
+  /** 普通方法而非 getter：@Builder/ForEach 生成器里 `private get c()` 取到 undefined
+   * （真机 TypeError: Cannot read property 'labelPrimary' of undefined 整进程崩）。 */
+  private c(): DsColors {
     return new DsColors(this.dark);
   }
 
@@ -74,17 +76,17 @@ export struct MdCodeBlock {
       Row() {
         Text(this.lang.length > 0 ? this.lang : 'text')
           .fontSize(DsTypography.codeBlockLabel.size)
-          .fontColor(this.c.labelTertiary)
+          .fontColor(this.c().labelTertiary)
           .maxLines(1)
           .textOverflow({ overflow: TextOverflow.Ellipsis })
           .layoutWeight(1)
         Row() {
           Text(this.copied ? '✓' : '⧉')
             .fontSize(14)
-            .fontColor(this.c.labelTertiary)
+            .fontColor(this.c().labelTertiary)
           Text(this.copied ? '已复制' : '复制')
             .fontSize(DsTypography.codeBlockLabel.size)
-            .fontColor(this.c.labelTertiary)
+            .fontColor(this.c().labelTertiary)
             .margin({ left: 4 })
         }
         .padding({ left: 6, right: 6, top: 2, bottom: 2 })
@@ -99,7 +101,7 @@ export struct MdCodeBlock {
       })
       // 1px 分隔线
       Divider()
-        .color(this.c.mdCodeBlockDivider)
+        .color(this.c().mdCodeBlockDivider)
         .strokeWidth(1)
       // 代码正文（水平滚动）
       Scroll() {
@@ -120,7 +122,7 @@ export struct MdCodeBlock {
       })
     }
     .constraintSize({ minWidth: '100%' })
-    .backgroundColor(this.c.mdCodeBlockBg)
+    .backgroundColor(this.c().mdCodeBlockBg)
     .borderRadius(DsSpacing.codeBlockRadius)
     .clip(true)
     .margin({ top: DsSpacing.blockGap, bottom: DsSpacing.blockGap })

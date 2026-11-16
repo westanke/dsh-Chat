@@ -153,38 +153,48 @@ export function eventFromFrame(data: JsonMap | null): GatewayEvent | null {
   if (data === null) {
     return null;
   }
-  const etype: string = JsonAccess.strOr(data, 'type', '');
+  const rawType: string = JsonAccess.strOr(data, 'type', '');
+  // 真实帧外层带 `chat.` 前缀（bridge normalizeDshEvent：`chat.${payload.type}`），
+  // 历史测试桩/部分旧帧不带；统一剥前缀再比，两形状都认。
+  const etype: string = rawType.startsWith('chat.') ? rawType.substring(5) : rawType;
   const sessionId: string = JsonAccess.strOr(data, 'sessionId', '');
-  if (etype === 'chat.message.delta') {
-    return GatewayEvent.delta(MessageDelta.fromJson(data));
+  // 事件体在内层 data（Android gateway.dart:219 `payload = data['data']`）；
+  // 缺内层时退回外层，兼容只带一层字段的旧帧/测试桩。
+  const inner: JsonMap | null = JsonAccess.asMap(JsonAccess.raw(data, 'data'));
+  const payload: JsonMap = inner !== null ? inner : data;
+  // sessionId 内外层都可能带：内层优先，退回外层。
+  const innerSid: string = JsonAccess.strOr(payload, 'sessionId', '');
+  const payloadSessionId: string = innerSid !== '' ? innerSid : sessionId;
+  if (etype === 'message.delta') {
+    return GatewayEvent.delta(MessageDelta.fromJson(payload));
   }
-  if (etype === 'chat.message.committed') {
-    return GatewayEvent.committed(MessageCommitted.fromJson(data));
+  if (etype === 'message.committed') {
+    return GatewayEvent.committed(MessageCommitted.fromJson(payload));
   }
-  if (etype === 'chat.turn.failed') {
-    return GatewayEvent.turnFailed(sessionId, JsonAccess.strOr(data, 'message', '执行失败'));
+  if (etype === 'turn.failed') {
+    return GatewayEvent.turnFailed(sessionId, JsonAccess.strOr(payload, 'message', '执行失败'));
   }
-  if (etype === 'chat.session.event') {
-    return GatewayEvent.sessionEvent(sessionId, JsonAccess.strOr(data, 'eventType', ''));
+  if (etype === 'session.event') {
+    return GatewayEvent.sessionEvent(payloadSessionId, JsonAccess.strOr(payload, 'eventType', ''));
   }
   if (etype === 'userQuestions/requested') {
-    return GatewayEvent.questionRequested(PendingQuestion.fromJson(sessionId, data));
+    return GatewayEvent.questionRequested(PendingQuestion.fromJson(payloadSessionId, payload));
   }
   if (etype === 'userQuestions/answered' || etype === 'userQuestions/dismissed') {
-    return GatewayEvent.questionResolved(sessionId, JsonAccess.strOr(data, 'callId', ''));
+    return GatewayEvent.questionResolved(payloadSessionId, JsonAccess.strOr(payload, 'callId', ''));
   }
   if (etype === 'approval.requested') {
-    return GatewayEvent.approvalRequested(PendingApproval.fromJson(sessionId, data));
+    return GatewayEvent.approvalRequested(PendingApproval.fromJson(payloadSessionId, payload));
   }
   if (etype === 'approval.resolved') {
-    return GatewayEvent.approvalResolved(sessionId, JsonAccess.strOr(data, 'approvalId', ''));
+    return GatewayEvent.approvalResolved(payloadSessionId, JsonAccess.strOr(payload, 'approvalId', ''));
   }
-  if (etype === 'chat.deliverables.presented') {
+  if (etype === 'deliverables.presented') {
     // 帧里只有 files+seq，不就地插卡，转会话事件防抖重拉 history。
-    return GatewayEvent.sessionEvent(sessionId, 'deliverables/presented');
+    return GatewayEvent.sessionEvent(payloadSessionId, 'deliverables/presented');
   }
-  if (etype === 'chat.models.updated') {
-    return GatewayEvent.modelsUpdated(JsonAccess.strOr(data, 'provider', ''));
+  if (etype === 'models.updated') {
+    return GatewayEvent.modelsUpdated(JsonAccess.strOr(payload, 'provider', ''));
   }
   // 其余事件忽略（Android 同口径）。
   return null;

@@ -9,6 +9,7 @@ import { preferences } from '@kit.ArkData';
 import { common } from '@kit.AbilityKit';
 import { BusinessError } from '@kit.BasicServicesKit';
 import { bundleManager } from '@kit.AbilityKit';
+import { i18n } from '@kit.LocalizationKit';
 import type { TimerBridge } from '../core/Transport';
 
 export class ArkTimers implements TimerBridge {
@@ -22,10 +23,20 @@ export class ArkTimers implements TimerBridge {
 }
 
 /**
- * 时区名。@ohos i18n 无直读 IANA 名的稳定 API，走系统 Date 降级链：
- * Intl resolvedOptions → 'UTC'。安卓侧失败同样回退 'UTC'（bridge/platform.dart）。
+ * 时区名（IANA）。真机实测 `new Intl.DateTimeFormat().resolvedOptions().timeZone`
+ * 在本机 ArkTS 运行时返回 'America/Chicago'（错误值）——不能作首选。改走
+ * @ohos.i18n 的 `getTimeZone().getID()`（系统时区库直出 IANA 名），失败才降级
+ * Intl，再失败回 'UTC'（安卓 bridge/platform.dart 同样回退 'UTC'）。
  */
 export function timeZoneId(): string {
+  try {
+    const zone: string = i18n.getTimeZone().getID();
+    if (zone !== undefined && zone !== null && zone !== '') {
+      return zone;
+    }
+  } catch (e) {
+    // 继续走降级链。
+  }
   try {
     const fmt = new Intl.DateTimeFormat();
     const zone: string | undefined = fmt.resolvedOptions().timeZone;

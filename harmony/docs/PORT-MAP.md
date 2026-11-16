@@ -93,4 +93,35 @@
   放大 + 锐化生成（合规：自绘资产自用）。真机阶段前按安卓同款视觉矢量精绘。
 - `test node_modules 不进 CI 缓存外目录` —— npm 用 npmmirror（toolchain-env.sh 已配）。
 
+- `ArkUI getter 崩进程` —— **@Builder / ForEach 生成器里 `private get c(): DsColors`
+  取值是 undefined**，`this.c().x` 不会自动兜底，直接 `TypeError: Cannot read property
+  'labelPrimary' of undefined`，ArkUI 把它当未捕获 JS 异常 → AMS `exit_msg:TypeError`
+  **整进程被杀死**（不是红屏，是 App 静默消失）。鸿蒙侧一律用普通方法 `private c()`，
+  调用写 `this.c().labelPrimary`；`get` 访问器只允许出现在非 UI 的 core 纯逻辑里。
+- `@Prop 无 @Watch 不重渲染` —— ArkUI **只对 build 期间读到的 @State/@Prop 建立依赖**。
+  把 store 挂在 `store: ChatStore | null = null`（普通成员）上，再在 build 里
+  `ForEach(this.store.messages)` / `if (this.isEmpty())` 直读，数据变化**不会**让节点重新
+  求值 —— 真机现象：`version` 已涨到 73、`store.messages.length=2`，界面仍停在初始空态；
+  改成 List 后子项恒为 0。修法：把 store 派生值在 `setNotify()` 回调里抄进 `@State`
+  （`emptyView`/`titleView`/`msgs`/`sessionsView`/`connectedView`…），`@Prop version`
+  必须配 `@Watch('syncVersion')`，并在 `aboutToAppear()` 补一次首帧快照。
+- `hilog 抓 JS 崩溃栈` —— App 静默退出（`pidof` 为空、hilog 无 crash 关键字）时：
+  `hdc shell "hilog -G 16M"` 先把 app 缓冲放到 16M（64M 会报 `Invalid buffer size`，
+  上限就是 16M）→ `hilog -r` 清 → 复现 → `hdc shell "hilog -x | grep -iE
+  'JsError|Stacktrace|TypeError'"`。能拿到 `FIX THIS APPLICATION ERROR: @Component 'X'[id]
+  has error in update func: ...` + 精确到 `.ets:行:列` 的栈 + AMS 的
+  `exit_msg/reason`。缓冲区不放大时崩溃日志常被后续日志冲掉。
+- `hilog 读不到应用日志` —— 域 `0xD5C0`（platform/Dlog.ets）的 info/warn 在真机 hilog 里
+  按 pid 或 `-T Dsh` 过滤都取不到（未落盘或被系统过滤）。**真机排障不要指望 hilog**，
+  走协议探针（mock bridge 抓帧 / REST 直查 bridge）。
+- `node 内置 WebSocket 不带 header` —— Node 22+ 的全局 `WebSocket` 构造项不认
+  `headers`，探针要打 `Authorization` 头必须显式 require `ws` 包
+  （`/home/wangke/.dsh/profiles/web/node_modules/ws/index.js`），否则握手虽然 OPEN，
+  服务端按未鉴权处理、帧全被丢弃（表现为 messag 帧回 INTERNAL_ERROR）。
+- `uitest inputText 是追加` —— `hdc shell uitest uiInput inputText x y "文本"` 往已有内容
+  后面追加，不清空。重复导入 DSH1 会双拼成 2 倍长度 → 报「配置文本无法识别」。要么
+  先清数据重装，要么发 DEL 清空。
+- `设备上无 sed -i` —— 鸿蒙设备 shell 的 `sed -i` 报 `sed: no temp file`。改设备文件
+  （如 preferences）要 `hdc file send` 传新文件再 `hdc shell cp` 覆盖。
+
 **阶段 4 已记偏差（2026-11-16）**：①@s 文件补全多根下钻/删除确认照搬；②设置页「字号跟随系统」开关与 Slider 鸿蒙版延后阶段 5（fontScale 真机定）；③诊断日志开关不移植（Dlog.ets hilog 直写不落文件）；④子会话历史页（subagent_history_page）与 subagentHistory REST 已有，入口延后阶段 5；⑤会话目录选择（session_location_sheet）延后阶段 5；⑥表格下载/展开、推挤抽屉动画、自绘品牌标延后。

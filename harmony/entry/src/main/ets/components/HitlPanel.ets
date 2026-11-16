@@ -21,7 +21,9 @@ export struct HitlPanel {
   private custom: Map<string, string> = new Map<string, string>();
   @State version: number = 0;
 
-  private get c(): DsColors {
+  /** 普通方法而非 getter：@Builder/ForEach 生成器里 `private get c()` 取到 undefined
+   * （真机 TypeError: Cannot read property 'labelPrimary' of undefined 整进程崩）。 */
+  private c(): DsColors {
     return new DsColors(this.dark);
   }
 
@@ -100,12 +102,12 @@ export struct HitlPanel {
       Row() {
         Text('⚖')
           .fontSize(DsSpacing.processIconSize)
-          .fontColor(this.c.settingsWarnFg)
+          .fontColor(this.c().settingsWarnFg)
           .margin({ right: DsSpacing.processIconGap })
         Text('DSH 请求使用 ' + a.toolName)
           .fontSize(DsTypography.smallStrong.size)
           .fontWeight(DsTypography.smallStrong.weight)
-          .fontColor(this.c.settingsWarnFg)
+          .fontColor(this.c().settingsWarnFg)
           .layoutWeight(1)
       }
       .alignItems(VerticalAlign.Center)
@@ -113,7 +115,7 @@ export struct HitlPanel {
       if (a.reason !== null && a.reason.length > 0) {
         Text(a.reason)
           .fontSize(DsTypography.caption.size)
-          .fontColor(this.c.settingsWarnFg)
+          .fontColor(this.c().settingsWarnFg)
           .margin({ top: DsSpacing.liGap })
           .width('100%')
       }
@@ -121,13 +123,13 @@ export struct HitlPanel {
         Blank()
         Text('拒绝')
           .fontSize(DsTypography.small.size)
-          .fontColor(this.c.danger)
+          .fontColor(this.c().danger)
           .padding({ left: 14, right: 14, top: 8, bottom: 8 })
           .onClick(() => this.onDecide(a, false))
         Text('允许一次')
           .fontSize(DsTypography.small.size)
-          .fontColor(this.c.onBrand)
-          .backgroundColor(this.c.link)
+          .fontColor(this.c().onBrand)
+          .backgroundColor(this.c().link)
           .borderRadius(DsSpacing.chipRadius)
           .padding({ left: 14, right: 14, top: 8, bottom: 8 })
           .margin({ left: DsSpacing.chipGap })
@@ -138,7 +140,7 @@ export struct HitlPanel {
     }
     .width('100%')
     .alignItems(HorizontalAlign.Start)
-    .backgroundColor(this.c.settingsWarnBg)
+    .backgroundColor(this.c().settingsWarnBg)
     .borderRadius(DsSpacing.codeBlockRadius)
     .padding(DsSpacing.codeBlockPad)
     .margin({ top: DsSpacing.blockGap })
@@ -154,8 +156,8 @@ export struct HitlPanel {
         Blank()
         Text('提交')
           .fontSize(DsTypography.small.size)
-          .fontColor(this.c.onBrand)
-          .backgroundColor(this.canSubmit() ? this.c.link : this.c.drawerGroupLabel)
+          .fontColor(this.c().onBrand)
+          .backgroundColor(this.canSubmit() ? this.c().link : this.c().drawerGroupLabel)
           .borderRadius(DsSpacing.chipRadius)
           .padding({ left: 16, right: 16, top: 8, bottom: 8 })
           .onClick(() => {
@@ -169,7 +171,7 @@ export struct HitlPanel {
     }
     .width('100%')
     .alignItems(HorizontalAlign.Start)
-    .backgroundColor(this.c.chipSelectedBg)
+    .backgroundColor(this.c().chipSelectedBg)
     .borderRadius(DsSpacing.codeBlockRadius)
     .padding(DsSpacing.codeBlockPad)
     .margin({ top: DsSpacing.blockGap })
@@ -181,19 +183,19 @@ export struct HitlPanel {
       if (item.header !== null && item.header.length > 0) {
         Text(item.header)
           .fontSize(DsTypography.caption.size)
-          .fontColor(this.c.drawerGroupLabel)
+          .fontColor(this.c().drawerGroupLabel)
           .width('100%')
       }
       Text(item.question)
         .fontSize(DsTypography.smallStrong.size)
         .fontWeight(DsTypography.smallStrong.weight)
-        .fontColor(this.c.labelPrimary)
+        .fontColor(this.c().labelPrimary)
         .width('100%')
         .margin({ top: 2 })
       if (item.detail !== null && item.detail.length > 0) {
         Text(item.detail)
           .fontSize(DsTypography.caption.size)
-          .fontColor(this.c.labelSecondary)
+          .fontColor(this.c().labelSecondary)
           .margin({ top: DsSpacing.liGap })
           .width('100%')
       }
@@ -219,10 +221,10 @@ export struct HitlPanel {
   optionChip(item: UserQuestion, opt: UserQuestionOption, qIdx: number, idx: number, oi: number) {
     Text(opt.label)
       .fontSize(DsTypography.small.size)
-      .fontColor(this.pickedOf(item.id).indexOf(opt.label) >= 0 ? this.c.chipSelectedFg : this.c.labelPrimary)
-      .backgroundColor(this.pickedOf(item.id).indexOf(opt.label) >= 0 ? this.c.chipSelectedBg : Color.Transparent)
+      .fontColor(this.pickedOf(item.id).indexOf(opt.label) >= 0 ? this.c().chipSelectedFg : this.c().labelPrimary)
+      .backgroundColor(this.pickedOf(item.id).indexOf(opt.label) >= 0 ? this.c().chipSelectedBg : Color.Transparent)
       .borderRadius(DsSpacing.chipRadius)
-      .border({ width: 1, color: this.pickedOf(item.id).indexOf(opt.label) >= 0 ? this.c.chipSelectedFg : this.c.borderL2 })
+      .border({ width: 1, color: this.pickedOf(item.id).indexOf(opt.label) >= 0 ? this.c().chipSelectedFg : this.c().borderL2 })
       .padding({ left: 12, right: 12, top: 6, bottom: 6 })
       .margin({ right: DsSpacing.chipIconGap, bottom: DsSpacing.chipIconGap })
       .onClick(() => this.toggleOption(item, opt.label))
@@ -235,10 +237,10 @@ export struct HitlPanel {
       placeholder: '或输入自定义回答…',
     })
       .fontSize(DsTypography.small.size)
-      .fontColor(this.c.labelPrimary)
-      .placeholderColor(this.c.inputHintText)
-      .backgroundColor(this.c.inputFill)
-      .border({ width: 1, color: this.c.inputBorder })
+      .fontColor(this.c().labelPrimary)
+      .placeholderColor(this.c().inputHintText)
+      .backgroundColor(this.c().inputFill)
+      .border({ width: 1, color: this.c().inputBorder })
       .borderRadius(DsSpacing.codeBlockRadius)
       .height(36)
       .width('100%')

@@ -139,3 +139,20 @@ Flex 链式 .alignItems 不存在（构造参数里传）。
 **500 行合规拆分**：core/ChatActions.ts（runCommandIn/regenerateAtIn/cancelTurnIn/setPermissionIn 收 store 参数）→ ChatStore 450 行；GatewayEvents.ts 收编 eventFromFrame（十一支事件映射纯函数）→ GatewayClient 473 行；components/PermissionSheet.ets（权限 sheet 组件化，aboutToAppear 拉清单）→ Composer 423 行。另拆 core/MobileWorkspace.ts（ensureMobileWorkspace/prepareSessionFor/oldestSeqOf）、core/ChatLabels.ts（四个 label 纯函数）、HistoryPage.mergeOlderMessages。
 
 **测试**：npm test 179/179 全绿（chat-store 22/22 含 sendWithImage/runCommand/权限 NO_SESSION）；**根因教训**：全量测试卡死=拆分时 setPermission 丢 NO_SESSION 校验发空 sessionId 帧等 30s 超时——`import test, { after } from 'node:test'` 收口 dispose + --test-name-pattern 逐用例定位。hvigorw assembleHap BUILD SUCCESSFUL（唯一 WARN=已知 PATCH 枚举透传）。
+
+## 阶段 5：真机签名装机与端到端打通（2026-11-16）
+
+**签名材料就绪**：本机 JDK17 `keytool` 生成 ECC 密钥库 `harmony/signing/dsh-chat-harmony.p12`（alias `dsh-chat-harmony`、secp256v1/SHA256withECDSA、9125 天）+ CSR；用户在 AGC 办回调试/发布证书 `.cer`、两份 `.p7b` Profile、`agconnect-services`。`signing/` 整个目录 `.gitignore` 拉黑。命令口径见 `harmony/docs/RELEASE.md`。
+
+**装机链路打通**：`hvigorw assembleHap` → `hap-sign-tool sign-app -mode localSign` 签出 debug hap（~1.43MB）→ `hdc shell bm uninstall -n com.dsh.dshchat` → `hdc install` → `hdc shell aa start -a EntryAbility -b com.dsh.dshchat`。DSH1 导入（REST 配对路径，不走 `dsh-pair` 双子协议）→ 连接成功进对话页，顶栏/空态/设备名/权限 chip/免责声明全渲染。
+
+**四个阻塞性 bug（真机定位 + 修好 + 复验）**：
+
+1. **时区错传**（`platform/PlatformBridge.ets:28`）：`new Intl.DateTimeFormat().resolvedOptions().timeZone` 在 ArkTS 运行时给出 `America/Chicago`。改走 `i18n.getTimeZone().getID()`（`@kit.LocalizationKit`），失败降级 Intl 再回 `'UTC'`；真机 REST 读回 `clientTimeZone = Asia/Shanghai`。
+2. **流式事件读不到 payload**（`core/GatewayEvents.ts` `eventFromFrame`）：真实 event 帧的载荷在**内层 `data.data`**（安卓 `gateway.dart:219` 同口径），原实现直接把外层 `data` 当 payload → `MessageDelta` 取到空 text → 正文空白。修法：内层优先、退回外层，并统一剥 `chat.` 事件名前缀（bridge `normalizeDshEvent` 会加，测试桩不加），`payloadSessionId` 同样两级取值。
+3. **ArkUI 观察失效**（`pages/ChatView.ets`、`components/{MessageList,Composer,SessionsDrawer}.ets`）：`version` 已递增、`store.messages` 已有数据，界面仍停在空态——ArkUI 只对 build 期间读到的 `@State`/`@Prop` 建依赖，`if (this.isEmpty())` / `ForEach(this.messages())` 直读 store 普通成员永不重新求值。统一改成「setNotify 回调里把派生值抄进 `@State` 快照 + `@Prop @Watch('syncVersion') version`」。
+4. **Markdown 渲染整进程崩溃**（`components/md/*.ets`）：发消息后进程静默消失。抓栈靠 `hilog -G 16M` 扩容 + `hilog -r` 清空 + 复现 + `grep -iE 'JsError|Stacktrace|TypeError'`，拿到 `Cannot read property labelPrimary of undefined` @ `MdView.ets:168`。根因是 MdView 用了 `private get c(): DsColors`（getter），`@Builder`/`ForEach` 生成器里取到 undefined；六个文件统一改成普通方法 `private c()` + `this.c().`。
+
+**验收**：发「1+1等于几？只回答数字」→ 用户气泡 + 助手 Markdown（reasoning 折叠块、正文、⧉/👍/🔊/⤴/⟳ 操作行）全渲染，进程稳定不退出；`npm --prefix harmony/test test` 179/179 全绿。
+
+**排障方法论**（写进 PORT-MAP §3 坑位索引，共 7 条）：真机 hilog 取不到应用域日志，protocol 层排障靠 `mock-bridge`（`ws` 包 + `handleProtocols: dsh-mobile-v1`）抓 App 实际帧、REST 直查 bridge 会话历史；`uitest inputText` 是追加语义；设备上无 `sed -i`。
