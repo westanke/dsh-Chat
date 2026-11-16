@@ -380,3 +380,56 @@ REST 兜底合流得到），点「验证通过」→ 提交 → 卡片消失、
 `gateway-rest.test.ts` +3 条：fetchQuestions 解析/宽容/403）。
 **文档**：`AGENTS.md` §11 +2 条（`挂起提问只有 REST 有` / `REST 合流别用 JsonAccess.arr`）；
 本文件 §3 同两条详版。
+
+## 阶段 5 第九批：断线重连链修复（2026-11-16）
+
+**背景**：冒烟剩余项「断线重连退避 1→2→4→8→16→30s」。真机实测发现两条真实缺陷 ——
+掉线后的重连链会提前终止，以及一次掉线排两次退避；都不是设计意图，安卓无此问题。
+
+**缺陷一：重连链提前终止**。原 `core/GatewayClient.ts` 的 `onDown()` 写
+`if (this.disposed || !wasReady) { CLOSED; return; }`，重连的 `connect().catch` 里又写
+`if (self.attempt === failedAttempt + 1) { self.state = CLOSED; }` —— 掉线后**只要第一次
+重连尝试失败（TCP 拒连 / 握手失败 / hello 超时）就永久 CLOSED**，用户必须重启 App。
+安卓 `app/lib/bridge/gateway.dart:303 _onDone()` 是无条件继续退避（只判
+`_disposed || _authDead`），只有 `CONNECT_FAIL` 才收口，两端本应同语义。
+**修法**：加 `private reconnecting: boolean` + `private scheduleReconnect()`；`onDown` 改三分支
+—— `disposed → CLOSED`、`!wasReady && !reconnecting → CLOSED`（**初连失败仍不自动重连**，
+安卓同口径）、否则 `scheduleReconnect()`；`scheduleReconnect` 里 `Math.min(1 << backoffIndex,
+MAX_BACKOFF_SECONDS=30)`、index 封顶 `MAX_BACKOFF_INDEX=5`；`connect().catch` 里
+`isFatal(err)`（只认 `NO_TOKEN`/`PROTOCOL`/`DISPOSED` —— 拒连与握手超时都不算致命）才
+`teardown() + CLOSED`，否则接力重排；`onHello()` 里 `backoffIndex=0; reconnecting=false;` 收口。
+
+**缺陷二：一次掉线排两次退避**。真机上 `@ohos.net.webSocket` 一次掉线连发 **error + close
+两个回调**，`platform/WsTransport.ets` 只在 timeout 分支做了 `settleOnce()`（而它只清 timeout），
+`error`/`close` 两处都直接 `callbacks.onDown(...)` → 状态机对同一次掉线排两次退避，
+**1s 档被 2s 档顶掉**（日志实证：`scheduleReconnect delay=1s` 同一毫秒紧跟 `delay=2s`）。
+**两层修法**：①`WsTransport.ets` 加 `let downSent` + `claimDown()`，`close`/`error`/`connect`
+回调/`timeout` 四处统一走 `claimDown()` 只放行第一次（并补 `[ws] connect callback err=` 日志）；
+②`core/GatewayClient.ts` 加 `private downAttempt: number`，`onDown` 里
+`attemptOfThisConnection === downAttempt` 直接 return（平台层之外的二次防线）。
+
+**真机验证（本轮全部实测）**：
+- 拒绝期探针 `/home/wangke/probe-drop.cjs`（第 1 个连接放行握手 + 发 hello 进 READY，
+  6s 后断；之后每个 TCP 都 destroy）→ hilog `[gw] scheduleReconnect delay=` 序列实测
+  **1s→2s→4s→8s→16s→30s→30s，每档只排一次**；探针侧 REFUSE 时间戳
+  `+15.9 / +18.0 / +22.0 / +30.1 / +46.1 / +76.2s` 与退避档完全吻合，**永不终止**。
+- 恢复期探针 `/home/wangke/probe-recover.cjs`（先拒 20s 再放行 + 回 sessions 帧）→ App 在
+  30s 档 `[ws] open` → `[gw] state -> 2`（READY）→ 探针侧 `ACCEPT` + `RECV sessions`，
+  界面自愈（`ChatStore.onGatewayState` 的 READY 分支 resync 生效，安卓
+  `chat_state.dart:387 _onGatewayState` 同口径）。掉线期间界面提示「加载会话失败：连接已断开」，
+  重连成功后由 `loadSessions()` 清 `lastError`。
+
+**门禁**：`npm --prefix harmony/test test` → **218/218 全绿**（`gateway-client.test.ts` 改
+「重连中掉线继续接力 2s（不终止）」+ 新增「连续失败 1→2→4→8→16→30→30 七档永不终止」
+「重连中 hello 协议不符（致命）→ CLOSED 终止链」「hello 超时算偶发继续接力」
+「同一次掉线的重复 onDown 只排一次退避（`pendingCount()===1`、`nextDelay()===1000`）」）；
+`bash scripts/ci/docs-check.sh` 通过；`bash scripts/package.sh --no-test` BUILD SUCCESSFUL。
+
+**排障设施（保留，后续真机排障继续用）**：`core/GatewayClient.ts` 的可选
+`GatewayDeps.trace?: (m: string) => void`（`applyState`/`onDown`/`scheduleReconnect` 三处
+`traceMsg`），两个 pages 的 `buildGateway()` 注入 `Dlog.info('[gw] ' + m)`；
+`platform/WsTransport.ets` 的 `[ws] open/close/error/timeout` 四条。
+hilog 取法：`hdc shell "hilog -x | grep 'A0D5C0'"`（TAG `Dsh`、domain 0xD5C0）。
+**文档**：`AGENTS.md` §11 +3 条（`重连链提前终止` / `一次掉线排两次退避` /
+`hilog 读应用日志要带域`，并改写原「hilog 读不到应用日志」的错误结论）；
+`harmony/docs/PORT-MAP.md` §3 同三条详版（含探针构造与真机日志序列）。

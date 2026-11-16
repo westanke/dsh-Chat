@@ -101,7 +101,7 @@ test('READY 后掉线 → 1s 退避重连，hello 后 backoff 归零', async () 
   assert.equal(c.getState(), GatewayState.READY);
 });
 
-test('READY 掉线退避 1s；重连中掉线 CLOSED 终止；hello 成功归零 index', async () => {
+test('READY 掉线退避 1s；重连中掉线继续接力退避 2s（不终止）', async () => {
   const socket: FakeSocket = new FakeSocket();
   const timers: FakeTimers = new FakeTimers();
   const c: GatewayClient = makeClient(socket, timers);
@@ -116,25 +116,87 @@ test('READY 掉线退避 1s；重连中掉线 CLOSED 终止；hello 成功归零
   timers.advance(1000);
   assert.equal(socket.openCountOf(), 2);
 
-  // 重连中（未 READY）再掉线：初连失败口径 → CLOSED，不再排程
+  // 重连中（未 READY）又掉线 —— 真机实证这里是原实现永久 CLOSED 的地方：
+  // 必须留在重连链里，按下一档 2s 继续排（安卓 _onDone 无条件退避同口径）。
   socket.serverDown('flap');
-  assert.equal(c.getState(), GatewayState.CLOSED);
-  assert.equal(timers.pendingCount(), 0);
+  assert.equal(c.getState(), GatewayState.CONNECTING);
+  assert.equal(timers.nextDelay(), 2000);
+  assert.equal(timers.pendingCount(), 1);
+  await new Promise<void>((r: () => void): void => setImmediate(r)); // 放 catch 微任务跑
+  assert.equal(c.getState(), GatewayState.CONNECTING, '失败拒绝不许把重连链收掉');
+  assert.equal(timers.pendingCount(), 1);
 
-  // 手动再连成功 → hello 把 index 归零 → 掉线仍是 1s 起步
-  const p2: Promise<void> = c.connect();
+  // 接力中途连上 → hello 把 index 归零 → 再掉线仍 1s 起步
+  timers.advance(2000);
+  assert.equal(socket.openCountOf(), 3);
   socket.serverOpen();
   socket.serverHello();
-  await p2;
+  await new Promise<void>((r: () => void): void => setImmediate(r));
+  assert.equal(c.getState(), GatewayState.READY);
   socket.serverDown('drop2');
   assert.equal(timers.nextDelay(), 1000);
-  assert.equal(c.getState(), GatewayState.CONNECTING);
-  timers.advance(1000);
-  socket.serverDown('flap2'); // 又是重连中掉线
-  assert.equal(c.getState(), GatewayState.CLOSED);
 });
 
-test('重连 open 后 hello 超时 → 内部 promise reject TIMEOUT，catch 兜 CLOSED', async () => {
+test('同一次掉线的重复 onDown（error 紧跟 close）只排一次退避', async () => {
+  const socket: FakeSocket = new FakeSocket();
+  const timers: FakeTimers = new FakeTimers();
+  const c: GatewayClient = makeClient(socket, timers);
+  const p: Promise<void> = c.connect();
+  socket.serverOpen();
+  socket.serverHello();
+  await p;
+
+  // 真机实证：@ohos webSocket 一次掉线先发 error 再发 close，两个回调都上报 onDown。
+  socket.serverDown('error');
+  socket.serverDown('close');
+  assert.equal(c.getState(), GatewayState.CONNECTING);
+  assert.equal(timers.pendingCount(), 1, '一次掉线只许排一个重连 timer');
+  assert.equal(timers.nextDelay(), 1000, '第一档必须是 1s，不许被第二次回调顶成 2s');
+});
+
+test('重连连续失败仍按 1→2→4→8→16→30→30 退避，永不终止', async () => {
+  const socket: FakeSocket = new FakeSocket();
+  const timers: FakeTimers = new FakeTimers();
+  const c: GatewayClient = makeClient(socket, timers);
+  const p: Promise<void> = c.connect();
+  socket.serverOpen();
+  socket.serverHello();
+  await p;
+
+  const expected: number[] = [1000, 2000, 4000, 8000, 16000, 30000, 30000];
+  socket.serverDown('drop');
+  for (let i: number = 0; i < expected.length; i += 1) {
+    assert.equal(timers.nextDelay(), expected[i], '第 ' + i.toString() + ' 档退避');
+    assert.equal(c.getState(), GatewayState.CONNECTING);
+    timers.advance(expected[i]);
+    // 每次重连都连不上：open 了但服务端立刻断（或根本没 open）
+    socket.serverDown('down-' + i.toString());
+    await new Promise<void>((r: () => void): void => setImmediate(r));
+    assert.notEqual(c.getState(), GatewayState.CLOSED, '第 ' + i.toString() + ' 次失败后不许 CLOSED');
+  }
+  assert.equal(socket.openCountOf(), 1 + expected.length);
+  assert.ok(MAX_BACKOFF_SECONDS === 30);
+});
+
+test('重连中 hello 协议不符（致命）→ CLOSED 终止重连链', async () => {
+  const socket: FakeSocket = new FakeSocket();
+  const timers: FakeTimers = new FakeTimers();
+  const c: GatewayClient = makeClient(socket, timers);
+  const p: Promise<void> = c.connect();
+  socket.serverOpen();
+  socket.serverHello();
+  await p;
+
+  socket.serverDown('drop');
+  timers.advance(1000); // 自动重连：第二次 open
+  socket.serverOpen();
+  socket.serverHello(2); // 服务端协议版本不符 —— 重试无意义
+  await new Promise<void>((r: () => void): void => setImmediate(r));
+  assert.equal(c.getState(), GatewayState.CLOSED);
+  assert.equal(timers.pendingCount(), 0);
+});
+
+test('重连 open 后 hello 超时 → 继续退避接力（不 CLOSED）', async () => {
   const socket: FakeSocket = new FakeSocket();
   const timers: FakeTimers = new FakeTimers();
   const c: GatewayClient = makeClient(socket, timers);
@@ -149,7 +211,9 @@ test('重连 open 后 hello 超时 → 内部 promise reject TIMEOUT，catch 兜
   socket.serverOpen();  // 连上了但服务端不发 hello
   timers.advance(WS_HELLO_TIMEOUT_MS + 1); // hello 超时（reject 在微任务里结算）
   await new Promise<void>((r: () => void): void => setImmediate(r)); // 等 catch 微任务跑完
-  assert.equal(c.getState(), GatewayState.CLOSED);
+  // hello 超时属于偶发失败（服务端慢/网络抖），继续按下一档退避接力。
+  assert.equal(c.getState(), GatewayState.CONNECTING);
+  assert.equal(timers.nextDelay(), 2000);
 });
 
 test('请求/回显：requestId 配对 resolve；error 帧按 code reject', async () => {

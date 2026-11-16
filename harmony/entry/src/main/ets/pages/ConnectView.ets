@@ -112,6 +112,10 @@ export struct ConnectView {
       timeZoneId: (): string => {
         return timeZoneId();
       },
+      // 真机排障出口：连接状态机打点（hilog 域 0xD5C0 / TAG Dsh）。
+      trace: (message: string): void => {
+        Dlog.info('[gw] ' + message);
+      },
     };
     return new GatewayClient(baseUrl, deps);
   }

@@ -26,17 +26,33 @@ export class WsTransport implements WebSocketTransport {
     });
 
     // core 接口同步返回句柄；连接过程通过 callbacks 上报（onDown 恰好一次）。
+    // 一次掉线在 @ohos webSocket 上常常连发 error + close 两个回调；
+    // 不去重会让状态机同一次掉线排两次退避（真机实证：1s 档被 2s 档顶掉）。
     let settled: boolean = false;
+    let downSent: boolean = false;
     const settleOnce = (): void => {
       if (!settled) {
         settled = true;
         clearTimeout(timeoutId);
       }
     };
+    /** onDown 去重：真正的「第一次上报掉线」返回 true，其余返回 false。 */
+    const claimDown = (): boolean => {
+      settleOnce();
+      if (downSent) {
+        return false;
+      }
+      downSent = true;
+      return true;
+    };
     const timeoutId: number = setTimeout((): void => {
       if (!settled) {
         settled = true;
-        callbacks.onDown('timeout');
+        Dlog.warn('[ws] connect timeout');
+        if (!downSent) {
+          downSent = true;
+          callbacks.onDown('timeout');
+        }
       }
     }, connectTimeoutMs);
 
@@ -45,6 +61,7 @@ export class WsTransport implements WebSocketTransport {
         return;
       }
       settleOnce();
+      Dlog.warn('[ws] open ' + url);
       callbacks.onOpen();
     });
 
@@ -60,13 +77,17 @@ export class WsTransport implements WebSocketTransport {
     });
 
     socket.on('close', (err: BusinessError | undefined): void => {
-      settleOnce();
-      callbacks.onDown('close');
+      Dlog.warn('[ws] close err=' + (err ? err.message : 'none'));
+      if (claimDown()) {
+        callbacks.onDown('close');
+      }
     });
 
     socket.on('error', (err: BusinessError): void => {
-      settleOnce();
-      callbacks.onDown('error');
+      Dlog.warn('[ws] error ' + err.message);
+      if (claimDown()) {
+        callbacks.onDown('error');
+      }
     });
 
     const connectOptions: webSocket.WebSocketRequestOptions = {
@@ -74,9 +95,11 @@ export class WsTransport implements WebSocketTransport {
       protocol: subprotocol,
     };
     socket.connect(url, connectOptions, (err: BusinessError | undefined): void => {
-      if (err && !settled) {
-        settleOnce();
-        callbacks.onDown('error:' + err.message);
+      if (err) {
+        Dlog.warn('[ws] connect callback err=' + err.message);
+        if (claimDown()) {
+          callbacks.onDown('error:' + err.message);
+        }
       }
     });
 

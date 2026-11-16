@@ -322,4 +322,40 @@
   真机验证：抽屉显示「今天 / workspace / 未分组 / 手机会话」多层小节，滚到底「更早 28 条 · 展开」，
   点一下变「28 条 · 收起」并展开。
 
+- `重连链提前终止` —— 原 `core/GatewayClient.ts` 的 `onDown()` 写
+  `if (this.disposed || !wasReady) { CLOSED; return; }`，重连的 `connect().catch` 里又写
+  `if (self.attempt === failedAttempt + 1) { self.state = CLOSED; }` —— **掉线后只要第一次
+  重连尝试失败（TCP 拒连 / 握手失败 / hello 超时）就永久 CLOSED**，用户必须重启 App。
+  安卓 `app/lib/bridge/gateway.dart:303 _onDone()` 是无条件继续退避（只判 `_disposed||_authDead`），
+  只有 `CONNECT_FAIL` 才收口，两端本应同语义。修法：加 `private reconnecting: boolean` +
+  `private scheduleReconnect()`；`onDown` 改三分支 —— `disposed→CLOSED`、
+  `!wasReady && !reconnecting→CLOSED`（**初连失败不自动重连**，安卓同口径）、
+  否则 `scheduleReconnect()`；catch 里 `isFatal(err)`（只认 `NO_TOKEN`/`PROTOCOL`/`DISPOSED`，
+  拒连/握手超时都不算致命）才 `teardown()+CLOSED`，否则接力重排；`onHello()` 里
+  `backoffIndex=0; reconnecting=false;` 收口。**真机验证**：探针
+  `/home/wangke/probe-drop.cjs`（第 1 个连接放行握手发 hello 进 READY，6s 后断；之后每个
+  TCP 都 destroy）→ hilog `[gw] scheduleReconnect delay=` 序列实测
+  `1s→2s→4s→8s→16s→30s→30s`，探针侧 REFUSE 时间戳（+15.9/+18.0/+22.0/+30.1/+46.1/+76.2s）
+  完全吻合；另用 `/home/wangke/probe-recover.cjs`（先拒 20s 再放行）验证 30s 档自动连回、
+  `state -> 2` 后 `RECV sessions` 重拉，界面自愈。
+- `一次掉线排两次退避` —— 真机上 `@ohos.net.webSocket` 一次掉线连发 **error + close 两个
+  回调**，`WsTransport` 只在 `timeout` 分支做了 `settleOnce()`（且 `settleOnce` 只清 timeout），
+  `error`/`close` 两个回调都 `callbacks.onDown(...)` → 状态机对同一次掉线排两次退避，
+  **1s 档被 2s 档顶掉**（日志实证：`scheduleReconnect delay=1s` 紧跟 `delay=2s`）。
+  两层修法：①`platform/WsTransport.ets` 加 `let downSent` + `claimDown()`，`close`/`error`/
+  `connect` 回调/`timeout` 四处统一走 `claimDown()` 只放行第一次；②`core/GatewayClient.ts`
+  加 `private downAttempt: number`，`onDown` 里 `attemptOfThisConnection === downAttempt`
+  直接 return（平台层兜底之外的第二次防线）。测试：`gateway-client.test.ts` 新增
+  「同一次掉线的重复 onDown（error 紧跟 close）只排一次退避」断言 `pendingCount()===1`
+  且 `nextDelay()===1000`。真机复验：序列纯为 1→2→4→8→16→30→30，每档一次。
+- `hilog 取应用日志的姿势` —— 应用 TAG 是 **`Dsh`**、domain **`0xD5C0`**，
+  `hdc shell "hilog -x | grep -E '/Dsh|D5C0'"`（或 `grep 'A0D5C0'`）能取到；
+  `hilog -x -T Dsh` 与裸 `hilog` 都不可用（后者数千行、易超时）。此前「hilog 拿不到应用
+  日志」的判断是错的 —— 前提是代码里先有 `Dlog` 打点。排障打点走
+  `core/GatewayClient.ts` 的可选 `GatewayDeps.trace?: (m: string) => void`
+  （`applyState`/`onDown`/`scheduleReconnect` 三处 `traceMsg`），两个 pages 的
+  `buildGateway()` 注入 `Dlog.info('[gw] ' + m)`；`platform/WsTransport.ets` 另打
+  `[ws] open/close/error/timeout`。**注意** `@ohos webSocket` 的 error 回调 `err.message`
+  实测是 `undefined`（打印为字符串 'undefined'），底层原因拿不到，只能靠状态序列判断。
+
 **阶段 4 已记偏差（2026-11-16）**：①@s 文件补全多根下钻/删除确认照搬；②设置页「字号跟随系统」开关与 Slider 鸿蒙版延后阶段 5（fontScale 真机定）；③诊断日志开关不移植（Dlog.ets hilog 直写不落文件）；④子会话历史页（subagent_history_page）与 subagentHistory REST 已有，入口延后阶段 5；⑤会话目录选择（session_location_sheet）延后阶段 5；⑥表格下载/展开、推挤抽屉动画、自绘品牌标延后。

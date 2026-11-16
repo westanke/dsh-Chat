@@ -42,6 +42,9 @@ export interface GatewayDeps {
 
   /** 本机 IANA 时区名（Android 走 MethodChannel，鸿蒙由平台层注入）。 */
   timeZoneId(): string;
+
+  /** 可选诊断出口（真机 hilog 拿不到应用日志时落盘取证用；不传则静默）。 */
+  trace?: (message: string) => void;
 }
 
 export class GatewayClient {
@@ -61,6 +64,19 @@ export class GatewayClient {
   private disposed: boolean = false;
   /** 连接代数：每次 connect() 递增；陈旧的 onDown/catch 回调一律忽略。 */
   private attempt: number = 0;
+  /**
+   * 是否处于「掉线重连链」中。READY 过的连接掉线后置 true：
+   * 此后每一次重连尝试失败（TCP 拒连 / 握手失败 / hello 超时）都继续按退避
+   * 接力重排，直到连上（onHello 归零）或致命错误（协议不符/令牌缺失）或 dispose()。
+   * 真机实证：不加这条，重连那一次失败就永久 CLOSED，必须重启 App（见 PORT-MAP）。
+   */
+  private reconnecting: boolean = false;
+  /**
+   * 已处理过掉线回调的连接代数。一次掉线在平台上常常连发 error + close
+   * 两个回调；状态机必须只认第一次，否则同一次掉线会排两次退避
+   * （真机实证：1s 档被 2s 档顶掉）。0 表示尚无（attempt 从 1 起）。
+   */
+  private downAttempt: number = 0;
 
   /** hello 帧里服务端的 device 信息（设备表占位名换真名用）。 */
   private serverDevice: JsonMap | null = null;
@@ -87,7 +103,14 @@ export class GatewayClient {
     this.stateListener = listener;
   }
 
+  private traceMsg(message: string): void {
+    if (this.deps.trace !== undefined) {
+      this.deps.trace(message);
+    }
+  }
+
   private applyState(next: GatewayState): void {
+    this.traceMsg('state -> ' + next.toString());
     this.state = next;
     if (this.stateListener !== null) {
       this.stateListener(next);
@@ -322,6 +345,7 @@ export class GatewayClient {
     }
     this.serverDevice = data !== null ? JsonAccess.obj(data, 'device') : null;
     this.backoffIndex = 0;
+    this.reconnecting = false;
     this.applyState(GatewayState.READY);
     this.cancelHelloTimer();
     this.scheduleHeartbeat();
@@ -343,31 +367,75 @@ export class GatewayClient {
     if (attemptOfThisConnection !== this.attempt) {
       return; // 陈旧回调（连接已被替换/关闭），忽略。
     }
+    if (attemptOfThisConnection === this.downAttempt) {
+      return; // 同一次掉线的第二个回调（error 之后紧跟 close），忽略。
+    }
+    this.downAttempt = attemptOfThisConnection;
+    this.traceMsg('onDown#' + attemptOfThisConnection.toString() + ' ' + reason
+      + ' state=' + this.state.toString());
     const wasReady: boolean = this.state === GatewayState.READY;
     this.teardown();
     // hello 尚未结算时把 connect() 的 Promise 打回去（已结算则是 no-op）。
     this.settleHello(new RequestException('CONNECT_FAIL', '连接中断: ' + reason));
 
-    if (this.disposed || !wasReady) {
-      // 未 READY 过（初连失败）：不自动重连，报给调用方（Android 同口径）。
+    if (this.disposed) {
       this.applyState(GatewayState.CLOSED);
       return;
     }
-    // READY 过的连接掉线：自动重连，退避 1,2,4,8,16,30,30…（index 封顶 5）。
+    // 已经在重连链里：任意一次重连尝试又掉了（TCP 未连上就 close、握手失败），
+    // 也继续按退避接力 —— 安卓 _onDone 无条件退避同口径。
+    if (!wasReady && !this.reconnecting) {
+      // 初连失败（从未 READY 过）：不自动重连，报给调用方（Android 同口径）。
+      this.applyState(GatewayState.CLOSED);
+      return;
+    }
+    this.scheduleReconnect();
+  }
+
+  /**
+   * 排一次退避重连，退避 1,2,4,8,16,30,30…（index 封顶 5）。
+   * 重连尝试失败不是终点：继续按同一序列接力，直到成功或致命错误。
+   */
+  private scheduleReconnect(): void {
+    this.reconnecting = true;
     const delay: number = Math.min(1 << this.backoffIndex, MAX_BACKOFF_SECONDS);
     this.backoffIndex = Math.min(this.backoffIndex + 1, MAX_BACKOFF_INDEX);
+    this.traceMsg('scheduleReconnect delay=' + delay.toString() + 's');
     this.applyState(GatewayState.CONNECTING);
     const self: GatewayClient = this;
     const failedAttempt: number = this.attempt;
     this.reconnectTimer = this.deps.timers.schedule(delay * 1000, (): void => {
+      self.reconnectTimer = -1;
       self.connect().catch((err: Error): void => {
-        // 重连失败（含 CONNECT_FAIL/TIMEOUT/PROTOCOL）：终止重连链。
-        // 代数判定防迟到回调覆盖新连接的状态（本轮 attempt 已被更新则不置 CLOSED）。
-        if (self.attempt === failedAttempt + 1) {
-          self.state = GatewayState.CLOSED;
+        // 代数判定：本轮 attempt 已被更新说明有新连接在跑，交给它自己收口。
+        if (self.attempt !== failedAttempt + 1 || self.disposed) {
+          return;
         }
+        if (!self.isFatal(err)) {
+          // 偶发失败（拒连/握手超时）：留在链里，继续退避。
+          if (self.reconnectTimer < 0) {
+            self.scheduleReconnect();
+          }
+          return;
+        }
+        self.reconnecting = false;
+        // 致命错误：链已终止，把残留的 hello 超时/重连 timer 一并清掉。
+        self.teardown();
+        self.applyState(GatewayState.CLOSED);
       });
     });
+  }
+
+  /**
+   * 致命错误 —— 重试无用，只有这类才终止重连链（Android 只认 CONNECT_FAIL 之外的
+   * 语义更宽，这里取「配置/凭据类」作为不可自愈项，与 bridge 服务端 4001 鉴权失败对齐）。
+   */
+  private isFatal(err: Error): boolean {
+    if (!(err instanceof RequestException)) {
+      return false;
+    }
+    const code: string = (err as RequestException).code;
+    return code === 'NO_TOKEN' || code === 'PROTOCOL' || code === 'DISPOSED';
   }
 
   private teardown(): void {

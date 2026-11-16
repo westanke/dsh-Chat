@@ -284,7 +284,7 @@ CI 构建没人用（理由见 ci.yml 头注释）；鸿蒙构建需 DevEco 工�
 - `ArkUI getter 崩进程` —— `@Builder`/`ForEach` 里 `private get c()` 取到 undefined → TypeError → AMS 杀进程；一律用普通方法 `private c()`。
 - `@Prop 无 @Watch 不重渲染` —— ArkUI 只认 build 期间读到的 @State/@Prop；store 派生值必须在 setNotify 里抄进 @State，@Prop version 配 @Watch。
 - `hilog 抓 JS 崩溃栈` —— 先 `hilog -G 16M`（上限 16M）再 `hilog -r` 复现，`grep -iE 'JsError|Stacktrace|TypeError'` 才能拿到 .ets:行:列。
-- `hilog 读不到应用日志` —— 域 0xD5C0 在真机 hilog 取不到；排障走 mock bridge 抓帧 / REST 直查。
+- `hilog 读应用日志要带域` —— 应用日志 TAG 是 `Dsh`、domain `0xD5C0`，必须 `hdc shell "hilog -x | grep 'A0D5C0'"` 才取得到；`hilog -T Dsh` 与裸 `hilog` 都不可用（后者数千行易超时）。前提是代码里先有 `Dlog` 打点（连接状态机走 `GatewayDeps.trace?` 的 applyState/onDown/scheduleReconnect 三处 + `WsTransport` 的 `[ws]` 四条）；另可配 mock bridge 抓帧 / REST 直查。注意 `webSocket` 的 error 回调 `err.message` 实测为 undefined，只能靠状态序列判断。
 - `node WebSocket 无 header` —— 探针要打 Authorization 头必须 require ws 包，内置全局 WebSocket 不认 headers。
 - `uitest inputText 是追加` —— 不清空会双拼（DSH1 报「配置文本无法识别」）。
 - `设备上无 sed -i` —— 报 `sed: no temp file`；改设备文件用 `hdc file send` + `hdc shell cp`。
@@ -303,6 +303,8 @@ CI 构建没人用（理由见 ci.yml 头注释）；鸿蒙构建需 DevEco 工�
 - `新建会话没目录选项` —— 安卓空态有「工作目录」chip（默认手机会话，可换授权根下目录）；鸿蒙要 `store.pendingLocation` + 首条消息走 `session-create{rootId,cwd}`（core/SessionLocation.ts + components/SessionLocationSheet.ets）。
 - `目录浏览显示空根` —— 首个授权根常是空的 `default-workspace`；REST 必须显式给 rootId，浏览时自动跳到下一个有子目录的根。
 - `切界面风格不生效` —— 设置页只 `AppStorage.setOrCreate('dshThemeMode')` + `PrefsStore.putString`，但没人监听：`applyTheme` 只在 mediaquery 变化时被调。修法：Index 加 `@StorageProp('dshThemeMode') @Watch('onThemeModeChange')` + 缓存 `sysDark`，回调里 `applyTheme(this.sysDark)`；启动时异步读偏好回来再重算（`PrefsStore.getString` 返 Promise，`?? 'system'` 会编译成 `string | Promise<string>` 报 10505001）。
+- `重连链提前终止` —— `GatewayClient.onDown` 原写 `!wasReady → CLOSED` + 重连 catch 里 `state=CLOSED`，掉线后第一次重连失败就永久 CLOSED（得重启 App）；安卓 `_onDone` 是无条件继续退避。改成 `reconnecting` 标志 + `scheduleReconnect()`，只有 `isFatal`（NO_TOKEN/PROTOCOL/DISPOSED）才收口；初连失败仍不自动重连（安卓同口径）。真机实测 1→2→4→8→16→30→30 且能自动连回。
+- `一次掉线排两次退避` —— `@ohos webSocket` 一次掉线连发 `error` + `close` 两个回调，两个都 `onDown` → 1s 档被 2s 档顶掉。`WsTransport` 用 `claimDown()` 去重 + `GatewayClient.downAttempt` 二次防线。
 - `应用更新走市场` —— 鸿蒙应用只能 AppGallery 分发、不允许自更新；不要照搬安卓 Gitee/GitHub Release 检查，改 `@kit.AppGalleryKit` 的 `updateManager.checkAppUpdate(ctx)`（`updateAvailable===1` 有新版）/ `showUpdateDialog(ctx)`（系统弹官方更新框）。错误码 1009400001~7 见 `core/AppUpdate.ts`。
 - `会话列表时间优先` —— 用户口径（2026-11-16）：先按时间（今天/昨天/更早）分桶、桶内再按工作区聚合，超过 2 天收进可折叠「更早」；安卓同口径（`app/lib/ui/session_groups.dart` 的 `groupSessionsByTime`，a91c1d9），两端一致。纯函数在 `core/SessionGroups.ts`。
 - `TTS 必须先 setListener` —— CoreSpeechKit 不先 `setListener` 就 `speak`，onStart/onComplete/onError 全部收不到（引擎照读但无回调、无法判断结束）；`CreateEngineParams.online` 是 **0=在线 / 1=离线**，别当布尔用；引擎是进程级单例，Ability `onDestroy` 要 `shutdownTts()` 释放音频焦点。
