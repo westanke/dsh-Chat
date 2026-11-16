@@ -433,3 +433,39 @@ hilog 取法：`hdc shell "hilog -x | grep 'A0D5C0'"`（TAG `Dsh`、domain 0xD5C
 **文档**：`AGENTS.md` §11 +3 条（`重连链提前终止` / `一次掉线排两次退避` /
 `hilog 读应用日志要带域`，并改写原「hilog 读不到应用日志」的错误结论）；
 `harmony/docs/PORT-MAP.md` §3 同三条详版（含探针构造与真机日志序列）。
+
+## 阶段 5 第十批：历史分页 UI 入口（2026-11-16）
+
+**现象**：全功能冒烟最后一项「历史分页」——`ChatStore.loadOlder()`
+（`harmony/entry/src/main/ets/core/ChatStore.ts:294`）已实现并有单测，但
+`grep -rn loadOlder harmony/entry/src/main/ets/pages harmony/entry/src/main/ets/components`
+**零命中**：UI 从未调用，用户无从触发。安卓侧 `app/lib/ui/chat_message_list.dart:196-215`
+在列表头放「加载更早消息」`TextButton.icon`，由 `state.historyHasMore` 控制显示。
+
+**修法**（`harmony/entry/src/main/ets/components/MessageList.ets`）：
+- 新增 `@State hasMore` / `@State loadingOlder`，`syncVersion()` 里从 store 抄两个派生值
+  （`@Prop @Watch('syncVersion') version` 已由 `pages/ChatView.ets:158-160` 传入）。
+- `renderList()` 的 `List` 内、`ForEach` 之前插列表头项：`hasMore` 时渲染
+  `⌃ 加载更早消息`（`loadingOlder` 期间换 `LoadingProgress`），整行
+  `justifyContent(FlexAlign.Center)` + `.onClick(() => this.loadOlder())`。
+- 翻页 prepend 不跳底：`syncVersion()` 里 `if (st !== null && st.consumeHistoryPageJustLoaded()) { return; }`
+  —— 用户点按钮的意图是往上读旧内容，不是贴底（安卓 `chat_message_list.dart:147-158` 同口径注释）。
+- 新增 `private loadOlder()`：`st.loadOlder().catch(() => {})`，错误文案由 store 写 `lastError`。
+
+**桥侧分页基线（真机实测取证）**：`/home/wangke/probe-history.cjs` 直连 WS——
+- WS 客户端帧是**扁平**对象 `{type:'history', sessionId, beforeSeq?, maxMessages?}`
+  （`dsh-remote-bridge/src/host/ws-protocol.ts:212 ClientFrame`），不是 `{type, data}`；
+  服务端连上即自动发 `hello`，客户端**不要**发 hello（发了报 `UNKNOWN_TYPE`）；
+  history 应答事件是 `{type:'event', event:{type, seq, time, data}}`，**seq 在 `e.event.seq`**。
+- `session-2bc4648d-…`（「安卓配对码连接失败」）：首屏 `maxMessages=200` →
+  `events 757, hasMore true, seq 3003-3759`；`beforeSeq=3003` 翻页 →
+  `events 1156, hasMore true, seq 1847-3002`，两页 seq 无缝衔接（3002 | 3003）。
+- `session-c6413d15-…`（「重启后验证提问确认」）只有 42 个事件、`hasMore false` ——
+  该会话**本就不该出按钮**，真机上「看不到按钮」是正确行为，不是缺陷。
+
+**门禁**：`npm --prefix harmony/test test` → 218/218 全绿；`bash scripts/package.sh --no-test`
+BUILD SUCCESSFUL；签名装机后真机进入有长历史的会话，列表头渲染正常。
+
+**顺带修的排障设施**：`harmony/build/ui.sh` 的 `dump` 分支原先直接
+`hdc file recv`，失败时**留下上一轮的 `ui.json`**，导致读到旧快照误判「滑动没生效」；
+改为先 `rm -f`、recv 后校验 `stat -c%s > 100`、失败重试 3 次。

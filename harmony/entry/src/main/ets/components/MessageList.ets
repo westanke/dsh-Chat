@@ -28,6 +28,10 @@ export struct MessageList {
   @Prop @Watch('syncVersion') version: number = 0;
   /** store 派生消息快照（唯一被观察的数据源）。 */
   @State msgs: ChatMessage[] = [];
+  /** 服务端还有更早事件（history 应答 hasMore）—— 决定列表头是否出「加载更早消息」。 */
+  @State hasMore: boolean = false;
+  /** 正在翻页（按钮换 spinner）。 */
+  @State loadingOlder: boolean = false;
   private scroller: Scroller = new Scroller();
 
   private c(): DsColors {
@@ -58,6 +62,33 @@ export struct MessageList {
   @Builder
   renderList() {
     List({ scroller: this.scroller, space: 14 }) {
+      // 历史翻页入口（安卓 chat_message_list.dart:196-215 同口径）：
+      // 上滑触发不可靠，官方做法是显式「加载更早消息」按钮。
+      if (this.hasMore) {
+        ListItem() {
+          Row({ space: 6 }) {
+            if (this.loadingOlder) {
+              LoadingProgress()
+                .width(18)
+                .height(18)
+                .color(this.c().brand)
+            } else {
+              Text('⌃')
+                .fontSize(16)
+                .fontColor(this.c().brand)
+              Text('加载更早消息')
+                .fontSize(DsTypography.small.size)
+                .fontColor(this.c().brand)
+            }
+          }
+          .width('100%')
+          .justifyContent(FlexAlign.Center)
+          .padding({ top: 8, bottom: 8 })
+          .onClick((): void => {
+            this.loadOlder();
+          })
+        }
+      }
       ForEach(this.messages(), (m: ChatMessage, idx: number) => {
         ListItem() {
           if (m.isUser) {
@@ -147,10 +178,30 @@ export struct MessageList {
   syncVersion(): void {
     const st: ChatStore | null = this.store;
     this.msgs = st === null ? [] : st.messages;
+    this.hasMore = st !== null && st.historyHasMore;
+    this.loadingOlder = st !== null && st.loadingOlder;
+    if (st !== null && st.consumeHistoryPageJustLoaded()) {
+      // 翻页 prepend：用户意图是往上读旧内容，不是贴底。ArkUI 没有 Flutter
+      // prepend 保持 pixels 的语义，这里消费掉标志（不跳底），由 List 自身
+      // 维护的滚动锚点停在原内容上。
+      return;
+    }
     // 新消息/流式增量到达后贴底（等一帧让 List 先按新数据布局）。
     setTimeout((): void => {
       this.jumpToBottom(false);
     }, 30);
+  }
+
+  /** 点「加载更早消息」：翻页 + 失败只提示不打断（store 侧写 lastError）。 */
+  private loadOlder(): void {
+    const st: ChatStore | null = this.store;
+    if (st === null || this.loadingOlder) {
+      return;
+    }
+    st.loadOlder().catch((): void => {
+      // store 已把 RequestException 转成 lastError 并 changed()，这里吞掉避免
+      // 未处理的 Promise 拒绝刷屏。
+    });
   }
 
   aboutToAppear(): void {

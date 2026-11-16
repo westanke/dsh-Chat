@@ -348,6 +348,35 @@
   直接 return（平台层兜底之外的第二次防线）。测试：`gateway-client.test.ts` 新增
   「同一次掉线的重复 onDown（error 紧跟 close）只排一次退避」断言 `pendingCount()===1`
   且 `nextDelay()===1000`。真机复验：序列纯为 1→2→4→8→16→30→30，每档一次。
+- `历史分页没入口` —— `core/ChatStore.ts` 的 `loadOlder()`（`:294`）与
+  `mergeOlderMessages` 早就实现、有 218 条单测覆盖，但
+  `grep -rn loadOlder entry/src/main/ets/pages entry/src/main/ets/components` **零命中**
+  —— UI 从没调用过，用户根本触发不到。安卓 `app/lib/ui/chat_message_list.dart:196-215`
+  在列表头放「加载更早消息」`TextButton.icon`（`state.historyHasMore` 控制、`state.loadingOlder`
+  换 spinner）。
+  修法：`components/MessageList.ets` 加 `@State hasMore/loadingOlder`，`syncVersion()` 从
+  `st.historyHasMore`/`st.loadingOlder` 抄值（`@Prop @Watch('syncVersion') version` 已由
+  `pages/ChatView.ets:158-160` 传入），`List` 的 `ForEach` 之前插一行居中
+  `⌃ 加载更早消息`（`loadingOlder` 时换 `LoadingProgress`），点击调 `private loadOlder()`。
+  翻页 prepend **必须** `if (st.consumeHistoryPageJustLoaded()) { return; }` 跳过贴底跟随
+  —— 用户点按钮是要往上读旧内容，prepend 后跳底等于「新消息把旧历史冲没了」
+  （安卓 `chat_message_list.dart:147-158` 同口径注释）。
+  教训：**单测绿不等于功能可达**。冒烟清单要按「用户能不能点到」验，不能按「core 类有没有
+  这个方法」验。
+- `历史分页验证的桥侧基线` —— 直连 WS 探针 `/home/wangke/probe-history.cjs`（require
+  `/home/wangke/.dsh/profiles/web/node_modules/ws/index.js`，内置全局 WebSocket 不认 headers）：
+  客户端帧是**扁平** `{type:'history', sessionId, beforeSeq?, maxMessages?}`
+  （`dsh-remote-bridge/src/host/ws-protocol.ts:212 ClientFrame`），不是 `{type, data:{…}}`；
+  服务端连上即自动发 `hello`，客户端**不要**发 hello（发了报 `UNKNOWN_TYPE Unknown frame type: hello`）；
+  应答事件是 `{type:'event', event:{type, seq, time, data}}`，**seq 在 `e.event.seq`**。
+  `session-2bc4648d-…` 首屏 `events 757 / hasMore true / seq 3003-3759`，`beforeSeq=3003`
+  翻页 `events 1156 / seq 1847-3002`（无缝衔接）。`session-c6413d15-…` 只有 42 事件、
+  `hasMore false` —— 那种会话列表头**本就不该**出按钮，看不到按钮是正确行为。
+- `ui.sh dump 读旧快照` —— `harmony/build/ui.sh` 的 `dump` 分支原本直接 `hdc file recv`，
+  命令失败（`[Fail]ExecuteCommand need connect-key?`）时**留下上一轮的 `ui.json`**，
+  于是连续几次「滑动前后界面文字完全一样」，误判成「List 不接收手势」。已修为
+  `rm -f` + recv 后 `stat -c%s > 100` 校验 + 重试 3 次。真机滑动验证据此先确认快照新鲜。
+
 - `hilog 取应用日志的姿势` —— 应用 TAG 是 **`Dsh`**、domain **`0xD5C0`**，
   `hdc shell "hilog -x | grep -E '/Dsh|D5C0'"`（或 `grep 'A0D5C0'`）能取到；
   `hilog -x -T Dsh` 与裸 `hilog` 都不可用（后者数千行、易超时）。此前「hilog 拿不到应用
