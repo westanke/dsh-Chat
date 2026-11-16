@@ -36,6 +36,10 @@ class ChatState extends ChangeNotifier {
   ChatState(this._gateway) {
     _sub = _gateway.events.listen(_onEvent);
     _stateSub = _gateway.state.listen(_onGatewayState);
+    // HITL 卡片要自己驱动重建：hitl 表变更（含 replay / REST 合流）直达 UI，
+    // 不再依赖 reloadHistory 等其它事件「碰巧」触发 build（2026-11-16 真机
+    // 反馈：replay 晚于 reloadHistory 时提问卡永不出现）。
+    hitl.addListener(notifyUi);
   }
 
   final GatewayClient _gateway;
@@ -183,7 +187,20 @@ class ChatState extends ChangeNotifier {
     // 先用清空态渲染新会话页（history 网络往返期间不显示旧会话残留）。
     notifyListeners();
     _gateway.subscribe(s.id);
+    // REST 兜底拉一次挂起提问（含内核 continued）：WS replay 只补本桥前台
+    // 挂起表，内核 continued（限时提问）只有 REST 看得到。fire-and-forget，
+    // 失败静默（打断换会话的代价大于漏一张兜底卡）。
+    unawaited(_refreshPendingQuestions(s.id));
     await reloadHistory();
+  }
+
+  /// REST 拉会话挂起提问并合流进 hitl 表（见 GatewayApi.fetchQuestions）。
+  Future<void> _refreshPendingQuestions(String sessionId) async {
+    try {
+      hitl.mergeQuestions(await _gateway.fetchQuestions(sessionId));
+    } on RequestException catch (e) {
+      DshLog.w('ui pending-questions refresh failed sid=$sessionId ${e.code}');
+    }
   }
 
   Future<void> newChat() async {

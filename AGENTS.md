@@ -298,6 +298,8 @@ CI 构建没人用（理由见 ci.yml 头注释）；鸿蒙构建需 DevEco 工�
 - `权限显示英文档位` —— 投影 `currentValue` 是 `workspace-write` 这类 ASCII 名，界面必须过 `permissionLabelOf()` 转中文（仅可查看/工作区读写/完全权限/自动审查）。
 - `纯文本模型发图气泡` —— bridge 把图片写成两个 text 块（原文 + 给模型看的「🖼️ 图片 1「x.png」…[Image: source: …]」说明），没有 image 块；气泡要剥掉说明行（逐行滤，别贪婪正则）并靠 `handoffRefOf(rawText)` 渲染缩略图。
 - `覆盖式抽屉漏边` —— 官方抽屉是推挤式（聊天页整体右移一抽屉宽），覆盖式会在抽屉右缘漏出输入框；`translate({x: open ? '80%' : '0%'})` 用百分比别用像素。
+- `TTS 必须先 setListener` —— CoreSpeechKit 不先 `setListener` 就 `speak`，onStart/onComplete/onError 全部收不到（引擎照读但无回调、无法判断结束）；`CreateEngineParams.online` 是 **0=在线 / 1=离线**，别当布尔用；引擎是进程级单例，Ability `onDestroy` 要 `shutdownTts()` 释放音频焦点。
+- `分享要先 ShareKit` —— 只用 Want `action:ohos.want.action.sendData` 不一定弹系统分享面板；首选 `@kit.ShareKit` 的 `systemShare.SharedData`（UTD `general.plain-text` + content）→ `ShareController(data).show(context, {selectionMode: SINGLE, previewMode: DEFAULT})`，拿不到再退 Want。
 - `发送键白底看不见` —— 禁用态不能用 `inputFill`（浅色主题等于白底白箭头），走 `sendDisabledBg/sendDisabledFg` 浅灰底 + 中灰箭头。
 - `会话列表待回答标记靠 REST` —— bridge 的 sessions 列表只下发 `pendingInteraction:'approval'`（挂起审批），**挂起提问不发**；非当前会话的 HITL 帧也不补推。标记必须靠 `GET /chat/sessions/{sid}/questions` + `/approvals` 逐会话探测，结果抄进 `@State` 数组（Map 不触发 ArkUI）。
 - `GatewayApi 忘注入 HTTP transport` —— `new GatewayApi(gateway, null)` 会让所有 REST 功能（附件/图片交接/根列表/文件全文/挂起项）报 `NO_TRANSPORT`；两条连接路径（ConnectView 与 Index.autoConnect）都必须传 `new HttpTransportImpl()`。

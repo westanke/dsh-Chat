@@ -173,6 +173,18 @@
   把它冲掉（`runCommandIn` 成功链恰好会重拉 history）。修法：替换前先收集
   `m.role === 'command' && m.seq < 0` 的卡片，再 `[...page.items, ...localCards]`
   （安卓 `chat_history_actions.dart:36-40` 同口径）。
+- `TTS 必须先 setListener` —— `@kit.CoreSpeechKit` 的 `textToSpeech` 引擎，`speak()`
+  之前必须先 `setListener(SpeakListener)`，否则 `onStart/onComplete/onStop/onError`
+  一个都收不到（表现：能出声但工具条图标不切、异常静默）。另外
+  `CreateEngineParams.online` 的语义是 **0=在线、1=离线**（不是布尔开关），
+  在线音色更自然，取 0。引擎是进程级单例，Ability `onDestroy` 里 `shutdown()`
+  释放，否则长期占音频焦点导致后续朗读报忙。
+- `分享要先 ShareKit` —— 只发 Want `ohos.want.action.sendData` + `text/plain`
+  在部分机型/版本不会弹出系统分享面板（静默失败或直接报错）。首选
+  `@kit.ShareKit` 的 `systemShare`：`new SharedData({utd: UniformDataType.PLAIN_TEXT,
+  content})` → `new ShareController(data).show(context, {selectionMode:
+  SelectionMode.SINGLE, previewMode: SharePreviewMode.DEFAULT})`；ShareKit 不可用
+  时再退回 Want 隐式拉起。
 - `发送键白底看不见` —— 禁用态底色若用 `inputFill`（浅色主题=纯白），白底 + 浅灰箭头在
   浅色界面上几乎不可见（用户反馈）。改用 token `sendDisabledBg`（亮 `#EBEEF2` / 暗
   `c800`）+ `sendDisabledFg`（亮 `c500` / 暗 `c400`）；可用态走实心 `brand` + `onBrand`

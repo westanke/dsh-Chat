@@ -214,6 +214,7 @@ class _ChatPageState extends State<ChatPage>
             // HITL 问答/审批卡（DSH 向用户提问；无挂起项时不占空间）。
             HitlPanel(
               state: st.hitlState,
+              sessionId: st.sessionId,
               colors: c,
               onAnswer: st.answerQuestion,
               onDecide: st.decideApproval,

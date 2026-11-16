@@ -16,12 +16,17 @@ class HitlPanel extends StatelessWidget {
   const HitlPanel({
     super.key,
     required this.state,
+    required this.sessionId,
     required this.colors,
     required this.onAnswer,
     required this.onDecide,
   });
 
   final HitlState state;
+
+  /// 只渲染当前会话的卡：挂起表是全连接的（含其它会话），不过滤会把别的
+  /// 会话的提问/审批渲染进当前页（2026-11-16 真机反馈）。
+  final String? sessionId;
   final DsColors colors;
 
   /// 提交一套答案（chat_state.answerQuestion）。
@@ -32,8 +37,8 @@ class HitlPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final questions = state.pendingQuestions.values.toList();
-    final approvals = state.pendingApprovals.values.toList();
+    final questions = state.sessionQuestions(sessionId);
+    final approvals = state.sessionApprovals(sessionId);
     if (questions.isEmpty && approvals.isEmpty) return const SizedBox.shrink();
     // 限高 + 整面板滚动：题目/选项过多时提交按钮会被撑出屏幕外
     // （2026-11-15 用户反馈），故面板最大占屏高一半，超出可上下滑动。

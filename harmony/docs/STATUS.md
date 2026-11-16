@@ -246,3 +246,13 @@ Flex 链式 .alignItems 不存在（构造参数里传）。
 **尚未冒烟**：TTS 朗读与系统分享面板（`platform/Tts.ets`、`platform/Share.ets` 代码已就绪，未经真机点击）；深色模式整屏；`@` 引用文件；历史分页（`mergeOlderMessages`）；断线重连退避（1→2→4→8→16s）；检查更新跳转。
 
 **设备状态**：2026-11-16 16:10 起 hdc 掉线（`hdc list targets` 为 `[Empty]`、`lsusb` 无华为设备、WiFi 也 ping 不通 192.168.1.211），需重新插线并确认调试授权后继续上面的「待真机复验」三项。
+
+## 阶段 5 收尾：TTS / 分享面板代码修正（设备离线期，2026-11-16）
+
+真机 hdc 掉线后不空转，把两个**尚未冒烟**的平台层按 SDK 声明逐一核对，修掉两处会在真机上出问题的实现：
+
+**TTS（`platform/Tts.ets`）**：原实现 `createEngine` 后直接 `speak`，从未调 `setListener` —— SDK 明确「`setListener` 必须先于 `speak`，否则 onStart/onComplete/onError 一律收不到」，真机表现会是「能出声但 UI 不知道朗读何时结束、异常静默」。同时 `CreateEngineParams.online` 的原值是 `1`，而 SDK 注释是 **0=在线、1=离线**，被当成布尔用反了 → 改 `0`（在线音色）。重写后：完整 `SpeakListener`（onStart/onComplete/onStop/onError 都按 requestId 过滤过期回调）、`watchSpeaking()` 供 UI 切「朗读中/朗读」图标、`isSpeaking()` 走 `engine.isBusy()`、新增 `shutdownTts()` 并在 `entryability/EntryAbility.ets` 的 `onDestroy` 调用（引擎是进程级单例，不释放会长期占音频焦点）。
+
+**分享（`platform/Share.ets`）**：原实现只发 Want `ohos.want.action.sendData` + `text/plain`，在部分机型不会弹系统分享面板。改为**首选 ShareKit**：`new systemShare.SharedData({utd: UniformDataType.PLAIN_TEXT, content})` → `new systemShare.ShareController(data).show(context, {selectionMode: SelectionMode.SINGLE, previewMode: SharePreviewMode.DEFAULT})`；拿不到 ShareKit 时退回原 Want 隐式拉起（两级兜底）。
+
+两处均 `bash scripts/package.sh --no-test` 编译通过，183/183 用例不受影响（平台层不进 node 测试）。**真机行为待设备恢复后验证**：🔊 点一次应出声且图标切「朗读中」、读完自行复位；⤴ 点一次应弹系统分享面板。

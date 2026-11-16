@@ -46,6 +46,11 @@ class SessionsDrawerState extends State<SessionsDrawer> {
     // 官方抽屉：顶部搜索框（圆角胶囊灰底）→ 日期分组标题 → 会话条目 → 底部账号栏。
     final groups = state.sessionGroups;
     final q = _search.text.trim().toLowerCase();
+    // 「待回答/待审批」角标（与电脑端会话列表 status.compact.* 同口径）：
+    // 数据来自全连接挂起表（WS replay + REST 合流），按会话 id 派生；
+    // hitl 变更经 ChatState.notifyUi 直达本页重建。
+    final qSids = state.hitlState.pendingQuestionSessionIds;
+    final aSids = state.hitlState.pendingApprovalSessionIds;
     return Drawer(
       width: DsSpacing.drawerWidth,
       backgroundColor: c.bgLayer1,
@@ -142,6 +147,9 @@ class SessionsDrawerState extends State<SessionsDrawer> {
                               SessionsDrawerItem(
                                 session: s,
                                 selected: s.id == state.sessionId,
+                                badge: qSids.contains(s.id)
+                                    ? '待回答'
+                                    : (aSids.contains(s.id) ? '待审批' : null),
                                 colors: c,
                                 onTap: () {
                                   widget.onClose();

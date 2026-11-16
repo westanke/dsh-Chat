@@ -3,6 +3,7 @@ import { BusinessError } from '@kit.BasicServicesKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { window, KeyboardAvoidMode } from '@kit.ArkUI';
 import { PrefsStore } from '../platform/PlatformBridge';
+import { shutdownTts } from '../platform/Tts';
 
 const DOMAIN: number = 0x0000;
 const TAG: string = 'DshChat';
@@ -43,6 +44,9 @@ export default class EntryAbility extends UIAbility {
 
   onDestroy(): void {
     hilog.info(DOMAIN, TAG, 'EntryAbility onDestroy');
+    // 释放 TTS 引擎：CoreSpeechKit 的引擎是进程级单例，不 shutdown 会一直占着
+    // 音频焦点（下次朗读报忙/无声）。
+    shutdownTts();
   }
 
   onWindowStageCreate(windowStage: window.WindowStage): void {

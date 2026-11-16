@@ -113,6 +113,24 @@ extension GatewayApi on GatewayClient {
         '?sessionId=${Uri.encodeComponent(sessionId)}',
       );
 
+  /// 会话挂起提问清单（REST GET /api/v1/chat/sessions/{id}/questions，
+  /// routes/chat.ts:381-392）：本桥前台挂起 + 内核 continued 合流，挂起的
+  /// 排前面。WS replay 只补本桥前台那批，内核 continued 只有这里能拉到
+  /// —— 打开会话时兜底拉一次，合流进 HitlState（chat_state._refreshPendingQuestions）。
+  /// 需要 chat.read scope（设备默认 scope 含它）。
+  Future<List<PendingQuestion>> fetchQuestions(String sessionId) async {
+    final r = await gatewayHttpJson(
+      this,
+      '/api/v1/chat/sessions/${Uri.encodeComponent(sessionId)}/questions',
+    );
+    final items = r['items'] as List? ?? const [];
+    return [
+      for (final e in items)
+        if (e is Map)
+          PendingQuestion.from(sessionId, Map<String, dynamic>.from(e)),
+    ];
+  }
+
   /// 取图片交接产物（REST GET /api/v1/image-handoff?name=`<bare>`，
   /// openapi.yaml:314-344）：纯文本模型发图时 bridge 把图交接成工作区
   /// `.dsh-images/<sha256>.<ext>`，消息文本留 [Image: source: ...] 占位。
