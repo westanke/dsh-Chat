@@ -177,6 +177,17 @@
   浅色界面上几乎不可见（用户反馈）。改用 token `sendDisabledBg`（亮 `#EBEEF2` / 暗
   `c800`）+ `sendDisabledFg`（亮 `c500` / 暗 `c400`）；可用态走实心 `brand` + `onBrand`
   白箭头、字号 20 加粗。
+- `纯文本模型发图气泡` —— bridge 收到图片后，会把 `user/message` 的 content 写成
+  **两个 text 块**（原文 + 一段给模型看的说明「🖼️ 图片 1「x.png」（当前模型看不到图，
+  已存到 .dsh-images/<hex>.png…）」+ 独立一行 `[Image: source: /abs/<hex>.png]`），
+  **没有 `type:'image'` 块**。所以：①`ContentParts.from()` 拿不到 images；②那段说明会
+  原样进气泡（真机现象：气泡里出现整段提示和 64 位 hex 路径）。修法两半 ——
+  `core/Content.ts` 的 `stripBridgeImageNote(text)` 逐行滤掉以 `🖼` 开头和以
+  `[Image: source:` 开头的行（**不能整段正则贪婪匹配**，会连用户原文一起吃掉）；
+  `core/HistoryPage.ts` 装配用户消息时把清洗结果写 `text`、被清洗的原文留
+  `rawText` 字段；`components/MessageList.ets` 的用户气泡与助手气泡都用
+  `handoffRefOf(rawText !== '' ? rawText : text)` 找交接图渲染缩略图（安卓
+  `chat_message_items.dart:176` 同口径）。
 - `覆盖式抽屉漏边` —— 官方是**推挤式**（`docs/design-tokens.md` §4.2、`app/lib/design/tokens.dart:329`
   `drawerWidth = 288.0` / `:336` `drawerPageShift = drawerWidth`）：抽屉滑入时聊天页整体右移
   一个抽屉宽度，右缘与抽屉右缘对齐停到屏外（官方截图仍露输入框一条）。用

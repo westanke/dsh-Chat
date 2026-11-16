@@ -11,6 +11,7 @@ import {
   ContentParts,
   ContentImageRef,
   handoffImageNameOf,
+  stripBridgeImageNote,
   PromptPart,
   SlashCommandList,
   parseSlashDraft,
@@ -216,4 +217,24 @@ test('parseAtMentionDraft: 开括号后触发，越界回 null', () => {
   assert.equal(d.end, 5);
   assert.equal(parseAtMentionDraft('abc', 99), null);
   assert.equal(parseAtMentionDraft('abc', -1), null);
+});
+
+test('stripBridgeImageNote: 剥掉 bridge 注入的图片说明与交接占位', () => {
+  const hex = 'a0317e47b80546f76bb819814679e9c4247eefcba6cab5befa239d953784f36a';
+  const raw = '这张图里主要是什么？一句话回答\n'
+    + '🖼️ 图片 1「IMG_1657.png」（当前模型看不到图，已存到 .dsh-images/' + hex + '.png；'
+    + '要看图，请用识图工具打开下面那行的路径）\n'
+    + '[Image: source: /media/wangke/OFFICE/workspace/.dsh-mobile/.dsh-images/' + hex + '.png]';
+  // 气泡只剩用户原文
+  assert.equal(stripBridgeImageNote(raw), '这张图里主要是什么？一句话回答');
+  // 交接文件名仍能从原文里取到（渲染缩略图用）
+  assert.equal(handoffImageNameOf(raw), hex + '.png');
+});
+
+test('stripBridgeImageNote: 普通文本/纯占位/无占位都不变形', () => {
+  assert.equal(stripBridgeImageNote('你好'), '你好');
+  const hex = 'b'.repeat(64) + '.jpg';
+  const only = '[Image: source: /a/b/' + hex + ']';
+  assert.equal(stripBridgeImageNote(only), '');
+  assert.equal(handoffImageNameOf(only), hex);
 });

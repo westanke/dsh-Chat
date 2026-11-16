@@ -195,12 +195,20 @@ export struct MessageList {
     .borderColor(this.c().inputBorder)
   }
 
-  /** 用户消息：右对齐气泡（官方浅色 #edf3fe / 深色 c850）。 */
+  /** 用户消息：右对齐气泡（官方浅色 #edf3fe / 深色 c850）。
+   * 图片两种来源：content 里 type=image 的引用（images）与纯文本模型的交接占位
+   * （文本里的 `[Image: source: …]`，安卓 chat_message_items.dart:176 同口径，
+   * 用户与助手气泡都挂）。 */
   @Builder
   userBubble(m: ChatMessage) {
     Row() {
       Blank().layoutWeight(1)
       this.userImages(m)
+      if (this.userHandoff(m) !== null) {
+        ImageTile({ store: this.store, ref: this.userHandoff(m) as DsImageRef })
+          .constraintSize({ maxWidth: this.bubbleMaxWidth() })
+          .margin({ left: 8 })
+      }
       Text(m.text === '' ? ' ' : m.text)
         .fontSize(16)
         .fontColor(this.c().labelPrimary)
@@ -225,6 +233,16 @@ export struct MessageList {
       }
       .constraintSize({ maxWidth: this.bubbleMaxWidth() })
     }
+  }
+
+  /** 用户气泡里的交接图引用（没有回 null；气泡布局用）。 */
+  private userHandoff(m: ChatMessage): DsImageRef | null {
+    return handoffRefOf(this.rawTextOf(m));
+  }
+
+  /** 取交接图用的原文：清洗过的消息把原文留在 rawText 里。 */
+  private rawTextOf(m: ChatMessage): string {
+    return m.rawText !== '' ? m.rawText : m.text;
   }
 
   /** 助手消息：全宽平铺文本 + 前置过程组短语行 + reasoning 灰字。 */
@@ -257,8 +275,8 @@ export struct MessageList {
       } else {
         MdView({ text: m.text })
       }
-      if (handoffRefOf(m.text) !== null) {
-        ImageTile({ store: this.store, ref: handoffRefOf(m.text) as DsImageRef })
+      if (handoffRefOf(this.rawTextOf(m)) !== null) {
+        ImageTile({ store: this.store, ref: handoffRefOf(this.rawTextOf(m)) as DsImageRef })
           .margin({ top: 6 })
       }
       if (!m.streaming && m.text !== '') {

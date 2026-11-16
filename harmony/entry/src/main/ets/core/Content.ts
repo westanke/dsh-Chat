@@ -101,6 +101,37 @@ export function handoffImageNameOf(text: string): string | null {
   return m === null ? null : m[1];
 }
 
+/**
+ * bridge 给「纯文本模型 + 图片」注入的说明段（整行，含 `[Image: source: …]` 那一行）：
+ *
+ *   🖼️ 图片 1「IMG_1657.png」（当前模型看不到图，已存到 .dsh-images/<hex>.png；
+ *   要看图，请用识图工具打开下面那行的路径）
+ *   [Image: source: /abs/…/<hex>.png]
+ *
+ * 这段是**给模型看的提示**，不该出现在用户气泡里（安卓 `chat_message_items.dart`
+ * 只在气泡里显示原文 + 交接图，同样不显示这段）。剥离后气泡只剩用户真正打的字，
+ * 图片本体由 `handoffRefOf(text)` 从原文本里取引用渲染。
+ */
+const IMAGE_NOTE_LINE_PREFIX = '🖼';
+
+export function stripBridgeImageNote(text: string): string {
+  if (text.indexOf('[Image: source:') < 0 && text.indexOf(IMAGE_NOTE_LINE_PREFIX) < 0) {
+    return text;
+  }
+  // 逐行过滤：bridge 注入的说明是独立行（以 🖼 开头），交接占位是独立行
+  // （`[Image: source: …]`）。两者都属于「给模型看的提示」，用户气泡不该显示。
+  const lines: string[] = text.split('\n');
+  const kept: string[] = [];
+  for (const line of lines) {
+    const t: string = line.trim();
+    if (t.startsWith(IMAGE_NOTE_LINE_PREFIX) || t.startsWith('[Image: source:')) {
+      continue;
+    }
+    kept.push(line);
+  }
+  return kept.join('\n').trim();
+}
+
 // ---- PromptPart（chat-adapter.ts 的发送侧判别联合）----
 
 /**

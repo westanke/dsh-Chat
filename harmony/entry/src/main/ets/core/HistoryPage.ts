@@ -6,7 +6,7 @@
  */
 
 import { JsonAccess, JsonMap } from './JsonAccess';
-import { ContentImageRef, ContentParts } from './Content';
+import { ContentImageRef, ContentParts, stripBridgeImageNote } from './Content';
 import { RawToolCall, ToolCallInfo, extractToolCalls, toolResultText, toolPhrases, toolSummary } from './ToolCall';
 
 /** 内核历史事件（原样透传）：{type, seq, time, data}。 */
@@ -70,6 +70,12 @@ export class DeliverableFile {
 export class ChatMessage {
   role: string = ''; // 'user' | 'assistant' | 'process' | 'error' | 'files' | 'command'
   text: string = '';
+  /**
+   * 未剥离的原文（仅当 text 被清洗过才有值）：纯文本模型发图时 bridge 往 content
+   * 里塞的「🖼️ 图片 1「x.png」…[Image: source: …]」说明会从 text 剥掉，但交接图的
+   * 文件名只能从这里取 —— UI 用 `handoffRefOf(rawText !== '' ? rawText : text)`。
+   */
+  rawText: string = '';
   reasoning: string = '';
   /** content 里的图片引用（历史形状：attachment 引用，无字节）。 */
   images: ContentImageRef[] = [];
@@ -236,7 +242,14 @@ export class HistoryPage {
             flushFileCards();
             const msg: ChatMessage = new ChatMessage();
             msg.role = 'user';
-            msg.text = parts.text;
+            // 纯文本模型发图时 bridge 会往 content 里塞一段「🖼️ 图片 1「x.png」…
+            // [Image: source: …]」说明给模型看，不该上屏；剥掉后气泡只剩原文，
+            // 图片本体由 MessageList 的 handoffRefOf(原文本) 渲染（安卓同口径）。
+            const cleaned: string = stripBridgeImageNote(parts.text);
+            msg.text = cleaned;
+            if (cleaned !== parts.text) {
+              msg.rawText = parts.text;
+            }
             msg.images = parts.images;
             msg.seq = ev.seq;
             items.push(msg);
