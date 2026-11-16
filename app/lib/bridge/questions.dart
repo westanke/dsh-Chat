@@ -9,7 +9,9 @@
 ///   {id, question, header?, detail?, multiSelect?, options?:[{label, description?}]}。
 /// - 答题帧 `question-answer` / 取消 `question-cancel` / 审批 `approval-response`
 ///   （ws-protocol.ts:267-281，应答 kind=question-response / approval-response 可 await）。
-/// 挂起超时 10 分钟（chat.ts:218,227）；同一 callId/approvalId 客户端按 id 去重。
+/// 挂起寿命随电脑端走（bridge 2026-11-16 起：delegate 未决不摘表，桌面卡片
+/// 不过期手机端就不过期；电脑端不在线时才有 10 分钟自愈超时）；同一
+/// callId/approvalId 客户端按 id 去重。
 library;
 
 /// 一道待回答的题（bridge 原样透传，多余字段丢弃）。

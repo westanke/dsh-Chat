@@ -6,7 +6,7 @@
 
 import { pasteboard } from '@kit.BasicServicesKit';
 import { common } from '@kit.AbilityKit';
-import { speak, stopSpeak } from '../platform/Tts';
+import { speak, stopSpeak, addSpeakingWatcher, removeSpeakingWatcher } from '../platform/Tts';
 import { shareText } from '../platform/Share';
 import { DsColors, DsTypography, DsSpacing } from '../ui/theme';
 
@@ -19,6 +19,8 @@ export struct MessageActions {
   @State liked: boolean = false;
   @State copied: boolean = false;
   @State hint: string = '';
+  /** 本条消息正在朗读（🔊 变 ⏹，再点一次停止）。 */
+  @State speaking: boolean = false;
 
   private c(): DsColors {
     return new DsColors(this.dark);
@@ -40,18 +42,42 @@ export struct MessageActions {
     });
   }
 
-  private speak(): void {
+  /** 自己注册的观察者引用（注销时要传同一个函数）。 */
+  private watcher: (busy: boolean) => void = (busy: boolean): void => {
+    if (!busy && this.speaking) {
+      this.speaking = false;
+    }
+  };
+
+  aboutToAppear(): void {
+    addSpeakingWatcher(this.watcher);
+  }
+
+  aboutToDisappear(): void {
+    removeSpeakingWatcher(this.watcher);
+  }
+
+  private toggleSpeak(): void {
+    if (this.speaking) {
+      stopSpeak();
+      this.speaking = false;
+      this.flash('已停止朗读');
+      return;
+    }
     speak(this.context(), this.text).then((ok: boolean): void => {
-      this.hint = ok ? '正在朗读' : '朗读暂不可用';
-      setTimeout((): void => {
-        this.hint = '';
-      }, 2000);
+      this.speaking = ok;
+      this.flash(ok ? '正在朗读' : '朗读暂不可用');
     }).catch((): void => {
-      this.hint = '朗读暂不可用';
-      setTimeout((): void => {
-        this.hint = '';
-      }, 2000);
+      this.speaking = false;
+      this.flash('朗读暂不可用');
     });
+  }
+
+  private flash(msg: string): void {
+    this.hint = msg;
+    setTimeout((): void => {
+      this.hint = '';
+    }, 2000);
   }
 
   private share(): void {
@@ -97,9 +123,10 @@ export struct MessageActions {
           (): void => {
             this.liked = !this.liked;
           })
-        this.icon('🔊', this.c().labelTertiary, (): void => {
-          this.speak();
-        })
+        this.icon(this.speaking ? '⏹' : '🔊',
+          this.speaking ? this.c().brand : this.c().labelTertiary, (): void => {
+            this.toggleSpeak();
+          })
         this.icon('⤴', this.c().labelTertiary, (): void => {
           this.share();
         })

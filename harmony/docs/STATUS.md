@@ -255,4 +255,8 @@ Flex 链式 .alignItems 不存在（构造参数里传）。
 
 **分享（`platform/Share.ets`）**：原实现只发 Want `ohos.want.action.sendData` + `text/plain`，在部分机型不会弹系统分享面板。改为**首选 ShareKit**：`new systemShare.SharedData({utd: UniformDataType.PLAIN_TEXT, content})` → `new systemShare.ShareController(data).show(context, {selectionMode: SelectionMode.SINGLE, previewMode: SharePreviewMode.DEFAULT})`；拿不到 ShareKit 时退回原 Want 隐式拉起（两级兜底）。
 
-两处均 `bash scripts/package.sh --no-test` 编译通过，183/183 用例不受影响（平台层不进 node 测试）。**真机行为待设备恢复后验证**：🔊 点一次应出声且图标切「朗读中」、读完自行复位；⤴ 点一次应弹系统分享面板。
+两处均 `bash scripts/package.sh --no-test` 编译通过，183/183 用例不受影响（平台层不进 node 测试）。
+
+**朗读按钮接上状态**（`components/MessageActions.ets`）：光有 `watchSpeaking` 不接 UI 等于没做（本仓 `私有方法只定义没调用` 坑）。改为 🔊 与 ⏹ 双态——说话中显示 ⏹ 且用品牌色，再点一次 `stopSpeak()`；朗读自然结束/出错时由观察者回调复位。观察者**用列表不用单槽位**：聊天页每条助手消息都挂一个 `MessageActions`，单槽位会被最后挂载的覆盖，其余实例图标永不复位；组件 `aboutToAppear` 注册、`aboutToDisappear` 注销（传同一个函数引用）。
+
+**真机行为待设备恢复后验证**：🔊 点一次应出声且图标变 ⏹、读完自行复位、再点一次能中止；⤴ 点一次应弹系统分享面板。

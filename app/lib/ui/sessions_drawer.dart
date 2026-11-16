@@ -176,17 +176,23 @@ class SessionsDrawerState extends State<SessionsDrawer> {
 }
 
 /// 单条会话：官方是纯文字行（选中态蓝字），无 card、无分割线。
+/// 行尾可带状态小字（badge）——「待回答/待审批」，对齐电脑端会话列表
+/// status.compact.answer / status.compact.approval 的 trailingLabel。
 class SessionsDrawerItem extends StatelessWidget {
   const SessionsDrawerItem({
     super.key,
     required this.session,
     required this.selected,
+    this.badge,
     required this.colors,
     required this.onTap,
   });
 
   final DshSession session;
   final bool selected;
+
+  /// 行尾状态小字（null = 不显示）。
+  final String? badge;
   final DsColors colors;
   final VoidCallback onTap;
 
@@ -199,14 +205,27 @@ class SessionsDrawerItem extends StatelessWidget {
           horizontal: DsSpacing.drawerItemPadH,
           vertical: DsSpacing.drawerItemPadV,
         ),
-        child: Text(
-          session.displayTitle,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: DsTypography.small.copyWith(
-            color: selected ? colors.brand : colors.labelPrimary,
-            height: DsSpacing.drawerLineHeight / 14,
-          ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                session.displayTitle,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: DsTypography.small.copyWith(
+                  color: selected ? colors.brand : colors.labelPrimary,
+                  height: DsSpacing.drawerLineHeight / 14,
+                ),
+              ),
+            ),
+            if (badge != null) ...[
+              const SizedBox(width: DsSpacing.drawerSearchIconGap),
+              Text(
+                badge!,
+                style: DsTypography.small.copyWith(color: colors.brand),
+              ),
+            ],
+          ],
         ),
       ),
     );

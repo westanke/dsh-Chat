@@ -13,17 +13,32 @@ import { textToSpeech } from '@kit.CoreSpeechKit';
 let engine: textToSpeech.TextToSpeechEngine | null = null;
 /** 当前朗读的 requestId；用于忽略过期的完成回调。 */
 let currentRequestId: string = '';
-/** 朗读开始/结束的观察者（UI 用来切「朗读中/朗读」图标）。 */
-let busyWatcher: ((busy: boolean) => void) | null = null;
+/**
+ * 朗读状态观察者（UI 用来切「朗读中/朗读」图标）。
+ * 用**多观察者列表**而不是单个槽位：聊天页每条助手消息都挂一个 MessageActions，
+ * 单槽位会被最后挂载的那个覆盖，其余实例的图标永远不复位。
+ */
+const busyWatchers: ((busy: boolean) => void)[] = [];
 
-/** 注册朗读状态观察者（可传 null 取消）。 */
-export function watchSpeaking(watcher: ((busy: boolean) => void) | null): void {
-  busyWatcher = watcher;
+/** 注册观察者。 */
+export function addSpeakingWatcher(watcher: (busy: boolean) => void): void {
+  if (busyWatchers.indexOf(watcher) < 0) {
+    busyWatchers.push(watcher);
+  }
+}
+
+/** 注销观察者（组件 aboutToDisappear 时调，避免泄漏与悬空回调）。 */
+export function removeSpeakingWatcher(watcher: (busy: boolean) => void): void {
+  const i: number = busyWatchers.indexOf(watcher);
+  if (i >= 0) {
+    busyWatchers.splice(i, 1);
+  }
 }
 
 function notifyBusy(busy: boolean): void {
-  const w: ((busy: boolean) => void) | null = busyWatcher;
-  if (w !== null) {
+  // 回调里可能有人注销自己，先拷一份再遍历。
+  const snapshot: ((busy: boolean) => void)[] = busyWatchers.slice();
+  for (const w of snapshot) {
     w(busy);
   }
 }
@@ -129,7 +144,7 @@ export function shutdownTts(): void {
   const e: textToSpeech.TextToSpeechEngine | null = engine;
   engine = null;
   currentRequestId = '';
-  busyWatcher = null;
+  busyWatchers.length = 0;
   if (e === null) {
     return;
   }

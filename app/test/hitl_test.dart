@@ -114,6 +114,7 @@ void main() {
           home: Scaffold(
             body: HitlPanel(
               state: hitl,
+              sessionId: 's1',
               colors: DsColors(false),
               onAnswer: (q, answers) {
                 submitted = true;
@@ -151,6 +152,7 @@ void main() {
           home: Scaffold(
             body: HitlPanel(
               state: hitl,
+              sessionId: 's1',
               colors: DsColors(false),
               onAnswer: (_, _) {},
               onDecide: (_, allow) => decisions.add(allow),
@@ -173,6 +175,7 @@ void main() {
           home: Scaffold(
             body: HitlPanel(
               state: hitl,
+              sessionId: 's1',
               colors: DsColors(false),
               onAnswer: (_, answers) => captured = answers,
               onDecide: (_, _) {},
