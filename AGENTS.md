@@ -326,4 +326,7 @@ CI 构建没人用（理由见 ci.yml 头注释）；鸿蒙构建需 DevEco 工�
 - `hilog 只在 Dlog.ets` —— `entryability/EntryAbility.ets` 曾直调 7 处 `hilog.`（DOMAIN `0x0000`/TAG `DshChat`），与 `platform/Dlog.ets` 的 `0xD5C0`/`Dsh` 不一致 → 真机 `hilog -x | grep A0D5C0` 抓不到 Ability 生命周期日志；统一走 `Dlog.info/warn/error`。
 - `剪段拆文件会静默带走别的方法` —— 按行号区间把 ChatStore 的历史段剪成 ChatHistory 时，夹在区间里的 `setPermission` 被一起带走，单测报 `TypeError: ctx.store.setPermission is not a function`。剪完必须 grep 原有公开方法名是否齐全；边界行先 `print(repr(line))` 核对，插入点用「唯一锚点字符串 + assert in」而不是行号。
 - `拆帧模块漏 hello 分支` —— 把 `onFrame` 拆到 `core/GatewayRequests.ts` 时只搬了 event/error/ping/pong 分支、漏了 `kind==='hello'` → 连接永远不 READY，所有客户端用例挂满 300s 报 `Promise resolution is still pending but the event loop has already resolved`。拆这种 if 链函数要用「原分支数 == 新分支数」核对。
+- `触控热区 ≥40vp` —— `harmony_check a11y` 的 R009 只认 `.height()/.width()` ≥40；加载指示器
+  写成 `width(20)`/`width(32)` 也算「小热区」被拦（`ImageTile`、`MdDocViewer` 实踩）。
+  纯装饰性图标可给 `.accessibilityGroup(true)` 或直接放大到 40；输入框高度 36 同样违规（`HitlPanel` 实踩 → 40）。
 - `脚本拼 head+tail 会坏括号` —— 拆 GatewayApi 时尾部多出一个 `}`（`Unexpected "}"`），剪出的段又少一个方法闭合 `}`（`Expected identifier but found end of file`）。剪接脚本必须 assert 首尾行内容。

@@ -586,3 +586,15 @@ inSubDir)`（多根 label 前缀、query **名字前缀**过滤且大小写不�
 的 `AtEntry` 定义随之迁走、改 import。新增 `harmony/test/cases/at-mention.test.ts` 8 条 →
 **235/235 全绿**。顺手修了「单根时名字不带前缀」的用例（原写法喂了两条 list 却只给一个
 label，属测试自身笔误）。
+
+**追加：无障碍全量复检（22 个 UI 文件全 pass）**
+`harmony_check a11y` 逐文件复检 22 个含交互的 ets，补掉最后 4 处 R009（触控目标 <40vp）：
+`components/HitlPanel.ets` 自定义回答输入框 36→40、`components/SessionLocationSheet.ets` 浏览返回键
+36→40（并补 `.height(40)`）、`components/ImageTile.ets` 加载指示器 20→40、
+`pages/MdDocViewer.ets` 加载指示器 32→40。复检后 22 个文件 **全 pass**（0 error / 0 warn）。
+
+`harmony_check review` 复查大件只剩三类已知项，均在 REVIEW 报告 P2 延后清单内：
+R005（`ForEach` 全量渲染 → LazyForEach，涉及 MessageList/SessionsDrawer/ComposerPanels/
+ProjectionSheets/MdCodeBlock/ConnectView，列表规模受 `HISTORY_MAX_MESSAGES=200` 与
+会话数约束，暂不引入 IDataSource）、R007（无窗口宽度断点，deviceTypes 已收窄为 phone）、
+R014（嵌套 10-11 层，info 级）。
