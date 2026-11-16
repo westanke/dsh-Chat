@@ -215,3 +215,34 @@ Flex 链式 .alignItems 不存在（构造参数里传）。
 **推挤式抽屉**：真机截图发现抽屉是覆盖式、右侧漏出聊天页 composer 一角，与官方口径不符。按 `docs/design-tokens.md` §4.2 改成推挤式——`pages/ChatView.ets` 把 `chatScaffold()` 包进 `Column().width('100%').height('100%').translate({ x: this.drawerOpen ? '80%' : '0%' }).animation({ duration: 240, curve: Curve.EaseOut })`（百分比位移，不依赖 screenW）；`components/SessionsDrawer.ets` 宽度 `78%` → `80%` 对齐官方 `drawerWidth = 288dp / 360dp`。真机截图 `harmony/build/smoke/drawer4.jpeg` 与官方 `ref/verify2-drawer-push.png` 形态一致（官方同样露出输入框一条）。抽屉点遮罩关闭、点会话行切换均正常。
 
 **图片消息气泡（bug⑯）**：真机发图后发现用户气泡没渲染缩略图，而是把 `[Image: source: /abs/.dsh-images/<64hex>.png]` 整段当纯文本显示、上方还有一整段 bridge 注入的说明。根因：图片走纯文本模型时，`user/message` 的 content 是**两个 text 块**（原文 + 说明+占位），没有 `type:'image'` 块 → `ContentParts.from()` 取不到 images、说明也原样进 text。修法：`core/Content.ts` 新增 `stripBridgeImageNote()` 逐行滤掉以 `🖼` / `[Image: source:` 开头的行（不能贪婪整段匹配，会吃掉用户原文）；`core/HistoryPage.ts` 装配时 text 存清洗结果、原文留新的 `rawText` 字段；`components/MessageList.ets` 用户气泡（原先只有 `userImages(m)`）与助手气泡统一用 `handoffRefOf(rawText !== '' ? rawText : text)` 挂 `ImageTile` 缩略图。新增 2 条 `stripBridgeImageNote` 用例 → 183/183 绿。
+
+## 阶段 5 验收清单（真机逐项，2026-11-16 结项）
+
+**已真机验收通过**（截图/文本树为证，见 `harmony/build/smoke/`）：
+
+| 功能 | 验证方式 |
+|---|---|
+| DSH1 导入 → 连接 → 进对话页 | 导入区粘贴 463 字符配置 → 「导入并连接」→ 空态问候/Mobile device/权限 chip/免责声明全渲染 |
+| 连接历史落盘 + 重启自动重连 | 偏好文件出现 `dsh.hosts` 条目；`aa force-stop` 后重启直达对话页 |
+| 发消息 → 流式回复 → Markdown 渲染 | 「1+1等于几」→ 用户气泡 + reasoning 折叠块 + 正文 + ⧉👍🔊⤴⟳ 操作行 |
+| 会话抽屉 | 分组「手机会话」、点行加载历史并切标题、待回答橙胶囊、推挤式位移 |
+| 五面板（统计/轨迹/团队/待办/模型） | 逐面板展开，轨迹节点可展开，模型面板六分组 + effort chips + 确认切换 |
+| 设置页六分区 + 检查更新 | 连接/设备/外观/发送/关于/协议全渲染，「发现新版本 v1.0.17」 |
+| 权限面板切档 + 中文化 | 点「仅可查看」→ chip 变「🔒 read-only」→ 提示条；chip 显示中文档位 |
+| 命令补全 + 命令卡 | 输入 `/` 弹 6+ 命令；`/help` 渲染 ⌨ 卡片；`/permission` 弹面板 |
+| HITL 提问卡全链路 | 卡片渲染 → 点选项高亮 → 提交键激活 → bridge 收答案 → 助手回「你选了蓝色」+ 表格 |
+| 键盘避让 | 弹键盘后整页 1355px，＋/权限/↑ 全可见可点，键盘下发消息收回复 |
+| 图片发出（bridge 侧） | 相册选图 → chip「🖼 IMG_1657.png ✕」→ bridge 存到 `.dsh-images/<hex>.png` → 委派识图子代理 |
+| 自动贴底 | 新消息/流式增量后自动滚到底 |
+
+**已离屏验证、待真机复验**（代码面已确认，缺一次装机目视）：
+
+| 项 | 离屏证据 | 待验内容 |
+|---|---|---|
+| 文件卡（deliverables/presented） | 用真实事件流 `build/smoke/deliv-history.json`（33 事件，含 seq 25 的 `deliverables/presented`）跑 `HistoryPage.fromEvents` → items 5 条，`files` 卡落位正确，`hello-deliverable.md` 的 path/name/description 全对 | 真机看卡片样式 + 点 .md 能否打开 `MdDocViewer` |
+| 图片缩略图（bug⑯） | 183/183 含 2 条 `stripBridgeImageNote` 用例；事件流证明 content 是两个 text 块 | 用户气泡应只剩原文 + 「看不到图...」说明段消失 + 出现缩略图 |
+| 审批卡（bug⑭） | ws 探针抓到 `chat.approval.requested`/`resolved`；`HitlPanel` 已改 `@Prop` | 真机触发一次升级审批，看卡片出现/回答后消失 |
+
+**尚未冒烟**：TTS 朗读与系统分享面板（`platform/Tts.ets`、`platform/Share.ets` 代码已就绪，未经真机点击）；深色模式整屏；`@` 引用文件；历史分页（`mergeOlderMessages`）；断线重连退避（1→2→4→8→16s）；检查更新跳转。
+
+**设备状态**：2026-11-16 16:10 起 hdc 掉线（`hdc list targets` 为 `[Empty]`、`lsusb` 无华为设备、WiFi 也 ping 不通 192.168.1.211），需重新插线并确认调试授权后继续上面的「待真机复验」三项。
