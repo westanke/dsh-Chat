@@ -5,16 +5,9 @@
  */
 
 import { SlashCommand } from '../core/Content';
+import { AtEntry } from '../core/AtMention';
 import { PermissionOption } from '../core/Permissions';
 import { DsColors, DsTypography, DsSpacing } from '../ui/theme';
-
-/** @ 面板条目（多根时 name 已带 label/ 前缀，安卓 fetchAtEntries 口径）。 */
-export class AtEntry {
-  name: string = '';
-  path: string = '';
-  kind: string = '';
-  isDirectory: boolean = false;
-}
 
 /** 命令补全面板。 */
 @Component

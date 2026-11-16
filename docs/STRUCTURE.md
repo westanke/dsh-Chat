@@ -205,6 +205,7 @@
 | `ets/core/ChatHistory.ts` | 历史装载与翻页（从 ChatStore 拆出，store 参数纯函数）：reloadHistoryIn 重拉（本地命令卡灌回尾部）+ loadOlderIn 向上翻页（beforeSeq=最小 seq、合并去重、跨会话结果丢弃）|
 | `ets/core/SessionGroups.ts` | 会话抽屉分组纯函数：groupSessionsByTime 先按时间分桶（今天/昨天/更早，超 2 天折叠）、桶内按工作区聚合（同区只显示一次小节标题），visibleRowsOf 处理「更早」展开态；dayBucketOf 按本地日历天分桶 |
 | `ets/core/AppUpdate.ts` | 检查更新（华为应用市场口径）：UpdateCheckResult 结果对象 + updateErrorMessage SDK 错误码（1009400001~7/401）中文映射 + NOT_SUPPORTED_MESSAGE；平台调用在 SettingsView（updateManager.checkAppUpdate / showUpdateDialog） |
+| `ets/core/AtMention.ts` | @ 文件引用面板纯逻辑（从 Composer 抽出）：AtEntry 条目模型 + mergeAtEntries 多根合并（label/ 前缀、query 名字前缀过滤不区分大小写、逐根容错 okRoots 计数）+ inSubDirectory 全失败判定；Composer 只做拉取与状态搬运 |
 | `ets/core/SessionLocation.ts` | 新建会话工作目录纯逻辑（对照安卓 session_location_sheet.dart）：SessionLocation(rootId,cwd,label)+key 契约串、locationLabel（''=根目录）、recentLocations（历史会话 (rootId,cwd) 去重保序、跳过无根会话）、locationSubtitle（优先 cwdAbsolute 退回 rootId）、parentPath 逐级上退、locationChipLabel 空态 chip 文案 |
 | `ets/components/SessionLocationSheet.ets` | 工作目录选择面板：默认「手机会话」项 + 最近使用列表 + 授权根逐级浏览（空根自动跳到下一个有子目录的根、多根可点标题切换、面包屑「用此目录」）；选中写 store.pendingLocation，首条消息走 session-create{rootId,cwd} |
 | `ets/core/ChatLabels.ts` | 展示文案纯函数：sessionTitleOf/deviceLabelOf/connectionLabelOf/stateLabelOf（安卓 chat_labels 口径） |

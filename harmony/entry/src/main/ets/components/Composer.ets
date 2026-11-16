@@ -14,7 +14,8 @@ import { GatewayRoot, GatewayEntry } from '../core/Files';
 import { JsonMap } from '../core/JsonAccess';
 import { PermissionSheet } from './PermissionSheet';
 import { PickedImage, pickImageFromGallery } from '../platform/PhotoPick';
-import { CommandPanel, AtFilePanel, AtEntry } from './ComposerPanels';
+import { CommandPanel, AtFilePanel } from './ComposerPanels';
+import { AtEntry, mergeAtEntries, inSubDirectory, AtMentionMerge } from '../core/AtMention';
 import { DsColors, DsTypography, DsSpacing } from '../ui/theme';
 import { permissionLabelOf } from '../core/Permissions';
 import { common } from '@kit.AbilityKit';
@@ -182,28 +183,14 @@ export struct Composer {
         .catch((e: Error): GatewayEntry[] => new Array<GatewayEntry>()));
     }
     Promise.all(jobs).then((lists: GatewayEntry[][]): void => {
-      const merged: AtEntry[] = [];
-      let okRoots: number = 0;
-      for (let i = 0; i < lists.length; i++) {
-        const label: string = roots.length > 1 ? roots[i].label + '/' : '';
-        if (lists[i].length > 0 || dir.length === 0) {
-          okRoots = okRoots + 1;
-        }
-        for (const e of lists[i]) {
-          const name: string = label + e.path;
-          if (query.length === 0 || name.toLowerCase().indexOf(query.toLowerCase()) === 0) {
-            const item: AtEntry = new AtEntry();
-            item.name = name;
-            item.path = e.path;
-            item.kind = e.kind;
-            item.isDirectory = e.isDirectory;
-            merged.push(item);
-          }
-        }
+      const labels: string[] = [];
+      for (let i = 0; i < roots.length; i++) {
+        labels.push(roots.length > 1 ? roots[i].label : '');
       }
-      this.atEntries = merged;
+      const merged: AtMentionMerge = mergeAtEntries(lists, labels, query, inSubDirectory(dir));
+      this.atEntries = merged.items;
       this.atLoading = false;
-      if (okRoots === 0 && dir.length > 0) {
+      if (merged.okRoots === 0 && inSubDirectory(dir)) {
         this.atFailed = true; // 所有根都没这个目录：确实失败
       }
     }).catch((): void => {

@@ -577,3 +577,12 @@ BUILD SUCCESSFUL；签名装机后真机进入有长历史的会话，列表头�
 **未修（P2 延后，报告里已列）**：R007 窗口宽度断点（600/840vp 一多分档，deviceTypes 已收窄到
 phone 规避）、R005 `LazyForEach`（长会话全量 ForEach）、R016 图片 `objectFit`、中文硬编码 92 处
 （未做 `$r('app.string')` 资源化）。
+
+**追加：Composer 501→488 行（@ 面板纯逻辑外提）**
+`components/Composer.ets` 落位后仍 501 行超限 → 把 @ 面板的合并逻辑抽成
+`core/AtMention.ts`（65 行，node 直测）：`AtEntry` 模型 + `mergeAtEntries(lists, labels, query,
+inSubDir)`（多根 label 前缀、query **名字前缀**过滤且大小写不敏感、逐根 404 容错并统计
+`okRoots`）+ `inSubDirectory(dir)`；`Composer` 只负责拉取与状态搬运。`ComposerPanels.ets`
+的 `AtEntry` 定义随之迁走、改 import。新增 `harmony/test/cases/at-mention.test.ts` 8 条 →
+**235/235 全绿**。顺手修了「单根时名字不带前缀」的用例（原写法喂了两条 list 却只给一个
+label，属测试自身笔误）。
