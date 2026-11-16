@@ -174,6 +174,23 @@ class DsColors {
   /// 设置页明文 HTTP 警告条文字（浅棕 / 深暖黄）。
   Color get settingsWarnFg =>
       dark ? const Color(0xFFFFC24B) : const Color(0xFF8A5A00);
+
+  // ---- 代码工作视图 · diff 行色（官方 Web diff 配色，docs/design-tokens.md §4.9）----
+  /// diff 新增行前景（浅 #50A14F / 深 #91D076）。
+  Color get diffAdd =>
+      dark ? const Color(0xFF91D076) : const Color(0xFF50A14F);
+
+  /// diff 删除行前景（浅 #E45649 / 深 #CD6660）。
+  Color get diffRemove =>
+      dark ? const Color(0xFFCD6660) : const Color(0xFFE45649);
+
+  /// diff 行底色：官方深色为前景 12% 透明度铺底，浅色无行底（返回透明）。
+  Color get diffAddBg =>
+      dark ? const Color(0xFF91D076).withValues(alpha: 0.12) : none;
+
+  /// diff 删除行底色：同上（浅色无行底）。
+  Color get diffRemoveBg =>
+      dark ? const Color(0xFFCD6660).withValues(alpha: 0.12) : none;
 }
 
 /// 字号（官方 token，sp；行高随 dp 换算）。

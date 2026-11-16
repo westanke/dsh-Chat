@@ -8,6 +8,13 @@
 /// 措辞（修改了文件 / 执行了命令 / 读取了图片…）来自 lib/bridge/tool_call.dart 的
 /// toolPhrases，与 dsh-companion 的 ChatToolPresentation 同源；详情布局参考
 /// companion 的 ChatToolBlocks/ChatToolDetail（参数 JSON + 结果正文 + 耗时）。
+///
+/// 「通用设置 · 工作步骤展示」（2026-11-16 批次）四档：
+/// - concise 简洁：只渲染折叠行，不可展开、无展开箭头；
+/// - standard 标准：可展开，但只有每条工具行（短语+摘要），不渲染详情；
+/// - detailed 详细：现状（工具行 + 点开详情）；
+/// - verbose 完全展开：同 detailed，默认展开态由父层（ChatState）给出。
+/// 展开态提升到 ChatState（key=组内首个 callId），跨历史 reload 稳定。
 library;
 
 import 'dart:convert';
@@ -15,28 +22,35 @@ import 'dart:convert';
 import 'package:material_ui/material_ui.dart';
 
 import '../bridge/models.dart';
+import '../design/app_settings.dart';
 import '../design/tokens.dart';
 import 'md_code_block.dart';
 
-class DsProcessGroup extends StatefulWidget {
-  const DsProcessGroup({super.key, required this.group, required this.colors});
+class DsProcessGroup extends StatelessWidget {
+  const DsProcessGroup({
+    super.key,
+    required this.group,
+    required this.colors,
+    required this.detail,
+    required this.expanded,
+    required this.onToggle,
+  });
 
   final ChatMessage group; // role == 'process'
   final DsColors colors;
+  final WorkStepsDetail detail;
 
-  @override
-  State<DsProcessGroup> createState() => _DsProcessGroupState();
-}
-
-class _DsProcessGroupState extends State<DsProcessGroup> {
-  bool _expanded = false;
+  /// 展开态（父层托管）；verbose 默认展开、concise 恒折叠。
+  final bool expanded;
+  final VoidCallback? onToggle;
 
   @override
   Widget build(BuildContext context) {
-    final c = widget.colors;
-    final calls = widget.group.toolCalls;
+    final c = colors;
+    final calls = group.toolCalls;
     final failed = calls.any((t) => t.failed);
     final headColor = failed ? c.labelTertiary : c.labelSecondary;
+    final canExpand = detail != WorkStepsDetail.concise && calls.isNotEmpty;
 
     return Padding(
       padding: const EdgeInsets.only(top: DsSpacing.blockGap),
@@ -44,9 +58,7 @@ class _DsProcessGroupState extends State<DsProcessGroup> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           InkWell(
-            onTap: calls.isEmpty
-                ? null
-                : () => setState(() => _expanded = !_expanded),
+            onTap: canExpand ? onToggle : null,
             child: SizedBox(
               height: DsSpacing.processRowHeight,
               child: Row(
@@ -64,15 +76,15 @@ class _DsProcessGroupState extends State<DsProcessGroup> {
                   ),
                   Flexible(
                     child: Text(
-                      widget.group.phraseText,
+                      group.phraseText,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: DsTypography.small.copyWith(color: headColor),
                     ),
                   ),
-                  if (calls.isNotEmpty)
+                  if (canExpand)
                     Icon(
-                      _expanded ? Icons.expand_less : Icons.expand_more,
+                      expanded ? Icons.expand_less : Icons.expand_more,
                       size: 16,
                       color: headColor,
                     ),
@@ -80,12 +92,20 @@ class _DsProcessGroupState extends State<DsProcessGroup> {
               ),
             ),
           ),
-          if (_expanded)
+          if (canExpand && expanded)
             Padding(
               padding: const EdgeInsets.only(top: 4, bottom: 4),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
-                children: [for (final t in calls) _ToolRow(call: t, colors: c)],
+                children: [
+                  for (final t in calls)
+                    _ToolRow(
+                      call: t,
+                      colors: c,
+                      // standard 只到工具行（短语+摘要），不渲染 _ToolDetail。
+                      allowDetail: detail != WorkStepsDetail.standard,
+                    ),
+                ],
               ),
             ),
         ],
@@ -96,11 +116,17 @@ class _DsProcessGroupState extends State<DsProcessGroup> {
 
 /// 展开后的单条工具调用：图标 + 动作短语 + 参数摘要（+ 失败标记）；
 /// 点击整行再展开完整详情（参数 JSON + 结果正文 + 耗时）。
+/// [allowDetail] = false（standard 档）时只显示短语与摘要。
 class _ToolRow extends StatefulWidget {
-  const _ToolRow({required this.call, required this.colors});
+  const _ToolRow({
+    required this.call,
+    required this.colors,
+    required this.allowDetail,
+  });
 
   final ToolCallInfo call;
   final DsColors colors;
+  final bool allowDetail;
 
   @override
   State<_ToolRow> createState() => _ToolRowState();
@@ -119,13 +145,14 @@ class _ToolRowState extends State<_ToolRow> {
         call.resultText != null ||
         call.durationMs != null ||
         _rawArgs() != null;
+    final showDetail = hasDetail && widget.allowDetail;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 3),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           InkWell(
-            onTap: hasDetail ? () => setState(() => _detail = !_detail) : null,
+            onTap: showDetail ? () => setState(() => _detail = !_detail) : null,
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -162,7 +189,7 @@ class _ToolRowState extends State<_ToolRow> {
                     ],
                   ),
                 ),
-                if (hasDetail)
+                if (showDetail)
                   Icon(
                     _detail ? Icons.expand_less : Icons.expand_more,
                     size: 14,
@@ -171,7 +198,8 @@ class _ToolRowState extends State<_ToolRow> {
               ],
             ),
           ),
-          if (_detail) _ToolDetail(call: call, colors: c),
+          if (_detail && widget.allowDetail)
+            _ToolDetail(call: call, colors: c),
         ],
       ),
     );

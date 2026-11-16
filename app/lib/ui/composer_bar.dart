@@ -82,6 +82,7 @@ class _ComposerBar extends StatelessWidget {
     required this.showAddImage,
     required this.canPickImage,
     required this.onPickImage,
+    required this.onInsertContent,
     required this.sendState,
     required this.canSend,
     required this.onSend,
@@ -106,6 +107,7 @@ class _ComposerBar extends StatelessWidget {
   final bool showAddImage;
   final bool canPickImage;
   final VoidCallback? onPickImage;
+  final VoidCallback? onInsertContent;
 
   final _SendKeyState sendState;
   final bool canSend;
@@ -205,6 +207,17 @@ class _ComposerBar extends StatelessWidget {
                   filled: false,
                   icon: Icons.add,
                   onPressed: canPickImage ? onPickImage : null,
+                ),
+                // 「选择项目中的内容」（官方输入条 @ 引用入口）：
+                // 光标处插 @ 唤起文件面板，禁用条件与加图钮一致。
+                Tooltip(
+                  message: '选择项目中的内容',
+                  child: _RoundIconButton(
+                    colors: c,
+                    filled: false,
+                    icon: Icons.folder_open_outlined,
+                    onPressed: canPickImage ? onInsertContent : null,
+                  ),
                 ),
                 const SizedBox(width: DsSpacing.composerButtonGap),
               ],

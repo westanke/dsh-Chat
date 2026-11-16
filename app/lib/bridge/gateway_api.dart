@@ -370,4 +370,12 @@ extension GatewayApi on GatewayClient {
       );
     }
   }
+
+  /// Agent 预设清单（REST GET /chat/agent-presets，「代码工作视图」第三段）。
+  Future<List<GatewayAgentPreset>> agentPresets() =>
+      gatewayAgentPresets(this);
+
+  /// 切换空白会话的 Agent 预设（REST PUT，409=预设已锁，由调用方处理）。
+  Future<String?> selectAgentPreset(String sessionId, String presetId) =>
+      gatewaySelectAgentPreset(this, sessionId, presetId);
 }

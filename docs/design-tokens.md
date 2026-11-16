@@ -252,6 +252,19 @@ App 实测墨迹高（density 3.0）：H1 71px、H2 61px、H3 57px、正文 45px
 
 命中区约束：删除按钮是卡片 `Row` 里独立的 `IconButton`（`minWidth/minHeight:40`），`InkWell` 只包左侧 `Expanded` 区域，**两者不重叠**——点删除不会触发「点击直连」（避免误连）。删除若命中 `DshCredentials.baseUrl`，顺手 `DshCredentials.clear()`，避免下次启动拿过期 token 静默直连失败。
 
+## 4.9 代码工作视图 · diff 行色（本工程自定义，取官方 Web diff 配色）
+
+「显示代码工作视图」开启后，聊天页 ⋯ 菜单出现「代码工作视图」抽屉；其中「本轮代码差异」把 edit/write 工具参数渲染成 +/- 行色代码块。取色实测官方 Web CSS（`ref/main.pretty.css`）：inserted 行前景浅 `#50a14f`（行2334）/ 深 `#91d076`（行2310），deleted 行前景浅 `#e45649`（行2333）/ 深 `#cd6660`（行2282）；深色 diff 行另铺 12% 前景透明度底色（行2310-2311），浅色无行底。
+
+| 元素 | token | 取值 | 依据 |
+|---|---|---|---|
+| diff 新增行（+）前景 | `DsColors.diffAdd` | 浅 `#50A14F` / 深 `#91D076` | 官方 Web `.hljs-addition`/inserted fg 实测 |
+| diff 删除行（-）前景 | `DsColors.diffRemove` | 浅 `#E45649` / 深 `#CD6660` | 官方 Web `.hljs-deletion`/deleted fg 实测 |
+| diff 新增行底色 | `DsColors.diffAddBg` | 深：`#91D076` @12%；浅：透明 | 官方 Web rgba(145,208,118,.12) |
+| diff 删除行底色 | `DsColors.diffRemoveBg` | 深：`#CD6660` @12%；浅：透明 | 官方 Web rgba(205,102,96,.12) |
+
+同一抽屉的轨迹段（复用 §4.7 运行轨迹面板）、Agent 预设列表（名称/描述/默认标记/当前勾选）与底部说明，全部复用既有语义 token（`bgLayer1`/`labelPrimary`/`labelSecondary`/`labelTertiary`/`brand`/`settingsSurface`/`chipSelectedBg`），无新增色值/字号/间距。diff 代码块沿用 `DsTypography.codeBlock`/`codeBlockPad`/`codeBlockRadius`，仅行前景/底色按上表。
+
 ## 5. 截图资产（ref/）
 - official-login-page.png 登录页（+86 152 1388 0002 / 验证码输入 / 发送验证码按钮）
 - official-welcome.png 欢迎引导页（开启对话主按钮）

@@ -19,6 +19,11 @@ void main() {
     appSettings.setFontFollowsSystem(false);
     appSettings.setBusySendMode(BusySendMode.queue);
     appSettings.setDiagLog(true);
+    // 2026-11-16 通用设置批次：新四项同样逐项复位。
+    appSettings.setWorkStepsDetail(WorkStepsDetail.detailed);
+    appSettings.setCollapseTiming(CollapseTiming.completion);
+    appSettings.setFoldedReplies(FoldedReplies.all);
+    appSettings.setCodeWorkView(false);
   });
 
   Future<void> pump(WidgetTester tester, {GatewayClient? gateway}) async {
@@ -35,7 +40,7 @@ void main() {
 
   testWidgets('renders every section title', (tester) async {
     await pump(tester);
-    for (final title in ['连接', '外观', '发送', '诊断', '关于']) {
+    for (final title in ['连接', '外观', '通用', '发送', '诊断', '关于']) {
       expect(find.text(title), findsOneWidget, reason: title);
     }
     expect(find.text('断开连接'), findsOneWidget);
@@ -91,13 +96,48 @@ void main() {
 
   testWidgets('diagnostics switch is wired', (tester) async {
     await pump(tester);
-    // 两个 Switch：字号跟随系统、记录诊断日志；取后者。
+    // 三个 Switch：字号跟随系统、显示代码工作视图（通用）、记录诊断日志；取后者。
     final switches = find.byType(Switch);
-    expect(switches, findsNWidgets(2));
-    final diag = tester.widget<Switch>(switches.at(1));
+    expect(switches, findsNWidgets(3));
+    final diag = tester.widget<Switch>(switches.at(2));
     expect(diag.value, isTrue);
     diag.onChanged!(false);
     expect(appSettings.diagLog, isFalse);
+  });
+
+  testWidgets('general section rows are wired to the new settings',
+      (tester) async {
+    await pump(tester);
+    // 工作步骤展示（四档）。
+    await tester.ensureVisible(find.text('完全展开'));
+    await tester.tap(find.text('完全展开'));
+    await tester.pump();
+    expect(appSettings.workStepsDetail, WorkStepsDetail.verbose);
+    // verbose 时「收起后显示的回复」整行隐藏（verbose 从不折叠）。
+    expect(find.text('收起后显示的回复'), findsNothing);
+    await tester.tap(find.text('详细'));
+    await tester.pump();
+    expect(appSettings.workStepsDetail, WorkStepsDetail.detailed);
+
+    // 收起时机。
+    await tester.ensureVisible(find.text('下次有新消息时'));
+    await tester.tap(find.text('下次有新消息时'));
+    await tester.pump();
+    expect(appSettings.collapseTiming, CollapseTiming.nextInput);
+
+    // 收起后显示的回复（detailed 档下重新可见）。
+    await tester.ensureVisible(find.text('仅最终回答'));
+    await tester.tap(find.text('仅最终回答'));
+    await tester.pump();
+    expect(appSettings.foldedReplies, FoldedReplies.finalOnly);
+
+    // 显示代码工作视图开关（通用段的 Switch，位于字号跟随系统之后）。
+    final switches = find.byType(Switch);
+    final workView = tester.widget<Switch>(switches.at(1));
+    expect(workView.value, isFalse);
+    workView.onChanged!(true);
+    expect(appSettings.codeWorkView, isTrue);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('connection section shows hello device scopes read-only',

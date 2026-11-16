@@ -73,6 +73,11 @@ void main() {
       expect(s.fontFollowsSystem, isFalse);
       expect(s.busySendMode, BusySendMode.queue);
       expect(s.diagLog, isTrue);
+      // 2026-11-16 通用设置批次：详细档 / 回答结束后收起 / 全部回复 / 关闭。
+      expect(s.workStepsDetail, WorkStepsDetail.detailed);
+      expect(s.collapseTiming, CollapseTiming.completion);
+      expect(s.foldedReplies, FoldedReplies.all);
+      expect(s.codeWorkView, isFalse);
       expect(s.effectiveFontScale, 1.0);
     });
 
@@ -106,6 +111,10 @@ void main() {
           'fontFollowsSystem': true,
           'busySendMode': 'steer',
           'diagLog': false,
+          'workStepsDetail': 'verbose',
+          'collapseTiming': 'next-input',
+          'foldedReplies': 'final',
+          'codeWorkView': true,
         }),
       });
       final s = AppSettings();
@@ -115,7 +124,51 @@ void main() {
       expect(s.fontFollowsSystem, isTrue);
       expect(s.busySendMode, BusySendMode.steer);
       expect(s.diagLog, isFalse);
+      expect(s.workStepsDetail, WorkStepsDetail.verbose);
+      expect(s.collapseTiming, CollapseTiming.nextInput);
+      expect(s.foldedReplies, FoldedReplies.finalOnly);
+      expect(s.codeWorkView, isTrue);
       expect(s.effectiveFontScale, 1.0);
+    });
+
+    test('new general-settings enums round-trip through their jsonName', () async {
+      // 存读走官方 token 字符串（workStepsDetail/collapseTiming/foldedReplies），
+      // 未知名与缺键回默认；setX 即时 _save 可被再次 load 读回。
+      final s = AppSettings();
+      var notified = 0;
+      s.addListener(() => notified++);
+      s.setWorkStepsDetail(WorkStepsDetail.concise);
+      s.setCollapseTiming(CollapseTiming.nextInput);
+      s.setFoldedReplies(FoldedReplies.finalOnly);
+      s.setCodeWorkView(true);
+      expect(notified, 4);
+      s.setWorkStepsDetail(WorkStepsDetail.concise); // no-op 不 notify
+      s.setCodeWorkView(false);
+      expect(notified, 5);
+      expect(s.codeWorkView, isFalse);
+
+      final saved = jsonDecode(
+        (await SharedPreferences.getInstance()).getString('dsh.settings')!,
+      ) as Map<String, dynamic>;
+      expect(saved['workStepsDetail'], 'concise');
+      expect(saved['collapseTiming'], 'next-input');
+      expect(saved['foldedReplies'], 'final');
+      // 前面 no-op 演练已把 codeWorkView 设回 false，存盘也应是 false。
+      expect(saved['codeWorkView'], false);
+
+      SharedPreferences.setMockInitialValues({
+        'dsh.settings': jsonEncode({
+          'workStepsDetail': 'NO_SUCH',
+          'collapseTiming': 'NO_SUCH',
+          'foldedReplies': 'NO_SUCH',
+        }),
+      });
+      final r = AppSettings();
+      await r.load();
+      expect(r.workStepsDetail, WorkStepsDetail.detailed);
+      expect(r.collapseTiming, CollapseTiming.completion);
+      expect(r.foldedReplies, FoldedReplies.all);
+      expect(r.codeWorkView, isFalse);
     });
 
     test('load keeps defaults on corrupt JSON / unknown enum names', () async {

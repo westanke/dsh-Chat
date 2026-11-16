@@ -217,7 +217,19 @@ class _MessageListState extends State<_MessageList> {
         ),
       );
     }
+    // 「收起后显示的回复」（官方通用设置）：finalOnly 且轮完成时只保留
+    // 每轮最终回答（流式中永不过滤）。index 仍用原 i——regenerateAt
+    // 依赖原列表下标，不能按可见序列号重排。
+    final visible = Set<ChatMessage>.identity()
+      ..addAll(
+        visibleMessagesOf(
+          state.messages,
+          appSettings.foldedReplies,
+          state.streaming,
+        ),
+      );
     for (var i = 0; i < state.messages.length; i++) {
+      if (!visible.contains(state.messages[i])) continue;
       items.add(
         _MessageItem(
           message: state.messages[i],

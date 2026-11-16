@@ -12,6 +12,7 @@ import '../bridge/models.dart';
 import '../design/app_settings.dart';
 import 'hitl_state.dart';
 import 'chat_history_actions.dart';
+import 'chat_expand_state.dart';
 import 'chat_hitl_actions.dart';
 import 'mobile_workspace.dart';
 import 'session_groups.dart';
@@ -32,14 +33,14 @@ String? lastUserTextBefore(List<ChatMessage> messages, int end) {
   return last;
 }
 
-class ChatState extends ChangeNotifier {
+class ChatState extends ChangeNotifier with GroupExpandState {
   ChatState(this._gateway) {
     _sub = _gateway.events.listen(_onEvent);
     _stateSub = _gateway.state.listen(_onGatewayState);
-    // HITL 卡片要自己驱动重建：hitl 表变更（含 replay / REST 合流）直达 UI，
-    // 不再依赖 reloadHistory 等其它事件「碰巧」触发 build（2026-11-16 真机
-    // 反馈：replay 晚于 reloadHistory 时提问卡永不出现）。
+    // HITL 卡片要自己驱动重建：hitl 表变更（含 replay/REST 合流）直达 UI，
+    // 不依赖 reloadHistory「碰巧」触发（2026-11-16 真机：replay 晚于 reloadHistory 时提问卡永不出现）。
     hitl.addListener(notifyUi);
+    appSettings.addListener(notifyUi); // 通用设置变更直达会话页（列表读 appSettings）
   }
 
   final GatewayClient _gateway;
@@ -234,15 +235,14 @@ class ChatState extends ChangeNotifier {
     // 不再因 streaming 直接拒绝：运行中再发由「繁忙发送模式」决定语义
     // （对照 companion ComposerSendPolicy：queue 排队 / steer 插话）。
     lastError = null;
-    messages = [
-      ...messages,
-      ChatMessage(role: 'user', text: trimmed.isEmpty ? '[图片]' : trimmed),
-    ];
+    final userText = trimmed.isEmpty ? '[图片]' : trimmed;
+    messages = [...messages, ChatMessage(role: 'user', text: userText)];
+    // 收起时机 = 下次有新消息时：发送即收起（verbose 档永不自动收起）。
+    collapseOnNewInput();
     // 繁忙发送模式（对照 companion ComposerSendPolicy）：运行中再发消息时，
     // queue = 排队等当前回合结束，steer = 立即打断。设置页偏好在这里落地。
-    final mode = appSettings.busySendMode == BusySendMode.steer
-        ? 'steer'
-        : 'queue';
+    final mode =
+        appSettings.busySendMode == BusySendMode.steer ? 'steer' : 'queue';
     // steer 会打断当前回合：清掉流式缓冲；queue 保留当前流式显示继续跑。
     // 注意：queue 时首回合 committed 会短暂置 streaming=false，随后次回合
     // delta 再置回 true（本版本不做多回合队列跟踪，属已知简化）。
@@ -414,6 +414,8 @@ class ChatState extends ChangeNotifier {
         if (committed.role == 'assistant') {
           streaming = false;
           _clearStream();
+          // 收起时机 = 回答结束后：本轮（最后一条 user 之后）展开的组收起。
+          collapseOnAssistantCommitted(messages);
           reloadHistory();
         } else {
           // 用户消息落库：可能是本端发的（本地已乐观上屏），也可能是别的端
@@ -492,6 +494,7 @@ class ChatState extends ChangeNotifier {
     _toolRefreshTimer?.cancel();
     _sub?.cancel();
     _stateSub?.cancel();
+    appSettings.removeListener(notifyUi);
     super.dispose();
   }
 }

@@ -188,6 +188,73 @@ class _AppearanceSection extends StatelessWidget {
   }
 }
 
+// ---------- 通用（对照官方 App「通用设置」）----------
+
+class _GeneralSection extends StatelessWidget {
+  const _GeneralSection({required this.colors});
+
+  final DsColors colors;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = colors;
+    final detail = appSettings.workStepsDetail;
+    return _Section(
+      colors: c,
+      title: '通用',
+      children: [
+        _SegmentedRow<WorkStepsDetail>(
+          colors: c,
+          label: '工作步骤展示',
+          description: '选择希望看到多少工具调用细节',
+          values: WorkStepsDetail.values,
+          selected: detail,
+          labels: const {
+            WorkStepsDetail.concise: '简洁',
+            WorkStepsDetail.standard: '标准',
+            WorkStepsDetail.detailed: '详细',
+            WorkStepsDetail.verbose: '完全展开',
+          },
+          onChanged: appSettings.setWorkStepsDetail,
+        ),
+        _SegmentedRow<CollapseTiming>(
+          colors: c,
+          label: '工作步骤收起时机',
+          description: '选择何时自动收起工作步骤',
+          values: CollapseTiming.values,
+          selected: appSettings.collapseTiming,
+          labels: const {
+            CollapseTiming.completion: '回答结束后',
+            CollapseTiming.nextInput: '下次有新消息时',
+          },
+          onChanged: appSettings.setCollapseTiming,
+        ),
+        // verbose 从不折叠，「收起后显示的回复」只对可折叠档位有意义。
+        if (detail != WorkStepsDetail.verbose)
+          _SegmentedRow<FoldedReplies>(
+            colors: c,
+            label: '收起后显示的回复',
+            description: '工作步骤收起后，保留哪些助手回复',
+            values: FoldedReplies.values,
+            selected: appSettings.foldedReplies,
+            labels: const {
+              FoldedReplies.all: '全部回复',
+              FoldedReplies.finalOnly: '仅最终回答',
+            },
+            onChanged: appSettings.setFoldedReplies,
+          ),
+        _SwitchRow(
+          colors: c,
+          title: '显示代码工作视图',
+          description: '开启后，显示轨迹、本轮代码差异，可选择完整的 Agent 预设切换',
+          value: appSettings.codeWorkView,
+          onChanged: appSettings.setCodeWorkView,
+        ),
+      ],
+    );
+  }
+}
+
 // ---------- 发送 ----------
 
 class _SendSection extends StatelessWidget {

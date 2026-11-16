@@ -217,10 +217,14 @@ class _SegmentedRow<T extends Enum> extends StatelessWidget {
     required this.selected,
     required this.labels,
     required this.onChanged,
+    this.description,
   });
 
   final DsColors colors;
   final String label;
+
+  /// 可选说明文字（官方通用设置的行描述，如「选择希望看到多少工具调用细节」）。
+  final String? description;
   final List<T> values;
   final T selected;
   final Map<T, String> labels;
@@ -241,6 +245,13 @@ class _SegmentedRow<T extends Enum> extends StatelessWidget {
             label,
             style: DsTypography.base.copyWith(color: c.labelPrimary),
           ),
+          if (description != null) ...[
+            const SizedBox(height: 2),
+            Text(
+              description!,
+              style: DsTypography.caption.copyWith(color: c.labelTertiary),
+            ),
+          ],
           const SizedBox(height: 8),
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,

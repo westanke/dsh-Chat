@@ -60,6 +60,60 @@ class AppFontScaler implements TextScaler {
 
 enum BusySendMode { queue, steer }
 
+/// 「通用设置 · 工作步骤展示」：希望看到多少工具调用细节。
+///
+/// 持久化存官方 token 字符串（[jsonName]），不存 ordinal/name，
+/// 与官方语义对齐（detailed 为默认）。
+enum WorkStepsDetail {
+  concise('concise'),
+  standard('standard'),
+  detailed('detailed'),
+  verbose('verbose');
+
+  const WorkStepsDetail(this.jsonName);
+
+  /// 官方语义 token：verbose 完全展开、从不折叠。
+  final String jsonName;
+
+  static WorkStepsDetail fromJsonName(String? v) =>
+      WorkStepsDetail.values.firstWhere(
+        (e) => e.jsonName == v,
+        orElse: () => WorkStepsDetail.detailed,
+      );
+}
+
+/// 「通用设置 · 工作步骤收起时机」：何时自动收起工作步骤。
+enum CollapseTiming {
+  completion('completion'),
+  nextInput('next-input');
+
+  const CollapseTiming(this.jsonName);
+
+  final String jsonName;
+
+  static CollapseTiming fromJsonName(String? v) =>
+      CollapseTiming.values.firstWhere(
+        (e) => e.jsonName == v,
+        orElse: () => CollapseTiming.completion,
+      );
+}
+
+/// 「通用设置 · 收起后显示的回复」：工作步骤收起后保留哪些助手回复。
+enum FoldedReplies {
+  all('all'),
+  finalOnly('final');
+
+  const FoldedReplies(this.jsonName);
+
+  final String jsonName;
+
+  static FoldedReplies fromJsonName(String? v) =>
+      FoldedReplies.values.firstWhere(
+        (e) => e.jsonName == v,
+        orElse: () => FoldedReplies.all,
+      );
+}
+
 /// 顶层纯函数：NaN/Inf → 1.0，否则夹到 [0.8, 1.5]（对齐 AppPreferences.kt:213）。
 double normalizeFontScale(double value) =>
     value.isFinite ? value.clamp(0.8, 1.5).toDouble() : 1.0;
@@ -74,12 +128,20 @@ class AppSettings extends ChangeNotifier {
   bool _fontFollowsSystem = false;
   BusySendMode _busySendMode = BusySendMode.queue;
   bool _diagLog = true;
+  WorkStepsDetail _workStepsDetail = WorkStepsDetail.detailed;
+  CollapseTiming _collapseTiming = CollapseTiming.completion;
+  FoldedReplies _foldedReplies = FoldedReplies.all;
+  bool _codeWorkView = false;
 
   AppThemeMode get themeMode => _themeMode;
   double get fontScale => _fontScale;
   bool get fontFollowsSystem => _fontFollowsSystem;
   BusySendMode get busySendMode => _busySendMode;
   bool get diagLog => _diagLog;
+  WorkStepsDetail get workStepsDetail => _workStepsDetail;
+  CollapseTiming get collapseTiming => _collapseTiming;
+  FoldedReplies get foldedReplies => _foldedReplies;
+  bool get codeWorkView => _codeWorkView;
 
   /// 与系统字号相乘的系数：跟随系统时为 1.0（即只用系统无障碍字号），
   /// 否则为应用内设定的缩放（对齐 AppPreferences.effectiveFontScale()）。
@@ -112,6 +174,14 @@ class AppSettings extends ChangeNotifier {
           ? (BusySendMode.values.asNameMap()[bm] ?? BusySendMode.queue)
           : BusySendMode.queue;
       _diagLog = j['diagLog'] != false;
+      final wsd = j['workStepsDetail'];
+      _workStepsDetail =
+          WorkStepsDetail.fromJsonName(wsd is String ? wsd : null);
+      final ct = j['collapseTiming'];
+      _collapseTiming = CollapseTiming.fromJsonName(ct is String ? ct : null);
+      final fr = j['foldedReplies'];
+      _foldedReplies = FoldedReplies.fromJsonName(fr is String ? fr : null);
+      _codeWorkView = j['codeWorkView'] == true;
     }
     notifyListeners();
   }
@@ -127,6 +197,10 @@ class AppSettings extends ChangeNotifier {
           'fontFollowsSystem': _fontFollowsSystem,
           'busySendMode': _busySendMode.name,
           'diagLog': _diagLog,
+          'workStepsDetail': _workStepsDetail.jsonName,
+          'collapseTiming': _collapseTiming.jsonName,
+          'foldedReplies': _foldedReplies.jsonName,
+          'codeWorkView': _codeWorkView,
         }),
       );
     } catch (_) {
@@ -166,6 +240,34 @@ class AppSettings extends ChangeNotifier {
   void setDiagLog(bool v) {
     if (_diagLog == v) return;
     _diagLog = v;
+    notifyListeners();
+    _save();
+  }
+
+  void setWorkStepsDetail(WorkStepsDetail v) {
+    if (_workStepsDetail == v) return;
+    _workStepsDetail = v;
+    notifyListeners();
+    _save();
+  }
+
+  void setCollapseTiming(CollapseTiming v) {
+    if (_collapseTiming == v) return;
+    _collapseTiming = v;
+    notifyListeners();
+    _save();
+  }
+
+  void setFoldedReplies(FoldedReplies v) {
+    if (_foldedReplies == v) return;
+    _foldedReplies = v;
+    notifyListeners();
+    _save();
+  }
+
+  void setCodeWorkView(bool v) {
+    if (_codeWorkView == v) return;
+    _codeWorkView = v;
     notifyListeners();
     _save();
   }

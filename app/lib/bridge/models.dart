@@ -23,6 +23,7 @@ class DshSession {
     this.workspaceTitle,
     this.cwd = '',
     this.cwdAbsolute,
+    this.agentPreset,
   });
 
   final String id;
@@ -46,6 +47,11 @@ class DshSession {
   /// 新建会话目录选择（2026-11-15 反馈）用它做「最近使用」候选。
   final String cwd;
 
+  /// 会话的 Agent 预设 id（openapi §ChatSession.agentPreset 可选；
+  /// 空白会话可通过 PUT /chat/sessions/{sid}/agent-preset 切换，
+  /// 首条消息后桥端锁定）。
+  final String? agentPreset;
+
   factory DshSession.fromJson(Map<String, dynamic> j) => DshSession(
     id: (j['id'] ?? '') as String,
     rootId: (j['rootId'] ?? '') as String,
@@ -57,6 +63,7 @@ class DshSession {
     workspaceTitle: j['workspaceTitle'] as String?,
     cwd: (j['cwd'] ?? '') as String,
     cwdAbsolute: j['cwdAbsolute'] as String?,
+    agentPreset: j['agentPreset'] as String?,
   );
 
   String get displayTitle {

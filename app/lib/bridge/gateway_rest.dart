@@ -289,3 +289,100 @@ Future<List<int>> gatewayReadFileBytes(
     '/api/v1/roots/$rootId/content?path=${Uri.encodeComponent(wirePath)}',
   );
 }
+
+/// REST GET /api/v1/chat/agent-presets（listAgentPresets，openapi.yaml:458-474，
+/// chat.read scope）：Agent 预设清单（「代码工作视图」第三段用）。
+Future<List<GatewayAgentPreset>> gatewayAgentPresets(
+  GatewayClient gateway,
+) async {
+  final token = gateway.token;
+  if (token == null || token.isEmpty) {
+    throw RequestException('NO_TOKEN', '尚未配对');
+  }
+  final base = gateway.baseUrl.replaceAll(RegExp(r'/+$'), '');
+  final uri = Uri.parse('$base/api/v1/chat/agent-presets');
+  final client = http.Client();
+  try {
+    final resp = await client
+        .get(uri, headers: {'Authorization': 'Bearer $token'})
+        .timeout(const Duration(seconds: 30));
+    if (resp.statusCode != 200) {
+      throw RequestException('HTTP_${resp.statusCode}', 'Agent 预设列表拉取失败');
+    }
+    final j = jsonDecode(resp.body);
+    final items = j is Map ? j['items'] : null;
+    if (items is! List) return const [];
+    return [
+      for (final it in items)
+        if (it is Map)
+          GatewayAgentPreset.fromJson(Map<String, dynamic>.from(it)),
+    ];
+  } on TimeoutException {
+    throw RequestException('TIMEOUT', 'Agent 预设列表超时');
+  } finally {
+    client.close();
+  }
+}
+
+/// AgentPreset（openapi.yaml:2064）：required id/name/trust/isDefault/available，
+/// description 可选；trust 标记预设来源（'system' 内置 / 'user' 自定义）。
+class GatewayAgentPreset {
+  const GatewayAgentPreset({
+    required this.id,
+    required this.name,
+    this.description,
+    required this.trust,
+    required this.isDefault,
+    required this.available,
+  });
+
+  final String id;
+  final String name;
+  final String? description;
+  final String trust; // 'system' | 'user'
+  final bool isDefault;
+  final bool available;
+
+  factory GatewayAgentPreset.fromJson(Map<String, dynamic> j) {
+    return GatewayAgentPreset(
+      id: (j['id'] ?? '') as String,
+      name: (j['name'] ?? '') as String,
+      description: j['description'] as String?,
+      trust: (j['trust'] ?? 'system') as String,
+      isDefault: j['isDefault'] == true,
+      available: j['available'] != false,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'name': name,
+        if (description != null) 'description': description,
+        'trust': trust,
+        'isDefault': isDefault,
+        'available': available,
+      };
+}
+
+/// REST PUT /api/v1/chat/sessions/{sessionId}/agent-preset
+/// （selectSessionAgentPreset，openapi.yaml:1406-1435）：仅空白会话可切换，
+/// 桥端在首条消息后锁定预设（409 = 预设已锁，UI 提示「仅空白会话可切换」）。
+/// 返回桥端确认落库的 agentPreset id。
+Future<String?> gatewaySelectAgentPreset(
+  GatewayClient gateway,
+  String sessionId,
+  String presetId,
+) async {
+  final resp = await _restJson(
+    gateway,
+    method: 'PUT',
+    path:
+        '/api/v1/chat/sessions/${Uri.encodeComponent(sessionId)}/agent-preset',
+    body: {'agentPreset': presetId},
+    fail: 'Agent 预设切换失败',
+    timeout: 'Agent 预设切换超时',
+    okCodes: const [200],
+  );
+  final preset = resp is Map ? resp['agentPreset'] : null;
+  return preset is String ? preset : null;
+}

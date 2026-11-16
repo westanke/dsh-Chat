@@ -96,6 +96,7 @@ class SettingsPage extends StatelessWidget {
                     const SizedBox(height: DsSpacing.settingsSectionGap),
                     _ConnectionSection(colors: c, gateway: gateway),
                     _AppearanceSection(colors: c),
+                    _GeneralSection(colors: c),
                     _SendSection(colors: c),
                     _DiagnosticsSection(colors: c),
                     _AboutSection(colors: c),

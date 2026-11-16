@@ -36,7 +36,16 @@ class _MessageItem extends StatelessWidget {
   Widget build(BuildContext context) {
     // 工具调用过程组：折叠成一行，点开展开明细。
     if (message.isProcess) {
-      return DsProcessGroup(group: message, colors: colors);
+      // 展开态托管在 ChatState（key=首个 callId，跨 reload 稳定）；
+      // detail 四档由「通用设置 · 工作步骤展示」决定。
+      final key = processGroupKeyOf(message);
+      return DsProcessGroup(
+        group: message,
+        colors: colors,
+        detail: appSettings.workStepsDetail,
+        expanded: state.isGroupExpanded(key),
+        onToggle: () => state.toggleGroup(key),
+      );
     }
     // 文件卡（第四轮反馈 6）：present 工具交付的文件列表。
     if (message.role == 'files') {

@@ -93,17 +93,19 @@ void showTrajectorySheet(
   );
 }
 
-class _TrajectorySheet extends StatefulWidget {
-  const _TrajectorySheet({required this.state, required this.colors});
+/// 轨迹渲染体（轮次分组 + 节点树，点节点展开原始 JSON）。
+/// 「运行轨迹」抽屉与「代码工作视图」的轨迹段共用，不复制逻辑。
+class TrajectoryBody extends StatefulWidget {
+  const TrajectoryBody({super.key, required this.state, required this.colors});
 
   final ChatState state;
   final DsColors colors;
 
   @override
-  State<_TrajectorySheet> createState() => _TrajectorySheetState();
+  State<TrajectoryBody> createState() => _TrajectoryBodyState();
 }
 
-class _TrajectorySheetState extends State<_TrajectorySheet> {
+class _TrajectoryBodyState extends State<TrajectoryBody> {
   int? _expandedSeq;
 
   @override
@@ -197,11 +199,26 @@ class _TrajectorySheetState extends State<_TrajectorySheet> {
         ));
       }
     }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: children,
+    );
+  }
+}
+
+class _TrajectorySheet extends StatelessWidget {
+  const _TrajectorySheet({required this.state, required this.colors});
+
+  final ChatState state;
+  final DsColors colors;
+
+  @override
+  Widget build(BuildContext context) {
     return _sheetScaffold(
-      c: c,
+      c: colors,
       title: '运行轨迹',
       subtitle: '由当前会话的原始历史事件本地分组，不产生网络请求；点节点展开原始 JSON。',
-      children: children,
+      children: [TrajectoryBody(state: state, colors: colors)],
     );
   }
 }

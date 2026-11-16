@@ -310,3 +310,20 @@ Future<List<GatewayEntry>> fetchAtEntries(
   }
   return merged;
 }
+
+/// 「选择项目中的内容」圆钮（对照官方 App 输入条，2026-11-16 通用设置批次）：
+/// 在光标处插入 `@` 唤起 @ 文件面板——与手敲 @ 走同一状态路径
+/// （_atDraft 解析 + _onChanged 预拉目录候选），不另起文件浏览器。
+void insertAtMention(
+  TextEditingController controller,
+  ValueChanged<String> onChanged,
+) {
+  final text = controller.text;
+  final raw = controller.selection.baseOffset;
+  final offset = (raw < 0 ? text.length : raw).clamp(0, text.length);
+  controller.value = TextEditingValue(
+    text: '${text.substring(0, offset)}@${text.substring(offset)}',
+    selection: TextSelection.collapsed(offset: offset + 1),
+  );
+  onChanged(controller.text);
+}

@@ -476,6 +476,7 @@ class _ComposerState extends State<Composer> {
             showAddImage: _sendKeyState != _SendKeyState.stop,
             canPickImage: widget.enabled,
             onPickImage: _pickImage,
+            onInsertContent: () => insertAtMention(_controller, _onChanged),
             sendState: _sendKeyState,
             canSend: widget.enabled && _hasText || (_hasImage && widget.enabled),
             onSend: _send,
