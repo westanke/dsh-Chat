@@ -5,6 +5,7 @@
 
 import { GatewayClient } from '../core/GatewayClient';
 import { GatewayApi } from '../core/GatewayApi';
+import { HttpTransportImpl } from '../platform/HttpTransport';
 import { GatewayDeps } from '../core/GatewayClient';
 import { DshCredentials, CREDENTIALS_STORAGE_KEY } from '../core/Credentials';
 import { WsTransport } from '../platform/WsTransport';
@@ -109,7 +110,9 @@ struct Index {
       const gateway = this.buildGateway(cred.baseUrl);
       gateway.setToken(cred.token, 'DSH Chat');
       this.gateway = gateway;
-      this.api = new GatewayApi(gateway, null);
+      // HTTP 传输必须注入：附件/图片交接/根列表/文件全文/挂起项查询全走 REST，
+      // 传 null 会让这些功能在自动连接路径下全部 NO_TRANSPORT（真机踩过）。
+      this.api = new GatewayApi(gateway, new HttpTransportImpl());
       this.bootHint = '正在连接 ' + cred.baseUrl;
       gateway.connect().then((): void => {
         this.route = 'chat';

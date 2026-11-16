@@ -18,6 +18,12 @@ export struct SessionsDrawer {
   /** 会话列表快照（唯一被观察的数据源）。 */
   @State sessionsView: DshSession[] = [];
   @State currentView: string = '';
+  /**
+   * 「待回答/待审批」标记快照（sessionId → 'question' | 'approval' | ''）。
+   * 用 @State 数组而非 Map：ArkUI 只观察 build 期间读到的 @State，Map 内部
+   * 变更不触发重渲染（HitlPanel 踩过同样的坑）。每条编码 `id + '\u0001' + mark`。
+   */
+  @State marksView: string[] = [];
   onClose: (() => void) | null = null;
   onOpenSettings: (() => void) | null = null;
 
@@ -34,10 +40,44 @@ export struct SessionsDrawer {
     const st: ChatStore | null = this.store;
     this.sessionsView = st === null ? [] : st.sessions;
     this.currentView = st === null || st.sessionId === null ? '' : st.sessionId;
+    const next: string[] = [];
+    if (st !== null) {
+      for (const s of this.sessionsView) {
+        const mark: string = st.pendingMarkOf(s.id);
+        if (mark.length > 0) {
+          next.push(s.id + '\u0001' + mark);
+        }
+      }
+    }
+    this.marksView = next;
+  }
+
+  /** 某会话的挂起标记（'question' / 'approval' / ''）。 */
+  private markOf(sessionId: string): string {
+    const prefix: string = sessionId + '\u0001';
+    for (const item of this.marksView) {
+      if (item.startsWith(prefix)) {
+        return item.substring(prefix.length);
+      }
+    }
+    return '';
   }
 
   aboutToAppear(): void {
     this.syncVersion();
+    // 抽屉打开即拉一次「其它会话」的挂起项：HITL 帧只推当前连接关心的会话，
+    // 非当前会话的挂起提问/审批只能靠 REST 逐会话探测（每次 2 个请求/会话）。
+    const st: ChatStore | null = this.store;
+    if (st !== null) {
+      st.loadSessions().then((): Promise<void> => {
+        return st.refreshPendingMarks();
+      }).then((): void => {
+        // 标记表变了要再抄一次快照，否则 @State marksView 停在打开时的空表。
+        this.syncVersion();
+      }).catch((): void => {
+        // 探测失败不影响列表本身展示（静默）。
+      });
+    }
   }
 
   /** 工作区分组标题顺序（未分组垫底，同安卓 session_groups.dart）。 */
@@ -168,7 +208,10 @@ export struct SessionsDrawer {
 
   private hostLabel(): string {
     const st: ChatStore | null = this.store;
-    return st === null ? '' : st.connectionLabel;
+    if (st === null) {
+      return '';
+    }
+    return st.connectionLabel;
   }
 
   /** 会话行：标题 + 运行中圆点；当前会话高亮 chip 背景。 */
@@ -184,6 +227,24 @@ export struct SessionsDrawer {
         .maxLines(1)
         .textOverflow({ overflow: TextOverflow.Ellipsis })
         .layoutWeight(1)
+      // 待处理标记：提问=「待回答」实心橙点，审批=「待审批」品牌色描边。
+      // bridge 会话列表只对挂起审批下发 pendingInteraction，提问不发，
+      // 所以标记一律由 HitlStore 全连接挂起表推导（ChatStore.pendingMarkOf）。
+      if (this.markOf(s.id) === 'question') {
+        Text('待回答')
+          .fontSize(11)
+          .fontColor(this.c().markQuestion)
+          .padding({ left: 6, right: 6, top: 2, bottom: 2 })
+          .borderRadius(7)
+          .backgroundColor(this.c().markQuestionBg)
+      } else if (this.markOf(s.id) === 'approval') {
+        Text('待审批')
+          .fontSize(11)
+          .fontColor(this.c().brand)
+          .padding({ left: 6, right: 6, top: 2, bottom: 2 })
+          .borderRadius(7)
+          .border({ width: 1, color: this.c().brand })
+      }
     }
     .width('100%')
     .height(44)

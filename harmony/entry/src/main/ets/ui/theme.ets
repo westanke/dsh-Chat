@@ -219,6 +219,16 @@ export class DsColors {
   get settingsWarnFg(): string {
     return this.dark ? '#FFC24B' : '#8A5A00';
   }
+
+  /// 会话列表「待回答」标记：桌面端是橙色小圆点/字，这里用橙字 + 极浅橙底。
+  /// 语义与 settingsWarnFg 同族（提醒性质，非错误），故不引 danger 红。
+  get markQuestion(): string {
+    return this.dark ? '#FFB454' : '#B26A00';
+  }
+
+  get markQuestionBg(): string {
+    return this.dark ? '#26F5A623' : '#1AF5A623';
+  }
 }
 
 /// 字号（官方 token，fp；行高换算）。

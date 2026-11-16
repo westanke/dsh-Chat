@@ -236,8 +236,16 @@ export class ChatStore {
       return Promise.resolve();
     }
     const self: ChatStore = this;
+    // 本地命令卡（role='command'，seq=-1）不在服务端历史里，会被整体替换冲掉 ——
+    // 重灌回列表尾部（安卓 chat_history_actions.dart:36-40 同口径）。
+    const localCards: ChatMessage[] = [];
+    for (const m of this.messages) {
+      if (m.role === 'command' && m.seq < 0) {
+        localCards.push(m);
+      }
+    }
     return this.api.history(id, HISTORY_MAX_MESSAGES, 0).then((page: HistoryPage): void => {
-      self.messages = page.items;
+      self.messages = localCards.length === 0 ? page.items : [...page.items, ...localCards];
       self.rawEvents = page.rawEvents;
       self.historyHasMore = page.hasMore;
       // 翻页/刷新时 projections 可能缺席：保留上一份（同会话），避免面板闪空。
@@ -322,6 +330,9 @@ export class ChatStore {
 
   private readonly hitl: HitlStore = new HitlStore();
 
+  /** REST 探测出的挂起标记缓存（sessionId → 'question' | 'approval'）。 */
+  private readonly pendingMarks: Map<string, string> = new Map<string, string>();
+
   /** 当前会话待答的提问（到达序）。 */
   get pendingQuestions(): PendingQuestion[] {
     return this.hitl.sessionQuestions(this.sessionId);
@@ -330,6 +341,63 @@ export class ChatStore {
   /** 当前会话待决的审批。 */
   get pendingApprovals(): PendingApproval[] {
     return this.hitl.sessionApprovals(this.sessionId);
+  }
+
+  /**
+   * 从 REST 刷新「其它会话」的挂起标记（抽屉打开时调）。
+   * 实时事件只覆盖当前连接的推送；非当前会话的挂起项可能在本连接建立前
+   * 就已存在（bridge 不在 hello 后补推全部会话的 HITL 帧，实测 0 条），
+   * 因此只能用 REST `/questions` + `/approvals` 逐会话探测。
+   * 结果写进 pendingMarks（sessionId → 'question' | 'approval'）。
+   */
+  refreshPendingMarks(): Promise<void> {
+    const list: DshSession[] = this.sessions;
+    if (list.length === 0) {
+      return Promise.resolve();
+    }
+    const jobs: Promise<void>[] = [];
+    for (const s of list) {
+      jobs.push(this.api.countPendingQuestions(s.id)
+        .then((n: number): Promise<void> | void => {
+          if (n > 0) {
+            this.pendingMarks.set(s.id, 'question');
+            return;
+          }
+          this.pendingMarks.delete(s.id);
+          return this.api.countPendingApprovals(s.id).then((m: number): void => {
+            if (m > 0) {
+              this.pendingMarks.set(s.id, 'approval');
+            } else {
+              this.pendingMarks.delete(s.id);
+            }
+          }).catch((): void => {});
+        })
+        .catch((): void => {}));
+    }
+    return Promise.all(jobs).then((): void => {
+      this.changed();
+    });
+  }
+
+  /**
+   * 会话抽屉用的「待处理标记」：全连接挂起表里属于该会话的条目。
+   * bridge 的 sessions 列表只对**挂起审批**下发 pendingInteraction:'approval'，
+   * 挂起提问不发（协议缺口），所以标记一律由本客户端挂起表推导，不看 REST 字段。
+   * 返回 'question'（待回答）优先于 'approval'（待审批）——提问是阻塞用户输入的那类。
+   */
+  pendingMarkOf(sessionId: string): string {
+    if (sessionId === '') {
+      return '';
+    }
+    // 实时推送优先（本连接亲眼见过的事件最可信）。
+    if (this.hitl.sessionQuestions(sessionId).length > 0) {
+      return 'question';
+    }
+    if (this.hitl.sessionApprovals(sessionId).length > 0) {
+      return 'approval';
+    }
+    // 退回 REST 探测缓存（非当前会话的挂起项不推送，只能查）。
+    return this.pendingMarks.get(sessionId) ?? '';
   }
 
   /** 提交一套答案（question-answer 帧），成功即本地摘卡（HitlStore 持 api 动作）。 */

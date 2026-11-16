@@ -462,6 +462,26 @@ test('runCommand：本地命令卡 → executeCommand → ✓/✗ 回填', async
   assert.ok(card2.text.includes('✓ 压缩完成'));
 });
 
+test('runCommand：命中成功分支后本地命令卡不被 reloadHistory 冲掉', async () => {
+  const ctx: ReadyCtx = makeReady();
+  await openSession1(ctx, []);
+  drain();
+  const pRun: Promise<void> = ctx.store.runCommand('/compact');
+  await drain();
+  const reqId: string = ctx.socket.lastRequestId();
+  ctx.socket.serverFrame({ kind: 'reply',
+    data: { requestId: reqId, result: { kind: 'ok', text: '压缩完成' } } });
+  await drain();
+  // 成功链里会重拉 history：应答一条用户消息（模拟服务端无命令卡）。
+  respondHistory(ctx.socket, [userItem(1, '你好')]);
+  await drain();
+  await pRun;
+  const cards: ChatMessage[] = ctx.store.messages.filter((m: ChatMessage): boolean => m.role === 'command');
+  assert.equal(cards.length, 1);
+  assert.ok(cards[0].text.includes('✓ 压缩完成'));
+  assert.equal(ctx.store.messages.length, 2);
+});
+
 test('HITL：question/approval 挂起 → answer/decide 摘卡', async () => {
   const ctx: ReadyCtx = makeReady();
   await openSession1(ctx, []);
@@ -516,4 +536,40 @@ test('setPermission：当前有会话才发 permission 帧', async () => {
   ctx.store.sessionId = null;
   await assert.rejects(ctx.store.setPermission('read-only'),
     (e: Error): boolean => (e as Error).message.includes('当前没有会话'));
+});
+
+test('refreshPendingMarks：REST 探测挂起项 → pendingMarkOf 返 question/approval', async () => {
+  const ctx: ReadyCtx = makeReady();
+  await ctx.p;
+  const pLoad: Promise<void> = ctx.store.loadSessions();
+  respond(ctx.socket, { sessions: [
+    { id: 's1', updatedAt: 5, running: false, blank: false },
+    { id: 's2', updatedAt: 9, running: false, blank: false },
+    { id: 's3', updatedAt: 7, running: false, blank: false },
+  ] });
+  await pLoad;
+  // 每个会话先查 questions；s1 有提问（不查 approvals），s2 无提问再查 approvals 命中，
+  // s3 两查皆空。FakeHttp 是队列式：按调用顺序准备好应答。
+  // 注意顺序：三个 questions 请求在循环里同步发出（s1→s2→s3），approvals 请求
+  // 要等 questions 回来才发（s2→s3），所以 approvals 的应答必须排在最后两个。
+  ctx.http.push(200, JSON.stringify({ items: [{ callId: 'c1' }] }));   // s1 questions
+  ctx.http.push(200, JSON.stringify({ items: [] }));                   // s2 questions
+  ctx.http.push(200, JSON.stringify({ items: [] }));                   // s3 questions
+  ctx.http.push(200, JSON.stringify({ items: [{ approvalId: 'a1' }] })); // s2 approvals
+  ctx.http.push(200, JSON.stringify({ items: [] }));                   // s3 approvals
+  const pMarks: Promise<void> = ctx.store.refreshPendingMarks();
+  await drain();
+  await pMarks;
+  assert.equal(ctx.store.pendingMarkOf('s1'), 'question');
+  assert.equal(ctx.store.pendingMarkOf('s2'), 'approval');
+  assert.equal(ctx.store.pendingMarkOf('s3'), '');
+  assert.equal(ctx.store.pendingMarkOf(''), '');
+  // 实时挂起表优先：当前会话现场收到提问时立刻标 question（无需 REST 回来）。
+  ctx.store.sessionId = 's3';
+  ctx.socket.serverFrame({ kind: 'event', data: {
+    type: 'chat.userQuestions/requested', sessionId: 's3',
+    data: { type: 'userQuestions/requested', sessionId: 's3', callId: 'c9',
+      questions: [{ id: 'q1', question: '吃什么？' }] } } });
+  await drain();
+  assert.equal(ctx.store.pendingMarkOf('s3'), 'question');
 });

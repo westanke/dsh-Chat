@@ -153,6 +153,26 @@
   `danger-full-access` 这类 ASCII 名，直接上屏就是英文。必须过
   `core/Permissions.ts` 的 `permissionLabelOf(value)`（仅可查看/工作区读写/完全权限/
   自动审查；未识别原样返回，不杜撰档位）。
+- `会话列表待回答标记靠 REST` —— bridge 的 `sessions` 列表只对**挂起审批**下发
+  `pendingInteraction:'approval'`（`listSessions` 里 `hasPendingApproval()` 判断），
+  **挂起提问不下发这个字段**；而且 WS 连上后不会补推其它会话的 HITL 帧（实测
+  hello 后 0 条事件、逐个 subscribe 也不补推）。所以「待回答」标记只能：
+  ① 当前连接实时收到的挂起项走 `HitlStore.pendingQuestions/pendingApprovals`；
+  ② 其它会话靠 REST `GET /api/v1/chat/sessions/{sid}/questions`（`{items:[{callId,
+  state,viaBridge,questions:[…]}]}`，`viaBridge:true` = agent 正阻塞）与
+  `/approvals` 逐会话探测，结果写进 `ChatStore.pendingMarks`（Map）再抄成
+  `@State marksView: string[]`（Map 内部变更不触发 ArkUI 重渲染）。抽屉打开时
+  探测 40+ 会话 = 80+ 个 REST 请求，实测约 25–30s 出结果（41/41 成功）。
+- `GatewayApi 忘注入 HTTP transport` —— `new GatewayApi(gateway, null)` 会让
+  **所有 REST 功能**（附件/图片交接/根列表/文件全文/挂起项探测）报
+  `NO_TRANSPORT`；两条连接路径必须都传 `new HttpTransportImpl()`：
+  `ConnectView.enterWith()`（原有）与 `Index.autoConnect()`（真机发现漏传，
+  自动连接后 @ 文件补全、图片、文件卡全坏）。
+- `命令卡被 reloadHistory 冲掉` —— 本地注入的命令卡是 `role='command'`、`seq=-1`，
+  不在服务端历史里；`reloadHistory()` 里 `self.messages = page.items` 整体替换会
+  把它冲掉（`runCommandIn` 成功链恰好会重拉 history）。修法：替换前先收集
+  `m.role === 'command' && m.seq < 0` 的卡片，再 `[...page.items, ...localCards]`
+  （安卓 `chat_history_actions.dart:36-40` 同口径）。
 - `发送键白底看不见` —— 禁用态底色若用 `inputFill`（浅色主题=纯白），白底 + 浅灰箭头在
   浅色界面上几乎不可见（用户反馈）。改用 token `sendDisabledBg`（亮 `#EBEEF2` / 暗
   `c800`）+ `sendDisabledFg`（亮 `c500` / 暗 `c400`）；可用态走实心 `brand` + `onBrand`

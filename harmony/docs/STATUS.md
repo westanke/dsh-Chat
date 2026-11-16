@@ -194,3 +194,20 @@ Flex 链式 .alignItems 不存在（构造参数里传）。
 **自动贴底**：`components/MessageList.ets` 的 `syncVersion()` 末尾 `setTimeout(() => this.jumpToBottom(false), 30)`，新消息与流式增量后自动滚到底。
 
 **测试**：`npm --prefix harmony/test test` 179/179；`bash scripts/ci/docs-check.sh` 通过。
+
+## 阶段 5 第四批：命令卡保活、会话列表待回答标记、REST transport 修复（2026-11-16）
+
+**bug⑮ 命令卡被重拉历史冲掉**：真机发 `/help`、`/permission` 等斜杠命令后看不到 ⌨ 命令卡。根因是 `core/ChatStore.ts` 的 `reloadHistory()` 用 `self.messages = page.items` 整体替换消息表，而本地注入的命令卡（`role='command'`、`seq=-1`）不在服务端历史里；`core/ChatActions.ts` 的 `runCommandIn` 成功链恰好会调 `reloadHistory()`。修法对齐安卓 `chat_history_actions.dart:36-40`：替换前先收集 `role === 'command' && seq < 0` 的卡片，再 `[...page.items, ...localCards]`。真机验收：`/help` 渲染 `⌨ /help ✗ The command is not available for this session.`，`/permission` 弹出命令补全面板。
+
+**会话列表「待回答 / 待审批」标记**（用户反馈「电脑端显示有待回答 手机上不显示」）：bridge 的 `sessions` 列表只对**挂起审批**下发 `pendingInteraction:'approval'`，挂起提问不下发；WS 连接也不会补推其它会话的 HITL 帧。因此标记改为双来源：
+- 当前连接实时收到的挂起项 → `core/HitlStore.ts` 的 `pendingQuestions` / `pendingApprovals`；
+- 其它会话 → 新增 `core/GatewayApi.ts` 的 `countPendingQuestions()` / `countPendingApprovals()`（REST `GET /chat/sessions/{sid}/questions` 与 `/approvals`）逐会话探测，结果存 `core/ChatStore.ts` 的 `pendingMarks`，对外只暴露 `pendingMarkOf(sessionId)`（实时挂起表优先，退回探测结果）。
+- UI 在 `components/SessionsDrawer.ets`：`@State marksView: string[]`（编码 `id + '\u0001' + mark`，**ArkUI 不观察 Map 内部变更**），`sessionRow` 标题后加橙色「待回答」胶囊或品牌色描边「待审批」；`aboutToAppear()` 里 `loadSessions()` → `refreshPendingMarks()` → 再 `syncVersion()`（不等待会读到打开时的空快照）。
+- 新 token：`ui/theme.ets` 的 `markQuestion`（暗 `#FFB454` / 亮 `#B26A00`）与 `markQuestionBg`（暗 `#26F5A623` / 亮 `#1AF5A623`）。
+- 真机验收：抽屉「手机会话」组里「询问晚餐选项」行右侧显示橙色「待回答」胶囊（截图 `harmony/build/smoke/mark.jpeg`）。
+
+**严重缺陷：自动连接未注入 HTTP transport**（顺带发现）：`pages/Index.ets` 的 `autoConnect()` 里 `new GatewayApi(gateway, null)` 把 REST 传输传成 null，导致**自动连接（重启后走的那条路）下所有 REST 功能失效** —— 附件上传、图片交接、授权根列表、文件全文读取、挂起项探测全部 `NO_TRANSPORT`。修法：注入 `new HttpTransportImpl()`（`ConnectView` 的两条路径本来就注入了，只有 Index 漏）。
+
+**测试**：`npm --prefix harmony/test test` **181/181 全绿**，新增用例「refreshPendingMarks：REST 探测挂起项 → pendingMarkOf 返 question/approval」（覆盖三会话三分支 + 实时挂起表优先；**FakeHttp 是队列式应答，questions 先全发、approvals 在 questions 回来后才发，应答顺序必须按此排**）。
+
+**排障手法沉淀**：真机没有可用应用日志，验证「REST 探测是否跑通」的办法是把计数拼进稳定渲染的 Text（曾把副标题临时改成 `S[ok42/42:1]` 再 `uitest dumpLayout` 读回），确证后清理。

@@ -424,6 +424,27 @@ export class GatewayApi {
     });
   }
 
+  /**
+   * 会话挂起提问（GET /chat/sessions/{sid}/questions，openapi §listUserQuestions）。
+   * 用来给会话列表打「待回答」标记：bridge 的 sessions 列表只对**挂起审批**
+   * 下发 pendingInteraction:'approval'，挂起提问不发，客户端只能自己查。
+   * 返回项数（>0 即有待答）。
+   */
+  countPendingQuestions(sessionId: string): Promise<number> {
+    const path: string = '/api/v1/chat/sessions/' + GatewayApi.encodePath(sessionId) + '/questions';
+    return this.restJson('GET', path, null, [200]).then((data: JsonMap): number => {
+      return JsonAccess.arr(data, 'items').length;
+    });
+  }
+
+  /** 会话挂起审批（GET /chat/sessions/{sid}/approvals）；返回项数。 */
+  countPendingApprovals(sessionId: string): Promise<number> {
+    const path: string = '/api/v1/chat/sessions/' + GatewayApi.encodePath(sessionId) + '/approvals';
+    return this.restJson('GET', path, null, [200]).then((data: JsonMap): number => {
+      return JsonAccess.arr(data, 'items').length;
+    });
+  }
+
   /** 根下条目（GET /api/v1/roots/{id}/entries?path=&limit=500；目录优先排序）。 */
   listEntriesRest(rootId: string, wirePath: string): Promise<GatewayEntry[]> {
     const encRoot: string = GatewayApi.encodePath(rootId);
