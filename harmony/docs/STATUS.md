@@ -578,7 +578,9 @@ BUILD SUCCESSFUL；签名装机后真机进入有长历史的会话，列表头�
 phone 规避）、R005 `LazyForEach`（长会话全量 ForEach）、R016 图片 `objectFit`、中文硬编码 92 处
 （未做 `$r('app.string')` 资源化）。
 
-**追加：Composer 501→488 行（@ 面板纯逻辑外提）**
+## 阶段 5 第十三批：Composer 拆 AtMention + 无障碍全量复检（2026-11-16）
+
+**Composer 501→488 行（@ 面板纯逻辑外提）**
 `components/Composer.ets` 落位后仍 501 行超限 → 把 @ 面板的合并逻辑抽成
 `core/AtMention.ts`（65 行，node 直测）：`AtEntry` 模型 + `mergeAtEntries(lists, labels, query,
 inSubDir)`（多根 label 前缀、query **名字前缀**过滤且大小写不敏感、逐根 404 容错并统计
@@ -587,7 +589,7 @@ inSubDir)`（多根 label 前缀、query **名字前缀**过滤且大小写不�
 **235/235 全绿**。顺手修了「单根时名字不带前缀」的用例（原写法喂了两条 list 却只给一个
 label，属测试自身笔误）。
 
-**追加：无障碍全量复检（22 个 UI 文件全 pass）**
+**无障碍全量复检（22 个 UI 文件全 pass）**
 `harmony_check a11y` 逐文件复检 22 个含交互的 ets，补掉最后 4 处 R009（触控目标 <40vp）：
 `components/HitlPanel.ets` 自定义回答输入框 36→40、`components/SessionLocationSheet.ets` 浏览返回键
 36→40（并补 `.height(40)`）、`components/ImageTile.ets` 加载指示器 20→40、
