@@ -14,6 +14,7 @@ import { HistoryPage } from './HistoryPage';
 import { RequestException } from './GatewayEvents';
 import { GatewayClient } from './GatewayClient';
 import { HttpRequest, HttpResponse, HttpTransport, HTTP_TIMEOUT_MS } from './Transport';
+import { AgentPreset } from './AgentPresets';
 
 export class GatewayRest {
   private client: GatewayClient;
@@ -273,5 +274,47 @@ export class GatewayRest {
       }
       return resp.bodyBytes;
     });
+  }
+
+  // ------------------------------------------------------------------
+  // Agent 预设（openapi §AgentPreset / §selectSessionAgentPreset）
+  // ------------------------------------------------------------------
+
+  /** 预设清单（GET /chat/agent-presets → {items: AgentPreset[]}）。 */
+  agentPresets(): Promise<AgentPreset[]> {
+    if (this.http === null) {
+      return Promise.reject(new RequestException('NO_TRANSPORT', 'HTTP 传输未注入'));
+    }
+    return this.restJson('GET', '/api/v1/chat/agent-presets', null, [200])
+      .then((data: JsonMap): AgentPreset[] => AgentPreset.listFrom(JsonAccess.arr(data, 'items')));
+  }
+
+  /**
+   * 选预设（PUT /chat/sessions/{sid}/agent-preset body {agentPreset}）。
+   * 200 返 {agentPreset: string}（字符串不是对象）；会话非 blank 已锁定 →
+   * 桥返 409（okCodes 不含，restJson 抛 HTTP_409），这里转译成
+   * RequestException AGENT_PRESET_LOCKED 供 UI 行内提示。
+   */
+  selectAgentPreset(sessionId: string, presetId: string): Promise<string> {
+    const path: string = '/api/v1/chat/sessions/' + GatewayRest.encodePath(sessionId) + '/agent-preset';
+    const body: JsonMap = {};
+    body['agentPreset'] = presetId;
+    if (this.http === null) {
+      return Promise.reject(new RequestException('NO_TRANSPORT', 'HTTP 传输未注入'));
+    }
+    return this.restJson('PUT', path, JSON.stringify(body), [200])
+      .then((data: JsonMap): string => {
+        const preset: string = JsonAccess.strOr(data, 'agentPreset', '');
+        if (preset === '') {
+          throw new RequestException('BAD_REPLY', 'agentPreset 响应缺字段');
+        }
+        return preset;
+      })
+      .catch((err: Object): string => {
+        if (err instanceof RequestException && err.code === 'HTTP_409') {
+          throw new RequestException('AGENT_PRESET_LOCKED', '会话已锁定，仅空白会话可切换');
+        }
+        throw err as Error;
+      });
   }
 }

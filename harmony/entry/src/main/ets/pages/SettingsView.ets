@@ -21,6 +21,7 @@ import { BusinessError } from '@kit.BasicServicesKit';
 import { DsColors, DsTypography, DsSpacing } from '../ui/theme';
 import { mediaquery } from '@kit.ArkUI';
 import { BP_SM, BP_QUERY_MD, BP_QUERY_LG, breakpointOf, atLeastMd } from '../core/Breakpoints';
+import { SettingsGeneralSection } from '../components/SettingsGeneralSection';
 
 
 @Component
@@ -172,6 +173,7 @@ export struct SettingsView {
         Column() {
           this.connectionSection()
           this.appearanceSection()
+          SettingsGeneralSection()
           this.sendSection()
           this.aboutSection()
           this.disconnectSection()

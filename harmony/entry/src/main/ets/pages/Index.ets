@@ -66,7 +66,25 @@ struct Index {
       this.applyTheme(this.sysDark);
     }).catch((): void => {
     });
+    // 通用设置四项（工作步骤展示/收起时机/收起后回复/代码工作视图）：
+    // 同款异步装载——值存官方 token 字符串，AppStorage 键用无点驼峰
+    //（设置页写、ChatView/MessageList @StorageProp 读，默认值与 core/WorkSteps 一致）。
+    this.loadGeneralPrefs();
     this.autoConnect();
+  }
+
+  private loadGeneralPrefs(): void {
+    this.loadStringPref('dsh.workStepsDetail', 'dshWorkStepsDetail', 'detailed');
+    this.loadStringPref('dsh.collapseTiming', 'dshCollapseTiming', 'completion');
+    this.loadStringPref('dsh.foldedReplies', 'dshFoldedReplies', 'all');
+    this.loadStringPref('dsh.codeWorkView', 'dshCodeWorkView', '0');
+  }
+
+  private loadStringPref(prefKey: string, appKey: string, fallback: string): void {
+    PrefsStore.getString(prefKey).then((saved: string | null): void => {
+      AppStorage.setOrCreate(appKey, saved !== null && saved !== '' ? saved : fallback);
+    }).catch((): void => {
+    });
   }
 
   /// 设置页切换界面风格 → 立刻重算生效（只写 AppStorage 不会自动触发）。

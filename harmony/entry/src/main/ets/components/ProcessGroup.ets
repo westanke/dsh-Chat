@@ -2,6 +2,8 @@
 /// 对齐安卓 `app/lib/ui/process_group.dart`。
 import { ChatMessage } from '../core/HistoryPage';
 import { ToolCallInfo, formatDuration, bashCommandOf, prettyArguments } from '../core/ToolCall';
+import { processGroupKey } from '../core/WorkSteps';
+import { ChatStore } from '../core/ChatStore';
 import { DsColors, DsTypography, DsSpacing } from '../ui/theme';
 import { MdCodeBlock } from './md/MdCodeBlock';
 /**
@@ -11,15 +13,57 @@ import { MdCodeBlock } from './md/MdCodeBlock';
  *
  * 三层折叠：①整组折成一行短语摘要（默认收起）；②展开后逐条工具行（图标 +
  * 短语 + 参数摘要）；③单条再展开详情（BASH 代码块 / 参数 JSON / 输出 / 耗时）。
+ *
+ * 工作步骤展示档（通用设置①，AppStorage dshWorkStepsDetail，语义见 core/WorkSteps）：
+ * - concise：只渲染折叠行，不可展开（无箭头，点击无效）；
+ * - standard：可展开，但工具行不带详情卡（无第三层）；
+ * - detailed：现状（默认档，三层齐全）；
+ * - verbose：默认全展开（未手工收起的组都展开），永不自动收起。
+ *
+ * 展开状态收口在 ChatStore.workSteps（ChatWorkSteps，node 直测），组件层不持状态：
+ * 展开/收起经 AppStorage dshExpandedVersion（ChatView.setNotify 写）@Watch 回读，
+ * 绕开 LazyForEach 同 key 不重建的坑位（@StorageProp 变化对已挂载组件始终生效）。
  */
 @Component
 export struct ProcessGroup {
   group: ChatMessage = new ChatMessage();
+  /** 所属 store（展开状态/档位都在 store.workSteps；null 兜底为收起不可点）。 */
+  store: ChatStore | null = null;
   @StorageProp('dshDark') dark: boolean = false;
+  @StorageProp('dshWorkStepsDetail') detailProp: string = 'detailed';
+  /// 展开集合版本（ChatView.setNotify 每次 changed 时写；初始值由 aboutToAppear 对账）。
+  @StorageProp('dshExpandedVersion') @Watch('syncExpanded') expandedVersion: number = 0;
   @State expanded: boolean = false;
 
   private c(): DsColors {
     return new DsColors(this.dark);
+  }
+
+  aboutToAppear(): void {
+    this.syncExpanded();
+  }
+
+  /** 从 store.workSteps 对账展开状态（key=组内首个 callId，无 callId 用 seq）。 */
+  private syncExpanded(): void {
+    const st: ChatStore | null = this.store;
+    if (st === null) {
+      this.expanded = false;
+      return;
+    }
+    this.expanded = st.workSteps.isExpanded(processGroupKey(this.group));
+  }
+
+  private toggle(): void {
+    // concise 档只渲染折叠行且不可展开。
+    if (this.detailProp === 'concise' || this.group.toolCalls.length === 0) {
+      return;
+    }
+    const st: ChatStore | null = this.store;
+    if (st === null) {
+      return;
+    }
+    st.workSteps.toggle(processGroupKey(this.group));
+    st.changed();
   }
 
   /** 组头耗时（两端齐全才显示，时钟倒退不算）。 */
@@ -29,6 +73,10 @@ export struct ProcessGroup {
       return null;
     }
     return formatDuration(this.group.durationMs);
+  }
+
+  private chevronVisible(): boolean {
+    return this.detailProp !== 'concise' && this.group.toolCalls.length > 0;
   }
 
   build() {
@@ -50,7 +98,7 @@ export struct ProcessGroup {
             .fontColor(this.c().labelTertiary)
             .margin({ left: 6 })
         }
-        if (this.group.toolCalls.length > 0) {
+        if (this.chevronVisible()) {
           Text(this.expanded ? '⌃' : '⌄')
             .fontSize(16)
             .fontColor(this.headColor())
@@ -61,9 +109,7 @@ export struct ProcessGroup {
       .height(DsSpacing.processRowHeight)
       .accessibilityText(this.group.phraseText + (this.expanded ? '，收起' : '，展开'))
       .onClick((): void => {
-        if (this.group.toolCalls.length > 0) {
-          this.expanded = !this.expanded;
-        }
+        this.toggle();
       })
       if (this.expanded) {
         Column() {
@@ -93,15 +139,21 @@ export struct ProcessGroup {
   }
 }
 
-/** 展开后的单条工具调用：图标 + 短语 + 参数摘要；点整行再展开详情。 */
+/** 展开后的单条工具调用：图标 + 短语 + 参数摘要；点整行再展开详情。
+ *  standard 档不带详情层（读 AppStorage 档位自判，绕开同 key 不重建的坑位）。 */
 @Component
 export struct ToolRow {
   call: ToolCallInfo = new ToolCallInfo('', '', [], null, false, null, null, null);
   @StorageProp('dshDark') dark: boolean = false;
+  @StorageProp('dshWorkStepsDetail') detailProp: string = 'detailed';
   @State detail: boolean = false;
 
   private c(): DsColors {
     return new DsColors(this.dark);
+  }
+
+  private allowDetail(): boolean {
+    return this.detailProp !== 'standard';
   }
 
   private hasDetail(): boolean {
@@ -137,7 +189,7 @@ export struct ToolRow {
         }
         .alignItems(HorizontalAlign.Start)
         .layoutWeight(1)
-        if (this.hasDetail()) {
+        if (this.allowDetail() && this.hasDetail()) {
           Text(this.detail ? '⌃' : '⌄')
             .fontSize(14)
             .fontColor(this.c().labelTertiary)
@@ -149,7 +201,7 @@ export struct ToolRow {
       .padding({ top: 4, bottom: 4 })
       .accessibilityText((this.call.phrases.length === 0 ? this.call.name : this.call.phrases.join('，')) + (this.detail ? '，收起详情' : '，展开详情'))
       .onClick((): void => {
-        if (this.hasDetail()) {
+        if (this.allowDetail() && this.hasDetail()) {
           this.detail = !this.detail;
         }
       })

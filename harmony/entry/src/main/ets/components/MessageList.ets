@@ -18,6 +18,7 @@ import { MdDocViewer } from '../pages/MdDocViewer';
 import { ThinkBlock } from './ThinkBlock';
 import { ProcessGroup } from './ProcessGroup';
 import { ArrayDataSource } from './ArrayDataSource';
+import { visibleMessagesOf, parseFoldedReplies } from '../core/WorkSteps';
 import { mediaquery } from '@kit.ArkUI';
 import {
   BP_SM, BP_QUERY_MD, BP_QUERY_LG, breakpointOf, atLeastMd, isLarge, contentMaxWidth,
@@ -29,6 +30,12 @@ export struct MessageList {
   @StorageProp('dshDark') dark: boolean = false;
   /** 窗口宽度断点：大屏给列表限最大宽并居中（R007），手机不限。 */
   @StorageProp('dshBreakpoint') bp: string = BP_SM;
+  /**
+   * 「收起后显示的回复」档（通用设置③，官方 token：all|final）。final 时完成轮
+   * 只保留最后一条正文助手消息（core/WorkSteps.visibleMessagesOf，node 直测）。
+   * 档位在设置页切换 → AppStorage 直写 → @Watch 重抄消息（同 version 链路）。
+   */
+  @StorageProp('dshFoldedReplies') @Watch('syncVersion') foldedRepliesProp: string = 'all';
   /**
    * ChatStore.changed() 递增的版本号。必须带 @Watch 并在回调里把 store 派生数据
    * 抄进 @State —— ArkUI 只对 build 期间读到的 @State/@Prop 建立依赖，ForEach 的
@@ -193,7 +200,10 @@ export struct MessageList {
   /** version 变化 → 重抄 store 派生数据（@Prop @Watch 回调）+ 跟随贴底。 */
   syncVersion(): void {
     const st: ChatStore | null = this.store;
-    this.msgs = st === null ? [] : st.messages;
+    // 折叠回复（通用设置③）：final 档完成轮只留最后一条正文助手消息；
+    // all 档原样。运行中轮（streaming 或本轮未 committed）始终全可见。
+    const raw: ChatMessage[] = st === null ? [] : st.messages;
+    this.msgs = st === null ? [] : visibleMessagesOf(raw, parseFoldedReplies(this.foldedRepliesProp), st.streaming);
     this.ds.reset(this.msgs);
     this.hasMore = st !== null && st.historyHasMore;
     this.loadingOlder = st !== null && st.loadingOlder;
@@ -267,7 +277,7 @@ export struct MessageList {
     } else if (m.role === 'files') {
       this.fileCard(m);
     } else if (m.isProcess) {
-      ProcessGroup({ group: m });
+      ProcessGroup({ group: m, store: this.store });
     } else {
       this.assistantBlock(m);
     }

@@ -33,6 +33,9 @@ export class DshSession {
   /** 会话工作目录，授权根内相对路径；'' = 会话目录就是授权根本身。 */
   readonly cwd: string;
 
+  /** 当前 Agent 预设 id（openapi §ChatSession.agentPreset；未设置/旧桥为 null）。 */
+  readonly agentPreset: string | null;
+
   constructor(j: JsonMap | null) {
     this.id = JsonAccess.strOr(j, 'id', '');
     this.rootId = JsonAccess.strOr(j, 'rootId', '');
@@ -44,6 +47,7 @@ export class DshSession {
     this.workspaceTitle = JsonAccess.str(j, 'workspaceTitle');
     this.cwdAbsolute = JsonAccess.str(j, 'cwdAbsolute');
     this.cwd = JsonAccess.strOr(j, 'cwd', '');
+    this.agentPreset = JsonAccess.str(j, 'agentPreset');
   }
 
   static fromJson(value: Object | null): DshSession {

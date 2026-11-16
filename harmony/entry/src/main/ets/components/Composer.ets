@@ -1,22 +1,20 @@
 /**
- * 输入条 —— 对照安卓 composer.dart/composer_bar.dart（阶段 4 全功能）：
- * 斜杠命令补全面板 + @ 文件引用面板 + 图片（相册选图/魔数嗅探/8MiB 上限）
- * + 权限档位 chip（bindSheet 切换，danger-full-access 二次确认）
- * + 发送键三态（send/stop/disabled）+ 免责声明。
- * 命令/@ 面板壳在 ComposerPanels.ets。
+ * 输入条 —— 对照安卓 composer.dart/composer_bar.dart：斜杠命令补全 + @ 文件
+ * 引用面板（含「选择项目中的内容」入口）+ 图片 chip + 权限档位 chip
+ * （bindSheet 二次确认）+ 发送键三态 + 免责声明；面板壳在 ComposerPanels.ets。
  */
 
 import { ChatStore } from '../core/ChatStore';
 import { GatewayState } from '../core/GatewayEvents';
 import { parseSlashDraft, parseAtMentionDraft, AtMentionDraft, SlashCommandList, SlashCommand,
   PromptPart } from '../core/Content';
-import { GatewayRoot, GatewayEntry } from '../core/Files';
+import { GatewayRoot } from '../core/Files';
 import { JsonMap } from '../core/JsonAccess';
 import { PermissionSheet } from './PermissionSheet';
 import { PickedImage, pickImageFromGallery } from '../platform/PhotoPick';
 import { CommandPanel, AtFilePanel } from './ComposerPanels';
 import { ErrorBanner, HintBanner } from './ComposerBanners';
-import { AtEntry, mergeAtEntries, inSubDirectory, AtMentionMerge } from '../core/AtMention';
+import { AtEntry, AtMentionMerge, loadMergedAtEntries, inSubDirectory } from '../core/AtMention';
 import { DsColors, DsTypography, DsSpacing } from '../ui/theme';
 import { permissionLabelOf } from '../core/Permissions';
 import { common } from '@kit.AbilityKit';
@@ -120,8 +118,7 @@ export struct Composer {
     return this.pendingImage !== null && this.pendingImage.error.length === 0;
   }
 
-  // ---------- 面板状态推导 ----------
-
+  /** ---------- 面板状态推导 ---------- */
   private onChanged(v: string): void {
     this.draft = v;
     // 光标兜底：onChange 先于 onTextSelectionChange 触发，刚敲下 '@' 那一帧
@@ -197,31 +194,18 @@ export struct Composer {
     }
     this.atLoading = this.atEntries.length === 0;
     this.atFailed = false;
-    const roots: GatewayRoot[] = this.atRoots;
-    const dir: string = this.atDir;
-    // 逐根拉取并各自容错：某个根下没有同名子目录（404）不该拖垮整张面板
-    // （实测：下钻到 workspace/.dhs-diff 时另两个根 404 → Promise.all 整批 reject
-    //  → 面板显示「目录加载失败」）。全失败才算失败。
-    const jobs: Promise<GatewayEntry[]>[] = [];
-    for (let i = 0; i < roots.length; i++) {
-      jobs.push(st.api.listEntriesRest(roots[i].id, dir)
-        .catch((e: Error): GatewayEntry[] => new Array<GatewayEntry>()));
-    }
-    Promise.all(jobs).then((lists: GatewayEntry[][]): void => {
-      const labels: string[] = [];
-      for (let i = 0; i < roots.length; i++) {
-        labels.push(roots.length > 1 ? roots[i].label : '');
-      }
-      const merged: AtMentionMerge = mergeAtEntries(lists, labels, query, inSubDirectory(dir));
-      this.atEntries = merged.items;
-      this.atLoading = false;
-      if (merged.okRoots === 0 && inSubDirectory(dir)) {
-        this.atFailed = true; // 所有根都没这个目录：确实失败
-      }
-    }).catch((): void => {
-      this.atLoading = false;
-      this.atFailed = true;
-    });
+    // 取数与合并下沉 core/AtMention.loadMergedAtEntries（逐根容错、多根才带
+    // label/ 前缀）：Composer 只做状态搬运。
+    loadMergedAtEntries(st.api, this.atRoots, this.atDir, query)
+      .then((merged: AtMentionMerge): void => {
+        this.atEntries = merged.items;
+        this.atLoading = false;
+        this.atFailed = merged.okRoots === 0 && inSubDirectory(this.atDir);
+      })
+      .catch((): void => {
+        this.atLoading = false;
+        this.atFailed = true;
+      });
   }
 
   private applyCommand(cmd: SlashCommand): void {
@@ -251,14 +235,22 @@ export struct Composer {
     this.ensureAtEntries();
   }
 
-  // ---------- 发送 ----------
+  /** 「选择项目中的内容」：合成空 @ 草稿（query=''）复用 @ 目录面板，选中后原位插入。 */
+  private openProjectPanel(): void {
+    const at: number = this.draft.length;
+    const synthetic: AtMentionDraft = { query: '', start: at, end: at };
+    this.atDraft = synthetic;
+    this.cursor = at;
+    this.panel = 'at';
+    this.ensureAtEntries();
+  }
 
+  /** 发送：busyMode 读 dshBusySend（缺省 queue）。 */
   private send(): void {
     const st: ChatStore | null = this.store;
     if (st === null) {
       return;
     }
-    // 繁忙发送模式（设置页写 dshBusySend；缺省 queue）。
     const busyMode: string = AppStorage.get<string>('dshBusySend') ?? 'queue';
     const text: string = this.draft.trim();
     const img: PickedImage | null = this.pendingImage;
@@ -270,10 +262,11 @@ export struct Composer {
       st.sendWithImage(text, PromptPart.image(img.mediaType, img.base64, img.name), busyMode);
       return;
     }
+    const slash = parseSlashDraft(text);
     if (text.length === 0) {
       return;
     }
-    if (parseSlashDraft(text) !== null) {
+    if (slash !== null) {
       st.runCommand(text);
       return;
     }
@@ -311,8 +304,6 @@ export struct Composer {
       },
     })
   }
-
-  // ---------- 渲染 ----------
 
   build() {
     Column() {
@@ -392,7 +383,8 @@ export struct Composer {
         .backgroundColor(this.c().chipSelectedBg)
         .margin({ top: 6 })
       }
-      // 底部行对齐官方输入框：左「＋」→ 权限 chip（盾牌 + 展开箭头），右发/停圆键。
+      // 底部行对齐官方输入框：左「＋」→「📁 选择项目中的内容」→ 权限 chip（盾牌
+      // + 展开箭头），右发/停圆键。
       Row({ space: 8 }) {
         Text('＋')
           .fontSize(20)
@@ -406,6 +398,19 @@ export struct Composer {
           .accessibilityText('添加图片')
           .onClick(() => {
             this.pickImage();
+          })
+        Text('📁')
+          .fontSize(12)
+          .fontColor(this.c().labelPrimary)
+          .width(DsSpacing.composerButtonSize)
+          .height(DsSpacing.composerButtonSize)
+          .borderRadius(DsSpacing.composerButtonSize / 2)
+          .backgroundColor(this.c().bgLayer1)
+          .border({ width: 1, color: this.c().borderL1 })
+          .textAlign(TextAlign.Center)
+          .accessibilityText('选择项目中的内容')
+          .onClick(() => {
+            this.openProjectPanel();
           })
         Row({ space: 4 }) {
           Text('🛡')

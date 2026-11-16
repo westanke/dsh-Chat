@@ -18,6 +18,7 @@ import { DshSession, DshWorkspace, DshDirectoryPage, SessionWaitResult } from '.
 import { PendingQuestion, QuestionAnswerItem } from './Questions';
 import { GatewayRoot, GatewayEntry, ResolvedFile } from './Files';
 import { HistoryPage } from './HistoryPage';
+import { AgentPreset } from './AgentPresets';
 import { RequestException } from './GatewayEvents';
 import { GatewayClient } from './GatewayClient';
 import { HttpTransport } from './Transport';
@@ -64,6 +65,19 @@ export class GatewayApi {
   /** 取附件字节（base64 由调用方从 data 解码）。 */
   fetchAttachment(attachmentId: string, sessionId: string): Promise<Uint8Array> {
     return this.rest.fetchAttachment(attachmentId, sessionId);
+  }
+
+  /** Agent 预设清单（GET /chat/agent-presets → items）。 */
+  agentPresets(): Promise<AgentPreset[]> {
+    return this.rest.agentPresets();
+  }
+
+  /**
+   * 选 Agent 预设（PUT /chat/sessions/{sid}/agent-preset）。200 返新 presetId；
+   * 会话非 blank → RequestException('AGENT_PRESET_LOCKED')（409 转译在 rest 层）。
+   */
+  selectAgentPreset(sessionId: string, presetId: string): Promise<string> {
+    return this.rest.selectAgentPreset(sessionId, presetId);
   }
 
   /** 授权根列表（GET /api/v1/roots）。 */

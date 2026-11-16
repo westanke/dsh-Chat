@@ -151,13 +151,13 @@
 | 文件 | 用途 |
 |---|---|
 | `ets/entryability/EntryAbility.ets` | 唯一 Ability：loadContent + 深浅色显式跟随系统（COLOR_MODE_NOT_SET，后台切色不丢） |
-| `ets/pages/Index.ets` | 根路由 boot（自动连接）→ connect（连接页）→ chat（对话页）；深浅色 mediaquery 监听写 AppStorage('dshDark')；ChatStore 单例随连接存活 |
+| `ets/pages/Index.ets` | 根路由 boot（自动连接）→ connect（连接页）→ chat（对话页）；深浅色 mediaquery 监听写 AppStorage('dshDark')；通用四偏好（workStepsDetail/collapseTiming/foldedReplies/codeWorkView）异步装载写 AppStorage 无点驼峰键；ChatStore 单例随连接存活 |
 | `ets/pages/ConnectView.ets` | 连接页三级路径：历史主机直连（失败记失效记录可删）/ DSH1 文本导入 / 手动地址+配对码（pairViaRest）；删除当前主机顺带清凭据 |
-| `ets/pages/SettingsView.ets` | 设置页六分区：连接只读（状态/设备/scopes/HTTP 警告）/外观（跟随系统/浅色/深色）/发送（queue|steer）/关于（版本+检查更新跳 Gitee）/断开连接（清凭据回连接页） |
+| `ets/pages/SettingsView.ets` | 设置页七分区：连接只读（状态/设备/scopes/HTTP 警告）/外观（跟随系统/浅色/深色）/通用（SettingsGeneralSection：工作步骤展示四档/收起时机/折叠回复/代码工作视图开关）/发送（queue|steer）/关于（版本+检查更新跳 Gitee）/断开连接（清凭据回连接页） |
 | `ets/pages/MdDocViewer.ets` | .md 全屏查看页：resolvePath/readFileBytes → MdView；标题+大小 caption/失败重试 |
-| `ets/pages/ChatView.ets` | 对话页：顶栏（⋮ 溢出菜单五项/标题/连接点/新建）+ HitlPanel 提问审批卡 + 消息列表 + 输入条 + 会话抽屉 + 五面板 bindSheet（统计/轨迹/团队/待办/模型）+ 设置页入口 |
-| `ets/components/MessageList.ets` | 消息列表：用户气泡（86.4% 宽 + 收图 ImageTile）/ 助手 MdView 富渲染 + 工具折叠组 ToolBlock + 命令卡 + 文件卡（.md 全屏 MdDocViewer）+ 消息操作条 MessageActions / 错误条 |
-| `ets/components/Composer.ets` | 输入条：发送键三态（send/stop/disabled）+ 命令补全/@ 文件补全（ComposerPanels）+ 图片 chip（PhotoPick 魔数校验 8MiB）+ 权限 chip（PermissionSheet bindSheet）+ 免责声明 |
+| `ets/pages/ChatView.ets` | 对话页：顶栏（⋮ 溢出菜单五项 + 代码工作视图入口（仅 dshCodeWorkView='1'）/标题/连接点/新建）+ HitlPanel 提问审批卡 + 消息列表 + 输入条 + 会话抽屉 + 六面板 bindSheet（统计/轨迹/团队/待办/模型/代码工作视图）+ 设置页入口；每次 changed 把 workSteps 展开集合版本写 AppStorage('dshExpandedVersion')（ProcessGroup @Watch 回读，LazyForEach 同 key 不重建的替代链路） |
+| `ets/components/MessageList.ets` | 消息列表：用户气泡（86.4% 宽 + 收图 ImageTile）/ 助手 MdView 富渲染 + 工具折叠组 ToolBlock + 命令卡 + 文件卡（.md 全屏 MdDocViewer）+ 消息操作条 MessageActions / 错误条；渲染前过 core/WorkSteps.visibleMessagesOf（dshFoldedReplies='final' 时完成轮只留最后一条正文助手消息，dshDark 同款 @StorageProp 链路） |
+| `ets/components/Composer.ets` | 输入条：发送键三态（send/stop/disabled）+ 命令补全/@ 文件补全（ComposerPanels）+ 图片 chip（PhotoPick 魔数校验 8MiB）+ 📁 选择项目中的内容（合成空 @ 草稿复用 AtFilePanel，原位插入 '@文件名 '）+ 权限 chip（PermissionSheet bindSheet）+ 免责声明 |
 | `ets/components/SessionsDrawer.ets` | 会话抽屉（阶段 2）：主机标识 + 新对话钮 + 工作区分组列表（未分组垫底）+ 当前会话高亮；搜索/删除阶段 4 |
 | `ets/components/md/MdView.ets` | Markdown 主组件：块级循环（h/p/quote/code/table/ul/ol/hr/latex）+ 行内混排（Span 样式/链接外跳/内嵌 MdLatexView）；任务项 ☑/☐，引用左竖条 |
 | `ets/components/md/MdCodeBlock.ets` | 代码块：banner 语言名+复制（pasteboard）+ 1px 分隔线 + 横滚 + SimpleHighlight 四类着色 |
@@ -165,18 +165,18 @@
 | `ets/components/md/MdLatex.ets` | 轻量 LaTeX 渲染：frac/sqrt/sup/sub/sym 分派（横线分子分母/√ 上边框/70% 字号偏移）；嵌套 smallArg 拍平 |
 | `ets/components/ArrayDataSource.ets` | `IDataSource` 的数组实现（MessageList/SessionsDrawer 的 LazyForEach 数据源）：totalCount/getData + 监听注册注销，reset(items) 广播 onDataReloaded（不做逐项 diff —— ChatStore.messages 每次 changed() 都是新数组） |
 | `ets/components/ToolBlock.ets` | 工具折叠组：摘要行（⚒ 短语）+ 展开逐条（✓/✗ 措辞/耗时）+ 单条 detail（bash 走 MdCodeBlock，其余 prettyArgs） |
-| `ets/components/ProcessGroup.ets` | 官方 web 式工具三层折叠（从 MessageList 切出，控行数）：组头 🔧+短语+总耗时 → ToolRow 逐行（○/⊘ + 短语 + 路径摘要）→ detailBlock 灰底描边卡片（call.name monospace + 耗时 + ✓/✗ + bash 走 MdCodeBlock / 参数 prettyArguments / 输出·错误 / 结果为空） |
+| `ets/components/ProcessGroup.ets` | 官方 web 式工具三层折叠（从 MessageList 切出，控行数）：组头 🔧+短语+总耗时 → ToolRow 逐行（○/⊘ + 短语 + 路径摘要）→ detailBlock 灰底描边卡片（call.name monospace + 耗时 + ✓/✗ + bash 走 MdCodeBlock / 参数 prettyArguments / 输出·错误 / 结果为空）；四档 detail 模式收口 ChatWorkSteps（concise 只留组头不可展开 / standard 展开仅工具行 / detailed 现状 / verbose 默认全展开），展开集合 key=组内首个 callId（无 callId 'seq<seq>'），组件经 AppStorage('dshExpandedVersion') @Watch 回读 store.workSteps |
 | `ets/components/ThinkBlock.ets` | 深度思考可折叠小块（从 MessageList 切出）：🧭 + 「深度思考中…/已深度思考」+ ⌃⌄；流式默认展开、流式结束自动收起、用户手动展开后不再强制折叠；展开走 MdView small |
 | `ets/components/HitlPanel.ets` | 提问/审批卡：审批（⚖ 警示底 拒绝/允许一次）先、提问（选项 chips 单选清旧 + 自定义输入 canSubmit）后；限高 0.5 屏 |
 | `ets/components/ImageTile.ets` | 收图渲染四态（加载/像素/错误重试/全屏）：createImageSource→PixelMap→Image 260 Cover，点按 bindContentCover 全屏 |
 | `ets/components/MessageActions.ets` | 消息操作条：复制（pasteboard 回弹）/喜欢/朗读（Tts）/分享（Share）/⟳ 重新生成 |
 | `ets/components/ModelSheet.ets` | 调整模型 bindSheet：分组折叠（默认展开当前）+ pending 提示 + reasoning chips + 确认（st.selectModel） |
-| `ets/components/ProjectionSheets.ets` | 会话统计/运行轨迹两 sheet（智能团队/待办已切出到 ProjectionTeamSheets，控行数） |
+| `ets/components/ProjectionSheets.ets` | 会话统计/运行轨迹两 sheet（智能团队/待办已切出到 ProjectionTeamSheets，控行数）；TrajectorySheet 支持 showHeader=false 内嵌复用（代码工作视图①段） |
 | `ets/components/ProjectionTeamSheets.ets` | 智能团队/待办任务两 sheet（从 ProjectionSheets 切出）：团队三指挥 chip + 成员/任务/子代理行；待办状态圆点与删除线 |
 | `ets/components/PermissionSheet.ets` | 会话权限档位 sheet（从 Composer 拆出）：aboutToAppear 拉清单 + pick/apply + danger 二次确认 |
 | `ets/components/ComposerBanners.ets` | 输入条两条横幅（从 Composer 切出，控行数）：ErrorBanner（错误「点按查看」）与 HintBanner（提示可带 danger 色 + 关闭钮） |
 | `ets/components/ComposerPanels.ets` | 输入面板：命令补全（缓存切会话失效/前缀过滤）与 @ 文件补全（多根合并 label/ 前缀 + 目录下钻 + 失败重试） |
-| `ets/ui/theme.ets` | design-tokens.md 的鸿蒙翻译：DsPalette/DsColors（dark 构造语义别名）/DsTypography/DsSpacing；改样式先改 token 文档再改这里 |
+| `ets/ui/theme.ets` | design-tokens.md 的鸿蒙翻译：DsPalette/DsColors（dark 构造语义别名，含代码差异四色 diffAddBg/Fg、diffDelBg/Fg）/DsTypography/DsSpacing；改样式先改 token 文档再改这里 |
 | `ets/platform/WsTransport.ets` | @ohos.web.websocket 实现 WebSocketTransport：header 小写键 + protocol 单值，connectTimeoutMs settled 防竞态 |
 | `ets/platform/HttpTransport.ets` | @ohos.net.http 实现 HttpTransport：响应头键小写收敛；PATCH 枚举缺失走字符串透传（真机待验） |
 | `ets/platform/PlatformBridge.ets` | ArkTimers（setTimeout/clearTimeout）+ timeZoneId（Intl→UTC 兜底）+ PrefsStore（preferences 单例，getString/putString/removeKey） |
@@ -185,14 +185,14 @@
 | `ets/platform/Tts.ets` | CoreSpeechKit 朗读（zh-CN，speak/stopSpeak，音量语速走 extraParams） |
 | `ets/platform/Share.ets` | 系统分享面板（Want ohos.want.action.sendData text/plain） |
 | `ets/core/Breakpoints.ts` | 窗口断点纯逻辑（R007 一多）：`breakpointOf` 归一 sm/md/lg + 三档尺寸查询（contentMaxWidth 0/720/840、drawerWidth 288/352/400、sheetMaxWidth 0/640/720、drawerFraction 0.8/0.4/0.32）；放 core 以便 node 直测 |
-| `ets/core/ChatStore.ts` | 会话状态机（chat_state.dart 全语义）：send 乐观上屏+手机工作区预建（ensureMobileWorkspace）、流式收束、committed assistant/user 分支、防抖重拉 800ms、loadOlder 翻页去重、isCurrent 空态防串台 |
+| `ets/core/ChatStore.ts` | 会话状态机（chat_state.dart 全语义）：send 乐观上屏+手机工作区预建（ensureMobileWorkspace）、流式收束、committed assistant/user 分支（assistant 后 workSteps.collapseTurnOnCompletion 自动收起）、防抖重拉 800ms、loadOlder 翻页去重、isCurrent 空态防串台；send() 里 collapseOnSend（next-input 时机）；workSteps:ChatWorkSteps 随会话 reset；selectAgentPreset/loadAgentPresets 转发 |
 | `ets/core/MdParser.ts` | Markdown 块级解析（围栏/#/hr/引用/列表+任务项/表格/块公式/段落）：行扫描产 MdBlock；parseMarkdown 入口 |
 | `ets/core/MdInline.ts` | 行内解析：code/bold/italic/strike/link/裸 URL 最早匹配优先；snake_case 不误判 |
 | `ets/core/LatexLite.ts` | 轻量 LaTeX 解析：递归下降 \frac/\sqrt/^/_/\text + SYMBOLS ~90 项；splitLatex 切 $..$/$$..$$ 段 |
 | `ets/core/SimpleHighlight.ts` | 轻量代码高亮：PY/JS/GO/SQL/BASH 关键词表 + 字符串/数字/注释四类 token；语言未知纯文本 |
 | `ets/core/JsonAccess.ts` | JSON 宽容守卫（入站侧）：缺键/null/类型不符→null 或默认，绝不抛异常；strOr/numOr/boolOr 便捷默认版 |
 | `ets/core/Wire.ts` | WireBuilder 出站编码（null 一律省略键，encodeDefaults=false 语义，姊妹仓同源） |
-| `ets/core/Models.ts` | 协议帧模型 8 类：DshSession/DshWorkspace/MessageDelta/MessageCommitted/SessionLocation/DshFileEntry/DshDirectoryPage/SessionWaitResult（缺键全默认值） |
+| `ets/core/Models.ts` | 协议帧模型 8 类：DshSession（含可空 agentPreset）/DshWorkspace/MessageDelta/MessageCommitted/SessionLocation/DshFileEntry/DshDirectoryPage/SessionWaitResult（缺键全默认值） |
 | `ets/core/Content.ts` | 消息内容部件：ContentParts 拼接规则、图片引用、交接占位正则、PromptPart（ArkTS 扁平类 + type 分派）、SlashCommand/别名过滤、斜杠/@ 草稿解析 |
 | `ets/core/Credentials.ts` | 凭据数据形状（键 'dsh.credentials'，baseUrl+token）；持久化留 entry 层（preferences） |
 | `ets/core/ImageMediaType.ts` | 图片白名单 4 种 + 魔数嗅探（PNG/JPEG/GIF/WEBP/BMP/AVIF/HEIC）+ 扩展名映射 |
@@ -200,8 +200,8 @@
 | `ets/core/GatewayEvents.ts` | GatewayState 枚举 + 扁平 GatewayEvent（十种事件 type 分派）+ RequestException（稳定错误码）+ eventFromFrame（十一支事件帧映射纯函数） |
 | `ets/core/Questions.ts` | HITL 模型：UserQuestion/UserQuestionOption/PendingQuestion/PendingApproval/QuestionAnswerItem（custom 空省略，与安卓 questions.dart 对齐） |
 | `ets/core/GatewayClient.ts` | WS 状态机：connect/hello 8s/心跳 25s/退避重连（1→30s，attempt+downAttempt 双代数防迟到/重复回调）、重连链 relay（reconnecting）、事件派发（映射在 GatewayEvents.eventFromFrame）、dispose；帧收发本体在 GatewayRequests |
-| `ets/core/GatewayApi.ts` | WS 端点 19 个 + REST 委托层（13 个同名方法转发给 GatewayRest；历史实现已搬到 GatewayRest，本体 365 行）|
-| `ets/core/GatewayRest.ts` | REST 实现（从 GatewayApi 拆出）：restHeaders/restJson/encodePath + pairing exchange/workspace 建改/roots 浏览/entries/path 解析/attachment/image-handoff/subagentHistory/countPending 两跳 |
+| `ets/core/GatewayApi.ts` | WS 端点 19 个 + REST 委托层（15 个同名方法转发给 GatewayRest；历史实现已搬到 GatewayRest，含 agentPresets/selectAgentPreset）|
+| `ets/core/GatewayRest.ts` | REST 实现（从 GatewayApi 拆出）：restHeaders/restJson/encodePath + pairing exchange/workspace 建改/roots 浏览/entries/path 解析/attachment/image-handoff/subagentHistory/countPending 两跳 + agentPresets（GET /chat/agent-presets）/selectAgentPreset（PUT /chat/sessions/{sid}/agent-preset，409→AGENT_PRESET_LOCKED） |
 | `ets/core/GatewayRequests.ts` | 帧收发（从 GatewayClient 拆出）：requestWithTimeoutOn 请求-回显结算 + requestOn 默认 30s + subscribeOn 发出即成功 + onFrameOn 帧分派（kind=hello/event/error/ping/pong/resync 双兜底 requestId）|
 | `ets/core/ToolCall.ts` | 工具调用合并模型 + 措辞表（bash/read_image…/mcp__ 直译/run_code 内嵌扫描）+ toolSummary 九键 + toolResultText（text 拼接/图片占位）|
 | `ets/core/HistoryPage.ts` | 历史装配器 fromEvents：user/assistant 正文、连续 tool/call+result 合并过程组（callId 去重/就地升级）、文件卡轮尾挂载、turn/end 错误卡、注入内容过滤（source.kind）+ mergeOlderMessages 翻页去重 |
@@ -214,11 +214,17 @@
 | `ets/core/ChatActions.ts` | 会话动作集（store 参数纯函数）：runCommandIn 命令卡（✓/✗ 就地改写）/regenerateAtIn 重生成/cancelTurnIn 停止/setPermissionIn（NO_SESSION 拒） |
 | `ets/core/ChatHitl.ts` | HITL 动作集（从 ChatStore 拆出，store 参数纯函数）：refreshPendingMarksIn 抽屉角标两跳计数/pendingMarkOfIn/answerQuestionIn/cancelQuestionIn/decideApprovalIn |
 | `ets/core/ChatHistory.ts` | 历史装载与翻页（从 ChatStore 拆出，store 参数纯函数）：reloadHistoryIn 重拉（本地命令卡灌回尾部）+ loadOlderIn 向上翻页（beforeSeq=最小 seq、合并去重、跨会话结果丢弃）|
+| `ets/core/WorkSteps.ts` | 通用设置①②③纯逻辑：WorkStepsDetail/CollapseTiming/FoldedReplies 解析（未知回退 detailed/completion/all）+ 四偏好键常量（dsh.workStepsDetail 等）+ turnsOf 轮分组（user 起轮）+ visibleMessagesOf 折叠回复（final 档完成轮只留最后一条正文助手消息；运行中轮全可见；user/process/error/files/command 卡全保留）+ processGroupKey（首个 callId，无 callId 'seq<seq>'）+ lastTurnGroupKeys（completion 自动收起用） |
+| `ets/core/CodeDiff.ts` | 本轮代码差异纯逻辑：fileDiffOfCall 从 edit（file_path/old_string/new_string→−old/＋new）/write（file_path/content→全＋）工具调用提取 FileDiff（行 type add/del/ctx，ctx 暂未产出保留档位）+ codeDiffsOfTurn 同 path 聚合保序 + codeDiffsOfLastTurn |
+| `ets/core/AgentPresets.ts` | Agent 预设模型：AgentPreset(id/name/description/trust/isDefault/available) fromJson 全宽容（姊妹仓 0.2.x 无 trust 字段实证→默认 system 兜底）+ listFrom + toJson（round-trip，description null 省键） |
+| `ets/core/ChatWorkSteps.ts` | 工作步骤运行时状态（从 ChatStore 拆出）：detail/timing 偏好应用（concise/standard/verbose 收 expanded，verbose 靠 isExpanded 默认 true）+ expandedGroups Set（key=callId）+ snapshotExpanded 自增版本（AppStorage 'dshExpandedVersion' 桥）+ isExpanded/toggle（concise 拒）+ collapseTurnOnCompletion（轮 committed 后收起最后一轮组）+ collapseOnSend（next-input 发送时收起）+ Agent 预设缓存（currentAgentPreset/cachedAgentPresets）+ selectAgentPresetIn（PUT 成功回填+loadSessions，NO_SESSION 拒） |
 | `ets/core/SessionGroups.ts` | 会话抽屉分组纯函数：groupSessionsByTime 先按时间分桶（今天/昨天/更早，超 2 天折叠）、桶内按工作区聚合（同区只显示一次小节标题），visibleRowsOf 处理「更早」展开态；dayBucketOf 按本地日历天分桶 |
 | `ets/core/AppUpdate.ts` | 检查更新（华为应用市场口径）：UpdateCheckResult 结果对象 + updateErrorMessage SDK 错误码（1009400001~7/401）中文映射 + NOT_SUPPORTED_MESSAGE；平台调用在 SettingsView（updateManager.checkAppUpdate / showUpdateDialog） |
-| `ets/core/AtMention.ts` | @ 文件引用面板纯逻辑（从 Composer 抽出）：AtEntry 条目模型 + mergeAtEntries 多根合并（label/ 前缀、query 名字前缀过滤不区分大小写、逐根容错 okRoots 计数）+ inSubDirectory 全失败判定；Composer 只做拉取与状态搬运 |
+| `ets/core/AtMention.ts` | @ 文件引用面板纯逻辑（从 Composer 抽出）：AtEntry 条目模型 + mergeAtEntries 多根合并（label/ 前缀、query 名字前缀过滤不区分大小写、逐根容错 okRoots 计数）+ inSubDirectory 全失败判定 + loadMergedAtEntries（逐根拉取合并，@ 补全与「选择项目中的内容」共用）；Composer 只做拉取与状态搬运 |
 | `ets/core/SessionLocation.ts` | 新建会话工作目录纯逻辑（对照安卓 session_location_sheet.dart）：SessionLocation(rootId,cwd,label)+key 契约串、locationLabel（''=根目录）、recentLocations（历史会话 (rootId,cwd) 去重保序、跳过无根会话）、locationSubtitle（优先 cwdAbsolute 退回 rootId）、parentPath 逐级上退、locationChipLabel 空态 chip 文案 |
 | `ets/components/SessionLocationSheet.ets` | 工作目录选择面板：默认「手机会话」项 + 最近使用列表 + 授权根逐级浏览（空根自动跳到下一个有子目录的根、多根可点标题切换、面包屑「用此目录」）；选中写 store.pendingLocation，首条消息走 session-create{rootId,cwd} |
+| `ets/components/SettingsGeneralSection.ets` | 设置页「通用」四行（从 SettingsView 切出，控行数，官方 Web 文案逐字对齐）：工作步骤展示四 chip（concise/standard/detailed/verbose）+ 收起时机（completion/next-input）+ 折叠回复（all/final，verbose 档隐藏该行）+ 显示代码工作视图开关；偏好键带点官方 token，AppStorage 无点驼峰（dshWorkStepsDetail 等），写 PrefsStore |
+| `ets/components/CodeWorkSheet.ets` | 代码工作视图 sheet（官方 developerTools）：三段 chip 切换 —— ①运行轨迹（官方描述 + TrajectorySheet showHeader=false 内嵌）②本轮代码差异（core/CodeDiff 本地提取最后一轮 edit/write，+/- 行着色 theme.diffAdd*/diffDel*，卡底 bgLayer1）③Agent 预设（GET /chat/agent-presets 列表 + 当前项打勾；非 blank 会话整列表置灰「首条消息后锁定」，点选走 PUT，409 AGENT_PRESET_LOCKED 行内提示「已锁定，仅空白会话可切换」） |
 | `ets/core/ChatLabels.ts` | 展示文案纯函数：sessionTitleOf/deviceLabelOf/connectionLabelOf/stateLabelOf（安卓 chat_labels 口径） |
 | `ets/core/HitlStore.ts` | HITL 挂起表：pendingQuestions/approvals Map + session 过滤 + onEvent 四分支（返回是否变化）+ answer/cancel/decide（api 参数，成功即本地摘卡） |
 | `ets/core/ImageRef.ts` | 收图引用：DsImageRef（attachmentId/handoffName 二选一 + cacheKey）+ imageRefsOf/handoffRefOf（交接占位正则复用 Content） |
@@ -242,13 +248,16 @@
 | `harmony/test/cases/hosts-models-permissions.test.ts` | 12 用例：FNV 幂等/DSH1 宽容解码/主机列表操作/SessionModels 收敛/select-model 判别/权限标签 |
 | `harmony/test/cases/projections-release.test.ts` | 7 用例：轨迹分组排序/todo 变体丢弃/团队投影空壳 null/发布资产双前缀/版本比较（更新检查已改走华为应用市场，ReleaseCheck 的 Gitee/GitHub 通道在鸿蒙版停用） |
 | `harmony/test/cases/md-parser.test.ts` | Markdown 四件套 22 用例：块级/行内/LaTeX/高亮 + splitLatex/任务项/表格对齐 |
-| `harmony/test/cases/gateway-rest.test.ts` | REST 用例：URL 拼装/头/HTTP_40x/BAD_REPLY/空 body/encode/NO_TRANSPORT + fetchQuestions 解析与 403 |
+| `harmony/test/cases/gateway-rest.test.ts` | REST 用例：URL 拼装/头/HTTP_40x/BAD_REPLY/空 body/encode/NO_TRANSPORT + fetchQuestions 解析与 403 + agentPresets items 解析与 selectAgentPreset（PUT body/409→AGENT_PRESET_LOCKED/200 缺字段→BAD_REPLY） |
 | `harmony/test/cases/chat-store.test.ts` | 会话状态机：打开/订阅/历史装配/翻页去重/发送/停止/权限/模型选择 + openSession REST 兜底合流提问（空 callId 丢弃、403 静默、保留 WS rpcId） |
 | `harmony/test/cases/hitl-store.test.ts` | HITL 表 10 用例：mergeQuestions upsert/空 callId/保留旧 rpcId/采纳新 rpcId/跨会话隔离 + 两个 sessionIds 派生 + 摘卡收缩 + onEvent 四类消费 |
 | `harmony/test/cases/session-groups.test.ts` | 会话抽屉分组 10 用例：今天/昨天/更早分桶、空桶、时间倒序、同刻工作区升序、工作区聚合、未分组兜底、折叠可见性、常量 |
 | `harmony/test/cases/session-location.test.ts` | 工作目录 7 用例：locationLabel/最近使用去重保序（跳过无根会话）/locationSubtitle 三级回退/parentPath/locationChipLabel |
 | `harmony/test/cases/app-update.test.ts` | 检查更新 6 用例：UpdateCheckResult 三态 + updateErrorMessage 错误码 (1009400001~7/401/NOT_IN_MARKET) 中文映射 |
 | `harmony/test/cases/tool-detail.test.ts` | 工具详情 9 用例：formatDuration 四档（ms/s/mXs）+负值+null、bashCommandOf 认 bash/tools.bash、参数缺command/坏JSON/空串、prettyArguments 逐行+超200字截断 |
+| `harmony/test/cases/work-steps.test.ts` | 工作步骤 9 用例：三偏好解析回退/turnsOf 轮分组/visibleMessagesOf all 原样与 final 过滤（运行中轮三路全可见、无候选整轮保留、process/files 卡保留）/processGroupKey callId 与 seq 兜底/lastTurnGroupKeys |
+| `harmony/test/cases/code-diff.test.ts` | 代码差异 6 用例：edit −old/＋new 行序/write 全 ＋ 行与空内容/非目标工具与坏参数→null/tools.edit+tools.write 前缀识别/同 path 聚合保序/codeDiffsOfLastTurn 只取最后一轮 |
+| `harmony/test/cases/agent-presets.test.ts` | Agent 预设 5 用例：全字段解析/缺键回默认（0.2.x 无 trust 实证）/null 全默认/toJson round-trip（description null 省键）/listFrom |
 | `harmony/test/helpers/fake-ws.ts` | FakeTimers（手动 advance）/FakeSocket（服务端扮演 + lastRequestId）/FakeHttp（队列式应答） |
 | `harmony/test/package.json` / `tsconfig.json` | node:test + tsx 跑 `cases/*.test.ts`，strict TS |
 

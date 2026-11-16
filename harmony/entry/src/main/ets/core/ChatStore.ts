@@ -24,6 +24,8 @@ import { PromptPart } from './Content';
 import { DsImageRef } from './ImageRef';
 import { ImageFetcher } from './ImageFetcher';
 import { HitlStore } from './HitlStore';
+import { ChatWorkSteps, selectAgentPresetIn } from './ChatWorkSteps';
+import { AgentPreset } from './AgentPresets';
 import { runCommandIn, regenerateAtIn, cancelTurnIn, setPermissionIn } from './ChatActions';
 import {
   refreshPendingMarksIn, pendingMarkOfIn, answerQuestionIn, cancelQuestionIn, decideApprovalIn,
@@ -59,6 +61,12 @@ export class ChatStore {
   // 切换中的会话 id（createSession 应答未落时收推送用；prepareSessionFor 写）
   pendingSessionId: string | null = null;
   mobileWorkspaceId: string | null = null;
+  /**
+   * 工作步骤展示状态（通用设置四项的会话页面）：过程组展开集合、detail/timing
+   * 档位、Agent 预设镜像。设置页写 AppStorage 后由 ChatView @Watch 抄进来；
+   * 实现与测试见 ChatWorkSteps.ts（UI 层只渲染与转发）。
+   */
+  readonly workSteps: ChatWorkSteps = new ChatWorkSteps();
   /**
    * 新建会话的待定工作目录 —— null = 落「手机会话」工作区（默认）；
    * 选中某授权根下目录后，首条消息走 session-create{rootId,cwd}。
@@ -185,6 +193,8 @@ export class ChatStore {
     this.streamText = '';
     this.streamReasoning = '';
     this.lastError = null;
+    // 展开集合与 Agent 预设镜像一并清（新会话新账；尾部 changed() 顺带刷 UI）。
+    this.workSteps.resetSessionView();
     this.changed();
   }
 
@@ -200,6 +210,9 @@ export class ChatStore {
       return Promise.resolve();
     }
     this.lastError = null;
+    // 收起时机 = 「下次有新消息时」：发送即收起当前展开的工作步骤组
+    //（verbose 档永不自动收；completion 时机挂 COMMITTED assistant 分支）。
+    this.workSteps.collapseOnSend();
     const userMsg: ChatMessage = new ChatMessage();
     userMsg.role = 'user';
     userMsg.text = trimmed === '' ? '[图片]' : trimmed;
@@ -364,7 +377,13 @@ export class ChatStore {
         this.streaming = false;
         this.streamText = '';
         this.streamReasoning = '';
-        this.reloadHistory();
+        const self: ChatStore = this;
+        this.reloadHistory().then((): void => {
+          // 收起时机 = 「回答结束后」：轮 committed 且历史刷新到本轮后，收起
+          // 该轮全部过程组（verbose 档永不自动收；时序保证组 key 已在 messages）。
+          self.workSteps.collapseTurnOnCompletion(self.messages);
+          self.changed();
+        });
       } else {
         // 用户消息落库（本端已乐观上屏；别的端/REST 外部写入靠防抖重拉）。
         this.scheduleToolRefresh();
@@ -451,6 +470,25 @@ export class ChatStore {
       .then((data: JsonMap): ModelSelection | null => {
         return parseSelectModelReply(data);
       });
+  }
+
+  /**
+   * 选 Agent 预设（代码工作视图第三段；实现见 ChatWorkSteps.selectAgentPresetIn）。
+   * 200 返新 presetId；409 → RequestException('AGENT_PRESET_LOCKED') 由 UI 行内提示。
+   */
+  selectAgentPreset(presetId: string): Promise<string> {
+    return selectAgentPresetIn(this, presetId);
+  }
+
+  /**
+   * 拉 Agent 预设列表（代码工作视图第三段；GET /chat/agent-presets → items）。
+   * 回填 workSteps 镜像并 changed()，UI 的 @Prop 快照随之刷新。
+   */
+  loadAgentPresets(): Promise<void> {
+    return this.api.agentPresets().then((presets: AgentPreset[]): void => {
+      this.workSteps.setAgentPresets(presets);
+      this.changed();
+    });
   }
 
 }

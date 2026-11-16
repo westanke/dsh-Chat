@@ -235,6 +235,25 @@ export class DsColors {
   get markQuestionBg(): string {
     return this.dark ? '#26F5A623' : '#1AF5A623';
   }
+
+  // ---- 代码工作视图：本轮代码差异行色（+/- 语义，明暗各一档）----
+  /// 新增行底/字：绿系（浅 #E6F4EA/#1A7F37，深 #1E3125/#7BC996）。
+  get diffAddBg(): string {
+    return this.dark ? '#1E3125' : '#E6F4EA';
+  }
+
+  get diffAddFg(): string {
+    return this.dark ? '#7BC996' : '#1A7F37';
+  }
+
+  /// 删除行底/字：红系（浅 #FDEBEB/#C0392B，深 #3B2426/#E58C8C）。
+  get diffDelBg(): string {
+    return this.dark ? '#3B2426' : '#FDEBEB';
+  }
+
+  get diffDelFg(): string {
+    return this.dark ? '#E58C8C' : '#C0392B';
+  }
 }
 
 /// 字号（官方 token，fp；行高换算）。

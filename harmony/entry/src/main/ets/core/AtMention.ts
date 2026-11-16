@@ -9,7 +9,8 @@
  *   拖垮整张面板，逐根容错；只有「所有根都失败且当前在子目录」才算真失败。
  */
 
-import { GatewayEntry } from './Files';
+import { GatewayEntry, GatewayRoot } from './Files';
+import { GatewayApi } from './GatewayApi';
 
 /** 面板条目（UI 直接消费；kind 保留 file/directory 供图标与下钻判断）。 */
 export class AtEntry {
@@ -62,4 +63,25 @@ export function mergeAtEntries(lists: GatewayEntry[][], labels: string[],
 /** dir 为空（根层）时不算「在子目录里」——决定全失败判定。 */
 export function inSubDirectory(dir: string): boolean {
   return dir.trim().length > 0;
+}
+
+/**
+ * 逐根拉取当前目录条目并合并（store/api 参数纯函数，「选择项目中的内容」与
+ * @ 补全共用）：某个根 404 不拖垮整张面板，全部失败才 okRoots===0。
+ * 多根时才给 `label/` 前缀，单根直接列原名（安卓同口径）。
+ */
+export function loadMergedAtEntries(api: GatewayApi, roots: GatewayRoot[],
+                                    dir: string, query: string): Promise<AtMentionMerge> {
+  const jobs: Promise<GatewayEntry[]>[] = [];
+  for (let i = 0; i < roots.length; i++) {
+    jobs.push(api.listEntriesRest(roots[i].id, dir)
+      .catch((e: Error): GatewayEntry[] => new Array<GatewayEntry>()));
+  }
+  return Promise.all(jobs).then((lists: GatewayEntry[][]): AtMentionMerge => {
+    const labels: string[] = [];
+    for (let i = 0; i < roots.length; i++) {
+      labels.push(roots.length > 1 ? roots[i].label : '');
+    }
+    return mergeAtEntries(lists, labels, query, inSubDirectory(dir));
+  });
 }

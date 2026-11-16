@@ -21,6 +21,7 @@ import { SessionLocation, locationChipLabel } from '../core/SessionLocation';
 import { ModelSheet } from '../components/ModelSheet';
 import { StatsSheet, TrajectorySheet } from '../components/ProjectionSheets';
 import { TeamSheet, TodoSheet } from '../components/ProjectionTeamSheets';
+import { CodeWorkSheet } from '../components/CodeWorkSheet';
 
 @Component
 export struct ChatView {
@@ -53,6 +54,13 @@ export struct ChatView {
   @State teamSheet: boolean = false;
   @State todoSheet: boolean = false;
   @State modelSheet: boolean = false;
+  /** 代码工作视图（通用设置④开启后出现在溢出菜单）。 */
+  @State codeWorkSheet: boolean = false;
+  /**
+   * 「显示代码工作视图」档（通用设置④，官方 token '1'|'0'；Index 异步装载）。
+   * 关闭时溢出菜单不出现该入口。
+   */
+  @StorageProp('dshCodeWorkView') codeWorkViewProp: string = '0';
 
   /**
    * 抽屉推挤位移（R007 一多）：手机上推 80%（安卓同口径，抽屉占 80% 屏宽），
@@ -84,6 +92,10 @@ export struct ChatView {
       this.titleView = st.sessionTitle;
       this.questionsView = st.pendingQuestions;
       this.approvalsView = st.pendingApprovals;
+      // 工作步骤展开集合版本：ProcessGroup 靠这个 @StorageProp @Watch 回读
+      // store.workSteps 的展开状态（LazyForEach 同 key 不重建，@Prop 链路不通）。
+      // snapshotExpanded().version 是自增计数，保证 @Watch 只在真变化时触发。
+      AppStorage.setOrCreate('dshExpandedVersion', st.workSteps.snapshotExpanded().version);
       st.consumeHistoryPageJustLoaded();
     });
     // 首帧快照（重连/复用组件时 store 可能已就绪）。
@@ -192,13 +204,14 @@ export struct ChatView {
         this.todoSheet = false;
         this.modelSheet = false;
         this.locSheet = false;
+        this.codeWorkSheet = false;
       }
     })
   }
 
   private sheetOpen(): boolean {
     return this.statsSheet || this.trajectorySheet || this.teamSheet || this.todoSheet
-      || this.modelSheet || this.locSheet;
+      || this.modelSheet || this.locSheet || this.codeWorkSheet;
   }
 
   private sheetTitle(): string {
@@ -219,6 +232,9 @@ export struct ChatView {
     }
     if (this.locSheet) {
       return '会话工作目录';
+    }
+    if (this.codeWorkSheet) {
+      return '代码工作视图';
     }
     return '';
   }
@@ -241,6 +257,17 @@ export struct ChatView {
         this.menuItem('🧭', '运行轨迹', (): void => {
           this.trajectorySheet = true;
         })
+        if (this.codeWorkViewProp === '1') {
+          this.menuItem('🧩', '代码工作视图', (): void => {
+            const st: ChatStore | null = this.store;
+            if (st !== null) {
+              st.loadAgentPresets().catch((): void => {
+                // 预设列表拉取失败不拦入口：sheet 内空态兜底。
+              });
+            }
+            this.codeWorkSheet = true;
+          })
+        }
         this.menuItem('🧠', '智能团队', (): void => {
           this.teamSheet = true;
         })
@@ -310,6 +337,8 @@ export struct ChatView {
           this.syncPendingLoc();
         }
       })
+    } else if (this.codeWorkSheet) {
+      CodeWorkSheet({ store: this.store })
     }
   }
 

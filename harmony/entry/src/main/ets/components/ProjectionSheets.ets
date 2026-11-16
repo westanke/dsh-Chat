@@ -67,10 +67,12 @@ export struct StatsSheet {
   }
 }
 
-/** 轨迹/团队/待办共用的骨架行为（title+subtitle+滚动内容）。 */
+/** 轨迹/团队/待办共用的骨架行为（title+subtitle+滚动内容）。
+ *  showHeader=false 供代码工作视图第一段内联复用（隐藏标题/说明，只留轨迹流）。 */
 @Component
 export struct TrajectorySheet {
   store: ChatStore | null = null;
+  @Prop showHeader: boolean = true;
   @StorageProp('dshDark') dark: boolean = false;
   @State expandedSeq: number = -1;
 
@@ -123,16 +125,18 @@ export struct TrajectorySheet {
 
   build() {
     Column() {
-      Text('运行轨迹')
-        .fontSize(DsTypography.h4.size)
-        .fontWeight(FontWeight.Medium)
-        .fontColor(this.c().labelPrimary)
-        .width('100%')
-      Text('由当前会话的原始历史事件本地分组，不产生网络请求；点节点展开原始 JSON。')
-        .fontSize(DsTypography.small.size)
-        .fontColor(this.c().labelSecondary)
-        .width('100%')
-        .margin({ top: DsSpacing.liGap })
+      if (this.showHeader) {
+        Text('运行轨迹')
+          .fontSize(DsTypography.h4.size)
+          .fontWeight(FontWeight.Medium)
+          .fontColor(this.c().labelPrimary)
+          .width('100%')
+        Text('由当前会话的原始历史事件本地分组，不产生网络请求；点节点展开原始 JSON。')
+          .fontSize(DsTypography.small.size)
+          .fontColor(this.c().labelSecondary)
+          .width('100%')
+          .margin({ top: DsSpacing.liGap })
+      }
       Scroll() {
         Column() {
           if (this.turns().length === 0) {
@@ -152,6 +156,7 @@ export struct TrajectorySheet {
       }
       .align(Alignment.Top)
       .width('100%')
+      .layoutWeight(1)
       .margin({ top: DsSpacing.blockGap })
     }
     .width('100%')

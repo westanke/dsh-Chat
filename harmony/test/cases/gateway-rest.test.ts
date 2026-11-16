@@ -150,3 +150,52 @@ test('fetchQuestions: 403 → RequestException（scope 不足要被上层看见�
   await assert.rejects(api.fetchQuestions('s1'),
     (e: Error): boolean => (e as RequestException).code === 'HTTP_403');
 });
+
+test('agentPresets: GET /chat/agent-presets → items 解析', async () => {
+  const http: FakeHttp = new FakeHttp();
+  http.push(200, '{"items":[{"id":"agentic","name":"Agentic","description":"完整工具链",'
+    + '"trust":"system","isDefault":true,"available":true},'
+    + '{"id":"lite","name":"轻量","trust":"user","isDefault":false,"available":false}]}');
+  const api: GatewayApi = await makeApi(http);
+  const list = await api.agentPresets();
+  assert.equal(http.requests[0].method, 'GET');
+  assert.equal(http.requests[0].url, 'http://192.168.1.10:8765/api/v1/chat/agent-presets');
+  assert.equal(http.requests[0].headers.get('authorization'), 'Bearer tok-9');
+  assert.equal(list.length, 2);
+  assert.equal(list[0].id, 'agentic');
+  assert.equal(list[0].name, 'Agentic');
+  assert.equal(list[0].isDefault, true);
+  assert.equal(list[1].trust, 'user');
+  // items 缺失 → 空列表（宽容）。
+  http.push(200, '{}');
+  assert.equal((await api.agentPresets()).length, 0);
+});
+
+test('selectAgentPreset: PUT body {agentPreset} → 200 回显新 id', async () => {
+  const http: FakeHttp = new FakeHttp();
+  http.push(200, '{"agentPreset":"agentic"}');
+  const api: GatewayApi = await makeApi(http);
+  const preset: string = await api.selectAgentPreset('s 1/2', 'agentic');
+  assert.equal(http.requests[0].method, 'PUT');
+  assert.equal(http.requests[0].url,
+    'http://192.168.1.10:8765/api/v1/chat/sessions/s%201%2F2/agent-preset');
+  const body: Record<string, unknown> = JSON.parse(http.requests[0].body as string) as Record<string, unknown>;
+  assert.equal(body['agentPreset'], 'agentic');
+  assert.equal(preset, 'agentic');
+});
+
+test('selectAgentPreset: 409 → AGENT_PRESET_LOCKED（会话非 blank 已锁定）', async () => {
+  const http: FakeHttp = new FakeHttp();
+  http.push(409, '{"error":{"code":"AGENT_PRESET_LOCKED","message":"locked"}}');
+  const api: GatewayApi = await makeApi(http);
+  await assert.rejects(api.selectAgentPreset('s1', 'agentic'), (e: Error): boolean =>
+    (e as RequestException).code === 'AGENT_PRESET_LOCKED');
+});
+
+test('selectAgentPreset: 200 缺 agentPreset 字段 → BAD_REPLY', async () => {
+  const http: FakeHttp = new FakeHttp();
+  http.push(200, '{}');
+  const api: GatewayApi = await makeApi(http);
+  await assert.rejects(api.selectAgentPreset('s1', 'agentic'), (e: Error): boolean =>
+    (e as RequestException).code === 'BAD_REPLY');
+});
