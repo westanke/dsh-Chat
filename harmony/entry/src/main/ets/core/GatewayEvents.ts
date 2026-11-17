@@ -7,7 +7,7 @@
  */
 
 import { JsonAccess, JsonMap } from './JsonAccess';
-import { MessageDelta, MessageCommitted } from './Models';
+import { MessageDelta, MessageCommitted, ToolCallEvent, ToolResultEvent } from './Models';
 import { PendingQuestion, PendingApproval } from './Questions';
 
 /** 长连接状态机（Android GatewayState 同款五态）。 */
@@ -31,6 +31,14 @@ export class GatewayEventType {
   static readonly APPROVAL_REQUESTED: string = 'approvalRequested';
   static readonly APPROVAL_RESOLVED: string = 'approvalResolved';
   static readonly MODELS_UPDATED: string = 'modelsUpdated';
+  /** chat.tool.call：工具开始执行（bridge 原样透传内核事件）。 */
+  static readonly TOOL_CALL: string = 'toolCall';
+  /** chat.tool.result：工具结果（含 error.code 失败分类）。 */
+  static readonly TOOL_RESULT: string = 'toolResult';
+  /** chat.turn.start：一轮开始（bridge 常发，此前未接）。 */
+  static readonly TURN_START: string = 'turnStart';
+  /** chat.turn.end：一轮结束（reason.kind 判收起/截断提示，官方 client.js:4935）。 */
+  static readonly TURN_END: string = 'turnEnd';
 }
 
 /**
@@ -52,6 +60,10 @@ export class GatewayEvent {
   approvalId: string = '';
   /** modelsUpdated 的新 provider（可空语义：'' 表示未携带）。 */
   provider: string = '';
+  toolCall: ToolCallEvent | null = null;
+  toolResult: ToolResultEvent | null = null;
+  /** turn.end 的 reason.kind（'aborted'|'interrupted'|'error'|'max-tokens'|…；''=无）。 */
+  turnReasonKind: string = '';
 
   static delta(d: MessageDelta): GatewayEvent {
     const e: GatewayEvent = new GatewayEvent();
@@ -126,6 +138,37 @@ export class GatewayEvent {
     e.provider = provider;
     return e;
   }
+
+  static turnStarted(sessionId: string): GatewayEvent {
+    const e: GatewayEvent = new GatewayEvent();
+    e.type = GatewayEventType.TURN_START;
+    e.sessionId = sessionId;
+    return e;
+  }
+
+  static turnEnded(sessionId: string, reasonKind: string): GatewayEvent {
+    const e: GatewayEvent = new GatewayEvent();
+    e.type = GatewayEventType.TURN_END;
+    e.sessionId = sessionId;
+    e.turnReasonKind = reasonKind;
+    return e;
+  }
+
+  static toolCall(call: ToolCallEvent): GatewayEvent {
+    const e: GatewayEvent = new GatewayEvent();
+    e.type = GatewayEventType.TOOL_CALL;
+    e.sessionId = call.sessionId;
+    e.toolCall = call;
+    return e;
+  }
+
+  static toolResult(result: ToolResultEvent): GatewayEvent {
+    const e: GatewayEvent = new GatewayEvent();
+    e.type = GatewayEventType.TOOL_RESULT;
+    e.sessionId = result.sessionId;
+    e.toolResult = result;
+    return e;
+  }
 }
 
 /**
@@ -148,7 +191,7 @@ export function requestExceptionFromFrame(data: JsonMap | null): RequestExceptio
   return new RequestException(code, message);
 }
 
-/** 事件帧 → GatewayEvent（十一支映射，纯函数；未知 type 回 null 由调用方忽略）。 */
+/** 事件帧 → GatewayEvent（十三支映射，纯函数；未知 type 回 null 由调用方忽略）。 */
 export function eventFromFrame(data: JsonMap | null): GatewayEvent | null {
   if (data === null) {
     return null;
@@ -171,6 +214,13 @@ export function eventFromFrame(data: JsonMap | null): GatewayEvent | null {
   if (etype === 'message.committed') {
     return GatewayEvent.committed(MessageCommitted.fromJson(payload));
   }
+  if (etype === 'turn.start') {
+    return GatewayEvent.turnStarted(payloadSessionId);
+  }
+  if (etype === 'turn.end') {
+    const reason: JsonMap | null = JsonAccess.asMap(JsonAccess.raw(payload, 'reason'));
+    return GatewayEvent.turnEnded(payloadSessionId, JsonAccess.strOr(reason, 'kind', ''));
+  }
   if (etype === 'turn.failed') {
     return GatewayEvent.turnFailed(sessionId, JsonAccess.strOr(payload, 'message', '执行失败'));
   }
@@ -192,6 +242,12 @@ export function eventFromFrame(data: JsonMap | null): GatewayEvent | null {
   if (etype === 'deliverables.presented') {
     // 帧里只有 files+seq，不就地插卡，转会话事件防抖重拉 history。
     return GatewayEvent.sessionEvent(payloadSessionId, 'deliverables/presented');
+  }
+  if (etype === 'tool.call') {
+    return GatewayEvent.toolCall(ToolCallEvent.fromJson(payload));
+  }
+  if (etype === 'tool.result') {
+    return GatewayEvent.toolResult(ToolResultEvent.fromJson(payload));
   }
   if (etype === 'models.updated') {
     return GatewayEvent.modelsUpdated(JsonAccess.strOr(payload, 'provider', ''));

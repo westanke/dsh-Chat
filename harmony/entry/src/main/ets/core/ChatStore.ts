@@ -9,7 +9,13 @@
  */
 
 import { JsonAccess, JsonMap } from './JsonAccess';
-import { DshSession, MessageCommitted, MessageDelta } from './Models';
+import { DshSession, MessageCommitted, MessageDelta, ToolCallEvent, ToolResultEvent } from './Models';
+import { StreamToolState } from './StreamTools';
+import {
+  bumpStreamToolsIn, clearStreamToolsIn, afterLiveRowsIn,
+  syncLiveRowsIntoMessagesIn, reattachLiveRowsIn,
+} from './ChatStreamTools';
+import { onEventIn } from './ChatEvents';
 import { GatewayClient } from './GatewayClient';
 import { GatewayApi } from './GatewayApi';
 import {
@@ -51,6 +57,8 @@ export class ChatStore {
   streamReasoning: string = '';
   streaming: boolean = false;
   lastError: string | null = null;
+  /** turn.end reason=max-tokens 置位：列表尾提示「回答被截断…」（MessageList 渲染）。 */
+  maxTokensNotice: boolean = false;
   historyHasMore: boolean = false;
   loadingOlder: boolean = false;
   /** 翻页刚 prepend 过更早消息：列表层消费后清零，跳过一次贴底跟随。 */
@@ -73,6 +81,16 @@ export class ChatStore {
    * 会话建好即清空（目录随会话定死，历史会话不受影响）。
    */
   pendingLocation: SessionLocation | null = null;
+  /**
+   * 工具调用实时流（bridge chat.message.delta kind='tool-call'/'tool-call-end'
+   * 与 chat.tool.call/chat.tool.result 四帧的行状态机，StreamTools.ts 纯逻辑）。
+   * callId 去重、后到覆盖；reloadHistory 落库后若仍在流式则重新并入（兜底）。
+   * 渲染：syncLiveRowsIntoMessages 并入运行中轮过程组（无组追加合成卡 seq=-1，
+   * reload 整体替换时天然消失）；组件刷新走 streamToolsVersion → ChatView 写
+   * AppStorage('dshStreamToolsVersion') 广播（LazyForEach 同 key 不重建的坑）。
+   */
+  streamTools: StreamToolState = new StreamToolState();
+  streamToolsVersion: number = 0;
   private refreshScheduled: boolean = false;
   private notify: (() => void) | null = null;
 
@@ -184,6 +202,7 @@ export class ChatStore {
 
   /** 清屏公共段（切会话/新建共用）：原始事件/投影/翻页/流式/错误全清。 */
   private resetSessionView(): void {
+    this.maxTokensNotice = false;
     this.rawEvents = [];
     this.projections = null;
     this.historyHasMore = false;
@@ -195,10 +214,15 @@ export class ChatStore {
     this.lastError = null;
     // 展开集合与 Agent 预设镜像一并清（新会话新账；尾部 changed() 顺带刷 UI）。
     this.workSteps.resetSessionView();
+    clearStreamToolsIn(this);
     this.changed();
   }
 
-  /** 发送文本（阶段 2 纯文本；带图走阶段 4 PromptPart.image）。 */
+  /** reloadHistory 落库后重挂 live 行（实现见 ChatStreamTools.ts）。 */
+  reattachLiveRows(): void {
+    reattachLiveRowsIn(this);
+  }
+
   sendWithImage(text: string, image: PromptPart, mode: string = 'queue'): Promise<void> {
     return this.send(text, image);
   }
@@ -222,6 +246,7 @@ export class ChatStore {
       this.streamText = '';
       this.streamReasoning = '';
     }
+    this.maxTokensNotice = false;
     this.streaming = true;
     this.changed();
     const self: ChatStore = this;
@@ -354,73 +379,11 @@ export class ChatStore {
   }
 
   private onEvent(event: GatewayEvent): void {
-    if (event.type === GatewayEventType.DELTA) {
-      const delta: MessageDelta | null = event.delta;
-      if (delta === null || !this.isCurrent(delta.sessionId)) {
-        return;
-      }
-      if (delta.kind === 'reasoning') {
-        this.streamReasoning += delta.text;
-      } else {
-        this.streamText += delta.text;
-      }
-      this.streaming = true;
-      this.changed();
-      return;
-    }
-    if (event.type === GatewayEventType.COMMITTED) {
-      const committed: MessageCommitted | null = event.committed;
-      if (committed === null || !this.isCurrent(committed.sessionId)) {
-        return;
-      }
-      if (committed.role === 'assistant') {
-        this.streaming = false;
-        this.streamText = '';
-        this.streamReasoning = '';
-        const self: ChatStore = this;
-        this.reloadHistory().then((): void => {
-          // 收起时机 = 「回答结束后」：轮 committed 且历史刷新到本轮后，收起
-          // 该轮全部过程组（verbose 档永不自动收；时序保证组 key 已在 messages）。
-          self.workSteps.collapseTurnOnCompletion(self.messages);
-          self.changed();
-        });
-      } else {
-        // 用户消息落库（本端已乐观上屏；别的端/REST 外部写入靠防抖重拉）。
-        this.scheduleToolRefresh();
-      }
-      return;
-    }
-    if (event.type === GatewayEventType.TURN_FAILED) {
-      if (!this.isCurrent(event.sessionId)) {
-        return;
-      }
-      this.streaming = false;
-      this.streamText = '';
-      this.streamReasoning = '';
-      this.lastError = event.message;
-      this.changed();
-      return;
-    }
-    if (event.type === GatewayEventType.RESYNC) {
-      this.reloadHistory();
-      return;
-    }
-    if (event.type === GatewayEventType.SESSION_EVENT) {
-      if (!this.isCurrent(event.sessionId)) {
-        return;
-      }
-      this.scheduleToolRefresh();
-      return;
-    }
-    if (this.hitl.onEvent(event)) {
-      this.changed();
-    }
-    return;
-    // MODELS_UPDATED（模型列表变化）在阶段 4 模型切换接入。
+    onEventIn(this, event);
   }
 
   /** 800ms 防抖重拉（一轮 turn 事件很密，限流）。 */
-  private scheduleToolRefresh(): void {
+  scheduleToolRefresh(): void {
     if (this.refreshScheduled) {
       return;
     }
@@ -433,7 +396,7 @@ export class ChatStore {
   }
 
   /** 未选会话（空态）时忽略一切推送（连接即重放的其它会话事件不串台）。 */
-  private isCurrent(sid: string | null): boolean {
+  isCurrent(sid: string | null): boolean {
     const current: string | null = this.sessionId;
     if (current === null || current === '') {
       return false;

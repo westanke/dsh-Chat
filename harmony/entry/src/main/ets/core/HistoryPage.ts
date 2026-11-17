@@ -8,6 +8,7 @@
 import { JsonAccess, JsonMap } from './JsonAccess';
 import { ContentImageRef, ContentParts, stripBridgeImageNote } from './Content';
 import { RawToolCall, ToolCallInfo, extractToolCalls, toolResultText, toolPhrases, toolSummary } from './ToolCall';
+import { statusFromErrorCode } from './StreamTools';
 
 /** 内核历史事件（原样透传）：{type, seq, time, data}。 */
 export class SessionEvent {
@@ -371,11 +372,15 @@ export class HistoryPage {
           const failed: boolean = JsonAccess.boolOr(msg, 'isError', false);
           raw.failed = failed;
           raw.resultText = toolResultText(JsonAccess.raw(msg, 'content'));
+          // error.code → 行终态（stopped/cancelled/failed；StreamTools 同口径）。
+          const errObj: JsonMap | null = JsonAccess.obj(ev.data, 'error');
+          const errorCode: string = errObj === null ? '' : JsonAccess.strOr(errObj, 'code', '');
           const info: ToolCallInfo = new ToolCallInfo(callId, raw.name,
             toolPhrases(raw.name, raw.arguments), toolSummary(raw.arguments),
             failed,
             ev.time - raw.time > 0 ? ev.time - raw.time : null,
             raw.resultText, raw.arguments);
+          info.status = statusFromErrorCode(errorCode);
           groupCalls[idx] = info;
           groupEnd = ev.time;
           break;

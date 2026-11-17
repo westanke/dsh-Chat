@@ -52,6 +52,8 @@ export struct MessageList {
   /** store 派生消息快照（唯一被观察的数据源）。 */
   @State msgs: ChatMessage[] = [];
   /** 服务端还有更早事件（history 应答 hasMore）—— 决定列表头是否出「加载更早消息」。 */
+  /** turn.end reason=max-tokens：列表尾「回答被截断」提示（官方 client.js:6707 文案）。 */
+  @State maxTokensNotice: boolean = false;
   @State hasMore: boolean = false;
   /** 正在翻页（按钮换 spinner）。 */
   @State loadingOlder: boolean = false;
@@ -124,6 +126,15 @@ export struct MessageList {
           this.itemOf(m)
         }
       }, (m: ChatMessage) => this.keyOf(m))
+      if (this.maxTokensNotice) {
+        ListItem() {
+          Text('回答被截断，已有输出保留在对话中。发送“继续”可让模型接着输出。')
+            .fontSize(DsTypography.caption.size).fontColor(this.c().settingsWarnFg)
+            .wordBreak(WordBreak.BREAK_ALL).width('100%')
+            .padding({ left: 12, right: 12, top: 8, bottom: 8 })
+            .backgroundColor(this.c().settingsWarnBg).borderRadius(8)
+        }
+      }
     }
     .width('100%')
     .constraintSize({ maxWidth: contentMaxWidth(this.bp) > 0 ? contentMaxWidth(this.bp) : '100%' })
@@ -163,27 +174,19 @@ export struct MessageList {
             .fontSize(16)
           Column({ space: 2 }) {
             Text(f.name.length > 0 ? f.name : f.path)
-              .fontSize(DsTypography.small.size)
-              .fontColor(this.c().labelPrimary)
-              .maxLines(1)
-              .textOverflow({ overflow: TextOverflow.Ellipsis })
-              .width('100%')
+              .fontSize(DsTypography.small.size).fontColor(this.c().labelPrimary).maxLines(1)
+              .textOverflow({ overflow: TextOverflow.Ellipsis }).width('100%')
             if (f.description !== null) {
               Text(f.description as string)
-                .fontSize(DsTypography.caption.size)
-                .fontColor(this.c().labelTertiary)
-                .maxLines(1)
-                .textOverflow({ overflow: TextOverflow.Ellipsis })
-                .width('100%')
+                .fontSize(DsTypography.caption.size).fontColor(this.c().labelTertiary).maxLines(1)
+                .textOverflow({ overflow: TextOverflow.Ellipsis }).width('100%')
             }
           }
           .alignItems(HorizontalAlign.Start)
           .layoutWeight(1)
         }
-        .width('100%')
-        .padding({ left: 12, right: 12, top: 8, bottom: 8 })
-        .borderRadius(10)
-        .backgroundColor(this.c().bgLayer1)
+        .width('100%').padding({ left: 12, right: 12, top: 8, bottom: 8 })
+        .borderRadius(10).backgroundColor(this.c().bgLayer1)
         .accessibilityText(f.name + '，文件：' + f.path)
         .onClick(() => {
           if (this.isMarkdown(f.path)) {
@@ -204,6 +207,7 @@ export struct MessageList {
     const raw: ChatMessage[] = st === null ? [] : st.messages;
     this.msgs = st === null ? [] : visibleMessagesOf(raw, parseFoldedReplies(this.foldedRepliesProp), st.streaming);
     this.ds.reset(this.msgs);
+    this.maxTokensNotice = st !== null && st.maxTokensNotice;
     this.hasMore = st !== null && st.historyHasMore;
     this.loadingOlder = st !== null && st.loadingOlder;
     const justLoaded: boolean = st !== null && st.consumeHistoryPageJustLoaded();
@@ -355,15 +359,12 @@ export struct MessageList {
         .margin({ top: 2 })
       Column({ space: 2 }) {
         Text(m.text.split('\n')[0])
-          .fontSize(DsTypography.small.size)
-          .fontFamily('monospace')
-          .fontColor(this.c().labelPrimary)
+          .fontSize(DsTypography.small.size).fontFamily('monospace').fontColor(this.c().labelPrimary)
           .width('100%')
         if (m.text.includes('\n')) {
           Text(m.text.split('\n').slice(1).join('\n'))
             .fontSize(DsTypography.small.size)
-            .fontColor(m.text.includes('\u2717') ? this.c().danger : this.c().labelTertiary)
-            .width('100%')
+            .fontColor(m.text.includes('\u2717') ? this.c().danger : this.c().labelTertiary).width('100%')
         }
       }
       .alignItems(HorizontalAlign.Start)

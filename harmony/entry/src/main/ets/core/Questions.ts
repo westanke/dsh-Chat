@@ -104,6 +104,8 @@ export class PendingApproval {
   /** 'standard' | 'full-access'。 */
   risk: string = 'standard';
   reason: string = '';
+  /** 命令预览（bridge redact 1200，tool/call args.command；官方 ApprovalFlow detail）。 */
+  detail: string = '';
 
   static fromJson(sessionId: string, payload: JsonMap | null): PendingApproval {
     const a: PendingApproval = new PendingApproval();
@@ -112,6 +114,7 @@ export class PendingApproval {
     a.toolName = JsonAccess.strOr(payload, 'toolName', '工具');
     a.risk = JsonAccess.strOr(payload, 'risk', 'standard');
     a.reason = JsonAccess.strOr(payload, 'reason', '');
+    a.detail = JsonAccess.strOr(payload, 'detail', '');
     return a;
   }
 }

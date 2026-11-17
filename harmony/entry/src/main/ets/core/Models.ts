@@ -105,9 +105,17 @@ export class MessageDelta {
   readonly turn: number;
   readonly step: number;
   readonly index: number;
-  /** 'text' | 'reasoning'。 */
+  /** 'text' | 'reasoning' | 'tool-call' | 'tool-call-end'（bridge 宽容透传）。 */
   readonly kind: string;
   readonly text: string;
+  /** kind='tool-call'/'tool-call-end'：工具 id（首包可能缺，调用方按 index 兜底）。 */
+  readonly callId: string;
+  /** kind='tool-call'：工具名（首包可能缺，调用方先用「工具调用」占位）。 */
+  readonly name: string;
+  /** kind='tool-call'：参数增量（拼到已有 argsRaw 后面）。 */
+  readonly argumentsDelta: string;
+  /** kind='tool-call-end'：定稿的完整 arguments。 */
+  readonly arguments: string;
 
   constructor(d: JsonMap | null) {
     this.sessionId = JsonAccess.strOr(d, 'sessionId', '');
@@ -116,10 +124,82 @@ export class MessageDelta {
     this.index = JsonAccess.numOr(d, 'index', 0);
     this.kind = JsonAccess.strOr(d, 'kind', 'text');
     this.text = JsonAccess.strOr(d, 'text', '');
+    this.callId = JsonAccess.strOr(d, 'callId', '');
+    this.name = JsonAccess.strOr(d, 'name', '');
+    this.argumentsDelta = JsonAccess.strOr(d, 'argumentsDelta', '');
+    this.arguments = JsonAccess.strOr(d, 'arguments', '');
   }
 
   static fromJson(value: Object | null): MessageDelta {
     return new MessageDelta(JsonAccess.asMap(value));
+  }
+}
+
+/** chat.tool.call 帧（工具开始执行；data=内核 event.data + base 字段）。 */
+export class ToolCallEvent {
+  readonly sessionId: string;
+  readonly callId: string;
+  readonly name: string;
+  readonly arguments: string;
+
+  constructor(d: JsonMap | null) {
+    this.sessionId = JsonAccess.strOr(d, 'sessionId', '');
+    this.callId = JsonAccess.strOr(d, 'callId', '');
+    this.name = JsonAccess.strOr(d, 'name', '');
+    this.arguments = JsonAccess.strOr(d, 'arguments', '');
+  }
+
+  static fromJson(value: Object | null): ToolCallEvent {
+    return new ToolCallEvent(JsonAccess.asMap(value));
+  }
+}
+
+/** chat.tool.result 帧（message.content[*].text 拼正文；error.code 内核失败分类）。 */
+export class ToolResultEvent {
+  readonly sessionId: string;
+  /** message.toolCallId，缺了退 source.callId。 */
+  readonly callId: string;
+  readonly isError: boolean;
+  readonly contentText: string;
+  readonly errorName: string;
+  readonly errorCode: string;
+
+  constructor(d: JsonMap | null) {
+    this.sessionId = JsonAccess.strOr(d, 'sessionId', '');
+    const message: JsonMap | null = JsonAccess.asMap(JsonAccess.raw(d, 'message'));
+    let callId: string = '';
+    let isError: boolean = false;
+    let contentText: string = '';
+    if (message !== null) {
+      callId = JsonAccess.strOr(message, 'toolCallId', '');
+      isError = JsonAccess.boolOr(message, 'isError', false);
+      const content: Object[] = JsonAccess.arr(message, 'content');
+      const parts: string[] = [];
+      for (let i = 0; i < content.length; i++) {
+        const block: JsonMap | null = JsonAccess.asMap(content[i]);
+        if (block !== null && JsonAccess.strOr(block, 'type', '') === 'text') {
+          const text: string = JsonAccess.strOr(block, 'text', '');
+          if (text !== '') {
+            parts.push(text);
+          }
+        }
+      }
+      contentText = parts.join('\n');
+      if (callId === '') {
+        const src: JsonMap | null = JsonAccess.asMap(JsonAccess.raw(message, 'source'));
+        callId = src === null ? '' : JsonAccess.strOr(src, 'callId', '');
+      }
+    }
+    this.callId = callId;
+    this.isError = isError;
+    this.contentText = contentText;
+    const error: JsonMap | null = JsonAccess.asMap(JsonAccess.raw(d, 'error'));
+    this.errorName = error === null ? '' : JsonAccess.strOr(error, 'name', '');
+    this.errorCode = error === null ? '' : JsonAccess.strOr(error, 'code', '');
+  }
+
+  static fromJson(value: Object | null): ToolResultEvent {
+    return new ToolResultEvent(JsonAccess.asMap(value));
   }
 }
 
@@ -131,6 +211,12 @@ export class MessageCommitted {
   readonly seq: number;
   readonly turn: number;
   readonly step: number;
+  /**
+   * 这条 assistant 消息是否带正文（bridge e08b6b5：内核在工具执行前先 settle
+   * 一条只含 tool-call 块、无 text 块的 assistant/message，hasReplyContent=false）。
+   * user/message 不带该键；老桥不带时按 true 兼容。
+   */
+  readonly hasReplyContent: boolean;
 
   constructor(d: JsonMap | null) {
     this.sessionId = JsonAccess.strOr(d, 'sessionId', '');
@@ -138,6 +224,7 @@ export class MessageCommitted {
     this.seq = JsonAccess.numOr(d, 'seq', 0);
     this.turn = JsonAccess.numOr(d, 'turn', 0);
     this.step = JsonAccess.numOr(d, 'step', 0);
+    this.hasReplyContent = JsonAccess.boolOr(d, 'hasReplyContent', true);
   }
 
   static fromJson(value: Object | null): MessageCommitted {

@@ -211,6 +211,17 @@ export struct HitlPanel {
           .margin({ top: DsSpacing.liGap })
           .width('100%')
       }
+      // 命令预览（bridge detail，args.command redact 1200；官方 ApprovalFlow body：
+      // 等宽代码字体逐字换行 break-all，失败输出过长不截语义）。
+      if (a.detail !== null && a.detail.length > 0) {
+        Text(a.detail)
+          .fontSize(DsTypography.codeBlockLabel.size)
+          .fontFamily('monospace')
+          .fontColor(this.c().settingsWarnFg)
+          .wordBreak(WordBreak.BREAK_ALL)
+          .margin({ top: DsSpacing.liGap })
+          .width('100%')
+      }
       Row() {
         Blank()
         Text('拒绝')

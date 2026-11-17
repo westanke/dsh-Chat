@@ -194,7 +194,7 @@
 | `ets/platform/Tts.ets` | CoreSpeechKit 朗读（zh-CN，speak/stopSpeak，音量语速走 extraParams） |
 | `ets/platform/Share.ets` | 系统分享面板（Want ohos.want.action.sendData text/plain） |
 | `ets/core/Breakpoints.ts` | 窗口断点纯逻辑（R007 一多）：`breakpointOf` 归一 sm/md/lg + 三档尺寸查询（contentMaxWidth 0/720/840、drawerWidth 288/352/400、sheetMaxWidth 0/640/720、drawerFraction 0.8/0.4/0.32）；放 core 以便 node 直测 |
-| `ets/core/ChatStore.ts` | 会话状态机（chat_state.dart 全语义）：send 乐观上屏+手机工作区预建（ensureMobileWorkspace）、流式收束、committed assistant/user 分支（assistant 后 workSteps.collapseTurnOnCompletion 自动收起）、防抖重拉 800ms、loadOlder 翻页去重、isCurrent 空态防串台；send() 里 collapseOnSend（next-input 时机）；workSteps:ChatWorkSteps 随会话 reset；selectAgentPreset/loadAgentPresets 转发 |
+| `ets/core/ChatStore.ts` | 会话状态机（chat_state.dart 全语义）：send 乐观上屏+手机工作区预建（ensureMobileWorkspace）、流式收束、防抖重拉 800ms、loadOlder 翻页去重、isCurrent 空态防串台；send() 里 collapseOnSend（next-input 时机）；workSteps:ChatWorkSteps 随会话 reset；事件分派 onEventIn 与流式工具行粘合拆到 ChatEvents/ChatStreamTools（onEvent/reattachLiveRows 转发）；streamTools:StreamToolState 容器；selectAgentPreset/loadAgentPresets 转发 |
 | `ets/core/MdParser.ts` | Markdown 块级解析（围栏/#/hr/引用/列表+任务项/表格/块公式/段落）：行扫描产 MdBlock；parseMarkdown 入口 |
 | `ets/core/MdInline.ts` | 行内解析：code/bold/italic/strike/link/裸 URL 最早匹配优先；snake_case 不误判 |
 | `ets/core/LatexLite.ts` | 轻量 LaTeX 解析：递归下降 \frac/\sqrt/^/_/\text + SYMBOLS ~90 项；splitLatex 切 $..$/$$..$$ 段 |
@@ -225,6 +225,9 @@
 | `ets/core/ChatActions.ts` | 会话动作集（store 参数纯函数）：runCommandIn 命令卡（✓/✗ 就地改写）/regenerateAtIn 重生成/cancelTurnIn 停止/setPermissionIn（NO_SESSION 拒） |
 | `ets/core/ChatHitl.ts` | HITL 动作集（从 ChatStore 拆出，store 参数纯函数）：refreshPendingMarksIn 抽屉角标两跳计数/pendingMarkOfIn/answerQuestionIn/cancelQuestionIn/decideApprovalIn |
 | `ets/core/ChatHistory.ts` | 历史装载与翻页（从 ChatStore 拆出，store 参数纯函数）：reloadHistoryIn 重拉（本地命令卡灌回尾部）+ loadOlderIn 向上翻页（beforeSeq=最小 seq、合并去重、跨会话结果丢弃）|
+| `ets/core/ChatStreamTools.ts` | 流式工具行↔store 粘合（从 ChatStore 拆出，store 参数纯函数）：bumpStreamToolsIn 版本广播/clearStreamToolsIn 清流+去合成卡/dropSyntheticGroupsIn 回收 seq=-1 占位组/afterLiveRowsIn 每帧并入+通知/syncLiveRowsIntoMessagesIn live 行并入运行中轮（callId 命中 mergeLiveRow 就地升级、未命中追加、无组追加合成卡）/reattachLiveRowsIn reload 后重挂 |
+| `ets/core/ChatEvents.ts` | Gateway 事件分派（从 ChatStore 拆出，store 参数纯函数）：onEventIn——DELTA 显式分派 text/reasoning/tool-call/tool-call-end（未知 kind 只抬流式态不渲染，防新协议帧 JSON 漏进气泡）/TOOL_CALL/TOOL_RESULT 进 StreamToolState、COMMITTED assistant 清流+reload+collapseTurnOnCompletion（user 走防抖）、TURN_FAILED 清流+lastError、RESYNC/SESSION_EVENT 防抖重拉、其余 hitl.onEvent 兜底 |
+| `ets/core/StreamTools.ts` | 流式工具行状态机（bridge 四帧→行；对齐安卓 streaming_tools.dart _rowFor）：StreamToolState 容器（rows+indexToCallId 映射；缺 callId 首包落 'idx<index>' 占位行、真实 callId 首现就地改键迁移收编+记映射、续包按 index 找回）applyDelta/applyEnd/applyCall/applyResult + 纯函数 exitBadgeOf（结果文本尾 [exit code: N]/[killed by signal: X]）/statusFromErrorCode（interrupted→stopped/ASK_CANCELLED→cancelled/未知降级失败）/rankOf（终态>有结果>running>preparing）/mergeLiveRow（rank 守卫防降级）+ TOOL_STATUS_* 三常量 |
 | `ets/core/WorkSteps.ts` | 通用设置①②③纯逻辑：WorkStepsDetail/CollapseTiming/FoldedReplies 解析（未知回退 detailed/completion/all）+ 四偏好键常量（dsh.workStepsDetail 等）+ turnsOf 轮分组（user 起轮）+ visibleMessagesOf 折叠回复（final 档完成轮只留最后一条正文助手消息；运行中轮全可见；user/process/error/files/command 卡全保留）+ processGroupKey（首个 callId，无 callId 'seq<seq>'）+ lastTurnGroupKeys（completion 自动收起用） |
 | `ets/core/CodeDiff.ts` | 本轮代码差异纯逻辑：fileDiffOfCall 从 edit（file_path/old_string/new_string→−old/＋new）/write（file_path/content→全＋）工具调用提取 FileDiff（行 type add/del/ctx，ctx 暂未产出保留档位）+ codeDiffsOfTurn 同 path 聚合保序 + codeDiffsOfLastTurn |
 | `ets/core/AgentPresets.ts` | Agent 预设模型：AgentPreset(id/name/description/trust/isDefault/available) fromJson 全宽容（姊妹仓 0.2.x 无 trust 字段实证→默认 system 兜底）+ listFrom + toJson（round-trip，description null 省键） |
@@ -260,7 +263,8 @@
 | `harmony/test/cases/projections-release.test.ts` | 7 用例：轨迹分组排序/todo 变体丢弃/团队投影空壳 null/发布资产双前缀/版本比较（更新检查已改走华为应用市场，ReleaseCheck 的 Gitee/GitHub 通道在鸿蒙版停用） |
 | `harmony/test/cases/md-parser.test.ts` | Markdown 四件套 22 用例：块级/行内/LaTeX/高亮 + splitLatex/任务项/表格对齐 |
 | `harmony/test/cases/gateway-rest.test.ts` | REST 用例：URL 拼装/头/HTTP_40x/BAD_REPLY/空 body/encode/NO_TRANSPORT + fetchQuestions 解析与 403 + agentPresets items 解析与 selectAgentPreset（PUT body/409→AGENT_PRESET_LOCKED/200 缺字段→BAD_REPLY） |
-| `harmony/test/cases/chat-store.test.ts` | 会话状态机：打开/订阅/历史装配/翻页去重/发送/停止/权限/模型选择 + openSession REST 兜底合流提问（空 callId 丢弃、403 静默、保留 WS rpcId） |
+| `harmony/test/cases/chat-store.test.ts` | 会话状态容器核心：oldestSeqOf/loadSessions/openSession/newChat/send 成功与失败/delta 累积/committed 三态（含 hasReplyContent 中途 commit）/turn.start·turn.end（max-tokens 提示、aborted 不收起）/committed user 与 sessionEvent 防抖/turnFailed/resync/loadOlder 翻页去重/cancelTurn/READY 回调/deviceLabel |
+| `harmony/test/cases/chat-store-actions.test.ts` | 会话交互动作：ensureMobileWorkspace 三条（命中复用/新建改名/缓存短路）/sendWithImage/runCommand ✓✗ 两卡/HITL answer·decide 摘卡/setPermission/refreshPendingMarks/openSession REST 兜底（空 callId 丢弃、403 静默、保留 WS rpcId）/refreshPendingQuestions |
 | `harmony/test/cases/hitl-store.test.ts` | HITL 表 10 用例：mergeQuestions upsert/空 callId/保留旧 rpcId/采纳新 rpcId/跨会话隔离 + 两个 sessionIds 派生 + 摘卡收缩 + onEvent 四类消费 |
 | `harmony/test/cases/session-groups.test.ts` | 会话抽屉分组 10 用例：今天/昨天/更早分桶、空桶、时间倒序、同刻工作区升序、工作区聚合、未分组兜底、折叠可见性、常量 |
 | `harmony/test/cases/session-location.test.ts` | 工作目录 7 用例：locationLabel/最近使用去重保序（跳过无根会话）/locationSubtitle 三级回退/parentPath/locationChipLabel |
@@ -269,8 +273,10 @@
 | `harmony/test/cases/work-steps.test.ts` | 工作步骤 9 用例：三偏好解析回退/turnsOf 轮分组/visibleMessagesOf all 原样与 final 过滤（运行中轮三路全可见、无候选整轮保留、process/files 卡保留）/processGroupKey callId 与 seq 兜底/lastTurnGroupKeys |
 | `harmony/test/cases/code-diff.test.ts` | 代码差异 6 用例：edit −old/＋new 行序/write 全 ＋ 行与空内容/非目标工具与坏参数→null/tools.edit+tools.write 前缀识别/同 path 聚合保序/codeDiffsOfLastTurn 只取最后一轮 |
 | `harmony/test/cases/tool-present.test.ts` | 工具呈现 24 用例：activityKind 全表/kindIcon 兜底/toolTitle 特例/词表截断（truncateDetail 160+…、reasoningTail 去 **）+liveDetailOf 键序与 queries 首项/processGroupTitle 进行中（preparing/detail 附加/liveProcessDetail=false/ask）/完成组组合（2 类「并」含「已」去重、≥3 类「，」、4 类「等」、空组已完成分析、count 降序并列首现）/toolSummaryOf 键序与兜底/detailModeOf 分派/ioInputOf（run_code code 正文/JSON 截 200/坏 JSON）/ioOutputOf（web 未找到结果）/askSummaryOf 五态（answerable/已关闭/计数/坏 JSON 兜底/null resultText）+answerEntries/askQuestions（multi_select 兜底/重复 id/缺字段）/answerEntries 非对象跳过/isAnswered/policyOf 四档/isGroupForceOpen 六路/五态口径与 AK 常量锚定 |
+| `harmony/test/cases/stream-tools.test.ts` | 流式工具行 11 用例（2026-11-17 实时工具事件批次，对齐安卓 streaming_tools.dart）：applyDelta 建 preparing 行/缺名占位「工具调用」/真实 callId 到达后迁移收编（仅 1 行、旧 idx 键消失）/只带 index 的续包命中已迁移行/applyEnd 定稿/applyCall 转 running/applyResult 终态（failed/stopped/cancelled）/exitBadgeOf（exit code / killed by signal）/statusFromErrorCode（interrupted→stopped、ASK_CANCELLED→cancelled、未知→失败）/rankOf 降级守卫/mergeLiveRow |
 | `harmony/test/cases/agent-presets.test.ts` | Agent 预设 5 用例：全字段解析/缺键回默认（0.2.x 无 trust 实证）/null 全默认/toJson round-trip（description null 省键）/listFrom |
 | `harmony/test/helpers/fake-ws.ts` | FakeTimers（手动 advance）/FakeSocket（服务端扮演 + lastRequestId）/FakeHttp（队列式应答） |
+| `harmony/test/helpers/chat-ctx.ts` | ChatStore 测试公共基建：drain/respond/respondHistory/userItem·assistantItem 桩/ReadyCtx/makeReady/openSession1 + createdClients 收口（after dispose，随各测试文件根上下文注册） |
 | `harmony/test/package.json` / `tsconfig.json` | node:test + tsx 跑 `cases/*.test.ts`，strict TS |
 
 ### harmony/scripts/

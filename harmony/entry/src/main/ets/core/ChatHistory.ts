@@ -41,6 +41,10 @@ export function reloadHistoryIn(store: ChatStore): Promise<void> {
     if (page.projections !== null) {
       store.projections = page.projections;
     }
+    // 仍在流式：重挂工具调用实时行（持久行可能缺 preparing/刚完成的行）。
+    if (store.streaming) {
+      store.reattachLiveRows();
+    }
     store.changed();
   }).catch((e: Error): void => {
     if (e instanceof RequestException) {

@@ -7,6 +7,7 @@ import { test } from 'node:test';
 import assert from 'node:assert';
 
 import { ChatMessage } from '../../entry/src/main/ets/core/HistoryPage';
+import { TOOL_STATUS_PREPARING } from '../../entry/src/main/ets/core/StreamTools';
 import { ToolCallInfo } from '../../entry/src/main/ets/core/ToolCall';
 import { QuestionAnswerItem } from '../../entry/src/main/ets/core/Questions';
 import {
@@ -138,8 +139,10 @@ test('processGroupTitle 进行中：running 词表 + preparing 近似 + detail �
   opts.liveProcessDetail = true;
   const running: ToolCallInfo[] = [call('read', '{"path":"/a"}', null)];
   assert.equal(processGroupTitle(running, true, opts), '正在读取文件 · /a');
-  const preparing: ToolCallInfo[] = [call('read', null, null)];
-  assert.equal(processGroupTitle(preparing, true, opts), '准备读取文件');
+  // preparing 现为真数据驱动（status 字段，StreamTools 建行时标记），不再用 rawArguments==null 近似。
+  const preparingRow: ToolCallInfo = call('read', null, null);
+  preparingRow.status = TOOL_STATUS_PREPARING;
+  assert.equal(processGroupTitle([preparingRow], true, opts), '准备读取文件');
   const withDetail: ToolCallInfo[] = [call('bash', '{"command":"npm run build"}', null)];
   assert.equal(processGroupTitle(withDetail, true, opts), '正在运行命令 · npm run build');
   const noDetailOpts: GroupTitleOptions = new GroupTitleOptions();

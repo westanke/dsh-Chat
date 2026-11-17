@@ -96,6 +96,9 @@ export struct ChatView {
       // store.workSteps 的展开状态（LazyForEach 同 key 不重建，@Prop 链路不通）。
       // snapshotExpanded().version 是自增计数，保证 @Watch 只在真变化时触发。
       AppStorage.setOrCreate('dshExpandedVersion', st.workSteps.snapshotExpanded().version);
+      // 工具调用实时流版本：ProcessGroup/ToolBlock 靠这个 @StorageProp @Watch
+      // 重读就地 mutate 的流式行（同 key 不重建坑，同上广播链路）。
+      AppStorage.setOrCreate('dshStreamToolsVersion', st.streamToolsVersion);
       st.consumeHistoryPageJustLoaded();
     });
     // 首帧快照（重连/复用组件时 store 可能已就绪）。

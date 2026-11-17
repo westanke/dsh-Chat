@@ -39,6 +39,8 @@ export struct ProcessGroup {
   @StorageProp('dshWorkStepsDetail') detailProp: string = 'detailed';
   /// 展开集合版本（ChatView.setNotify 每次 changed 时写；初始值由 aboutToAppear 对账）。
   @StorageProp('dshExpandedVersion') @Watch('syncExpanded') expandedVersion: number = 0;
+  /// 工具调用实时流版本：流式行就地 mutate（无新 key），靠它触发组头标题重算。
+  @StorageProp('dshStreamToolsVersion') @Watch('onStreamBump') streamVersion: number = 0;
   @State expanded: boolean = false;
 
   private c(): DsColors {
@@ -83,6 +85,10 @@ export struct ProcessGroup {
     }
     st.workSteps.toggle(processGroupKey(this.group));
     st.changed();
+  }
+
+  /** 实时流版本 bump：流式行是就地 mutate（无新 key），靠状态变化触发组头重渲染。 */
+  private onStreamBump(): void {
   }
 
   /** 官方 processTitle：进行中「正在…」词表（+detail），完成组 done 词组合。 */

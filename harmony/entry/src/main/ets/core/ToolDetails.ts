@@ -4,7 +4,7 @@
  * node 直测口径，与 app/ Flutter 端同构（Lead 逆向核实 2026-11-17）。
  *
  * 活动归类/词表/过程组标题/摘要键在 core/ToolPresent.ts（本文件为其 ≤500 行拆分）。
- * 不做（汇报口径）：ASK_CANCELLED/ASK_ABORTED 态、exit code badge、stopped 态。
+ * 不做（汇报口径）：ASK_ABORTED 态（ASK_CANCELLED/stopped/exit 徽标已在 StreamTools 通道实现）。
  */
 
 import { ChatMessage } from './HistoryPage';
@@ -12,6 +12,7 @@ import { ToolCallInfo } from './ToolCall';
 import { JsonAccess, JsonMap } from './JsonAccess';
 import { WorkStepsDetail } from './WorkSteps';
 import { QuestionAnswerItem, UserQuestion } from './Questions';
+import { TOOL_STATUS_CANCELLED } from './StreamTools';
 import { AK_COMMANDS, AK_EDIT, AK_READ, AK_QUESTIONS, AK_WEB_FETCH, AK_WEB_SEARCH,
   AK_WRITE, activityKind, firstLineOf, isCallRunning } from './ToolPresent';
 
@@ -94,6 +95,8 @@ export function ioOutputOf(call: ToolCallInfo): string {
 export const ASK_WAITING: string = '等待中';
 export const ASK_PENDING: string = '已继续；仍可回答';
 export const ASK_CLOSED: string = '已关闭';
+/** ask_user_question 取消态（内核 error.code==='ASK_CANCELLED'，官方 ask.cancelled）。 */
+export const ASK_CANCELLED_WORD: string = '已取消';
 export const ASK_NOT_ANSWERED: string = '未回答';
 
 /** 答案是否已答：selected 非空或 custom 非空。 */
@@ -135,6 +138,9 @@ export function answerEntries(resultText: string | null): QuestionAnswerItem[] |
  * 解析失败 → 原 summary 兜底。
  */
 export function askSummaryOf(call: ToolCallInfo, answerable: boolean): string {
+  if (call.status === TOOL_STATUS_CANCELLED) {
+    return ASK_CANCELLED_WORD;
+  }
   if (isCallRunning(call)) {
     return ASK_WAITING;
   }

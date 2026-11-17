@@ -13,6 +13,7 @@
 
 import { ToolCallInfo } from './ToolCall';
 import { JsonAccess, JsonMap } from './JsonAccess';
+import { TOOL_STATUS_PREPARING, TOOL_STATUS_STOPPED, TOOL_STATUS_CANCELLED } from './StreamTools';
 // ---- 活动归类（官方 activityKind） --------------------------------------
 
 export const AK_THINKING: string = 'thinking';
@@ -248,14 +249,18 @@ export function reasoningPreviewOf(text: string): string {
 }
 // ---- 运行态判定 ---------------------------------------------------------
 
-/** 调用是否运行中：无结果且未失败。 */
+/** 调用是否运行中：无结果且未失败、也没有显式终态（stopped/cancelled）。 */
 export function isCallRunning(call: ToolCallInfo): boolean {
-  return call.resultText === null && !call.failed;
+  return call.resultText === null && !call.failed
+    && call.status !== TOOL_STATUS_STOPPED && call.status !== TOOL_STATUS_CANCELLED;
 }
 
-/** preparing 近似：运行中且参数尚未到达。 */
+/**
+ * preparing = bridge chat.message.delta kind='tool-call' 的流式行
+ * （ToolCallInfo.status 显式标记；真数据驱动，弃 rawArguments==null 近似）。
+ */
 export function isCallPreparing(call: ToolCallInfo): boolean {
-  return isCallRunning(call) && call.rawArguments === null;
+  return call.status === TOOL_STATUS_PREPARING;
 }
 
 /** 组内是否有运行中调用（组级「进行中」渲染判定）。 */

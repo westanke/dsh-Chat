@@ -11,18 +11,27 @@ import { JsonAccess, JsonMap } from './JsonAccess';
 
 /** 一次工具调用（`tool/call` + `tool/result` 按 callId 合并后的展示形态）。 */
 export class ToolCallInfo {
-  readonly callId: string = '';
-  readonly name: string = '';
+  // 字段可变：流式阶段（chat.tool.* 事件）会就地升级同一实例，
+  // 让持有引用的工具行组件在版本广播后读到最新值（鸿蒙 LazyForEach 同 key 不重建的坑）。
+  callId: string = '';
+  name: string = '';
   /** 动作短语，如 `['运行了代码', '执行了命令']`（措辞对齐官方）。 */
-  readonly phrases: string[] = [];
+  phrases: string[] = [];
   /** 参数摘要（description / path / command / query 的首行）。 */
-  readonly summary: string | null = null;
-  readonly failed: boolean = false;
-  readonly durationMs: number | null = null;
+  summary: string | null = null;
+  failed: boolean = false;
+  durationMs: number | null = null;
   /** 执行结果正文（tool/result 的 text 段拼接；图片段一行占位）。 */
-  readonly resultText: string | null = null;
+  resultText: string | null = null;
   /** arguments 原串（JSON 字符串），详情展开用。 */
-  readonly rawArguments: string | null = null;
+  rawArguments: string | null = null;
+  /**
+   * 显式状态（空串=按字段派生）：'preparing'（参数流式生成中，bridge
+   * chat.message.delta kind='tool-call'）；'stopped'（error.code='interrupted'，
+   * 用户中断）；'cancelled'（error.code='ASK_CANCELLED'，询问已取消）。
+   * 'running'/'done'/'failed' 不落此字段——按 resultText/failed 派生。
+   */
+  status: string = '';
 
   constructor(callId: string, name: string, phrases: string[],
               summary: string | null, failed: boolean,
