@@ -5,7 +5,7 @@
 /// tabular-nums 降级为 monospace 字族。轮尾信息由本组件现算（core/TurnTail.
 /// turnTailOf，node 直测）：仅闭合轮渲染；点开 = 整轮过程组 setExpanded。
 import { ChatMessage } from '../core/HistoryPage';
-import { TurnTailInfo, turnTailOf, turnTailLabel, durationPartsOf, DurationPart } from '../core/TurnTail';
+import { TurnTailInfo, turnTailOf, turnTailLabel, turnTailLead, durationPartsOf, DurationPart } from '../core/TurnTail';
 import { ChatStore } from '../core/ChatStore';
 import { DsColors, DsTypography } from '../ui/theme';
 
@@ -67,6 +67,13 @@ export struct TurnProcessRow {
     return info === null || info.durationMs === null ? [] : durationPartsOf(info.durationMs as number);
   }
 
+  /** 行首文字：只有前缀（「已完成，用时 」），时长片段另行按代码字体渲染。 */
+  private lead(): string {
+    const info: TurnTailInfo | null = this.info();
+    return info === null ? '' : turnTailLead(info, this.parts().length > 0);
+  }
+
+  /** 整行文案（无障碍朗读用）。 */
   private label(): string {
     const info: TurnTailInfo | null = this.info();
     if (info === null) {
@@ -78,12 +85,11 @@ export struct TurnProcessRow {
   build() {
     if (this.info() !== null) {
       Row({ space: 0 }) {
-        Text(this.label())
+        Text(this.lead())
           .fontSize(DsTypography.small.size)
           .fontColor(this.labelColor())
           .maxLines(1)
-          .textOverflow({ overflow: TextOverflow.Ellipsis })
-          .flexShrink(1)
+          .flexShrink(0)
         if (this.showParts()) {
           ForEach(this.parts(), (p: DurationPart) => {
             if (p.numeric) {
@@ -100,6 +106,7 @@ export struct TurnProcessRow {
             }
           }, (p: DurationPart, idx: number) => idx.toString() + '-' + p.text)
         }
+        Blank().layoutWeight(1)
         if (this.canCollapse()) {
           Text(this.open ? '⌃' : '⌄')
             .fontSize(14)

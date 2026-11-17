@@ -122,15 +122,26 @@ export function durationPartsOf(ms: number): DurationPart[] {
   return parts;
 }
 
-/** 轮尾 label：已停止（本端不产）/处理失败/已完成/「已完成，用时 X」（前缀带尾空格）。 */
-export function turnTailLabel(info: TurnTailInfo, parts: DurationPart[] | null): string {
+/**
+ * 轮尾行前缀（时长片段要单独按代码字体渲染，故只给前缀）：
+ * 处理失败 / 已完成 / 「已完成，用时 」（带尾空格）。
+ * hasDuration 由调用方按实际拿到的片段决定 —— 行组件用 `parts.length > 0`，
+ * 测试可直接构造；不能只看 info.durationMs，否则 durationMs 有值但片段为空的
+ * 边界会得到「已完成」+ 无时长片段的不一致文案。
+ */
+export function turnTailLead(info: TurnTailInfo, hasDuration: boolean): string {
   if (info.failed) {
     return '处理失败';
   }
-  if (parts === null) {
-    return '已完成';
+  return hasDuration ? '已完成，用时 ' : '已完成';
+}
+
+/** 轮尾整行文案（无障碍朗读与测试用）：前缀 + 时长片段拼接。 */
+export function turnTailLabel(info: TurnTailInfo, parts: DurationPart[] | null): string {
+  if (info.failed || parts === null || parts.length === 0) {
+    return turnTailLead(info, false);
   }
-  let text: string = '已完成，用时 ';
+  let text: string = turnTailLead(info, true);
   for (let i = 0; i < parts.length; i++) {
     text += parts[i].text;
   }

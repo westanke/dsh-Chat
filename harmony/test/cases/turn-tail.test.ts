@@ -9,7 +9,7 @@ import assert from 'node:assert';
 
 import { ChatMessage } from '../../entry/src/main/ets/core/HistoryPage';
 import { ToolCallInfo } from '../../entry/src/main/ets/core/ToolCall';
-import { durationPartsOf, turnTailLabel, turnTailOf, DurationPart, TurnTailInfo } from '../../entry/src/main/ets/core/TurnTail';
+import { durationPartsOf, turnTailLabel, turnTailLead, turnTailOf, DurationPart, TurnTailInfo } from '../../entry/src/main/ets/core/TurnTail';
 
 function toolCall(callId: string): ToolCallInfo {
   return new ToolCallInfo(callId, 'bash', [], null, false, null, null, null);
@@ -141,4 +141,19 @@ test('turnTailLabel：失败/无时长/带时长三态', () => {
   const timed: TurnTailInfo = new TurnTailInfo();
   assert.equal(turnTailLabel(timed, durationPartsOf(5000)), '已完成，用时 5秒');
   assert.equal(turnTailLabel(timed, durationPartsOf(3723000)), '已完成，用时 1小时2分3秒');
+});
+
+// ---- turnTailLead（行首前缀，时长片段按代码字体另渲染） ---------------------
+
+test('turnTailLead：前缀不含时长文本，避免与时长片段重复', () => {
+  const failed: TurnTailInfo = new TurnTailInfo();
+  failed.failed = true;
+  assert.equal(turnTailLead(failed, true), '处理失败');
+  const plain: TurnTailInfo = new TurnTailInfo();
+  assert.equal(turnTailLead(plain, false), '已完成');
+  const timed: TurnTailInfo = new TurnTailInfo();
+  assert.equal(turnTailLead(timed, true), '已完成，用时 ');
+  // 前缀 + 片段拼起来必须等于整行文案（真机曾把时长渲染两遍）。
+  const joined: string = turnTailLead(timed, true) + durationPartsOf(5000).map((p: DurationPart) => p.text).join('');
+  assert.equal(joined, turnTailLabel(timed, durationPartsOf(5000)));
 });

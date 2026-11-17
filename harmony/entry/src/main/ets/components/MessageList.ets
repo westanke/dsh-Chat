@@ -5,7 +5,7 @@
  */
 
 import { ChatStore } from '../core/ChatStore';
-import { ChatMessage, DeliverableFile } from '../core/HistoryPage';
+import { ChatMessage } from '../core/HistoryPage';
 import { ToolCallInfo, formatDuration, bashCommandOf, prettyArguments } from '../core/ToolCall';
 import { DsColors, DsTypography, DsSpacing } from '../ui/theme';
 import { MdView } from './md/MdView';
@@ -16,6 +16,8 @@ import { MdDocViewer } from '../pages/MdDocViewer';
 import { ThinkBlock } from './ThinkBlock';
 import { ProcessGroup } from './ProcessGroup';
 import { TurnProcessRow } from './TurnProcessRow';
+import { StreamingBlock } from './StreamingBlock';
+import { CommandCard, DeliverableCard, ErrorBar } from './MessageCards';
 import { ToolBlock } from './ToolBlock';
 import { ArrayDataSource } from './ArrayDataSource';
 import { visibleMessagesOf, parseFoldedReplies, parseWorkStepsDetail } from '../core/WorkSteps';
@@ -58,6 +60,9 @@ export struct MessageList {
   @State hasMore: boolean = false;
   /** 正在翻页（按钮换 spinner）。 */
   @State loadingOlder: boolean = false;
+  /** 流式正文/思考快照（core 里累积，syncVersion 抄写；本端原先完全没渲染，2026-11-17 补）。 */
+  @State streamTextView: string = '';
+  @State streamReasoningView: string = '';
   private scroller: Scroller = new Scroller();
   /**
    * 列表数据源（R005 LazyForEach）：`List` 只支持 LazyForEach 做懒加载，
@@ -76,14 +81,17 @@ export struct MessageList {
   @State docOpen: boolean = false;
   @State docPath: string = '';
   @State docTitle: string = '';
-  /** .md / .markdown 判定（安卓 _isMarkdown 口径）。 */
-  private isMarkdown(path: string): boolean {
-    const lower: string = path.toLowerCase();
-    return lower.endsWith('.md') || lower.endsWith('.markdown');
-  }
   /** 消息气泡最大宽（官方 user 气泡约 86.4% 屏宽）。 */
   private bubbleMaxWidth(): Length {
     return '86.4%';
+  }
+  /** 流式块是否需要出现（官方：流式进行中，或残留增量未清）。 */
+  private streamingVisible(): boolean {
+    const st: ChatStore | null = this.store;
+    if (st === null) {
+      return false;
+    }
+    return st.streaming || this.streamTextView !== '' || this.streamReasoningView !== '';
   }
 
   build() {
@@ -127,6 +135,16 @@ export struct MessageList {
           this.itemOf(m)
         }
       }, (m: ChatMessage) => this.keyOf(m))
+      // 流式块（对照安卓 _StreamingItem）：思考中先出「思考」块，正文增量走 MdView。
+      // 必须排在已提交消息之后、截断提示之前，跟着内容长。
+      if (this.streamingVisible()) {
+        ListItem() {
+          StreamingBlock({
+            reasoning: this.streamReasoningView, text: this.streamTextView,
+            showPreview: policyOf(parseWorkStepsDetail(this.detailProp)).settledReasoningPreview
+          })
+        }
+      }
       if (this.maxTokensNotice) {
         ListItem() {
           Text('回答被截断，已有输出保留在对话中。发送“继续”可让模型接着输出。')
@@ -165,41 +183,6 @@ export struct MessageList {
       },
     })
   }
-  /** 交付文件卡（安卓 _DeliverableStrip 口径）：.md 走站内查看器，其余交系统。 */
-  @Builder
-  fileCard(m: ChatMessage) {
-    Column({ space: 6 }) {
-      ForEach(m.files, (f: DeliverableFile) => {
-        Row({ space: 8 }) {
-          Text(this.isMarkdown(f.path) ? '📄' : '📎')
-            .fontSize(16)
-          Column({ space: 2 }) {
-            Text(f.name.length > 0 ? f.name : f.path)
-              .fontSize(DsTypography.small.size).fontColor(this.c().labelPrimary).maxLines(1)
-              .textOverflow({ overflow: TextOverflow.Ellipsis }).width('100%')
-            if (f.description !== null) {
-              Text(f.description as string)
-                .fontSize(DsTypography.caption.size).fontColor(this.c().labelTertiary).maxLines(1)
-                .textOverflow({ overflow: TextOverflow.Ellipsis }).width('100%')
-            }
-          }
-          .alignItems(HorizontalAlign.Start)
-          .layoutWeight(1)
-        }
-        .width('100%').padding({ left: 12, right: 12, top: 8, bottom: 8 })
-        .borderRadius(10).backgroundColor(this.c().bgLayer1)
-        .accessibilityText(f.name + '，文件：' + f.path)
-        .onClick(() => {
-          if (this.isMarkdown(f.path)) {
-            this.docPath = f.path;
-            this.docTitle = f.name.length > 0 ? f.name : f.path;
-            this.docOpen = true;
-          }
-        })
-      }, (f: DeliverableFile) => f.path)
-    }
-    .width('100%')
-  }
   /** version 变化 → 重抄 store 派生数据（@Prop @Watch 回调）+ 跟随贴底。 */
   syncVersion(): void {
     const st: ChatStore | null = this.store;
@@ -209,6 +192,8 @@ export struct MessageList {
     this.msgs = st === null ? [] : visibleMessagesOf(raw, parseFoldedReplies(this.foldedRepliesProp), st.streaming);
     this.ds.reset(this.msgs);
     this.maxTokensNotice = st !== null && st.maxTokensNotice;
+    this.streamTextView = st === null ? '' : st.streamText;
+    this.streamReasoningView = st === null ? '' : st.streamReasoning;
     this.hasMore = st !== null && st.historyHasMore;
     this.loadingOlder = st !== null && st.loadingOlder;
     const justLoaded: boolean = st !== null && st.consumeHistoryPageJustLoaded();
@@ -274,11 +259,18 @@ export struct MessageList {
     if (m.isUser) {
       this.userBubble(m);
     } else if (m.isError) {
-      this.errorBar(m);
+      ErrorBar({ text: m.text });
     } else if (m.role === 'command') {
-      this.commandCard(m);
+      CommandCard({ text: m.text });
     } else if (m.role === 'files') {
-      this.fileCard(m);
+      DeliverableCard({
+        files: m.files,
+        onOpenDoc: (path: string, title: string): void => {
+          this.docPath = path;
+          this.docTitle = title;
+          this.docOpen = true;
+        }
+      });
     } else if (m.isProcess) {
       if (this.detailProp === STEP_GROUPING_NONE) {
         // verbose 平铺：无组标题、无折叠层，逐条工具行（默认收起详情，可展开）。
@@ -287,9 +279,15 @@ export struct MessageList {
         ProcessGroup({ group: m, store: this.store });
       }
     } else {
-      this.assistantBlock(m);
-      // 轮尾行（官方 TurnProcessNodeView）：闭合轮给「已完成，用时 N/处理失败」，可点开整轮过程组。
-      TurnProcessRow({ store: this.store, msg: m, version: this.version })
+      // 正文 + 轮尾行必须同在一个容器里：ListItem 有多个直接子组件时 ArkUI 按
+      // Stack 叠放，轮尾行会压在正文上（真机 2026-11-17 现象）。
+      Column() {
+        this.assistantBlock(m);
+        // 轮尾行（官方 TurnProcessNodeView）：闭合轮给「已完成，用时 N/处理失败」，可点开整轮过程组。
+        TurnProcessRow({ store: this.store, msg: m, version: this.version })
+      }
+      .width('100%')
+      .alignItems(HorizontalAlign.Start)
     }
   }
   /** verbose 档平铺工具行（ForEach 带 keyGenerator，非 LazyForEach）。 */
@@ -352,49 +350,22 @@ export struct MessageList {
       // UIContext 未就绪（极少见）：保持 Index 写进来的档位不变。
     }
   }
-  /** 命令卡（安卓 chat_message_items.dart 口径）：首行 monospace + ✓/✗ 结果。 */
-  @Builder
-  commandCard(m: ChatMessage) {
-    Row({ space: 8 }) {
-      Text('⌨')
-        .fontSize(16)
-        .fontColor(m.text.includes('\u2717') ? this.c().danger : this.c().chipSelectedFg)
-        .margin({ top: 2 })
-      Column({ space: 2 }) {
-        Text(m.text.split('\n')[0])
-          .fontSize(DsTypography.small.size).fontFamily('monospace').fontColor(this.c().labelPrimary)
-          .width('100%')
-        if (m.text.includes('\n')) {
-          Text(m.text.split('\n').slice(1).join('\n'))
-            .fontSize(DsTypography.small.size)
-            .fontColor(m.text.includes('\u2717') ? this.c().danger : this.c().labelTertiary).width('100%')
-        }
-      }
-      .alignItems(HorizontalAlign.Start)
-      .layoutWeight(1)
-    }
-    .alignItems(VerticalAlign.Top)
-    .width('100%')
-    .padding({ left: 14, right: 14, top: 10, bottom: 10 })
-    .margin({ top: DsSpacing.blockGap })
-    .borderRadius(DsSpacing.codeBlockRadius)
-    .backgroundColor(this.c().bgLayer1)
-    .borderWidth(1)
-    .borderColor(this.c().inputBorder)
-  }
   /** 用户消息：右对齐气泡（浅色走 DsPalette.userBubble，深色同理，见 ui/theme.ets）。
    * 图片两种来源：content 里 type=image 的引用（images）与纯文本模型的交接占位
    * （文本里的 `[Image: source: …]`，安卓 chat_message_items.dart:176 同口径，
-   * 用户与助手气泡都挂）。 */
+   * 用户与助手气泡都挂）。
+   *
+   * 布局必须是 Column（图上文下、右对齐），不能是 Row：Row 里图片固定宽与
+   * Text 的 maxWidth 会争宽，两者各自都要 86.4% 屏宽 → 文字被挤到屏外
+   * （真机 2026-11-17 反馈）。安卓 chat_message_items.dart 也是 Column +
+   * CrossAxisAlignment.end。 */
   @Builder
   userBubble(m: ChatMessage) {
-    Row() {
-      Blank().layoutWeight(1)
+    Column({ space: 8 }) {
       this.userImages(m)
       if (this.userHandoff(m) !== null) {
         ImageTile({ store: this.store, ref: this.userHandoff(m) as DsImageRef })
           .constraintSize({ maxWidth: this.bubbleMaxWidth() })
-          .margin({ left: 8 })
       }
       Text(m.text === '' ? ' ' : m.text)
         .fontSize(16)
@@ -406,6 +377,7 @@ export struct MessageList {
         .borderRadius(DsSpacing.bubbleRadius)
     }
     .width('100%')
+    .alignItems(HorizontalAlign.End)
   }
   /** 用户消息图片块（发送即带引用）。 */
   @Builder
@@ -478,16 +450,6 @@ export struct MessageList {
       }
     }
     return 0;
-  }
-  /** 错误条（turn 失败）：红字轻背景。 */
-  @Builder
-  errorBar(m: ChatMessage) {
-    Text(m.text === '' ? '执行失败' : m.text)
-      .fontSize(14).lineHeight(20)
-      .fontColor(this.c().danger)
-      .width('100%')
-      .padding({ left: 12, right: 12, top: 8, bottom: 8 })
-      .backgroundColor(this.c().borderL1).borderRadius(10)
   }
   /** 版本变化后贴底（streaming / 新历史到达时由 ChatView 触发）。 */
   jumpToBottom(animate: boolean): void {
