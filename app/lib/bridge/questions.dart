@@ -101,6 +101,7 @@ class PendingApproval {
     required this.toolName,
     this.risk = 'standard',
     this.reason,
+    this.detail,
   });
 
   final String approvalId;
@@ -109,12 +110,20 @@ class PendingApproval {
   final String risk; // standard | full-access
   final String? reason;
 
+  /// 关联 tool/call 的命令预览（args.command 或字符串参数；bridge
+  /// redactApprovalText 截 1200，chat-adapter.ts:1949 publicApproval）。
+  /// 官方 ApprovalFlow body：等宽代码字体 break-all 命令预览。
+  final String? detail;
+
   static PendingApproval from(Map<String, dynamic> j) => PendingApproval(
     approvalId: (j['approvalId'] ?? '') as String,
     sessionId: (j['sessionId'] ?? '') as String,
     toolName: (j['toolName'] ?? '工具') as String,
     risk: j['risk'] is String ? j['risk'] as String : 'standard',
     reason: j['reason'] is String ? j['reason'] as String : null,
+    detail: j['detail'] is String && (j['detail'] as String).isNotEmpty
+        ? j['detail'] as String
+        : null,
   );
 }
 

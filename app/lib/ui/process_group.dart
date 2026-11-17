@@ -25,6 +25,7 @@ import 'package:material_ui/material_ui.dart';
 import '../bridge/models.dart';
 import '../design/app_settings.dart';
 import '../design/tokens.dart';
+import 'ask_present.dart';
 import 'code_diff.dart';
 import 'md_code_block.dart';
 import 'tool_present.dart';
@@ -172,26 +173,37 @@ class _DsToolRowState extends State<DsToolRow> {
     final c = widget.colors;
     final call = widget.call;
     final kind = activityKind(call.name);
-    final running = isCallRunning(call);
+    final rowState = toolRowStateOf(call);
     final expandable =
         widget.allowDetail && (call.resultText != null || call.rawArguments != null);
     final diff =
         kind == ToolActivityKind.edit || kind == ToolActivityKind.write
             ? codeDiffOfCall(call.name, call.rawArguments)
             : null;
-    // 摘要：按 kind 键序取参；ask 工具换成状态机摘要；失败态换成结果首行红字
-    // （官方 error 态），结果为空回退参数摘要。
+    // 摘要：按 kind 键序取参；ask 工具换成状态机摘要；失败态换结果正文——
+    // 官方语义：error 态**无 exitLabel 时** summary 才换 errorSummary（结果
+    // 首行红字），带 exit 标记时保持参数摘要、退出状态交给行尾徽标。
+    final exit = parseExitStatus(call.resultText);
+    final hasResult = call.resultText?.trim().isNotEmpty ?? false;
     String? summary;
     Color summaryColor = c.labelTertiary;
-    if (call.failed && (call.resultText?.trim().isNotEmpty ?? false)) {
-      summary = call.resultText!.split('\n').first.trim();
-      summaryColor = c.danger;
+    if (call.failed && hasResult) {
+      if (exit != null) {
+        summary = summarizeArgs(kind, call.rawArguments) ?? call.summary;
+      } else {
+        summary = call.resultText!.split('\n').first.trim();
+        summaryColor = c.danger;
+      }
     } else if (kind == ToolActivityKind.questions) {
       summary = askSummary(call, widget.answerable ?? (_) => false) ??
           summarizeArgs(kind, call.rawArguments);
     } else {
       summary = summarizeArgs(kind, call.rawArguments) ?? call.summary;
     }
+    // 行尾退出状态徽标（exit code 不是协议字段，从结果文本尾部解析；
+    // 非 0 / signal 红色，exit 0 用弱化色）。
+    final badge = exitBadgeLabel(exit);
+    final badgeColor = exitBadgeIsError(exit) ? c.danger : c.labelTertiary;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 3),
       child: Column(
@@ -254,7 +266,19 @@ class _DsToolRowState extends State<DsToolRow> {
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
-                if (running)
+                if (badge != null)
+                  Padding(
+                    padding: const EdgeInsets.only(left: DsSpacing.chipIconGap),
+                    child: Text(
+                      badge,
+                      style: DsTypography.codeBlockLabel.copyWith(
+                        color: badgeColor,
+                      ),
+                    ),
+                  ),
+                // 状态字：preparing 无字（组标题已是「正在准备…」）、ok/cancelled
+                // 无字（cancelled 由 askSummary 的「已取消」承担）。
+                if (rowState == ToolRowState.running)
                   Padding(
                     padding: const EdgeInsets.only(left: DsSpacing.chipIconGap),
                     child: Text(
@@ -264,7 +288,17 @@ class _DsToolRowState extends State<DsToolRow> {
                       ),
                     ),
                   ),
-                if (call.failed)
+                if (rowState == ToolRowState.stopped)
+                  Padding(
+                    padding: const EdgeInsets.only(left: DsSpacing.chipIconGap),
+                    child: Text(
+                      '已停止',
+                      style: DsTypography.caption.copyWith(
+                        color: c.settingsWarnFg,
+                      ),
+                    ),
+                  ),
+                if (rowState == ToolRowState.failed)
                   Padding(
                     padding: const EdgeInsets.only(left: DsSpacing.chipIconGap),
                     child: Text(

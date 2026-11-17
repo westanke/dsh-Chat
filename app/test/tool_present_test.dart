@@ -7,6 +7,7 @@ library;
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:dshchat/bridge/models.dart';
+import 'package:dshchat/ui/ask_present.dart';
 import 'package:dshchat/ui/tool_present.dart';
 
 ToolCallInfo callOf(
@@ -17,6 +18,8 @@ ToolCallInfo callOf(
   String? resultText,
   bool failed = false,
   int? durationMs,
+  bool preparing = false,
+  String? errorCode,
 }) {
   return ToolCallInfo(
     callId: callId,
@@ -27,6 +30,8 @@ ToolCallInfo callOf(
     resultText: resultText,
     failed: failed,
     durationMs: durationMs,
+    preparing: preparing,
+    errorCode: errorCode,
   );
 }
 
@@ -86,13 +91,17 @@ void main() {
         ),
         '打包',
       );
-      expect(summarizeArgs(ToolActivityKind.commands, '{"command":"ls -la"}'),
-          'ls -la');
+      expect(
+        summarizeArgs(ToolActivityKind.commands, '{"command":"ls -la"}'),
+        'ls -la',
+      );
     });
 
     test('read：path / file_path / url 键序', () {
-      expect(summarizeArgs(ToolActivityKind.read, '{"file_path":"/a/b"}'),
-          '/a/b');
+      expect(
+        summarizeArgs(ToolActivityKind.read, '{"file_path":"/a/b"}'),
+        '/a/b',
+      );
       expect(summarizeArgs(ToolActivityKind.read, '{"path":"/a"}'), '/a');
     });
 
@@ -104,13 +113,14 @@ void main() {
         ),
         'web socket, http',
       );
-      expect(summarizeArgs(ToolActivityKind.search, '{"query":"多\\n行"}'),
-          '多');
+      expect(summarizeArgs(ToolActivityKind.search, '{"query":"多\\n行"}'), '多');
     });
 
     test('write/edit：path 键', () {
-      expect(summarizeArgs(ToolActivityKind.edit, '{"file_path":"a.dart"}'),
-          'a.dart');
+      expect(
+        summarizeArgs(ToolActivityKind.edit, '{"file_path":"a.dart"}'),
+        'a.dart',
+      );
     });
 
     test('未知 kind → 首个字符串值首行', () {
@@ -160,20 +170,14 @@ void main() {
 
   group('processGroupTitle', () {
     test('空组兜底「已完成分析」', () {
-      expect(
-        processGroupTitle(groupOf([]), liveDetail: true),
-        '已完成分析',
-      );
+      expect(processGroupTitle(groupOf([]), liveDetail: true), '已完成分析');
     });
 
     test('运行中 + liveDetail 后缀；关 detail 则无后缀', () {
       final g = groupOf([
         callOf('bash', rawArguments: '{"description":"编译中"}'),
       ]);
-      expect(
-        processGroupTitle(g, liveDetail: true),
-        '正在运行命令 · 编译中',
-      );
+      expect(processGroupTitle(g, liveDetail: true), '正在运行命令 · 编译中');
       expect(processGroupTitle(g, liveDetail: false), '正在运行命令');
     });
 
@@ -225,10 +229,7 @@ void main() {
         callOf('grep', callId: 'c', resultText: 'z'),
         callOf('write', callId: 'd', resultText: 'w'),
       ]);
-      expect(
-        processGroupTitle(g, liveDetail: false),
-        '执行了命令，已读取文件，已搜索代码等',
-      );
+      expect(processGroupTitle(g, liveDetail: false), '执行了命令，已读取文件，已搜索代码等');
     });
   });
 
@@ -256,8 +257,13 @@ void main() {
       expect(qs, isNotNull);
       expect(qs!.length, 2);
       expect(qs[0].multiSelect, isTrue);
-      expect(askQuestions('{"questions":[{"id":"q1","question":"重复"},'
-          '{"id":"q1","question":"重复"}]}'), isNull);
+      expect(
+        askQuestions(
+          '{"questions":[{"id":"q1","question":"重复"},'
+          '{"id":"q1","question":"重复"}]}',
+        ),
+        isNull,
+      );
       expect(askQuestions('{"questions":[{"id":"q1"}]}'), isNull);
       expect(askQuestions('{"questions":[]}'), isNull);
       expect(askQuestions('不是json'), isNull);
@@ -282,10 +288,8 @@ void main() {
       final answered = callOf(
         'ask_user_question',
         summary: '原摘要',
-        rawArguments:
-            '{"questions":[{"id":"q1","question":"一"},{"id":"q2","question":"二"}]}',
-        resultText:
-            '{"answers":[{"id":"q1","selected":["A"]},{"id":"q2"}]}',
+        rawArguments: '{"questions":[{"id":"q1","question":"一"},{"id":"q2","question":"二"}]}',
+        resultText: '{"answers":[{"id":"q1","selected":["A"]},{"id":"q2"}]}',
       );
       expect(askSummary(answered, (_) => false), '1/2 已回答');
     });
@@ -297,6 +301,144 @@ void main() {
         resultText: '纯文本结果',
       );
       expect(askSummary(fallback, (_) => false), '原摘要');
+    });
+
+    test('ASK_CANCELLED →「已取消」（ask 卡取消态）', () {
+      final cancelled = callOf(
+        'ask_user_question',
+        resultText: 'pending true', // 不影响：errorCode 优先于结果解析
+        errorCode: 'ASK_CANCELLED',
+      );
+      expect(askSummary(cancelled, (_) => false), '已取消');
+    });
+  });
+
+  group('toolRowStateOf / isToolRowLive', () {
+    test(
+      'errorCode 终态分派：interrupted→stopped、ask 的 ASK_CANCELLED→cancelled',
+      () {
+        expect(
+          toolRowStateOf(callOf('tools.bash', errorCode: 'interrupted')),
+          ToolRowState.stopped,
+        );
+        expect(
+          toolRowStateOf(
+            callOf('ask_user_question', errorCode: 'ASK_CANCELLED'),
+          ),
+          ToolRowState.cancelled,
+        );
+        // 非 ask 工具带 ASK_CANCELLED → 防御性失败态。
+        expect(
+          toolRowStateOf(callOf('tools.bash', errorCode: 'ASK_CANCELLED')),
+          ToolRowState.failed,
+        );
+      },
+    );
+
+    test('TOOL_OUTCOME_UNKNOWN / 未知 code / isError → failed', () {
+      expect(
+        toolRowStateOf(callOf('tools.bash', errorCode: 'TOOL_OUTCOME_UNKNOWN')),
+        ToolRowState.failed,
+      );
+      expect(
+        toolRowStateOf(callOf('tools.bash', errorCode: 'SOMETHING_ELSE')),
+        ToolRowState.failed,
+      );
+      expect(
+        toolRowStateOf(callOf('tools.bash', resultText: 'boom', failed: true)),
+        ToolRowState.failed,
+      );
+    });
+
+    test('ok / preparing（真标记与 rawArguments==null 近似）/ running', () {
+      expect(
+        toolRowStateOf(callOf('tools.bash', resultText: 'done')),
+        ToolRowState.ok,
+      );
+      expect(
+        toolRowStateOf(
+          callOf('tools.bash', rawArguments: '{"comm', preparing: true),
+        ),
+        ToolRowState.preparing,
+      );
+      expect(
+        toolRowStateOf(callOf('tools.bash', rawArguments: null)),
+        ToolRowState.preparing,
+      );
+      expect(
+        toolRowStateOf(callOf('tools.bash', rawArguments: '{"command": "ls"}')),
+        ToolRowState.running,
+      );
+    });
+
+    test('isToolRowLive：preparing 与 running 算活行；终态不算', () {
+      expect(isToolRowLive(callOf('tools.bash', rawArguments: null)), isTrue);
+      expect(
+        isToolRowLive(callOf('tools.bash', rawArguments: '{"command": "ls"}')),
+        isTrue,
+      );
+      expect(isToolRowLive(callOf('tools.bash', resultText: 'done')), isFalse);
+      expect(
+        isToolRowLive(callOf('tools.bash', errorCode: 'interrupted')),
+        isFalse,
+      );
+    });
+  });
+
+  group('parseExitStatus / 徽标', () {
+    test('尾部 [exit code: N] / [killed by signal: X] 解析', () {
+      final ok = parseExitStatus('ls 输出\n[exit code: 0]');
+      expect(ok!.exitCode, 0);
+      final bad = parseExitStatus('boom\n[exit code: 2]');
+      expect(bad!.exitCode, 2);
+      final killed = parseExitStatus('out\n[killed by signal: SIGKILL]');
+      expect(killed!.signal, 'SIGKILL');
+      expect(killed.exitCode, isNull);
+      expect(parseExitStatus('[exit code: null]'), isNull);
+      expect(parseExitStatus('没有标记的结果'), isNull);
+      expect(parseExitStatus(null), isNull);
+    });
+
+    test('徽标文案与颜色语义', () {
+      expect(exitBadgeLabel(parseExitStatus('x\n[exit code: 2]')), 'exit 2');
+      expect(exitBadgeLabel(parseExitStatus('x\n[exit code: 0]')), 'exit 0');
+      expect(
+        exitBadgeLabel(parseExitStatus('x\n[killed by signal: SIGTERM]')),
+        'signal SIGTERM',
+      );
+      expect(exitBadgeIsError(parseExitStatus('x\n[exit code: 2]')), isTrue);
+      expect(exitBadgeIsError(parseExitStatus('x\n[exit code: 0]')), isFalse);
+      expect(
+        exitBadgeIsError(parseExitStatus('x\n[killed by signal: SIGKILL]')),
+        isTrue,
+      );
+      expect(exitBadgeIsError(parseExitStatus('x')), isFalse);
+      expect(exitBadgeIsError(null), isFalse);
+    });
+  });
+
+  group('processGroupTitle preparing 真数据驱动', () {
+    test('preparing 标记行 →「准备…」词（即使 rawArguments 已有增量）', () {
+      final title = processGroupTitle(
+        groupOf([callOf('tools.read', rawArguments: '{"pat', preparing: true)]),
+        liveDetail: true,
+      );
+      expect(title, '准备读取文件');
+    });
+
+    test('rawArguments==null 的 running 行保留 preparing 近似回退', () {
+      expect(
+        processGroupTitle(groupOf([callOf('tools.write')]), liveDetail: false),
+        '准备写入文件',
+      );
+    });
+
+    test('stopped 行不算活行 → 组标题走完成态聚合', () {
+      final title = processGroupTitle(
+        groupOf([callOf('tools.bash', errorCode: 'interrupted')]),
+        liveDetail: true,
+      );
+      expect(title, '执行了命令');
     });
   });
 }

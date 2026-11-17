@@ -16,8 +16,11 @@ import 'chat_expand_state.dart';
 import 'chat_hitl_actions.dart';
 import 'mobile_workspace.dart';
 import 'session_groups.dart';
+import 'streaming_tools.dart';
 
 export 'hitl_state.dart';
+
+part 'chat_state_events.dart';
 
 /// 纯函数：取 [0..end] 区间里最后一条有正文的用户消息文本
 /// （对照 companion ChatRetry.kt：排除只有图片 / 空正文的用户消息）。
@@ -35,7 +38,7 @@ String? lastUserTextBefore(List<ChatMessage> messages, int end) {
 
 class ChatState extends ChangeNotifier with GroupExpandState {
   ChatState(this._gateway) {
-    _sub = _gateway.events.listen(_onEvent);
+    _sub = _gateway.events.listen((event) => _onGatewayEvent(this, event));
     _stateSub = _gateway.state.listen(_onGatewayState);
     // HITL 卡片要自己驱动重建：hitl 表变更（含 replay/REST 合流）直达 UI，
     // 不依赖 reloadHistory「碰巧」触发（2026-11-16 真机：replay 晚于 reloadHistory 时提问卡永不出现）。
@@ -63,7 +66,7 @@ class ChatState extends ChangeNotifier with GroupExpandState {
     return v is String && v.isNotEmpty ? v : null;
   }
 
-  /// HITL 挂起表（question_card.dart 渲染；事件转发见 _onEvent）。
+  /// HITL 挂起表（question_card.dart 渲染；事件转发见 chat_state_events.dart）。
   HitlState get hitlState => hitl;
 
   /// 当前设备名（抽屉底部账号栏显示，官方是手机号；bridge 侧是设备档案）。
@@ -248,6 +251,7 @@ class ChatState extends ChangeNotifier with GroupExpandState {
     // delta 再置回 true（本版本不做多回合队列跟踪，属已知简化）。
     if (!streaming || mode == 'steer') _clearStream();
     streaming = true;
+    maxTokensNotice = false;
     notifyListeners();
     try {
       DshLog.w('ui send start sid=$sessionId mode=$mode');
@@ -375,12 +379,53 @@ class ChatState extends ChangeNotifier with GroupExpandState {
   /// 失败重试：重发历史里最后一条有正文的用户消息。
   Future<void> retryLast() => regenerateAt(messages.length - 1);
 
-  void _clearStream() {
+  /// 工具调用实时缓冲（桥 fdb85da 工具帧 → preparing/running/结果三态；
+  /// committed 后由 reloadHistory 的持久化过程组覆盖，_clearStream 清空）。
+  final StreamingToolBuffer _toolBuffer = StreamingToolBuffer();
+
+  /// 流式工具合成过程组（空缓冲回 null；列表装配层据此插流式过程组）。
+  ChatMessage? get streamingProcess => _toolBuffer.processMessage;
+
+  /// 「回答被截断」提示（官方：轮结束 reason=max-tokens 时置位，列表装配
+  /// 层渲染提示行；新轮 turn.start 或 send() 复位）。
+  bool maxTokensNotice = false;
+
+  /// 只清正文流式缓冲，不动工具行缓冲——中途 committed（正文已落库）时
+  /// 工具仍在转（内核先提交无正文消息，工具跑完才出最终正文）。
+  void clearStreamText() {
     streamText = '';
     streamReasoning = '';
   }
 
-  // ---- 网关事件 ----
+  /// reloadHistory 后按 callId 去掉已持久化的流式工具行，防止同一工具
+  /// 「流式行 + 持久过程组」双份渲染（缓冲清空后 streamingProcess 为 null）。
+  void dropPersistedToolRows() {
+    final ids = <String>{
+      for (final m in messages)
+        for (final c in m.toolCalls)
+          if (c.callId.isNotEmpty) c.callId,
+    };
+    _persistedCallIds = ids;
+    _toolBuffer.dropPersisted(ids);
+  }
+
+  /// 已持久化的工具 callId（reloadHistory 后由持久过程组承载的集合）：
+  /// 内核先提交无正文消息再执行工具，随后 tool/call 帧才到——缓冲行已被
+  /// dropPersisted 清掉，迟到帧若重建行会出现「持久组 + 流式组」双份。
+  Set<String> _persistedCallIds = const {};
+
+  /// 该 callId 是否已由持久化消息承载（持久过程组渲染，缓冲不再重复建行）。
+  bool isPersistedToolCall(String callId) =>
+      callId.isNotEmpty && _persistedCallIds.contains(callId);
+
+  /// 网关事件分派（chat_state_events.dart）用的 notifyListeners 转发——
+  /// 顶层函数调用 ChangeNotifier.protected 成员会触发 lint，收进实例方法。
+  void _notify() => notifyListeners();
+
+  void _clearStream() {
+    clearStreamText();
+    _toolBuffer.clear();
+  }
 
   void _onGatewayState(GatewayState s) {
     if (s == GatewayState.ready) {
@@ -389,74 +434,6 @@ class ChatState extends ChangeNotifier with GroupExpandState {
       reloadHistory();
     }
     notifyListeners();
-  }
-
-  void _onEvent(GatewayEvent event) {
-    switch (event) {
-      case DeltaEvent(:final delta):
-        DshLog.w(
-          'ui delta kind=${delta.kind} len=${delta.text.length} sid=${delta.sessionId}',
-        );
-        if (!_isCurrent(delta.sessionId)) return;
-        if (delta.kind == 'reasoning') {
-          streamReasoning += delta.text;
-        } else {
-          streamText += delta.text;
-        }
-        streaming = true;
-        notifyListeners();
-      case CommittedEvent(:final committed):
-        DshLog.w(
-          'ui committed role=${committed.role} sid=${committed.sessionId}',
-        );
-        if (!_isCurrent(committed.sessionId)) return;
-        // committed = 一条消息落库；重拉历史拿最终顺序与完整内容。
-        if (committed.role == 'assistant') {
-          streaming = false;
-          _clearStream();
-          // 收起时机 = 回答结束后：本轮（最后一条 user 之后）展开的组收起。
-          collapseOnAssistantCommitted(messages);
-          reloadHistory();
-        } else {
-          // 用户消息落库：可能是本端发的（本地已乐观上屏），也可能是别的端
-          // /REST 外部写入。统一做一次防抖重拉，保证外部写入也能看到。
-          _scheduleToolRefresh();
-        }
-      case TurnFailedEvent(:final sessionId, :final message):
-        if (!_isCurrent(sessionId)) return;
-        streaming = false;
-        _clearStream();
-        lastError = message;
-        notifyListeners();
-      case ResyncEvent():
-        // 背压丢帧：走 REST/WS 重拉当前历史。
-        reloadHistory();
-      case SessionEventReceived(:final sessionId):
-        // 实时流只有 eventType（无事件体）：工具名/参数、外部端（REST）写入的
-        // 正文都只能靠重拉 history 拿到。一轮 turn 事件很密，800ms 防抖限流。
-        if (!_isCurrent(sessionId)) return;
-        _scheduleToolRefresh();
-      case QuestionRequestedEvent(:final question):
-        // HITL 提问（含 replay 补推）：按 callId 去重入表（全连接）。
-        DshLog.w(
-          'ui question requested callId=${question.callId} '
-          'sid=${question.sessionId} n=${question.questions.length}',
-        );
-        hitl.onQuestionRequested(question);
-      case QuestionResolvedEvent(:final sessionId, :final callId):
-        DshLog.w('ui question settled callId=$callId sid=$sessionId');
-        hitl.onQuestionResolved(callId);
-      case ApprovalRequestedEvent(:final approval):
-        DshLog.w('ui approval requested id=${approval.approvalId}');
-        hitl.onApprovalRequested(approval);
-      case ApprovalResolvedEvent(:final sessionId, :final approvalId):
-        DshLog.w('ui approval resolved id=$approvalId sid=$sessionId');
-        hitl.onApprovalResolved(approvalId);
-      case ModelsUpdatedEvent():
-        // 模型目录推送（桥 v2.11.0，issue #1）：模型面板打开时必重拉
-        // models 帧，这里无需处理；显式 case 保 switch 穷尽并留扩展点。
-        break;
-    }
   }
 
   // ---- HITL 动作（问答 / 审批；实现见 chat_hitl_actions.dart）----

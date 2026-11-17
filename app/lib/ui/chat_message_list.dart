@@ -239,8 +239,24 @@ class _MessageListState extends State<_MessageList> {
         ),
       );
     }
+    // 流式工具组（桥 fdb85da 工具帧）：合成过程组插在流式正文之前，
+    // 与官方一致——工具行在助手正文上方；组内 preparing/running/终态由
+    // StreamingToolBuffer 驱动，committed 后被 reloadHistory 的持久组覆盖。
+    final streamingGroup = state.streamingProcess;
+    if (streamingGroup != null) {
+      items.add(
+        _StreamingProcessGroup(
+          state: state,
+          colors: colors,
+          group: streamingGroup,
+        ),
+      );
+    }
     if (state.streaming) {
       items.add(_StreamingItem(state: state, colors: colors));
+    }
+    if (state.maxTokensNotice) {
+      items.add(_MaxTokensNotice(colors: colors));
     }
     if (state.lastError != null) {
       items.add(
@@ -338,6 +354,75 @@ class _JumpToLatestFab extends StatelessWidget {
             color: colors.brand,
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// 流式过程组（工具调用实时缓冲的合成组）：官方行为对齐——工具行在流式
+/// 正文上方，组恒展开（用户手动收起过则尊重 _forceDismissed）；标题走
+/// processGroupTitle 的 preparing 词表（「正在准备…」）。
+class _StreamingProcessGroup extends StatelessWidget {
+  const _StreamingProcessGroup({
+    required this.state,
+    required this.colors,
+    required this.group,
+  });
+
+  final ChatState state;
+  final DsColors colors;
+  final ChatMessage group;
+
+  @override
+  Widget build(BuildContext context) {
+    final detail = appSettings.workStepsDetail;
+    final key = processGroupKeyOf(group);
+    final forceOpen = !state.isForceOpenDismissed(key);
+    bool answerable(String callId) =>
+        state.hitl.sessionQuestions(state.sessionId).any(
+          (q) => q.callId == callId,
+        );
+    return DsProcessGroup(
+      group: group,
+      colors: colors,
+      detail: detail,
+      expanded: state.isGroupExpanded(key),
+      forceOpen: forceOpen,
+      onToggle: () => state.toggleProcessGroup(
+        key,
+        open: state.isGroupExpanded(key) || forceOpen,
+      ),
+      // reasoning 兜底不接：流式思考在 _StreamingItem 的 _ThinkBlock 展示。
+      answerable: answerable,
+    );
+  }
+}
+
+/// 「回答被截断」提示行（官方 client.js:6707 文案逐字）：轮结束
+/// reason=max-tokens 时置位，新轮 turn.start / send() 复位。
+class _MaxTokensNotice extends StatelessWidget {
+  const _MaxTokensNotice({required this.colors});
+
+  final DsColors colors;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = colors;
+    return Container(
+      margin: const EdgeInsets.only(top: DsSpacing.blockGap),
+      padding: const EdgeInsets.fromLTRB(
+        DsSpacing.thinkHMargin,
+        DsSpacing.liGap,
+        DsSpacing.thinkHMargin,
+        DsSpacing.liGap,
+      ),
+      decoration: BoxDecoration(
+        color: c.settingsWarnBg,
+        borderRadius: BorderRadius.circular(DsSpacing.settingsCardRadius),
+      ),
+      child: Text(
+        '回答被截断，已有输出保留在对话中。发送“继续”可让模型接着输出。',
+        style: DsTypography.small.copyWith(color: c.labelTertiary),
       ),
     );
   }

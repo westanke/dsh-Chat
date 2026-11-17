@@ -277,7 +277,8 @@ class _ToolDetail extends StatelessWidget {
       final result = call.resultText;
       if (result != null) {
         children.add(_resultSection(c, result));
-      } else if (!isCallRunning(call)) {
+      } else if (!isToolRowLive(call)) {
+        // preparing/running 不出兜底；ok/failed/stopped/cancelled 无结果 → 未找到。
         children.add(_caption('未找到结果'));
       }
     } else if (kind == ToolActivityKind.questions) {

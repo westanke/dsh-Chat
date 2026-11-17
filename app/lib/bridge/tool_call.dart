@@ -19,6 +19,8 @@ class ToolCallInfo {
     this.durationMs,
     this.resultText,
     this.rawArguments,
+    this.preparing = false,
+    this.errorCode,
   });
 
   final String callId;
@@ -38,6 +40,14 @@ class ToolCallInfo {
 
   /// arguments 原串（JSON 字符串），详情展开用（models.dart 组装时带上）。
   final String? rawArguments;
+
+  /// 参数流式生成中（官方 preparing 态，chat.message.delta kind='tool-call'；
+  /// bridge fdb85da 起）。历史路径没有该标记，靠 [rawArguments]==null 近似。
+  final bool preparing;
+
+  /// 内核失败分类（chat.tool.result 的 error.code 透传；官方状态机只有
+  /// 'interrupted'→已停止、ask 的 'ASK_CANCELLED'→已取消，其余进失败态）。
+  final String? errorCode;
 
   /// 折叠行用的主短语（run_code 取第一个，其余就是唯一那个）。
   String get phrase => phrases.isEmpty ? name : phrases.first;

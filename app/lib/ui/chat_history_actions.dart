@@ -30,6 +30,9 @@ Future<void> reloadChatHistory(ChatState state) async {
         'projections=${page.projections != null} '
         'hasMore=${page.hasMore}');
     state.messages = page.items;
+    // 去重：持久过程组已含这些工具，按 callId 从流式缓冲摘除对应行
+    // （缓冲空后 streamingProcess 为 null，页面上只剩持久组）。
+    state.dropPersistedToolRows();
     state.rawEvents = page.rawEvents;
     state.historyHasMore = page.hasMore;
     // 命令卡保留（第六轮反馈 m03878）：reloadHistory 重建 messages，

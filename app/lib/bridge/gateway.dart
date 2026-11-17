@@ -236,8 +236,21 @@ class GatewayClient {
             (payload['message'] ?? '执行失败') as String,
           ),
         );
+      case 'chat.turn.start':
+        _eventCtrl.add(TurnStartedEvent((payload['sessionId'] ?? '') as String));
+      case 'chat.turn.end':
+        // 官方轮结束判据（client.js:4935/4941）；reason.kind 宽容解析。
+        final reason = payload['reason'];
+        final reasonKind = reason is Map && reason['kind'] is String
+            ? reason['kind'] as String
+            : null;
+        _eventCtrl.add(
+          TurnEndedEvent((payload['sessionId'] ?? '') as String, reasonKind),
+        );
       case 'chat.session.event':
         // 实时流只带 eventType，不带事件体（工具名/参数要靠 history 重拉）。
+        // 桥 fdb85da 起 tool/call、tool/result 升级为独立帧（下方两个 case），
+        // 本分支退化为老桥兼容路径与低频事件的防抖重拉入口。
         final eventType = (payload['eventType'] ?? '') as String;
         DshLog.w('gw session.event $eventType sid=${payload['sessionId']}');
         _eventCtrl.add(
@@ -246,6 +259,14 @@ class GatewayClient {
             eventType,
           ),
         );
+      case 'chat.tool.call':
+        // 工具开始执行（参数已定稿）：按 callId 去重覆盖 preparing 行。
+        DshLog.w('gw tool.call callId=${payload['callId']} name=${payload['name']}');
+        _eventCtrl.add(ToolCallEvent(ToolCallStarted.from(payload)));
+      case 'chat.tool.result':
+        // 工具结果（error.code 是内核失败分类，UI 端分派已停止/已取消/失败）。
+        DshLog.w('gw tool.result callId=${payload['callId']}');
+        _eventCtrl.add(ToolResultEvent(ToolCallOutcome.from(payload)));
       case 'chat.userQuestions/requested':
         final q = PendingQuestion.from(
           (payload['sessionId'] ?? '') as String,

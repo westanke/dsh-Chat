@@ -164,6 +164,19 @@ class _ApprovalCardState extends State<_ApprovalCard> {
                 ),
               ),
             ),
+          // detail = 关联 tool/call 的命令预览（bridge redactApprovalText 截
+          // 1200；官方 ApprovalFlow body：等宽代码字体 break-all）。与 reason
+          // 同字体，超长命令靠 Flutter 默认按字符换行兜住。
+          if (approval.detail != null)
+            Padding(
+              padding: const EdgeInsets.only(top: DsSpacing.liGap),
+              child: Text(
+                approval.detail!,
+                style: DsTypography.codeBlockLabel.copyWith(
+                  color: c.settingsWarnFg,
+                ),
+              ),
+            ),
           SizedBox(
             height: DsSpacing.composerButtonSize,
             child: Row(

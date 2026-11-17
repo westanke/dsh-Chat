@@ -18,7 +18,6 @@ import 'dart:convert';
 import 'package:material_ui/material_ui.dart';
 
 import '../bridge/models.dart';
-import '../bridge/questions.dart';
 
 /// 官方 activityKind：内核工具名归一后的活动类别。
 enum ToolActivityKind {
@@ -211,7 +210,76 @@ const List<String> liveToolDetailKeys = [
 const int liveDetailMaxChars = 160;
 
 /// 工具行五态判定里的 running：结果未到且未失败（官方 running 态）。
-bool isCallRunning(ToolCallInfo call) => call.resultText == null && !call.failed;
+bool isCallRunning(ToolCallInfo call) =>
+    call.resultText == null && !call.failed && call.errorCode == null;
+
+/// 工具折叠行呈现状态（官方 row 状态机 + preparing/stopped/cancelled 特化）。
+/// 优先级：errorCode 终态（stopped/cancelled）→ failed → ok（有结果）→
+/// preparing（真数据驱动：流式行 preparing 标记；历史路径 rawArguments==null
+/// 近似）→ running。
+enum ToolRowState { preparing, running, ok, stopped, cancelled, failed }
+
+ToolRowState toolRowStateOf(ToolCallInfo call) {
+  if (call.errorCode == 'interrupted') return ToolRowState.stopped;
+  if (call.errorCode != null) {
+    // 'ASK_CANCELLED' 仅 ask 工具出「已取消」（官方 ask.cancelled）；其余
+    // 分类（TOOL_OUTCOME_UNKNOWN / TOOL_NOT_STARTED / 未知值）→ 失败态。
+    if (call.errorCode == 'ASK_CANCELLED' &&
+        activityKind(call.name) == ToolActivityKind.questions) {
+      return ToolRowState.cancelled;
+    }
+    return ToolRowState.failed;
+  }
+  if (call.failed) return ToolRowState.failed;
+  if (call.resultText != null) return ToolRowState.ok;
+  if (call.preparing || call.rawArguments == null) {
+    return ToolRowState.preparing;
+  }
+  return ToolRowState.running;
+}
+
+/// 行仍活着（preparing / running）：过程组标题的 running 选取、
+/// 「运行中」状态字与详情区「未找到结果」兜底都用它。
+bool isToolRowLive(ToolCallInfo call) {
+  final state = toolRowStateOf(call);
+  return state == ToolRowState.preparing || state == ToolRowState.running;
+}
+
+/// 结果文本尾部的退出状态标记（官方 parseExitStatus 同款；exit code 不是
+/// 协议字段，客户端从结果文本尾部 `[exit code: N]` / `[killed by signal: X]` 解析）。
+class ExitStatus {
+  const ExitStatus({this.exitCode, this.signal});
+
+  /// `[exit code: null]` → null（无数值退出码，不出徽标）。
+  final int? exitCode;
+  final String? signal;
+}
+
+ExitStatus? parseExitStatus(String? text) {
+  if (text == null) return null;
+  final exit = RegExp(r'\[exit code: (-?\d+|null)\]\s*$').firstMatch(text);
+  final signal = RegExp(r'\[killed by signal: ([^\]\n]+)\]\s*$')
+      .firstMatch(text);
+  if (signal != null) return ExitStatus(signal: signal.group(1));
+  if (exit == null) return null;
+  final raw = exit.group(1);
+  if (raw == null || raw == 'null') return null;
+  return ExitStatus(exitCode: int.tryParse(raw));
+}
+
+/// 徽标文案（行尾展示）：`exit 2` / `signal X`。
+String? exitBadgeLabel(ExitStatus? status) {
+  if (status == null) return null;
+  if (status.signal != null) return 'signal ${status.signal}';
+  if (status.exitCode != null) return 'exit ${status.exitCode}';
+  return null;
+}
+
+/// 徽标是否红色（非 0 / signal 的非正常退出）。
+bool exitBadgeIsError(ExitStatus? status) =>
+    status != null &&
+    (status.signal != null ||
+        (status.exitCode != null && status.exitCode != 0));
 
 String? _firstLine(Object? value) {
   if (value is! String) return null;
@@ -220,7 +288,7 @@ String? _firstLine(Object? value) {
   return t.split('\n').first.trim();
 }
 
-Object? _tryParseJson(String? raw) {
+Object? tryParseJson(String? raw) {
   if (raw == null || raw.trim().isEmpty) return null;
   try {
     return jsonDecode(raw);
@@ -236,7 +304,7 @@ String clipText(String text, int max) =>
 /// 折叠行摘要：按 kind 的键序取参（miss → 首个字符串值首行 → 参数原文首行）。
 /// search 的 queries 字符串数组 join(', ')（每项取首行）。
 String? summarizeArgs(ToolActivityKind kind, String? rawArguments) {
-  final parsed = _tryParseJson(rawArguments);
+  final parsed = tryParseJson(rawArguments);
   if (parsed is! Map) return _firstLine(rawArguments);
   for (final key in _summaryKeys[kind] ?? const <String>[]) {
     final line = _firstLine(parsed[key]);
@@ -268,7 +336,7 @@ String? liveDetailText(ChatMessage group) {
     if (isCallRunning(call)) latest = call;
   }
   if (latest == null) return null;
-  final parsed = _tryParseJson(latest.rawArguments);
+  final parsed = tryParseJson(latest.rawArguments);
   if (parsed is! Map) return null;
   for (final key in liveToolDetailKeys) {
     final value = parsed[key];
@@ -309,11 +377,13 @@ String processGroupTitle(
   if (calls.isEmpty) return _doneLabel[ToolActivityKind.thinking]!;
   ToolCallInfo? running;
   for (final call in calls) {
-    if (isCallRunning(call)) running = call;
+    if (isToolRowLive(call)) running = call;
   }
   if (running != null) {
     final kind = activityKind(running.name);
-    final label = running.rawArguments == null
+    // preparing 判定真数据驱动：流式行带 preparing 标记（桥 fdb85da）；
+    // 历史路径 running 行 rawArguments==null 时保留近似回退。
+    final label = running.preparing || running.rawArguments == null
         ? (_preparingLabel[kind] ?? _runningLabel[kind]!)
         : _runningLabel[kind]!;
     if (!liveDetail) return label;
@@ -356,111 +426,4 @@ String _completedTitle(List<ToolCallInfo> calls) {
     title = top.join('，');
   }
   return kinds.length > 3 ? '$title等' : title;
-}
-
-/// 一条已提交的 ask 答案（resultText JSON answers 数组的元素）。
-class AskAnswerEntry {
-  const AskAnswerEntry({required this.id, this.selected = const [], this.custom});
-
-  final String id;
-  final List<String> selected;
-  final String? custom;
-
-  /// selected 非空或 custom 非空即算已回答（官方 answered 口径）。
-  bool get answered =>
-      selected.isNotEmpty || (custom != null && custom!.trim().isNotEmpty);
-}
-
-/// ask 工具 resultText 的解析形态：pending 标记与 answers 数组（可有皆无）。
-class AskResult {
-  const AskResult({required this.pending, this.answers});
-
-  final bool pending;
-  final List<AskAnswerEntry>? answers;
-}
-
-/// 解析 ask 工具 resultText；不是 JSON 对象、且既无 pending 也无 answers →
-/// null（调用方回退通用摘要）。
-AskResult? askResultOf(String? resultText) {
-  final parsed = _tryParseJson(resultText);
-  if (parsed is! Map) return null;
-  final pending = parsed['pending'] == true;
-  final rawAnswers = parsed['answers'];
-  List<AskAnswerEntry>? answers;
-  if (rawAnswers is List) {
-    final entries = <AskAnswerEntry>[];
-    for (final item in rawAnswers) {
-      if (item is! Map) continue;
-      final id = item['id'];
-      if (id is! String || id.isEmpty) continue;
-      final selected = <String>[];
-      final rawSelected = item['selected'];
-      if (rawSelected is List) {
-        for (final s in rawSelected) {
-          if (s is String && s.isNotEmpty) selected.add(s);
-        }
-      }
-      entries.add(AskAnswerEntry(
-        id: id,
-        selected: selected,
-        custom: item['custom'] is String ? item['custom'] as String : null,
-      ));
-    }
-    answers = entries;
-  }
-  if (!pending && answers == null) return null;
-  return AskResult(pending: pending, answers: answers);
-}
-
-/// 解析 ask 工具 args.questions（官方 AskQuestionSpec）：重复 id / 缺
-/// id 或 question / 空列表 / 坏 JSON → null（调用方回退通用详情）。
-List<UserQuestion>? askQuestions(String? rawArguments) {
-  final parsed = _tryParseJson(rawArguments);
-  if (parsed is! Map) return null;
-  final rawQuestions = parsed['questions'];
-  if (rawQuestions is! List || rawQuestions.isEmpty) return null;
-  final seen = <String>{};
-  final out = <UserQuestion>[];
-  for (final item in rawQuestions) {
-    if (item is! Map) return null;
-    final id = item['id'];
-    final question = item['question'];
-    if (id is! String || id.isEmpty) return null;
-    if (question is! String || question.isEmpty) return null;
-    if (!seen.add(id)) return null;
-    out.add(UserQuestion(
-      id: id,
-      question: question,
-      header: item['header'] is String ? item['header'] as String : null,
-      detail: item['detail'] is String ? item['detail'] as String : null,
-      // args 用官方 snake_case multi_select；兼容驼峰键。
-      multiSelect: item['multi_select'] == true || item['multiSelect'] == true,
-      options: UserQuestionOption.listFrom(item['options']),
-    ));
-  }
-  return out;
-}
-
-/// ask_user_question 工具行的状态摘要（官方 AskQuestionRow 状态机）：
-/// - running 且无结果 →「等待中」；
-/// - resultText pending 且 HITL 挂起表还有该 callId（[answerable]）→
-///   「已继续；仍可回答」，否则「已关闭」；
-/// - answers 数组 →「{answered}/{total} 已回答」（answered = selected 或
-///   custom 非空计数）；
-/// - 解析失败 → 原参数摘要兜底。
-String? askSummary(ToolCallInfo call, bool Function(String callId) answerable) {
-  if (isCallRunning(call)) return '等待中';
-  final result = askResultOf(call.resultText);
-  if (result != null) {
-    if (result.pending) {
-      return answerable(call.callId) ? '已继续；仍可回答' : '已关闭';
-    }
-    final answers = result.answers;
-    if (answers != null) {
-      // 官方 answeredPresentation 的 total 用答案批次数（answers.length）。
-      final answered = answers.where((a) => a.answered).length;
-      return '$answered/${answers.length} 已回答';
-    }
-  }
-  return call.summary;
 }

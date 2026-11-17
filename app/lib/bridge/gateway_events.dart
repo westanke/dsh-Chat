@@ -32,6 +32,23 @@ class TurnFailedEvent extends GatewayEvent {
   final String message;
 }
 
+/// 轮开始（桥一直在发 chat.turn.start，此前未消费）。
+class TurnStartedEvent extends GatewayEvent {
+  TurnStartedEvent(this.sessionId);
+  final String sessionId;
+}
+
+/// 轮结束（chat.turn.end）：官方轮状态判据（client.js:4935 turnLocation
+/// status、:4941 outerHidden=turnClosed）；alwaysOpen 判
+/// reason.kind∈{aborted,interrupted,error}。
+class TurnEndedEvent extends GatewayEvent {
+  TurnEndedEvent(this.sessionId, this.reasonKind);
+  final String sessionId;
+
+  /// payload.reason.kind（宽容解析：缺帧/缺 kind → null）。
+  final String? reasonKind;
+}
+
 class ResyncEvent extends GatewayEvent {
   ResyncEvent(this.dropped);
   final int dropped;
@@ -76,6 +93,19 @@ class ApprovalResolvedEvent extends GatewayEvent {
 class ModelsUpdatedEvent extends GatewayEvent {
   ModelsUpdatedEvent(this.provider);
   final String? provider;
+}
+
+/// 工具开始执行（chat.tool.call，桥 fdb85da 起：工具调用有了自己的帧，
+/// 不再只能靠 chat.session.event 重拉 history；参数已定稿，覆盖 preparing 行）。
+class ToolCallEvent extends GatewayEvent {
+  ToolCallEvent(this.call);
+  final ToolCallStarted call;
+}
+
+/// 工具结果（chat.tool.result：message.role='tool' + error.code 内核分类）。
+class ToolResultEvent extends GatewayEvent {
+  ToolResultEvent(this.result);
+  final ToolCallOutcome result;
 }
 
 /// WS 请求 / REST 通道共用的错误（code 是稳定的错误名，如 HTTP_404/TIMEOUT）。

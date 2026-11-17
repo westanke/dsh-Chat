@@ -96,6 +96,9 @@ class DshWorkspace {
 }
 
 /// 实时推送 chat.message.delta（asyncapi §ChatMessageDelta）。
+/// kind 除 'text'|'reasoning' 外还有工具调用帧（桥 fdb85da 起，官方 preparing
+/// 态数据源）：'tool-call'=参数流式生成中、'tool-call-end'=参数定稿边界；
+/// 客户端契约：**未知 kind 忽略，不得当文本渲染**。
 class MessageDelta {
   const MessageDelta({
     required this.sessionId,
@@ -104,14 +107,27 @@ class MessageDelta {
     required this.index,
     required this.kind,
     required this.text,
+    this.callId,
+    this.name,
+    this.argumentsDelta,
+    this.arguments,
   });
 
   final String sessionId;
   final int turn;
   final int step;
   final int index;
-  final String kind; // 'text' | 'reasoning'
+  final String kind; // 'text' | 'reasoning' | 'tool-call' | 'tool-call-end'
   final String text;
+
+  /// 工具调用帧（tool-call/tool-call-end）：callId 宽容透传（首包可能缺，
+  /// 续包只带 index+argumentsDelta）。
+  final String? callId;
+  final String? name;
+
+  /// 参数流式增量（tool-call）；[arguments] 是 tool-call-end 的定稿参数。
+  final String? argumentsDelta;
+  final String? arguments;
 
   factory MessageDelta.from(Map<String, dynamic> d) => MessageDelta(
     sessionId: (d['sessionId'] ?? '') as String,
@@ -120,7 +136,100 @@ class MessageDelta {
     index: (d['index'] ?? 0) as int,
     kind: (d['kind'] ?? 'text') as String,
     text: (d['text'] ?? '') as String,
+    callId: d['callId'] is String && (d['callId'] as String).isNotEmpty
+        ? d['callId'] as String
+        : null,
+    name: d['name'] is String && (d['name'] as String).isNotEmpty
+        ? d['name'] as String
+        : null,
+    argumentsDelta: d['argumentsDelta'] is String ? d['argumentsDelta'] as String : null,
+    arguments: d['arguments'] is String ? d['arguments'] as String : null,
   );
+}
+
+/// 实时推送 chat.tool.call：工具开始执行（参数已定稿，覆盖 preparing 行；
+/// 按 callId 去重，后到帧覆盖前态）。
+class ToolCallStarted {
+  const ToolCallStarted({
+    required this.sessionId,
+    required this.callId,
+    required this.name,
+    this.arguments,
+    this.turn = 0,
+    this.step = 0,
+  });
+
+  final String sessionId;
+  final String callId;
+  final String name;
+  final String? arguments;
+  final int turn;
+  final int step;
+
+  factory ToolCallStarted.from(Map<String, dynamic> d) => ToolCallStarted(
+    sessionId: (d['sessionId'] ?? '') as String,
+    callId: (d['callId'] ?? d['id'] ?? '') as String,
+    name: (d['name'] ?? '') as String,
+    arguments: d['arguments'] is String ? d['arguments'] as String : null,
+    turn: (d['turn'] ?? 0) as int,
+    step: (d['step'] ?? 0) as int,
+  );
+}
+
+/// 实时推送 chat.tool.result：工具结果。error.code 是**内核失败分类**
+/// （不是桥的枚举）：'interrupted'=已停止、ask 工具的 'ASK_CANCELLED'=已取消，
+/// 其余（含未知值）降级为失败态；exit code 不是协议字段，从结果文本尾部解析。
+class ToolCallOutcome {
+  const ToolCallOutcome({
+    required this.sessionId,
+    required this.callId,
+    required this.isError,
+    required this.resultText,
+    this.errorCode,
+    this.turn = 0,
+    this.step = 0,
+  });
+
+  final String sessionId;
+  final String callId;
+  final bool isError;
+  final String resultText;
+  final String? errorCode;
+  final int turn;
+  final int step;
+
+  factory ToolCallOutcome.from(Map<String, dynamic> d) {
+    final message = d['message'] is Map ? d['message'] as Map<String, dynamic> : const {};
+    final callId = () {
+      final direct = d['callId'];
+      if (direct is String && direct.isNotEmpty) return direct;
+      final source = message['source'] is Map
+          ? (message['source'] as Map)['callId']
+          : null;
+      return source is String ? source : (message['toolCallId'] ?? '') as String;
+    }();
+    final error = d['error'] is Map ? d['error'] as Map : const {};
+    final code = error['code'];
+    var result = '';
+    final content = message['content'];
+    if (content is List) {
+      for (final part in content) {
+        if (part is Map && part['type'] == 'text' && part['text'] is String) {
+          if (result.isNotEmpty) result += '\n';
+          result += part['text'] as String;
+        }
+      }
+    }
+    return ToolCallOutcome(
+      sessionId: (d['sessionId'] ?? '') as String,
+      callId: callId,
+      isError: message['isError'] == true,
+      resultText: result,
+      errorCode: code is String && code.isNotEmpty ? code : null,
+      turn: (d['turn'] ?? 0) as int,
+      step: (d['step'] ?? 0) as int,
+    );
+  }
 }
 
 /// 实时推送 chat.message.committed（asyncapi §ChatMessageCommitted）。
@@ -131,6 +240,7 @@ class MessageCommitted {
     required this.seq,
     required this.turn,
     required this.step,
+    this.hasReplyContent = true,
   });
 
   final String sessionId;
@@ -139,12 +249,21 @@ class MessageCommitted {
   final int turn;
   final int step;
 
+  /// 这条 assistant 消息是否真有正文。桥 e08b6b5 起 committed 帧携带：
+  /// 内核（dsh-agent-loop lib/index.js:941-955）会在工具执行前先提交一条
+  /// 只含 tool-call 块、无 text 块的 assistant 消息（false）——客户端不能
+  /// 把它当成「回答已结束」。老桥不带该字段 → 缺省 true 兼容。
+  final bool hasReplyContent;
+
   factory MessageCommitted.from(Map<String, dynamic> d) => MessageCommitted(
     sessionId: (d['sessionId'] ?? '') as String,
     role: (d['role'] ?? 'assistant') as String,
     seq: (d['seq'] ?? 0) as int,
     turn: (d['turn'] ?? 0) as int,
     step: (d['step'] ?? 0) as int,
+    hasReplyContent: d['hasReplyContent'] is bool
+        ? d['hasReplyContent'] as bool
+        : true,
   );
 }
 
