@@ -98,6 +98,11 @@ export class DsColors {
     return this.dark ? DsPalette.c400 : DsPalette.c600;
   }
 
+  /// 官方 label-caption：比 tertiary 更弱一档（2px 分隔点/思考圆点用）。
+  get labelCaption(): string {
+    return this.dark ? DsPalette.c500 : DsPalette.c400;
+  }
+
   get brand(): string {
     return this.dark ? DsPalette.brandDark : DsPalette.brandLight;
   }

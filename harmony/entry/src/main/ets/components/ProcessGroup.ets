@@ -1,16 +1,24 @@
 /// 过程组标题行 —— 与工具行（ToolBlock）/消息列表（MessageList）拆开
-/// （宪法 §7 单文件 ≤500 行）。对齐官方 Web processTitle：
+/// （宪法 §7 单文件 ≤500 行）。对齐官方 Web ProcessGroupHeader：
+/// - 结构 [icon][chevron][title]（图标与折叠箭头在标题左侧，与轮尾行相反）；
+/// - icon：完成组 = counts 首类 kindIcon（topKindOf），进行中 = 最新 running
+///   工具的 kindIcon（无 running → thinking 💭）；
 /// - 进行中：最新 running 工具的「正在…」词表 + detail 附加（liveProcessDetail
-///   档位开关，concise 不带 detail；无 running 工具取组内 reasoning 尾段）；
+///   档位开关，concise 不带 detail；preparing+thinking → 准备调用工具；
+///   无 running 工具取组内 reasoning 尾段）；
 /// - 完成：按 kind 聚合 counts 降序取前 3 类，done 词组合（2 类「并」、
-///   ≥3 类「，」、>3 类加「等」、空组「已完成分析」）。
+///   ≥3 类「，」、>3 类加「等」、空组「已完成分析」）；组头不再显示耗时
+///   （官方无此元素，时长由轮尾行承担）；
+/// - 150ms 稳定标题（官方 PROCESS_TITLE_MINIMUM_MS）：进行中标题变更不足
+///   150ms 不上屏（防流式抖动），完成组即时提交。
 /// - 恒展开（alwaysOpen）：组所属轮未结束 / 组后同轮有 user 消息（core/
 ///   ToolPresent.isGroupForceOpen），此时无视收起集合强制展开。
 import { ChatMessage } from '../core/HistoryPage';
-import { ToolCallInfo, formatDuration } from '../core/ToolCall';
+import { ToolCallInfo } from '../core/ToolCall';
 import { processGroupKey, parseWorkStepsDetail } from '../core/WorkSteps';
 import { ChatStore } from '../core/ChatStore';
-import { GroupTitleOptions, hasRunningCall, processGroupTitle } from '../core/ToolPresent';
+import { GroupTitleOptions, hasRunningCall, processGroupTitle, isCallRunning,
+  isCallPreparing, kindIcon, topKindOf, activityKind, AK_THINKING } from '../core/ToolPresent';
 import { policyOf, isGroupForceOpen } from '../core/ToolDetails';
 import { DsColors, DsTypography, DsSpacing } from '../ui/theme';
 import { ToolBlock } from './ToolBlock';
@@ -30,6 +38,8 @@ import { ToolBlock } from './ToolBlock';
  * 展开/收起经 AppStorage dshExpandedVersion（ChatView.setNotify 写）@Watch 回读，
  * 绕开 LazyForEach 同 key 不重建的坑位（@StorageProp 变化对已挂载组件始终生效）。
  */
+const PROCESS_TITLE_MINIMUM_MS: number = 150;
+
 @Component
 export struct ProcessGroup {
   group: ChatMessage = new ChatMessage();
@@ -42,6 +52,11 @@ export struct ProcessGroup {
   /// 工具调用实时流版本：流式行就地 mutate（无新 key），靠它触发组头标题重算。
   @StorageProp('dshStreamToolsVersion') @Watch('onStreamBump') streamVersion: number = 0;
   @State expanded: boolean = false;
+  /// 150ms 稳定标题：当前上屏值（@State，变更即重渲染）。
+  @State shownTitle: string = '';
+  private titleShownAt: number = 0;
+  private titleTimer: number = -1;
+  private pendingTitle: string = '';
 
   private c(): DsColors {
     return new DsColors(this.dark);
@@ -49,6 +64,14 @@ export struct ProcessGroup {
 
   aboutToAppear(): void {
     this.syncExpanded();
+    this.syncTitle();
+  }
+
+  aboutToDisappear(): void {
+    if (this.titleTimer >= 0) {
+      clearTimeout(this.titleTimer);
+      this.titleTimer = -1;
+    }
   }
 
   /** 恒展开判定：组后同轮有 user（插话）或所属轮未结束。 */
@@ -72,6 +95,7 @@ export struct ProcessGroup {
       return;
     }
     this.expanded = this.forceOpen() || st.workSteps.isExpanded(processGroupKey(this.group));
+    this.syncTitle();
   }
 
   private toggle(): void {
@@ -89,6 +113,7 @@ export struct ProcessGroup {
 
   /** 实时流版本 bump：流式行是就地 mutate（无新 key），靠状态变化触发组头重渲染。 */
   private onStreamBump(): void {
+    this.syncTitle();
   }
 
   /** 官方 processTitle：进行中「正在…」词表（+detail），完成组 done 词组合。 */
@@ -99,13 +124,66 @@ export struct ProcessGroup {
     return processGroupTitle(this.group.toolCalls, hasRunningCall(this.group.toolCalls), opts);
   }
 
-  /** 组头耗时（两端齐全才显示，时钟倒退不算）。 */
-  private headDuration(): string | null {
-    const calls: ToolCallInfo[] = this.group.toolCalls;
-    if (calls.length === 0) {
-      return null;
+  /** 组是否进行中（running 或 preparing 任一 → live 态：标题走稳定窗口）。 */
+  private live(): boolean {
+    for (const t of this.group.toolCalls) {
+      if (isCallRunning(t) || isCallPreparing(t)) {
+        return true;
+      }
     }
-    return formatDuration(this.group.durationMs);
+    return false;
+  }
+
+  /** 组头图标：完成组取 counts 首类 kind；进行中取最新 running 工具 kind。 */
+  private headIcon(): string {
+    const calls: ToolCallInfo[] = this.group.toolCalls;
+    if (hasRunningCall(calls)) {
+      let idx: number = -1;
+      for (let i = 0; i < calls.length; i++) {
+        if (isCallRunning(calls[i])) {
+          idx = i;
+        }
+      }
+      return kindIcon(idx >= 0 ? activityKind(calls[idx].name) : AK_THINKING);
+    }
+    return kindIcon(topKindOf(calls));
+  }
+
+  /** 150ms 稳定标题：完成组即时提交；进行中不足 150ms 的变更延迟上屏。 */
+  private syncTitle(): void {
+    const desired: string = this.titleText();
+    if (!this.live()) {
+      this.commitTitle(desired);
+      return;
+    }
+    if (desired === this.shownTitle) {
+      return;
+    }
+    const remain: number = PROCESS_TITLE_MINIMUM_MS - (Date.now() - this.titleShownAt);
+    if (remain <= 0) {
+      this.commitTitle(desired);
+      return;
+    }
+    this.pendingTitle = desired;
+    if (this.titleTimer < 0) {
+      this.titleTimer = setTimeout((): void => {
+        this.titleTimer = -1;
+        const t: string = this.pendingTitle;
+        this.commitTitle(t);
+        if (t !== this.titleText()) {
+          this.syncTitle();
+        }
+      }, remain);
+    }
+  }
+
+  private commitTitle(t: string): void {
+    if (this.titleTimer >= 0) {
+      clearTimeout(this.titleTimer);
+      this.titleTimer = -1;
+    }
+    this.shownTitle = t;
+    this.titleShownAt = Date.now();
   }
 
   private chevronVisible(): boolean {
@@ -129,32 +207,31 @@ export struct ProcessGroup {
   build() {
     Column() {
       Row({ space: 0 }) {
-        Text('🔧')
+        Text(this.headIcon())
           .fontSize(DsSpacing.processIconSize)
           .fontColor(this.headColor())
-          .margin({ right: DsSpacing.processIconGap })
-        Text(this.titleText())
+          .width(DsSpacing.processIconSize)
+          .textAlign(TextAlign.Center)
+        if (this.chevronVisible()) {
+          Text(this.expanded ? '⌃' : '⌄')
+            .fontSize(14)
+            .fontColor(this.headColor())
+            .width(14)
+            .textAlign(TextAlign.Center)
+            .margin({ left: 4, right: 6 })
+        } else {
+          Blank().width(DsSpacing.processIconGap)
+        }
+        Text(this.shownTitle)
           .fontSize(DsTypography.small.size)
           .fontColor(this.headColor())
           .maxLines(1)
           .textOverflow({ overflow: TextOverflow.Ellipsis })
           .layoutWeight(1)
-        if (this.headDuration() !== null) {
-          Text(this.headDuration() as string)
-            .fontSize(DsTypography.caption.size)
-            .fontColor(this.c().labelTertiary)
-            .margin({ left: 6 })
-        }
-        if (this.chevronVisible()) {
-          Text(this.expanded ? '⌃' : '⌄')
-            .fontSize(16)
-            .fontColor(this.headColor())
-            .margin({ left: 6 })
-        }
       }
       .width('100%')
       .height(DsSpacing.processRowHeight)
-      .accessibilityText(this.titleText() + (this.expanded ? '，收起' : '，展开'))
+      .accessibilityText(this.shownTitle + (this.expanded ? '，收起' : '，展开'))
       .onClick((): void => {
         this.toggle();
       })
@@ -162,7 +239,8 @@ export struct ProcessGroup {
         Column() {
           Repeat<ToolCallInfo>(this.group.toolCalls)
             .each((item: RepeatItem<ToolCallInfo>) => {
-              ToolBlock({ call: item.item, answerable: this.answerableOf })
+              ToolBlock({ call: item.item, answerable: this.answerableOf,
+                allowDetail: this.detailProp !== 'standard' })
             })
             .key((item: ToolCallInfo) => item.callId)
         }

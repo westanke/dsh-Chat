@@ -13,8 +13,9 @@ import { JsonAccess, JsonMap } from './JsonAccess';
 import { WorkStepsDetail } from './WorkSteps';
 import { QuestionAnswerItem, UserQuestion } from './Questions';
 import { TOOL_STATUS_CANCELLED } from './StreamTools';
-import { AK_COMMANDS, AK_EDIT, AK_READ, AK_QUESTIONS, AK_WEB_FETCH, AK_WEB_SEARCH,
+import { AK_COMMANDS, AK_EDIT, AK_READ, AK_QUESTIONS, AK_SEARCH, AK_WEB_FETCH, AK_WEB_SEARCH,
   AK_WRITE, activityKind, firstLineOf, isCallRunning } from './ToolPresent';
+import { stripToolPrefix } from './ToolTitles';
 
 // ---- 展开详情分派 -------------------------------------------------------
 
@@ -22,7 +23,8 @@ export const DETAIL_DIFF_MAX_LINES: number = 9;
 export const DETAIL_READ_WINDOW: number = 8;
 export const DETAIL_INPUT_MAX_CHARS: number = 200;
 
-/** 详情模式：edit/write→diff；commands→command；read→read；questions→ask；其余 io。 */
+/** 详情模式：edit/write→diff；commands→command；read→read；search→search；
+ * webSearch/webFetch→web；questions→ask；其余（含 read_image）io。 */
 export function detailModeOf(call: ToolCallInfo): string {
   const kind: string = activityKind(call.name);
   if (kind === AK_EDIT || kind === AK_WRITE) {
@@ -33,6 +35,12 @@ export function detailModeOf(call: ToolCallInfo): string {
   }
   if (kind === AK_READ) {
     return 'read';
+  }
+  if (kind === AK_SEARCH) {
+    return 'search';
+  }
+  if (kind === AK_WEB_SEARCH || kind === AK_WEB_FETCH) {
+    return 'web';
   }
   if (kind === AK_QUESTIONS) {
     return 'ask';
@@ -90,11 +98,72 @@ export function ioOutputOf(call: ToolCallInfo): string {
   return '无结果';
 }
 
+// ---- 搜索 / 网页行内摘要（官方 zh 词表：search.* / web.noResults） --------
+
+export const SEARCH_NO_RESULTS: string = '无结果';
+export const WEB_NO_RESULTS: string = '未找到结果';
+
+/**
+ * 搜索行内摘要（官方 SearchCard 三态）：非空结果行数 = 匹配数，行内 file 前缀
+ * （首个 ':' 之前）去重 = 文件数 →「{n} 处匹配 · {f} 个文件」；glob（路径模式，
+ * 一行一个路径）→「{n} 个路径」；空 →「无结果」。
+ */
+export function searchSummaryOf(call: ToolCallInfo): string {
+  const raw: string | null = call.resultText;
+  if (raw === null || raw.trim().length === 0) {
+    return SEARCH_NO_RESULTS;
+  }
+  const lines: string[] = [];
+  const parts: string[] = raw.split('\n');
+  for (let i = 0; i < parts.length; i++) {
+    const t: string = parts[i].trim();
+    if (t.length > 0) {
+      lines.push(t);
+    }
+  }
+  if (lines.length === 0) {
+    return SEARCH_NO_RESULTS;
+  }
+  if (activityKind(call.name) === 'search' && stripToolPrefix(call.name) === 'glob') {
+    return lines.length.toString() + ' 个路径';
+  }
+  const files: Map<string, boolean> = new Map<string, boolean>();
+  for (let i = 0; i < lines.length; i++) {
+    const idx: number = lines[i].indexOf(':');
+    if (idx > 0) {
+      files.set(lines[i].substring(0, idx), true);
+    }
+  }
+  if (files.size === 0) {
+    return SEARCH_NO_RESULTS;
+  }
+  return lines.length.toString() + ' 处匹配 · ' + files.size.toString() + ' 个文件';
+}
+
+/** 网页行内摘要（官方 WebRow）：结果首行；空 → 未找到结果。 */
+export function webSummaryOf(call: ToolCallInfo): string {
+  const raw: string | null = call.resultText;
+  if (raw === null || raw.trim().length === 0) {
+    return WEB_NO_RESULTS;
+  }
+  return firstLineOf(raw);
+}
+
+/** read 行窗标签（官方 read.window）：「显示 {shown} / {total} 行」。 */
+export function readWindowLabelOf(shown: number, total: number): string {
+  return '显示 ' + shown.toString() + ' / ' + total.toString() + ' 行';
+}
+
+/** diff 展开提示（官方 diff.expandRest）：「… 其余 {count} 行」。 */
+export function expandRestLabelOf(count: number): string {
+  return '… 其余 ' + count.toString() + ' 行';
+}
+
 // ---- 询问（ask_user_question）状态机 ------------------------------------
 
-export const ASK_WAITING: string = '等待中';
-export const ASK_PENDING: string = '已继续；仍可回答';
-export const ASK_CLOSED: string = '已关闭';
+export const ASK_WAITING: string = '等待回答';
+export const ASK_PENDING: string = '已继续工作，仍可回答';
+export const ASK_CLOSED: string = '已结束';
 /** ask_user_question 取消态（内核 error.code==='ASK_CANCELLED'，官方 ask.cancelled）。 */
 export const ASK_CANCELLED_WORD: string = '已取消';
 export const ASK_NOT_ANSWERED: string = '未回答';
@@ -133,9 +202,9 @@ export function answerEntries(resultText: string | null): QuestionAnswerItem[] |
 }
 
 /**
- * ask 行 summary 状态映射：running → 等待中；pending===true 且 answerable →
- * 已继续；仍可回答；pending 且不可答 → 已关闭；answers 数组 → {n}/{total} 已回答；
- * 解析失败 → 原 summary 兜底。
+ * ask 行 summary 状态映射（官方 zh 词表 ask.*）：running → 等待回答；pending===true
+ * 且 answerable → 已继续工作，仍可回答；pending 且不可答 → 已结束；answers 数组 →
+ * {n}/{total} 已回答；解析失败 → 原 summary 兜底。
  */
 export function askSummaryOf(call: ToolCallInfo, answerable: boolean): string {
   if (call.status === TOOL_STATUS_CANCELLED) {

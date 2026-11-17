@@ -30,21 +30,22 @@ function rowOf(st: StreamToolState, callId: string): ToolCallInfo | null {
 
 // ---- exitBadgeOf ---------------------------------------------------------
 
-test('exitBadgeOf：exit 0 成功 / 非 0 失败 / null 不算失败', () => {
+test('exitBadgeOf：exit 0 成功不出徽标 / 非 0 失败 / null 为未正常退出', () => {
+  // 官方 terminalFailed：exitCode===0 视为成功 → 无徽标。
   const ok: ExitBadge | null = exitBadgeOf('done\n[exit code: 0]');
-  assert.ok(ok !== null);
-  assert.equal((ok as ExitBadge).kind, 'exit');
-  assert.equal((ok as ExitBadge).value, '0');
-  assert.equal((ok as ExitBadge).failed, false);
+  assert.equal(ok, null);
   const bad: ExitBadge | null = exitBadgeOf('boom\n[exit code: 2]');
   assert.ok(bad !== null);
+  assert.equal((bad as ExitBadge).kind, 'exit');
+  assert.equal((bad as ExitBadge).value, '2');
   assert.equal((bad as ExitBadge).failed, true);
   const none: ExitBadge | null = exitBadgeOf('clean output');
   assert.ok(none === null);
+  // [exit code: null] → terminal.noExitCode「未正常退出」，算失败。
   const exitNull: ExitBadge | null = exitBadgeOf('x\n[exit code: null]');
   assert.ok(exitNull !== null);
-  assert.equal((exitNull as ExitBadge).value, 'null');
-  assert.equal((exitNull as ExitBadge).failed, false);
+  assert.equal((exitNull as ExitBadge).kind, 'noExit');
+  assert.equal((exitNull as ExitBadge).failed, true);
 });
 
 test('exitBadgeOf：killed by signal 恒 failed；负数 exit code 失败', () => {

@@ -1,10 +1,10 @@
 /**
  * 投影面板四件 + 统计 —— 对照安卓 projection_sheets.dart/stats_sheet.dart：
  * 运行轨迹（本地 rawEvents 分组，点节点展开原始 JSON）/ 智能团队（成员/任务/
- * 子会话 + 三枚指挥话术）/ 待办任务 / 会话统计。全部本地只读，不发请求。
+ * 子会话 + 三枚指挥话术）/ 任务 / 会话统计。全部本地只读，不发请求。
  * 各面板由 ChatView 挂 bindSheet。骨架（title+subtitle+内容区）每件内联
  * （ArkTS @BuilderParam 传 lambda 不可靠，不用）。
- * 智能团队 / 待办任务已切到 ProjectionTeamSheets.ets（单文件 ≤500 行）。
+ * 智能团队 / 任务已切到 ProjectionTeamSheets.ets（单文件 ≤500 行）。
  */
 
 import { ChatStore } from '../core/ChatStore';
@@ -67,7 +67,7 @@ export struct StatsSheet {
   }
 }
 
-/** 轨迹/团队/待办共用的骨架行为（title+subtitle+滚动内容）。
+/** 轨迹/团队/任务共用的骨架行为（title+subtitle+滚动内容）。
  *  showHeader=false 供代码工作视图第一段内联复用（隐藏标题/说明，只留轨迹流）。 */
 @Component
 export struct TrajectorySheet {

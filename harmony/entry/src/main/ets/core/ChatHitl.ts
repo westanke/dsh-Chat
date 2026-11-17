@@ -7,7 +7,7 @@
  *
  * 为什么需要 REST 探测：bridge 的 sessions 列表只对**挂起审批**下发
  * pendingInteraction:'approval'，挂起提问不发（协议缺口），且 hello 后不补推
- * 其它会话的 HITL 帧（实测 0 条）。所以「非当前会话有没有待办」只能 REST 逐会话查。
+ * 其它会话的 HITL 帧（实测 0 条）。所以「非当前会话有没有任务」只能 REST 逐会话查。
  */
 
 import { PendingApproval, PendingQuestion, QuestionAnswerItem } from './Questions';

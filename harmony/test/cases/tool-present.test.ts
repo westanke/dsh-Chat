@@ -13,9 +13,10 @@ import { QuestionAnswerItem } from '../../entry/src/main/ets/core/Questions';
 import {
   AK_COMMANDS, AK_QUESTIONS, AK_READ, AK_TOOLS,
   activityKind, combineDoneWords, doneGroupTitle, doneWordOf, firstLineOf, hasRunningCall,
-  kindIcon, liveDetailOf, processGroupTitle, reasoningTailOf, toolSummaryOf, toolTitle,
-  truncateDetail, GroupTitleOptions,
+  kindIcon, liveDetailOf, processGroupTitle, reasoningTailOf, toolSummaryOf,
+  truncateDetail, GroupTitleOptions, topKindOf,
 } from '../../entry/src/main/ets/core/ToolPresent';
+import { toolTitleOf } from '../../entry/src/main/ets/core/ToolTitles';
 import {
   ASK_CLOSED, ASK_PENDING, ASK_WAITING, answerEntries, askQuestions, askSummaryOf,
   detailModeOf, ioInputOf, ioOutputOf, isAnswered, isGroupForceOpen, policyOf,
@@ -72,25 +73,41 @@ test('activityKind 官方归类全表（精确/前缀/后缀/tools. 剥离）', 
   assert.equal(activityKind('tools.bash'), 'commands');
 });
 
-// ---- toolTitle / kindIcon -----------------------------------------------
+// ---- toolTitleOf / kindIcon / topKindOf ----------------------------------
 
-test('toolTitle 精确特例优先，kind 表兜底，未知 → 工具调用', () => {
-  assert.equal(toolTitle('pwsh'), 'Pwsh');
-  assert.equal(toolTitle('tools.pwsh'), 'Pwsh');
-  assert.equal(toolTitle('grep'), 'Grep');
-  assert.equal(toolTitle('glob'), 'Glob');
-  assert.equal(toolTitle('bash'), 'Bash');
-  assert.equal(toolTitle('read'), '读取');
-  assert.equal(toolTitle('edit'), '编辑');
-  assert.equal(toolTitle('write'), '写入');
-  assert.equal(toolTitle('todo_write'), '更新待办列表');
-  assert.equal(toolTitle('subagent'), '创建子智能体');
-  assert.equal(toolTitle('read_image'), '读取图像');
-  assert.equal(toolTitle('ask_user_question'), '提问');
-  assert.equal(toolTitle('web_search'), '搜索');
-  assert.equal(toolTitle('web_fetch'), '获取');
-  assert.equal(toolTitle('mcp__x__y'), '工具调用');
-  assert.equal(toolTitle(''), '思考');
+test('toolTitleOf 三段分派：组件覆盖 → 自有标题 → variant 兜底', () => {
+  // ①组件级覆盖（SearchRow/WebRow 键）。
+  assert.equal(toolTitleOf('grep'), '搜索文件内容');
+  assert.equal(toolTitleOf('glob'), '查找文件');
+  assert.equal(toolTitleOf('web_search'), '网页搜索');
+  assert.equal(toolTitleOf('web_fetch'), '网页获取');
+  // ②自有标题 TOOL_TITLE_KEYS。
+  assert.equal(toolTitleOf('pwsh'), '运行命令');
+  assert.equal(toolTitleOf('tools.pwsh'), '运行命令');
+  assert.equal(toolTitleOf('todo_write'), '更新任务清单');
+  assert.equal(toolTitleOf('subagent'), '创建子智能体');
+  assert.equal(toolTitleOf('read_image'), '读取图片');
+  assert.equal(toolTitleOf('ask_user_question'), '提问');
+  assert.equal(toolTitleOf('apply_patch'), '应用补丁');
+  assert.equal(toolTitleOf('run_code'), '代码');
+  assert.equal(toolTitleOf('wait_agent'), '等待子智能体');
+  // ③variant 兜底（bash 无自有标题 → variant）。
+  assert.equal(toolTitleOf('bash'), '运行命令');
+  assert.equal(toolTitleOf('read'), '读取');
+  assert.equal(toolTitleOf('edit'), '编辑');
+  assert.equal(toolTitleOf('write'), '写入');
+  assert.equal(toolTitleOf('mcp__x__y'), '工具调用');
+  assert.equal(toolTitleOf(''), '工具调用');
+});
+
+test('topKindOf counts 降序并列按首现，空组 → thinking', () => {
+  assert.equal(topKindOf([]), 'thinking');
+  assert.equal(topKindOf([call('read', '{}', null), call('read', '{}', null),
+    call('bash', '{}', null)]), 'read');
+  assert.equal(topKindOf([call('bash', '{}', null), call('read', '{}', null),
+    call('read', '{}', null)]), 'read');
+  // 并列按首现：bash→commands 在前。
+  assert.equal(topKindOf([call('bash', '{}', null), call('read', '{}', null)]), 'commands');
 });
 
 test('kindIcon 未知 kind 兜底 🔧', () => {
@@ -225,8 +242,10 @@ test('detailModeOf 分派表', () => {
   assert.equal(detailModeOf(call('bash', '{}', null)), 'command');
   assert.equal(detailModeOf(call('read', '{}', null)), 'read');
   assert.equal(detailModeOf(call('ask_user_question', '{}', null)), 'ask');
-  assert.equal(detailModeOf(call('grep', '{}', null)), 'io');
-  assert.equal(detailModeOf(call('web_search', '{}', null)), 'io');
+  assert.equal(detailModeOf(call('grep', '{}', null)), 'search');
+  assert.equal(detailModeOf(call('glob', '{}', null)), 'search');
+  assert.equal(detailModeOf(call('web_search', '{}', null)), 'web');
+  assert.equal(detailModeOf(call('web_fetch', '{}', null)), 'web');
 });
 
 test('readLinesOf 按行切去尾空行', () => {

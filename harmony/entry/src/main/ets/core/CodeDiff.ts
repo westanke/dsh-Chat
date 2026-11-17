@@ -97,11 +97,24 @@ export function fileDiffOfCall(call: ToolCallInfo): FileDiff | null {
   return diff;
 }
 
+/** 行内 diff 统计（官方 ToolRow diffStat suffix）：「+N -M」。 */
+export function diffStatOf(d: FileDiff): string {
+  let add: number = 0;
+  let del: number = 0;
+  for (let i = 0; i < d.lines.length; i++) {
+    if (d.lines[i].type === DIFF_LINE_ADD) {
+      add += 1;
+    } else if (d.lines[i].type === DIFF_LINE_DEL) {
+      del += 1;
+    }
+  }
+  return '+' + add.toString() + ' -' + del.toString();
+}
+
 /**
  * 一轮内的代码差异，按 path 聚合（行顺序拼接），保文件首次出现顺序。
  * `turn` 传 turnsOf(messages) 的任意一轮（UI 用 codeDiffsOfLastTurn）。
- */
-export function codeDiffsOfTurn(turn: ChatMessage[]): FileDiff[] {
+ */export function codeDiffsOfTurn(turn: ChatMessage[]): FileDiff[] {
   const byPath: Map<string, FileDiff> = new Map<string, FileDiff>();
   const order: string[] = [];
   for (let i = 0; i < turn.length; i++) {

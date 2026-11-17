@@ -15,6 +15,7 @@ import { DsImageRef, imageRefsOf, handoffRefOf } from '../core/ImageRef';
 import { MdDocViewer } from '../pages/MdDocViewer';
 import { ThinkBlock } from './ThinkBlock';
 import { ProcessGroup } from './ProcessGroup';
+import { TurnProcessRow } from './TurnProcessRow';
 import { ToolBlock } from './ToolBlock';
 import { ArrayDataSource } from './ArrayDataSource';
 import { visibleMessagesOf, parseFoldedReplies, parseWorkStepsDetail } from '../core/WorkSteps';
@@ -287,6 +288,8 @@ export struct MessageList {
       }
     } else {
       this.assistantBlock(m);
+      // 轮尾行（官方 TurnProcessNodeView）：闭合轮给「已完成，用时 N/处理失败」，可点开整轮过程组。
+      TurnProcessRow({ store: this.store, msg: m, version: this.version })
     }
   }
   /** verbose 档平铺工具行（ForEach 带 keyGenerator，非 LazyForEach）。 */
@@ -480,13 +483,11 @@ export struct MessageList {
   @Builder
   errorBar(m: ChatMessage) {
     Text(m.text === '' ? '执行失败' : m.text)
-      .fontSize(14)
+      .fontSize(14).lineHeight(20)
       .fontColor(this.c().danger)
-      .lineHeight(20)
       .width('100%')
       .padding({ left: 12, right: 12, top: 8, bottom: 8 })
-      .backgroundColor(this.c().borderL1)
-      .borderRadius(10)
+      .backgroundColor(this.c().borderL1).borderRadius(10)
   }
   /** 版本变化后贴底（streaming / 新历史到达时由 ChatView 触发）。 */
   jumpToBottom(animate: boolean): void {

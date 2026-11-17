@@ -108,8 +108,10 @@ export const RUNNING_LABELS: Map<string, string> = mapOf([
   AK_TOOLS, '正在调用工具',
 ]);
 
-/** preparing 近似词表（running 且 rawArguments==null；thinking 无 preparing 词）。 */
+/** preparing 近似词表（running 且 rawArguments==null）。官方 prepare.<activity>：
+ * thinking → prepare.tools「准备调用工具」，其余各 activity 自有词。 */
 export const PREPARING_LABELS: Map<string, string> = mapOf([
+  AK_THINKING, '准备调用工具',
   AK_READ, '准备读取文件',
   AK_READ_IMAGE, '准备读取图片',
   AK_WRITE, '准备写入文件',
@@ -143,31 +145,6 @@ export const DONE_LABELS: Map<string, string> = mapOf([
   AK_TOOLS, '已调用工具',
 ]);
 
-/** 工具行标题表（kind → title）。 */
-export const KIND_TITLES: Map<string, string> = mapOf([
-  AK_SEARCH, '搜索',
-  AK_READ, '读取',
-  AK_COMMANDS, 'Bash',
-  AK_WRITE, '写入',
-  AK_EDIT, '编辑',
-  AK_CODE, '代码',
-  AK_WEB_SEARCH, '搜索',
-  AK_WEB_FETCH, '获取',
-  AK_READ_IMAGE, '读取图像',
-  AK_SUBAGENTS, '创建子智能体',
-  AK_QUESTIONS, '提问',
-  AK_PLAN, '更新待办列表',
-  AK_TOOLS, '工具调用',
-  AK_THINKING, '思考',
-]);
-
-/** 工具名精确特例（优先于 kind 表）。 */
-export const TITLE_EXACT: Map<string, string> = mapOf([
-  'pwsh', 'Pwsh',
-  'grep', 'Grep',
-  'glob', 'Glob',
-]);
-
 /** kind → 行首图标（官方是 SVG，本端用 emoji 占位）。 */
 export const KIND_ICONS: Map<string, string> = mapOf([
   AK_THINKING, '💭',
@@ -191,18 +168,30 @@ export function kindIcon(kind: string): string {
   return icon === undefined ? '🔧' : icon;
 }
 
-/** 工具行标题：精确名特例优先（剥 tools. 前缀后），否则按 kind 表。 */
-export function toolTitle(name: string): string {
-  let n: string = name;
-  if (n.startsWith('tools.')) {
-    n = n.substring('tools.'.length);
+/**
+ * 过程组闭合态图标（官方 counts[0].kind 口径）：各 kind 计数降序，并列按
+ * 首现取第一；空组 → thinking（「已完成分析」图标）。
+ */
+export function topKindOf(calls: ToolCallInfo[]): string {
+  const counts: Map<string, number> = new Map<string, number>();
+  const order: string[] = [];
+  for (let i = 0; i < calls.length; i++) {
+    const kind: string = activityKind(calls[i].name);
+    if (!counts.has(kind)) {
+      order.push(kind);
+    }
+    counts.set(kind, (counts.get(kind) ?? 0) + 1);
   }
-  const exact: string | undefined = TITLE_EXACT.get(n);
-  if (exact !== undefined) {
-    return exact;
+  let best: string | null = null;
+  let bestCount: number = -1;
+  for (let i = 0; i < order.length; i++) {
+    const c: number = counts.get(order[i]) ?? 0;
+    if (c > bestCount) {
+      bestCount = c;
+      best = order[i];
+    }
   }
-  const byKind: string | undefined = KIND_TITLES.get(activityKind(name));
-  return byKind === undefined ? '工具调用' : byKind;
+  return best === null ? AK_THINKING : best;
 }
 // ---- 文本工具 -----------------------------------------------------------
 
@@ -241,11 +230,6 @@ export function reasoningTailOf(reasoning: string): string {
     }
   }
   return '';
-}
-
-/** 已完成轮 ThinkBlock 折叠预览：首个非空行。 */
-export function reasoningPreviewOf(text: string): string {
-  return firstLineOf(text);
 }
 // ---- 运行态判定 ---------------------------------------------------------
 

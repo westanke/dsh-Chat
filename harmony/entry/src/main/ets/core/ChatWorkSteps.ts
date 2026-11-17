@@ -104,6 +104,14 @@ export class ChatWorkSteps {
     this.bump();
   }
 
+  /** 批量设展开/收起（轮尾行整轮展开/收起用）。 */
+  setExpanded(keys: string[], open: boolean): void {
+    for (let i = 0; i < keys.length; i++) {
+      this.expanded.set(keys[i], open);
+    }
+    this.bump();
+  }
+
   /**
    * completion 时机：轮 committed（流式结束分支）后收起该轮全部组。
    * detailed（stepGrouping=history）按官方 deferCollapse 语义：轮结束且该轮

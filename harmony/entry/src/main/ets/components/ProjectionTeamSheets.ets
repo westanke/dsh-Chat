@@ -1,5 +1,5 @@
 /**
- * 投影面板：智能团队 + 待办任务 —— 从 ProjectionSheets.ets 切出（单文件 ≤500 行）。
+ * 投影面板：智能团队 + 任务 —— 从 ProjectionSheets.ets 切出（单文件 ≤500 行）。
  * 对照安卓 projection_sheets.dart 的 TeamSheet / TodoSheet。全部本地只读，不发请求。
  */
 
@@ -225,7 +225,7 @@ export struct TodoSheet {
     return n;
   }
 
-  /** 单条待办。抽 @Builder 让 Repeat 帧里只有一行调用（静态审计口径）。 */
+  /** 单条任务。抽 @Builder 让 Repeat 帧里只有一行调用（静态审计口径）。 */
   @Builder
   todoRow(t: TodoItem) {
     Row({ space: DsSpacing.chipIconGap }) {
@@ -248,7 +248,7 @@ export struct TodoSheet {
 
   build() {
     Column() {
-      Text('待办任务')
+      Text('任务')
         .fontSize(DsTypography.h4.size)
         .fontWeight(FontWeight.Medium)
         .fontColor(this.c().labelPrimary)
@@ -261,7 +261,7 @@ export struct TodoSheet {
       Scroll() {
         Column() {
           if (this.todos().length === 0) {
-            Text('这个会话还没有待办任务。')
+            Text('任务清单为空')
               .fontSize(DsTypography.small.size)
               .fontColor(this.c().labelSecondary)
               .padding({ top: DsSpacing.blockGap, bottom: DsSpacing.blockGap })

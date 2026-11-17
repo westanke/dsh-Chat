@@ -228,7 +228,7 @@ export struct ChatView {
       return '智能团队';
     }
     if (this.todoSheet) {
-      return '待办任务';
+      return '任务';
     }
     if (this.modelSheet) {
       return '调整模型';
@@ -274,7 +274,7 @@ export struct ChatView {
         this.menuItem('🧠', '智能团队', (): void => {
           this.teamSheet = true;
         })
-        this.menuItem('✅', '待办任务', (): void => {
+        this.menuItem('✅', '任务', (): void => {
           this.todoSheet = true;
         })
         this.menuItem('🎛️', '调整模型', (): void => {

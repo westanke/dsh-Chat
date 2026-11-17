@@ -39,21 +39,33 @@ export class ExitBadge {
 const EXIT_CODE_RE: RegExp = /\n\[exit code: (-?\d+|null)\]$/;
 const KILLED_SIGNAL_RE: RegExp = /\n\[killed by signal: ([^\]\n]+)\]$/;
 
-/** 解析结果文本尾部的 exit/signal 标记；无标记返回 null。 */
+/**
+ * 解析结果文本尾部的 exit/signal 标记。
+ *
+ * 官方 terminalFailed/terminalExitLabel 口径（dsh-client-ui-tool）：只有
+ * 「未成功结束」才出徽标——exit 0 视为成功返回 null（不出徽标）；
+ * `[exit code: null]` 是「未正常退出」→ kind 'noExit'（terminal.noExitCode）；
+ * 信号恒失败 → kind 'signal'（terminal.signal）；非 0 退出码 → kind 'exit'。
+ */
 export function exitBadgeOf(resultText: string | null): ExitBadge | null {
   if (resultText === null) {
     return null;
   }
-  const exit = EXIT_CODE_RE.exec(resultText);
-  if (exit !== null) {
-    const value: string = exit[1];
-    const numeric: number = parseInt(value, 10);
-    const failed: boolean = !isNaN(numeric) && numeric !== 0;
-    return new ExitBadge('exit', value, failed);
-  }
   const signal = KILLED_SIGNAL_RE.exec(resultText);
   if (signal !== null) {
     return new ExitBadge('signal', signal[1], true);
+  }
+  const exit = EXIT_CODE_RE.exec(resultText);
+  if (exit !== null) {
+    const value: string = exit[1];
+    if (value === 'null') {
+      return new ExitBadge('noExit', '', true);
+    }
+    const numeric: number = parseInt(value, 10);
+    if (isNaN(numeric) || numeric === 0) {
+      return null;
+    }
+    return new ExitBadge('exit', value, true);
   }
   return null;
 }
