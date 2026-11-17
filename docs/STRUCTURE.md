@@ -238,6 +238,7 @@
 | `ets/core/SessionLocation.ts` | 新建会话工作目录纯逻辑（对照安卓 session_location_sheet.dart）：SessionLocation(rootId,cwd,label)+key 契约串、locationLabel（''=根目录）、recentLocations（历史会话 (rootId,cwd) 去重保序、跳过无根会话）、locationSubtitle（优先 cwdAbsolute 退回 rootId）、parentPath 逐级上退、locationChipLabel 空态 chip 文案 |
 | `ets/components/SessionLocationSheet.ets` | 工作目录选择面板：默认「手机会话」项 + 最近使用列表 + 授权根逐级浏览（空根自动跳到下一个有子目录的根、多根可点标题切换、面包屑「用此目录」）；选中写 store.pendingLocation，首条消息走 session-create{rootId,cwd} |
 | `ets/components/SettingsGeneralSection.ets` | 设置页「通用」四行（从 SettingsView 切出，控行数，官方 Web 文案逐字对齐）：工作步骤展示四 chip（concise/standard/detailed/verbose）+ 收起时机（completion/next-input）+ 折叠回复（all/final，verbose 档隐藏该行）+ 显示代码工作视图开关；偏好键带点官方 token，AppStorage 无点驼峰（dshWorkStepsDetail 等），写 PrefsStore |
+| `ets/components/SettingsDisconnectSection.ets` | 设置页「断开连接」分区（从 SettingsView 切出控行数）：红描边按钮 + 系统 AlertDialog 二次确认（自绘遮罩在 Scroll 内定位不可靠，真机点按无反应）→ onDisconnect 回连接页；不持状态、不碰 store |
 | `ets/components/CodeWorkSheet.ets` | 代码工作视图 sheet（官方 developerTools）：三段 chip 切换 —— ①运行轨迹（官方描述 + TrajectorySheet showHeader=false 内嵌）②本轮代码差异（core/CodeDiff 本地提取最后一轮 edit/write，+/- 行着色 theme.diffAdd*/diffDel*，卡底 bgLayer1）③Agent 预设（GET /chat/agent-presets 列表 + 当前项打勾；非 blank 会话整列表置灰「首条消息后锁定」，点选走 PUT，409 AGENT_PRESET_LOCKED 行内提示「已锁定，仅空白会话可切换」） |
 | `ets/core/ChatLabels.ts` | 展示文案纯函数：sessionTitleOf/deviceLabelOf/connectionLabelOf/stateLabelOf（安卓 chat_labels 口径） |
 | `ets/core/HitlStore.ts` | HITL 挂起表：pendingQuestions/approvals Map + session 过滤 + onEvent 四分支（返回是否变化）+ answer/cancel/decide（api 参数，成功即本地摘卡） |

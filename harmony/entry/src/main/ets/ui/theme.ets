@@ -316,7 +316,19 @@ export class DsSpacing {
   static readonly chipRadius: number = 16;
   static readonly chipGap: number = 18;
   static readonly composerButtonSize: number = 24;
+  // 设置页根外边距（安卓 settingsPadH=20 / settingsPadV=28 / settingsMaxWidth=720；
+  // 鸿蒙按 R003 4/8 档位就近落位 22 / 26，见 docs/design-tokens.md §4.4）
+  static readonly settingsPadH: number = 22;
+  static readonly settingsPadV: number = 26;
+  static readonly settingsMaxWidth: number = 720;
   // 设置卡/投影面板（安卓 tokens.dart:405-414）
+  /**
+   * 设置页信息行（label · value 同一行）的 label 固定最小宽。
+   * 鸿蒙与安卓布局不同：安卓 `_InfoRow` 是 label/value 上下两行，鸿蒙是左右两列，
+   * 不给 label 定宽时超长 value（设备 UUID）会把「设备」两字挤成竖排（真机反馈）。
+   * 72 = 4 个「设备」字宽 + 余量，落在 4/8 档位附近。
+   */
+  static readonly settingsLabelWidth: number = 72;
   static readonly settingsCardRadius: number = 14;
   static readonly settingsCardPadH: number = 16;
   static readonly settingsCardPadV: number = 6;

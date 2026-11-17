@@ -20,8 +20,10 @@ import { updateManager } from '@kit.AppGalleryKit';
 import { BusinessError } from '@kit.BasicServicesKit';
 import { DsColors, DsTypography, DsSpacing } from '../ui/theme';
 import { mediaquery } from '@kit.ArkUI';
-import { BP_SM, BP_QUERY_MD, BP_QUERY_LG, breakpointOf, atLeastMd } from '../core/Breakpoints';
+import { BP_SM, BP_QUERY_MD, BP_QUERY_LG, breakpointOf, atLeastMd,
+  contentMaxWidth } from '../core/Breakpoints';
 import { SettingsGeneralSection } from '../components/SettingsGeneralSection';
+import { SettingsDisconnectSection } from '../components/SettingsDisconnectSection';
 
 
 @Component
@@ -39,7 +41,6 @@ export struct SettingsView {
   @State updateChecking: boolean = false;
   @State updateHint: string = '';
   @State updateNewTag: string = '';
-  @State confirmDiscard: boolean = false;
 
   private c(): DsColors {
     return new DsColors(this.dark);
@@ -170,17 +171,30 @@ export struct SettingsView {
     Column() {
       this.header()
       Scroll() {
+        // 外层只负责一多居中：超宽屏内容列封顶 settingsMaxWidth 后左右留白。
         Column() {
-          this.connectionSection()
-          this.appearanceSection()
-          SettingsGeneralSection()
-          this.sendSection()
-          this.aboutSection()
-          this.disconnectSection()
+          Column() {
+            this.connectionSection()
+            this.appearanceSection()
+            SettingsGeneralSection()
+            this.sendSection()
+            this.aboutSection()
+            SettingsDisconnectSection({ onDisconnect: this.onDisconnect })
+          }
+          .width('100%')
+          // 页面级根边距（安卓 settingsPadH/V 口径，鸿蒙按触屏边缘余量微调）：
+          // 卡片之间靠 sectionTitle 的上间距拉分区间距，卡片自己只有
+          // settingsCardPadH/V 内边距。
+          .padding({ left: DsSpacing.settingsPadH, right: DsSpacing.settingsPadH,
+            top: DsSpacing.settingsPadV, bottom: DsSpacing.settingsPadV })
+          .constraintSize({ maxWidth: contentMaxWidth(this.bp) > 0
+            ? contentMaxWidth(this.bp) : DsSpacing.settingsMaxWidth })
         }
         .width('100%')
+        .alignItems(HorizontalAlign.Center)
       }
       .align(Alignment.Top)
+      .width('100%')
       .layoutWeight(1)
     }
     .width('100%')
@@ -227,14 +241,21 @@ export struct SettingsView {
   @Builder
   infoRow(label: string, value: string) {
     Row() {
+      // label 给固定最小宽并单行省略：长值（设备 ID 一整串 UUID）不再把
+      // 「设备」两个字挤成竖排（真机 2026-11-17 反馈「超屏幕/换行错位」）。
       Text(label)
         .fontSize(DsTypography.small.size)
         .fontColor(this.c().labelSecondary)
-        .layoutWeight(1)
+        .width(DsSpacing.settingsLabelWidth)
+        .maxLines(1)
+        .textOverflow({ overflow: TextOverflow.Ellipsis })
+      // value 占剩余宽并允许换行（官方「该换行的换行」口径）。
       Text(value)
         .fontSize(DsTypography.small.size)
         .fontColor(this.c().labelPrimary)
         .textAlign(TextAlign.End)
+        .layoutWeight(1)
+        .wordBreak(WordBreak.BREAK_ALL)
     }
     .width('100%')
     .padding({ top: DsSpacing.liGap, bottom: DsSpacing.liGap })
@@ -418,81 +439,4 @@ export struct SettingsView {
     .backgroundColor(this.c().settingsSurface)
   }
 
-  @Builder
-  disconnectSection() {
-    this.sectionTitle('断开连接')
-    Button('断开连接')
-      .fontSize(DsTypography.smallStrong.size)
-      .fontColor(this.c().danger)
-      .backgroundColor(Color.Transparent)
-      .borderWidth(1)
-      .borderColor(this.c().danger)
-      .borderRadius(DsSpacing.bubbleRadius)
-      .width('100%')
-      .height(44)
-      .accessibilityText('断开连接')
-      .onClick(() => {
-        this.confirmDiscard = true;
-      })
-    Text('将断开当前连接、清除本机配对并回到连接页；下次启动需重新输入配对码。')
-      .fontSize(DsTypography.caption.size)
-      .fontColor(this.c().labelTertiary)
-      .width('100%')
-      .padding({ top: DsSpacing.liGap, bottom: DsSpacing.blockGap })
-    if (this.confirmDiscard) {
-      this.confirmDialog()
-    }
-  }
-
-  /** 断开二次确认（安卓 AlertDialog 口径）。 */
-  @Builder
-  confirmDialog() {
-    Column()
-      .width('100%')
-      .height('100%')
-      .position({ x: 0, y: 0 })
-      .backgroundColor(this.c().drawerScrim)
-      .accessibilityText('关闭对话框')
-      .onClick(() => {
-        this.confirmDiscard = false;
-      })
-    Column({ space: DsSpacing.blockGap }) {
-      Text('断开连接？')
-        .fontSize(DsTypography.h4.size)
-        .fontWeight(FontWeight.Medium)
-        .fontColor(this.c().labelPrimary)
-      Text('本机配对信息会被清除，下次启动需重新输入配对码。')
-        .fontSize(DsTypography.small.size)
-        .fontColor(this.c().labelSecondary)
-      Row({ space: DsSpacing.blockGap }) {
-        Button('取消')
-          .fontSize(DsTypography.small.size)
-          .fontColor(this.c().labelPrimary)
-          .backgroundColor(this.c().inputFill)
-          .layoutWeight(1)
-          .accessibilityText('关闭对话框')
-          .onClick(() => {
-            this.confirmDiscard = false;
-          })
-        Button('断开')
-          .fontSize(DsTypography.small.size)
-          .fontColor(this.c().onBrand)
-          .backgroundColor(this.c().danger)
-          .layoutWeight(1)
-          .accessibilityText('取消断开')
-          .onClick(() => {
-            this.confirmDiscard = false;
-            if (this.onDisconnect !== null) {
-              this.onDisconnect();
-            }
-          })
-      }
-      .width('100%')
-    }
-    .width('82%')
-    .padding(DsSpacing.blockGap)
-    .borderRadius(DsSpacing.settingsCardRadius)
-    .backgroundColor(this.c().settingsSurface)
-    .position({ x: '9%', y: '38%' })
-  }
 }

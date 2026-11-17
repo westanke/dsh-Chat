@@ -192,6 +192,9 @@ App 实测墨迹高（density 3.0）：H1 71px、H2 61px、H3 57px、正文 45px
 | 行最小高度 | 52dp（仿官方 56dp 触控行） | `settingsRowMinHeight` |
 | 图标-文字 / 药丸间距 | 14dp / 7dp | `settingsIconGap` / `settingsChipGap` |
 | 药丸内边距 / 圆角 | 左右 10、上下 6 / 16dp | `settingsChipPadH` / `settingsChipPadV` / `settingsChipRadius` |
+| **鸿蒙偏差**：根外边距 | 左右 22 / 上下 26（ArkUI 触屏边缘余量略大于安卓 20/28 的上下、左右各 +2；`harmony/.../ui/theme.ets`） | `DsSpacing.settingsPadH=22` / `settingsPadV=26` |
+| **鸿蒙偏差**：内容最大宽 | 720vp，MD 档起用 `contentMaxWidth(bp)`（SM 不约束） | `DsSpacing.settingsMaxWidth=720` |
+| **鸿蒙偏差**：信息行 label 固定宽 | 72vp：鸿蒙 `infoRow` 是 label/value 左右两列（安卓 `_InfoRow` 是上下两行），不给 label 定宽时长 value（设备 UUID）会把「设备」挤成竖排 | `DsSpacing.settingsLabelWidth=72` |
 
 字号 / 主题 / 发送模式等行为偏好见 `lib/design/app_settings.dart`（对照 companion `AppPreferences`）：`normalizeFontScale` 夹 0.8–1.5 且 NaN/Inf→1.0，`effectiveFontScale` 与系统字号相乘（对齐 `AppFontScale.kt` 的 `base.fontScale * appScale`，Flutter 侧用自定义 `TextScaler` 包装 `MediaQuery` 平台 scaler，不覆盖系统无障碍字号）。
 
