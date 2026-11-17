@@ -9,6 +9,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:dshchat/bridge/models.dart';
 import 'package:dshchat/ui/ask_present.dart';
 import 'package:dshchat/ui/tool_present.dart';
+import 'package:dshchat/ui/tool_titles.dart';
 
 ToolCallInfo callOf(
   String name, {
@@ -69,16 +70,21 @@ void main() {
   });
 
   group('toolTitle', () {
-    test('精确名优先，其次 kind 词表', () {
-      expect(toolTitle('pwsh'), 'Pwsh');
-      expect(toolTitle('grep'), 'Grep');
-      expect(toolTitle('glob'), 'Glob');
-      expect(toolTitle('bash'), 'Bash');
+    test('官方 TOOL_TITLE_KEYS 精确名优先，其次变体词表', () {
+      expect(toolTitle('pwsh'), '运行命令');
+      expect(toolTitle('grep'), '搜索文件内容');
+      expect(toolTitle('glob'), '查找文件');
+      expect(toolTitle('web_search'), '网页搜索');
+      expect(toolTitle('web_fetch'), '网页获取');
+      expect(toolTitle('bash'), '运行命令');
       expect(toolTitle('tools.read'), '读取');
+      expect(toolTitle('read_image'), '读取图片');
       expect(toolTitle('ask_user_question'), '提问');
-      expect(toolTitle('todo_write'), '更新待办列表');
+      expect(toolTitle('todo_write'), '更新任务清单');
+      expect(toolTitle('lsp'), '查询代码符号');
       expect(toolTitle('mcp__x__y'), '工具调用');
-      expect(toolTitle(''), '思考');
+      expect(isGenericTool('mcp__x__y'), isTrue);
+      expect(isGenericTool('grep'), isFalse);
     });
   });
 
@@ -271,17 +277,17 @@ void main() {
   });
 
   group('askSummary', () {
-    test('running → 等待中', () {
-      expect(askSummary(callOf('ask_user_question'), (_) => false), '等待中');
+    test('running → 等待回答', () {
+      expect(askSummary(callOf('ask_user_question'), (_) => false), '等待回答');
     });
 
-    test('pending：answerable 决定已继续/已关闭', () {
+    test('pending：answerable 决定已继续工作，仍可回答/已结束', () {
       final pending = callOf(
         'ask_user_question',
         resultText: '{"pending":true}',
       );
-      expect(askSummary(pending, (_) => true), '已继续；仍可回答');
-      expect(askSummary(pending, (_) => false), '已关闭');
+      expect(askSummary(pending, (_) => true), '已继续工作，仍可回答');
+      expect(askSummary(pending, (_) => false), '已结束');
     });
 
     test('answers 计数：skipped 不计入，total 取题数', () {
@@ -394,20 +400,26 @@ void main() {
       final killed = parseExitStatus('out\n[killed by signal: SIGKILL]');
       expect(killed!.signal, 'SIGKILL');
       expect(killed.exitCode, isNull);
-      expect(parseExitStatus('[exit code: null]'), isNull);
+      final noExit = parseExitStatus('[exit code: null]');
+      expect(noExit!.noExit, isTrue);
+      expect(noExit.exitCode, isNull);
       expect(parseExitStatus('没有标记的结果'), isNull);
       expect(parseExitStatus(null), isNull);
     });
 
     test('徽标文案与颜色语义', () {
-      expect(exitBadgeLabel(parseExitStatus('x\n[exit code: 2]')), 'exit 2');
-      expect(exitBadgeLabel(parseExitStatus('x\n[exit code: 0]')), 'exit 0');
+      // 官方 terminalExitLabel：信号 →「信号 X」、非 0 →「退出码 N」、
+      // exit 0 视为成功不出徽标（terminalFailed 判据）。
+      expect(exitBadgeLabel(parseExitStatus('x\n[exit code: 2]')), '退出码 2');
+      expect(exitBadgeLabel(parseExitStatus('x\n[exit code: 0]')), isNull);
+      expect(exitBadgeLabel(parseExitStatus('x\n[exit code: null]')), '未正常退出');
       expect(
         exitBadgeLabel(parseExitStatus('x\n[killed by signal: SIGTERM]')),
-        'signal SIGTERM',
+        '信号 SIGTERM',
       );
       expect(exitBadgeIsError(parseExitStatus('x\n[exit code: 2]')), isTrue);
       expect(exitBadgeIsError(parseExitStatus('x\n[exit code: 0]')), isFalse);
+      expect(exitBadgeIsError(parseExitStatus('x\n[exit code: null]')), isTrue);
       expect(
         exitBadgeIsError(parseExitStatus('x\n[killed by signal: SIGKILL]')),
         isTrue,

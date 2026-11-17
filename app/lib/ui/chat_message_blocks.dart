@@ -1,10 +1,14 @@
 part of 'chat_page.dart';
 
-/// 思考流：官方「已深度思考」可折叠小字块。
-/// [streaming] 为 true 时默认展开并显示「深度思考中…」（真机反馈第五轮
-/// m03759：有思考时流式展示思考过程，而非折叠藏起来）；历史消息保持折叠。
-/// [showPreview]（官方 settledReasoningPreview）：折叠态在标题下显示一行
-/// 正文预览（concise 档只留标题）。
+/// 思考行（官方 ReasoningRow 逐项对齐，task-5）：
+/// - 图标 Think14 + 标题常量「思考」（message.think）+ 2px 圆点分隔 +
+///   13px 摘要（running 时取最后已完成段落首行，否则正文首行）；
+/// - 行高 24px（thinkRowHeight）、整行可点（expandOnRowClick）、无 chevron
+///   （官方 DisclosureRow 形态）；
+/// - 摘要仅在 preview 为真且未展开时显示（preview = running ||
+///   settledReasoningPreview；官方 TextShimmer 动画未做，偏差已登记）；
+/// - 签名包裹剥除后无正文 → 整块不渲染（reasoningHidden）；
+/// - 展开正文用 reasoningTextOf 剥掉 `<signature>` 包裹。
 class _ThinkBlock extends StatefulWidget {
   const _ThinkBlock({
     required this.text,
@@ -27,18 +31,21 @@ class _ThinkBlock extends StatefulWidget {
 class _ThinkBlockState extends State<_ThinkBlock> {
   late bool _expanded = widget.streaming;
 
-  /// 预览行：正文首个非空行（官方 preview 口径）。
-  String get _previewText {
-    for (final line in widget.text.split('\n')) {
-      final t = line.trim();
-      if (t.isNotEmpty) return t;
-    }
-    return '';
-  }
+  /// 折叠行摘要（官方 ReasoningRow）：running 取最后已完成段落首行，
+  /// 否则正文首行；加粗标记全剥。
+  String get _summary =>
+      reasoningSummaryOf(widget.text, running: widget.streaming);
 
   @override
   Widget build(BuildContext context) {
     final c = widget.colors;
+    // 官方 hidden 判定：签名包裹剥除后无正文 → 整块不渲染。
+    if (reasoningHidden(widget.text)) return const SizedBox.shrink();
+    // preview = 未展开 && 摘要非空 && (running || 档位允许预览)。
+    final showSummary =
+        !_expanded &&
+        _summary.isNotEmpty &&
+        (widget.streaming || widget.showPreview);
     return Padding(
       padding: const EdgeInsets.only(bottom: DsSpacing.thinkHMargin),
       child: Column(
@@ -46,55 +53,64 @@ class _ThinkBlockState extends State<_ThinkBlock> {
         children: [
           InkWell(
             onTap: () => setState(() => _expanded = !_expanded),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 4),
+            child: SizedBox(
+              height: DsSpacing.thinkRowHeight,
               child: Row(
-                mainAxisSize: MainAxisSize.min,
                 children: [
                   Icon(
-                    Icons.explore_outlined,
+                    Icons.psychology_outlined,
                     size: 14,
                     color: c.labelSecondary,
                   ),
                   const SizedBox(width: 4),
+                  // 官方标题常量「思考」（message.think），字重 400。
                   Text(
-                    _expanded
-                        ? '收起深度思考'
-                        : widget.streaming
-                        ? '深度思考中…'
-                        : '已深度思考',
-                    style: DsTypography.smallStrong.copyWith(
+                    '思考',
+                    style: DsTypography.small.copyWith(
                       color: c.labelSecondary,
                     ),
                   ),
-                  Icon(
-                    _expanded ? Icons.expand_less : Icons.expand_more,
-                    size: 16,
-                    color: c.labelSecondary,
-                  ),
+                  if (showSummary) ...[
+                    // 2px 圆点分隔（官方 .separator，色 label-caption
+                    // → 近似 labelTertiary）。
+                    Container(
+                      width: DsSpacing.sepDot,
+                      height: DsSpacing.sepDot,
+                      margin: const EdgeInsets.symmetric(
+                        horizontal: DsSpacing.sepGap,
+                      ),
+                      decoration: BoxDecoration(
+                        color: c.labelTertiary,
+                        borderRadius: BorderRadius.circular(1),
+                      ),
+                    ),
+                    Flexible(
+                      child: Text(
+                        _summary,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: DsTypography.codeBlockLabel.copyWith(
+                          color: c.labelTertiary,
+                        ),
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),
           ),
-          if (!_expanded && !widget.streaming && widget.showPreview)
-            Padding(
-              padding: const EdgeInsets.only(
-                left: DsSpacing.thinkHMargin + DsSpacing.processIconSize,
-              ),
-              child: Text(
-                _previewText,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: DsTypography.caption.copyWith(color: c.labelTertiary),
-              ),
-            ),
           if (_expanded)
             Padding(
               padding: const EdgeInsets.only(left: DsSpacing.thinkHMargin),
-              child: DsMarkdownView(text: widget.text, colors: c, small: true),
+              child: DsMarkdownView(
+                text: reasoningTextOf(widget.text),
+                colors: c,
+                small: true,
+              ),
             ),
         ],
       ),
     );
   }
 }
+

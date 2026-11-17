@@ -29,8 +29,10 @@ import 'ask_present.dart';
 import 'code_diff.dart';
 import 'md_code_block.dart';
 import 'tool_present.dart';
+import 'tool_titles.dart';
 
 part 'process_detail.dart';
+
 class DsProcessGroup extends StatelessWidget {
   const DsProcessGroup({
     super.key,
@@ -94,11 +96,23 @@ class DsProcessGroup extends StatelessWidget {
                       right: DsSpacing.processIconGap,
                     ),
                     child: Icon(
-                      Icons.build_outlined,
+                      toolIcon(_groupActivityKind(group)),
                       size: DsSpacing.processIconSize,
                       color: headColor,
                     ),
                   ),
+                  // 官方 ProcessGroupHeader：chevron 紧跟图标、都在标题左侧。
+                  if (canExpand)
+                    Padding(
+                      padding: const EdgeInsets.only(
+                        right: DsSpacing.chipIconGap,
+                      ),
+                      child: Icon(
+                        open ? Icons.expand_less : Icons.expand_more,
+                        size: 16,
+                        color: headColor,
+                      ),
+                    ),
                   Flexible(
                     child: Text(
                       title,
@@ -107,12 +121,6 @@ class DsProcessGroup extends StatelessWidget {
                       style: DsTypography.small.copyWith(color: headColor),
                     ),
                   ),
-                  if (canExpand)
-                    Icon(
-                      open ? Icons.expand_less : Icons.expand_more,
-                      size: 16,
-                      color: headColor,
-                    ),
                 ],
               ),
             ),
@@ -140,11 +148,14 @@ class DsProcessGroup extends StatelessWidget {
   }
 }
 
-/// 单条工具调用行（官方 tool row 五态结构）：
-/// [kind 图标] + [标题] + [参数摘要] + [diff 增删统计] + [状态字] + [展开箭头]。
-/// - running：右侧「运行中」（摘要仍显示已到的参数）；
-/// - failed：图标/状态字红色，摘要槽位换成结果首行（官方 error 态）；
-/// - ok：无状态字。
+/// 单条工具调用行（官方 ToolRow 逐项对齐）：
+/// [kind 图标] + [标题] + 2px 圆点 + [摘要] + [diff 增删统计] + [退出徽标]
+/// + [展开箭头]。
+/// - run-state（正在准备调用/运行中/失败/已停止）只作文案进 Semantics，
+///   官方把它放在 visuallyHidden 里，行上不显示文字；
+/// - running：TextShimmer（未做动画，仅色弱化）+ 摘要显示已到的参数；
+/// - failed：图标红色，无 exit 标记时摘要换成结果首行红字（官方 error 态）；
+/// - ok：无任何状态提示。
 /// 点击整行展开详情（[allowDetail]=false 时 standard 档只显示行本体）；
 /// 可展开 = 有结果或有参数（running 也可展开）。
 class DsToolRow extends StatefulWidget {
@@ -168,6 +179,37 @@ class DsToolRow extends StatefulWidget {
 class _DsToolRowState extends State<DsToolRow> {
   bool _detail = false;
 
+  /// 行 hover 态：官方 diff 增删统计只在展开或 hover 时显色。
+  bool _hover = false;
+
+  /// 读屏文案（官方 visuallyHidden 的 stateStatus）：标题 + 状态词 + 展开提示。
+  String _a11yLabel(
+    ToolCallInfo call,
+    ToolRowState state,
+    bool Function(String callId) answerable,
+  ) {
+    final kind = activityKind(call.name);
+    final buffer = StringBuffer(toolTitle(call.name));
+    switch (state) {
+      case ToolRowState.preparing:
+        buffer.write('，正在准备调用');
+      case ToolRowState.running:
+        buffer.write('，运行中');
+      case ToolRowState.stopped:
+        buffer.write('，已停止');
+      case ToolRowState.failed:
+        buffer.write('，失败');
+      case ToolRowState.cancelled:
+      case ToolRowState.ok:
+        break;
+    }
+    if (kind == ToolActivityKind.questions) {
+      final ask = askSummary(call, answerable);
+      if (ask != null) buffer.write('，$ask');
+    }
+    return buffer.toString();
+  }
+
   @override
   Widget build(BuildContext context) {
     final c = widget.colors;
@@ -175,11 +217,11 @@ class _DsToolRowState extends State<DsToolRow> {
     final kind = activityKind(call.name);
     final rowState = toolRowStateOf(call);
     final expandable =
-        widget.allowDetail && (call.resultText != null || call.rawArguments != null);
-    final diff =
-        kind == ToolActivityKind.edit || kind == ToolActivityKind.write
-            ? codeDiffOfCall(call.name, call.rawArguments)
-            : null;
+        widget.allowDetail &&
+        (call.resultText != null || call.rawArguments != null);
+    final diff = kind == ToolActivityKind.edit || kind == ToolActivityKind.write
+        ? codeDiffOfCall(call.name, call.rawArguments)
+        : null;
     // 摘要：按 kind 键序取参；ask 工具换成状态机摘要；失败态换结果正文——
     // 官方语义：error 态**无 exitLabel 时** summary 才换 errorSummary（结果
     // 首行红字），带 exit 标记时保持参数摘要、退出状态交给行尾徽标。
@@ -195,136 +237,178 @@ class _DsToolRowState extends State<DsToolRow> {
         summaryColor = c.danger;
       }
     } else if (kind == ToolActivityKind.questions) {
-      summary = askSummary(call, widget.answerable ?? (_) => false) ??
+      summary =
+          askSummary(call, widget.answerable ?? (_) => false) ??
           summarizeArgs(kind, call.rawArguments);
     } else {
-      summary = summarizeArgs(kind, call.rawArguments) ?? call.summary;
+      final base = summarizeArgs(kind, call.rawArguments) ?? call.summary;
+      // 官方 toolRowModel：generic 工具（未注册名）摘要带原工具名前缀
+      // [toolName, base].join(' · ')。
+      summary = isGenericTool(call.name) && base != null && base.isNotEmpty
+          ? '${bareToolName(call.name)} · $base'
+          : base;
     }
     // 行尾退出状态徽标（exit code 不是协议字段，从结果文本尾部解析；
     // 非 0 / signal 红色，exit 0 用弱化色）。
     final badge = exitBadgeLabel(exit);
     final badgeColor = exitBadgeIsError(exit) ? c.danger : c.labelTertiary;
+    // 官方 diff 增删统计只在行展开或 hover 时显色（折叠继承行色）。
+    final highlighted = _detail || _hover;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 3),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          InkWell(
-            onTap: expandable ? () => setState(() => _detail = !_detail) : null,
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.only(
-                    top: 3,
-                    right: DsSpacing.processIconGap,
-                  ),
-                  child: Icon(
-                    call.failed ? Icons.error_outline : toolIcon(kind),
-                    size: DsSpacing.processIconSize,
-                    color: call.failed ? c.danger : c.labelSecondary,
-                  ),
-                ),
-                Expanded(
-                  child: Text.rich(
-                    TextSpan(
-                      children: [
-                        TextSpan(
-                          text: toolTitle(call.name),
-                          style: DsTypography.small.copyWith(
-                            color: c.labelPrimary,
-                          ),
-                        ),
-                        if (summary != null && summary.isNotEmpty)
-                          TextSpan(
-                            text: '  $summary',
-                            style: DsTypography.codeBlockLabel.copyWith(
-                              color: summaryColor,
-                            ),
-                          ),
-                        if (diff != null) ...[
-                          const TextSpan(text: '  '),
-                          TextSpan(
-                            text:
-                                '+${_countDiff(diff, CodeDiffLineType.add)}',
-                            style: DsTypography.codeBlockLabel.copyWith(
-                              color: c.diffAdd,
-                            ),
-                          ),
-                          const TextSpan(text: ' '),
-                          TextSpan(
-                            text:
-                                '-${_countDiff(diff, CodeDiffLineType.del)}',
-                            style: DsTypography.codeBlockLabel.copyWith(
-                              color: c.diffRemove,
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-                if (badge != null)
-                  Padding(
-                    padding: const EdgeInsets.only(left: DsSpacing.chipIconGap),
-                    child: Text(
-                      badge,
-                      style: DsTypography.codeBlockLabel.copyWith(
-                        color: badgeColor,
+          Semantics(
+            // 官方 visuallyHidden 状态文案（读屏可用，屏幕上不显示）。
+            label: _a11yLabel(
+              call,
+              rowState,
+              widget.answerable ?? (_) => false,
+            ),
+            button: expandable,
+            child: MouseRegion(
+              onEnter: (_) => setState(() => _hover = true),
+              onExit: (_) => setState(() => _hover = false),
+              child: InkWell(
+                onTap: expandable
+                    ? () => setState(() => _detail = !_detail)
+                    : null,
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.only(
+                        top: 3,
+                        right: DsSpacing.processIconGap,
+                      ),
+                      child: Icon(
+                        call.failed ? Icons.error_outline : toolIcon(kind),
+                        size: DsSpacing.processIconSize,
+                        color: call.failed ? c.danger : c.labelSecondary,
                       ),
                     ),
-                  ),
-                // 状态字：preparing 无字（组标题已是「正在准备…」）、ok/cancelled
-                // 无字（cancelled 由 askSummary 的「已取消」承担）。
-                if (rowState == ToolRowState.running)
-                  Padding(
-                    padding: const EdgeInsets.only(left: DsSpacing.chipIconGap),
-                    child: Text(
-                      '运行中',
-                      style: DsTypography.caption.copyWith(
+                    Expanded(
+                      child: Text.rich(
+                        TextSpan(
+                          children: [
+                            TextSpan(
+                              text: toolTitle(call.name),
+                              style: DsTypography.small.copyWith(
+                                color: c.labelPrimary,
+                              ),
+                            ),
+                            // 标题与摘要之间的 2px 圆点分隔（官方 .sep，
+                            // 色 label-caption → 近似 labelTertiary）。
+                            if (summary != null && summary.isNotEmpty) ...[
+                              WidgetSpan(
+                                alignment: PlaceholderAlignment.middle,
+                                child: Container(
+                                  width: DsSpacing.sepDot,
+                                  height: DsSpacing.sepDot,
+                                  margin: const EdgeInsets.symmetric(
+                                    horizontal: DsSpacing.sepGap,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: c.labelTertiary,
+                                    borderRadius: BorderRadius.circular(1),
+                                  ),
+                                ),
+                              ),
+                              TextSpan(
+                                text: summary,
+                                style: DsTypography.codeBlockLabel.copyWith(
+                                  color: summaryColor,
+                                ),
+                              ),
+                            ],
+                            // diff 增删统计：官方只在展开或 hover 时显色
+                            //（折叠态继承行色）。
+                            if (diff != null) ...[
+                              const TextSpan(text: '  '),
+                              TextSpan(
+                                text:
+                                    '+${_countDiff(diff, CodeDiffLineType.add)}',
+                                style: DsTypography.codeBlockLabel.copyWith(
+                                  color: highlighted
+                                      ? c.diffAdd
+                                      : c.labelTertiary,
+                                ),
+                              ),
+                              const TextSpan(text: ' '),
+                              TextSpan(
+                                text:
+                                    '-${_countDiff(diff, CodeDiffLineType.del)}',
+                                style: DsTypography.codeBlockLabel.copyWith(
+                                  color: highlighted
+                                      ? c.diffRemove
+                                      : c.labelTertiary,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    // 行尾退出徽标（官方 ExitCodeBadge：红点恒红 + 标签）。
+                    if (badge != null)
+                      Padding(
+                        padding: const EdgeInsets.only(
+                          left: DsSpacing.exitBadgeGapLeft,
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              width: DsSpacing.exitBadgeDot,
+                              height: DsSpacing.exitBadgeDot,
+                              decoration: BoxDecoration(
+                                color: c.danger,
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                            const SizedBox(width: DsSpacing.exitBadgeGap),
+                            Text(
+                              badge,
+                              style: DsTypography.codeBlockLabel.copyWith(
+                                color: badgeColor,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    // 官方 ToolRow：run-state 文案走 visuallyHidden，只给读屏
+                    // 引擎，行上不渲染「运行中/失败/已停止」文字（状态靠图标
+                    // 色彩、TextShimmer、摘要红字表达）。
+                    if (expandable)
+                      Icon(
+                        _detail ? Icons.expand_less : Icons.expand_more,
+                        size: 14,
                         color: c.labelTertiary,
                       ),
-                    ),
-                  ),
-                if (rowState == ToolRowState.stopped)
-                  Padding(
-                    padding: const EdgeInsets.only(left: DsSpacing.chipIconGap),
-                    child: Text(
-                      '已停止',
-                      style: DsTypography.caption.copyWith(
-                        color: c.settingsWarnFg,
-                      ),
-                    ),
-                  ),
-                if (rowState == ToolRowState.failed)
-                  Padding(
-                    padding: const EdgeInsets.only(left: DsSpacing.chipIconGap),
-                    child: Text(
-                      '失败',
-                      style: DsTypography.caption.copyWith(color: c.danger),
-                    ),
-                  ),
-                if (expandable)
-                  Icon(
-                    _detail ? Icons.expand_less : Icons.expand_more,
-                    size: 14,
-                    color: c.labelTertiary,
-                  ),
-              ],
+                  ],
+                ),
+              ),
             ),
           ),
           if (_detail && widget.allowDetail)
-            _ToolDetail(
-              call: call,
-              colors: c,
-              answerable: widget.answerable,
-            ),
+            _ToolDetail(call: call, colors: c, answerable: widget.answerable),
         ],
       ),
     );
   }
+}
+
+/// 过程组图标的活动类型：运行中取最新 live 调用（官方 live.activity），
+/// 完成组取首类（官方 counts[0].kind 的近似），空组按 thinking。
+ToolActivityKind _groupActivityKind(ChatMessage group) {
+  for (final call in group.toolCalls) {
+    if (isToolRowLive(call)) return activityKind(call.name);
+  }
+  if (group.toolCalls.isEmpty) return ToolActivityKind.thinking;
+  return activityKind(group.toolCalls.first.name);
 }
 
 int _countDiff(CodeDiff diff, CodeDiffLineType type) =>

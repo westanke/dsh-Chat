@@ -10,7 +10,7 @@ const int _diffMaxLines = 9;
 /// - edit/write → 行级差异块（复用 lib/ui/code_diff.dart，默认 9 行 +
 ///   「… 其余 N 行」展开）+ 结果（失败信息保留）；
 /// - commands → BASH 代码块（command 字段）+ 结果正文；
-/// - read → 结果正文按行开窗（默认 8 行 + 展开，顶部「显示 N 行中的 M 行」）；
+/// - read → 结果正文按行开窗（默认 8 行 + 展开，顶部「显示 M / N 行」）；
 /// - code（run_code）→ code 字段代码块 + 结果；
 /// - web_search / web_fetch → 结果正文（完成且无结果 →「未找到结果」）；
 /// - questions → 逐问卡 / verdict + 问题列表（官方 AskQuestionRow 特化）；
@@ -112,30 +112,91 @@ class _ToolDetail extends StatelessWidget {
     return const SizedBox.shrink();
   }
 
+  /// 通用输入/输出卡（官方 ioCard：markdown-code-block 底 + border-l1
+  /// 圆角 radius-lg；分段 [label|content]，每段最高 ioSectionMaxHeight
+  /// 内滚，段间 0.5px 分隔线；label sticky → Flutter 用左列近似）。
   List<Widget> _inputOutput(DsColors c) {
     final out = <Widget>[];
     final args = _prettyArgs();
-    if (args != null) {
-      out
-        ..add(_caption('输入'))
-        ..add(const SizedBox(height: 2))
-        ..add(
-          Text(
-            args,
-            style: DsTypography.codeBlock.copyWith(color: c.labelSecondary),
-          ),
-        )
-        ..add(_gap());
+    final result = call.resultText;
+    final rows = <Widget>[];
+    final sections = <(String, String?, bool)>[
+      ('输入', args, false),
+      ('输出', result, call.failed),
+    ];
+    for (final (label, text, failed) in sections) {
+      if (text == null || text.isEmpty) continue;
+      if (rows.isNotEmpty) rows.add(_divider(c));
+      rows.add(_ioSection(c, label, text, failed));
     }
-    out.add(_resultSectionOrEmpty(c));
+    if (rows.isEmpty) {
+      out.add(_resultSectionOrEmpty(c));
+      return out;
+    }
+    out.add(
+      Container(
+        margin: const EdgeInsets.only(
+          top: DsSpacing.ioCardGap,
+          left: DsSpacing.ioCardGap,
+        ),
+        padding: const EdgeInsets.symmetric(
+          horizontal: DsSpacing.ioSectionPadH,
+          vertical: DsSpacing.ioSectionPadV,
+        ),
+        decoration: BoxDecoration(
+          color: c.mdCodeBlockBg,
+          borderRadius: BorderRadius.circular(DsSpacing.codeBlockRadius),
+          border: Border.all(color: c.borderL1, width: 0.5),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: rows,
+        ),
+      ),
+    );
     return out;
+  }
+
+  Widget _divider(DsColors c) => Container(height: 0.5, color: c.borderL2);
+
+  Widget _ioSection(DsColors c, String label, String text, bool failed) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(
+        vertical: DsSpacing.ioSectionPadV,
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: DsTypography.caption.copyWith(color: c.labelTertiary),
+          ),
+          const SizedBox(width: DsSpacing.ioColumnGap),
+          Expanded(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxHeight: DsSpacing.ioSectionMaxHeight,
+              ),
+              child: SingleChildScrollView(
+                child: Text(
+                  text,
+                  style: DsTypography.codeBlock.copyWith(
+                    color: failed ? c.danger : c.labelSecondary,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   /// ask_user_question 详情（官方 AskQuestionRow 特化，替换通用 IN/OUT）：
   /// - 已回答（resultText 有 answers）→ 逐问卡：问题文本（主色）+ 答案行
   ///   （selected/custom；无答案 → 灰字「未回答」）；
-  /// - 未回答 → verdict 行（pending 且挂起表可答 →「已继续；仍可回答」，
-  ///   否则「已关闭」）+ 问题列表；
+  /// - 未回答 → verdict 行（pending 且挂起表可答 →「已继续工作，仍可回答」，
+  ///   否则「已结束」（ask.closed））+ 问题列表；
   /// - 参数不可解析 → 通用 IN/OUT 兜底。
   /// 偏差：答题面板 HitlPanel 常驻消息列表上方（官方是 composer 上方面板 +
   /// reopen 入口），交互保持现状。
@@ -184,7 +245,7 @@ class _ToolDetail extends StatelessWidget {
       final answerable = this.answerable?.call(call.callId) ?? false;
       out.add(
         _captionColored(
-          answerable ? '已继续；仍可回答' : '已关闭',
+          answerable ? '已继续工作，仍可回答' : '已结束',
           c.labelTertiary,
         ),
       );
@@ -259,7 +320,7 @@ class _ToolDetail extends StatelessWidget {
           children.add(_resultSection(c, result));
         } else {
           children
-            ..add(_caption('显示 ${lines.length} 行中的 $_readWindowLines 行'))
+            ..add(_caption('显示 $_readWindowLines / ${lines.length} 行'))
             ..add(const SizedBox(height: 2))
             ..add(_ReadLines(lines: lines, shown: _readWindowLines, colors: c));
         }

@@ -23,11 +23,13 @@ import 'message_actions.dart';
 import 'model_sheet.dart';
 import 'process_group.dart';
 import 'session_location_sheet.dart';
+import 'reasoning_text.dart';
 import 'projection_sheets.dart';
 import 'question_card.dart';
 import 'scroll_follow.dart';
 import 'sessions_drawer.dart';
 import 'stats_sheet.dart';
+import 'turn_process_row.dart';
 import 'work_steps.dart';
 import 'work_view_sheet.dart';
 
@@ -372,7 +374,7 @@ class _OverflowMenu extends StatelessWidget {
         if (appSettings.codeWorkView)
           _menuItem('workview', Icons.difference_outlined, '代码工作视图'),
         _menuItem('team', Icons.groups_outlined, '智能团队'),
-        _menuItem('todo', Icons.checklist_outlined, '待办任务'),
+        _menuItem('todo', Icons.checklist_outlined, '任务'),
         _menuItem('model', Icons.tune, '调整模型'),
       ],
     );

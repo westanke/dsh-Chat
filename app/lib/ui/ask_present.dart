@@ -2,7 +2,7 @@
 ///
 /// 从 tool_present.dart 拆出（单文件 ≤500 行纪律）：问题规格解析
 ///（args.questions）、结果解析（resultText JSON 的 pending/answers）与
-/// 折叠行状态摘要（等待中/已继续/已关闭/已回答计数/已取消）。
+/// 折叠行状态摘要（等待回答/已继续工作/已结束/已回答计数/已取消）。
 library;
 
 import '../bridge/models.dart';
@@ -102,21 +102,21 @@ List<UserQuestion>? askQuestions(String? rawArguments) {
 }
 
 /// ask_user_question 工具行的状态摘要（官方 AskQuestionRow 状态机）：
-/// - running 且无结果 →「等待中」；
+/// - running 且无结果 →「等待回答」（ask.waiting）；
 /// - resultText pending 且 HITL 挂起表还有该 callId（[answerable]）→
-///   「已继续；仍可回答」，否则「已关闭」；
+///   「已继续工作，仍可回答」（ask.pending），否则「已结束」（ask.closed）；
 /// - answers 数组 →「{answered}/{total} 已回答」（answered = selected 或
 ///   custom 非空计数）；
 /// - 解析失败 → 原参数摘要兜底。
 String? askSummary(ToolCallInfo call, bool Function(String callId) answerable) {
-  if (isCallRunning(call)) return '等待中';
+  if (isCallRunning(call)) return '等待回答';
   // 工具结果 error.code='ASK_CANCELLED' →「已取消」（官方 ask.cancelled；
   // TOOL_OUTCOME_UNKNOWN 等其余分类走失败态，不进这里）。
   if (call.errorCode == 'ASK_CANCELLED') return '已取消';
   final result = askResultOf(call.resultText);
   if (result != null) {
     if (result.pending) {
-      return answerable(call.callId) ? '已继续；仍可回答' : '已关闭';
+      return answerable(call.callId) ? '已继续工作，仍可回答' : '已结束';
     }
     final answers = result.answers;
     if (answers != null) {

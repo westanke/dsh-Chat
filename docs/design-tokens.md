@@ -278,8 +278,26 @@ App 实测墨迹高（density 3.0）：H1 71px、H2 61px、H3 57px、正文 45px
 | 失败图标与「失败」状态字、错误输出、diff 后缀 `-M` | `DsColors.danger` / `DsColors.diffRemove` |
 | diff 后缀 `+N`、diff 详情行色 | `DsColors.diffAdd` / `DsColors.diffRemove`（+ 对应 *Bg，见 §4.9） |
 | 审批卡 strip 圆点与「等待审批」 | `DsColors.settingsWarnFg`（黄底沿用 `settingsWarnBg`） |
-| kind 图标 / 折叠行箭头 / 耗时与「显示 N 行中的 M 行」 | `labelSecondary` / `labelTertiary` + `DsSpacing.processIconSize/processRowHeight` |
+| kind 图标 / 折叠行箭头 / 耗时与「显示 8 / N 行」 | `labelSecondary` / `labelTertiary` + `DsSpacing.processIconSize/processRowHeight` |
 | 代码块（BASH/CODE/read 正文/diff 行） | `DsTypography.codeBlock` + `mdCodeBlockBg`/`mdCodeBlockText`/`codeBlockRadius` |
+
+
+## 4.11 官方展示细节批 · 轮尾行/思考行/ioCard（2026-11-17 task-5，全部复用既有色值无新增色）
+
+官方 Web 尺寸/间距实测值（token 已登记 `design/design_tokens_layout.dart`）：
+
+| 元素 | token | 值（官方） | 依据 |
+|---|---|---|---|
+| 轮尾行高 / 底部留白 | `DsSpacing.turnRowHeight` / `turnRowPadBottom` | 33 / 8 | TurnProcessNodeView height calc(33px+delta)、padding 0 0 8px |
+| 思考行高 | `DsSpacing.thinkRowHeight` | 24 | ReasoningRow .root:not([data-expanded]) |
+| 标题-摘要分隔圆点 / 间距 | `DsSpacing.sepDot` / `sepGap` | 2 / 8 | .sep 2×2、margin 0 8px、radius 1px、label-caption |
+| 退出徽标红点 / 点-文间距 / 左间距 | `DsSpacing.exitBadgeDot` / `exitBadgeGap` / `exitBadgeGapLeft` | 4 / 5 / 8 | ExitCodeBadge |
+| diff 后缀与摘要间距 | `DsSpacing.diffStatGap` | 10 | .diffStat margin-left |
+| ioCard 外边距 / 段落最大高 | `DsSpacing.ioCardGap` / `ioSectionMaxHeight` | 4 / 150 | margin 4px 0 4px 4px、ioSection max-height |
+| ioCard 标签-正文列间距 / 段内边距 | `DsSpacing.ioColumnGap` / `ioSectionPadV`+`ioSectionPadH` | 14 / 12+16 | column-gap 14、ioSection padding 12px 16px |
+| 过程组标题稳定窗口 / shimmer 周期 | `DsMotion.processTitleMinimum` / `shimmerCycle` | 150ms / 900ms | PROCESS_TITLE_MINIMUM_MS（shimmer 本工程未做动画，仅登记周期） |
+
+ioCard/轮尾行/思考行全部复用既有语义色（mdCodeBlockBg/borderL1/borderL2/labelTertiary/labelSecondary/danger 等），无新增色值；分段布局 [label\|content] 在 Flutter 侧用 Row+Expanded 近似官方 grid（label sticky 偏差：App 侧标签随内容滚动）。
 
 
 ## 5. 截图资产（ref/）

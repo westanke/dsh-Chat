@@ -404,7 +404,7 @@ class _TodoSheet extends StatelessWidget {
     final completed = todos.where((t) => t.isCompleted).length;
     final children = <Widget>[];
     if (todos.isEmpty) {
-      children.add(_emptyHint(c, '这个会话还没有待办任务。'));
+      children.add(_emptyHint(c, '这个会话还没有任务。'));
     } else {
       children.add(_row(c, '进度', '已完成 $completed/${todos.length}'));
       for (final t in todos) {
@@ -439,7 +439,7 @@ class _TodoSheet extends StatelessWidget {
     }
     return _sheetScaffold(
       c: c,
-      title: '待办任务',
+      title: '任务',
       subtitle: '列表来自服务端 projections.values.todos（只读展示，可能尚未产生）。',
       children: children,
     );

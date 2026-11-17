@@ -190,6 +190,31 @@ class _MessageListState extends State<_MessageList> {
     }
   }
 
+  /// 找以 [index] 结尾的轮（官方 TurnProcessNodeView 按 turn 渲染轮尾）。
+  TurnRange? _turnEndingAt(List<TurnRange> turns, int index) {
+    for (final turn in turns) {
+      if (turn.end - 1 == index) return turn;
+    }
+    return null;
+  }
+
+  /// 轮尾行点按：整轮过程组一起开合（官方 turnProcess.open 是轮级状态，
+  /// App 侧展开态按组存储，这里批量同步；open 取轮尾行的聚合展开态）。
+  void _toggleTurn(ChatState state, TurnRange turn) {
+    final keys = <String>[];
+    var anyOpen = false;
+    for (var i = turn.start + 1; i < turn.end; i++) {
+      final message = state.messages[i];
+      if (!message.isProcess) continue;
+      final key = processGroupKeyOf(message);
+      keys.add(key);
+      if (state.isGroupExpanded(key)) anyOpen = true;
+    }
+    for (final key in keys) {
+      state.toggleProcessGroup(key, open: !anyOpen);
+    }
+  }
+
   List<Widget> _buildChildren(ChatState state, DsColors colors) {
     final items = <Widget>[];
     // 历史翻页入口（真机反馈 2026-11-04 第 5 项）：服务端还有更早事件时，
@@ -228,6 +253,9 @@ class _MessageListState extends State<_MessageList> {
           state.streaming,
         ),
       );
+    // 轮尾行（官方 TurnProcessNodeView）：每轮最后一条消息下方的「已完成，
+    // 用时 …」摘要行；所有档位渲染，verbose 档 canCollapse=false（无 chevron）。
+    final turns = turnsOf(state.messages);
     for (var i = 0; i < state.messages.length; i++) {
       if (!visible.contains(state.messages[i])) continue;
       items.add(
@@ -236,6 +264,25 @@ class _MessageListState extends State<_MessageList> {
           colors: colors,
           index: i,
           state: state,
+        ),
+      );
+      final turn = _turnEndingAt(turns, i);
+      if (turn == null) continue;
+      final info = turnEndInfoOf(
+        state.messages,
+        turn,
+        canCollapse: appSettings.workStepsDetail.foldCompletedTurns,
+        isGroupExpanded: state.isGroupExpanded,
+      );
+      if (info == null) continue;
+      items.add(
+        Padding(
+          padding: const EdgeInsets.only(top: DsSpacing.blockGap),
+          child: TurnProcessRow(
+            info: info,
+            colors: colors,
+            onToggle: info.canCollapse ? () => _toggleTurn(state, turn) : null,
+          ),
         ),
       );
     }

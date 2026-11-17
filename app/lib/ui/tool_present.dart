@@ -66,37 +66,6 @@ ToolActivityKind activityKind(String toolName) {
   return ToolActivityKind.tools;
 }
 
-/// 名字精确匹配的标题特例（优先于 kind 词表，官方同款）。
-const Map<String, String> _toolTitleSpecials = {
-  'pwsh': 'Pwsh',
-  'grep': 'Grep',
-  'glob': 'Glob',
-};
-
-/// kind → 工具行标题（官方 toolTitle 词表）。
-const Map<ToolActivityKind, String> _toolTitleByKind = {
-  ToolActivityKind.search: '搜索',
-  ToolActivityKind.read: '读取',
-  ToolActivityKind.commands: 'Bash',
-  ToolActivityKind.write: '写入',
-  ToolActivityKind.edit: '编辑',
-  ToolActivityKind.code: '代码',
-  ToolActivityKind.webSearch: '搜索',
-  ToolActivityKind.webFetch: '获取',
-  ToolActivityKind.readImage: '读取图像',
-  ToolActivityKind.subagents: '创建子智能体',
-  ToolActivityKind.questions: '提问',
-  ToolActivityKind.plan: '更新待办列表',
-  ToolActivityKind.tools: '工具调用',
-  ToolActivityKind.thinking: '思考',
-};
-
-/// 工具行标题：特例（Pwsh/Grep/Glob）优先，其余按 kind。
-String toolTitle(String toolName) {
-  final bare = toolName.startsWith('tools.') ? toolName.substring(6) : toolName;
-  return _toolTitleSpecials[bare] ?? _toolTitleByKind[activityKind(toolName)]!;
-}
-
 /// kind → 工具行图标（官方按 kind 出图标；这里取 Material 近似形）。
 IconData toolIcon(ToolActivityKind kind) => switch (kind) {
   ToolActivityKind.read => Icons.description_outlined,
@@ -134,7 +103,7 @@ const Map<ToolActivityKind, String> _runningLabel = {
 };
 
 /// preparing 词表（running 调用还没拿到 arguments 时的近似态；
-/// 官方无 thinking 变体，缺项回退 [runningLabelOf]）。
+/// 官方无 thinking 变体，缺项回退 prepare.tools「准备调用工具」）。
 const Map<ToolActivityKind, String> _preparingLabel = {
   ToolActivityKind.read: '准备读取文件',
   ToolActivityKind.readImage: '准备读取图片',
@@ -247,39 +216,54 @@ bool isToolRowLive(ToolCallInfo call) {
 
 /// 结果文本尾部的退出状态标记（官方 parseExitStatus 同款；exit code 不是
 /// 协议字段，客户端从结果文本尾部 `[exit code: N]` / `[killed by signal: X]` 解析）。
+/// - `[killed by signal: X]` → 信号（terminal.signal = 信号 X，恒失败）；
+/// - `[exit code: null]` → 未正常退出（terminal.noExitCode）；
+/// - `[exit code: N]` → 退出码（terminal.exitCode）；
+/// - 无标记 → exitCode 视为 0，成功，不出徽标（官方 parseExitStatus 默认值）。
 class ExitStatus {
-  const ExitStatus({this.exitCode, this.signal});
+  const ExitStatus({this.exitCode, this.signal, this.noExit = false});
 
-  /// `[exit code: null]` → null（无数值退出码，不出徽标）。
+  /// 数值退出码；null 表示未知（[noExit] 表示「未正常退出」）。
   final int? exitCode;
   final String? signal;
+
+  /// `[exit code: null]`：进程没给出退出码（信号终止未必带 signal 标记）。
+  final bool noExit;
 }
 
 ExitStatus? parseExitStatus(String? text) {
   if (text == null) return null;
-  final exit = RegExp(r'\[exit code: (-?\d+|null)\]\s*$').firstMatch(text);
   final signal = RegExp(r'\[killed by signal: ([^\]\n]+)\]\s*$')
       .firstMatch(text);
   if (signal != null) return ExitStatus(signal: signal.group(1));
+  final exit = RegExp(r'\[exit code: (-?\d+|null)\]\s*$').firstMatch(text);
   if (exit == null) return null;
   final raw = exit.group(1);
-  if (raw == null || raw == 'null') return null;
-  return ExitStatus(exitCode: int.tryParse(raw));
+  if (raw == null || raw == 'null') return const ExitStatus(noExit: true);
+  final code = int.tryParse(raw);
+  if (code == null) return const ExitStatus(noExit: true);
+  return ExitStatus(exitCode: code);
 }
 
-/// 徽标文案（行尾展示）：`exit 2` / `signal X`。
+/// 徽标文案（行尾展示，官方 terminalExitLabel 口径）：
+/// 信号 → `信号 X`；未正常退出 → `未正常退出`；非 0 退出码 → `退出码 N`；
+/// **exit 0 / 无标记不出徽标**（官方 terminalFailed 判据）。
 String? exitBadgeLabel(ExitStatus? status) {
   if (status == null) return null;
-  if (status.signal != null) return 'signal ${status.signal}';
-  if (status.exitCode != null) return 'exit ${status.exitCode}';
+  if (status.signal != null) return '信号 ${status.signal}';
+  if (status.noExit) return '未正常退出';
+  final code = status.exitCode;
+  if (code != null && code != 0) return '退出码 $code';
   return null;
 }
 
-/// 徽标是否红色（非 0 / signal 的非正常退出）。
-bool exitBadgeIsError(ExitStatus? status) =>
-    status != null &&
-    (status.signal != null ||
-        (status.exitCode != null && status.exitCode != 0));
+/// 徽标是否红色（信号 / 未正常退出 / 非 0 退出码）。
+bool exitBadgeIsError(ExitStatus? status) {
+  if (status == null) return false;
+  if (status.signal != null || status.noExit) return true;
+  final code = status.exitCode;
+  return code != null && code != 0;
+}
 
 String? _firstLine(Object? value) {
   if (value is! String) return null;
@@ -384,7 +368,7 @@ String processGroupTitle(
     // preparing 判定真数据驱动：流式行带 preparing 标记（桥 fdb85da）；
     // 历史路径 running 行 rawArguments==null 时保留近似回退。
     final label = running.preparing || running.rawArguments == null
-        ? (_preparingLabel[kind] ?? _runningLabel[kind]!)
+        ? (_preparingLabel[kind] ?? _preparingLabel[ToolActivityKind.tools]!)
         : _runningLabel[kind]!;
     if (!liveDetail) return label;
     final detail = liveDetailText(group) ?? reasoningDetailOf(reasoningHint);
