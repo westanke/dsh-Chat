@@ -131,14 +131,27 @@ extension GatewayApi on GatewayClient {
     ];
   }
 
-  /// 取图片交接产物（REST GET /api/v1/image-handoff?name=`<bare>`，
-  /// openapi.yaml:314-344）：纯文本模型发图时 bridge 把图交接成工作区
-  /// `.dsh-images/<sha256>.<ext>`，消息文本留 [Image: source: ...] 占位。
-  /// name 是裸文件名（64 位 hex + 扩展名）。真机反馈第 8 条手机端显示回路。
-  Future<List<int>> fetchImageHandoff(String name) => gatewayHttpBytes(
-    this,
-    '/api/v1/image-handoff?name=${Uri.encodeComponent(name)}',
-  );
+  /// 取图片交接产物（REST GET /api/v1/image-handoff，openapi.yaml:314-344）：
+  /// 纯文本模型发图时 bridge 把图交接成工作区 `.dsh-images/<sha256>.<ext>`，
+  /// 消息文本留 [Image: source: ...] 占位。name 是裸文件名（64 位 hex + 扩展名）。
+  ///
+  /// **`sessionId` 必填**：bridge `attachmentsAndImage()` 强制 `name`+`sessionId`
+  /// 两个 query，缺一即 400 BODY_INVALID（内核要先确认该会话授权与引用）。
+  /// 姊妹仓踩过同一个坑（companion PITFALLS「image-handoff 缺 sessionId」），
+  /// 本仓鸿蒙侧已带、安卓侧此前漏传——两个渠道都必须带。
+  Future<List<int>> fetchImageHandoff(String name, String sessionId) =>
+      gatewayHttpBytes(this, imageHandoffPath(name, sessionId));
+
+  /// 会话统计投影（WS `session-stats` 帧，bridge ws-goals.ts:84-110）。
+  /// 读内核 `session/projections` 的 `sessionStats`/`tokenUsage`/`contextPressure`，
+  /// **键缺失时服务端回 null**（不是缺字段），所以三样都按可空处理。
+  /// 老的 `< 2.12` 桥没有这一帧，回 `UNKNOWN_TYPE` —— 调用方捕获后回落本地估算。
+  Future<Map<String, dynamic>> sessionStats(String sessionId) =>
+      request('session-stats', {'sessionId': sessionId});
+
+  /// 上下文占用投影（WS `context-usage` 帧）：同上，少一个 `sessionStats`。
+  Future<Map<String, dynamic>> contextUsage(String sessionId) =>
+      request('context-usage', {'sessionId': sessionId});
 
   /// 会话历史（history 帧，支持 beforeSeq 翻页——真机反馈第 5 项）。
   /// projections 只在首屏应答带（翻页不带，API.md:165,766）。
@@ -159,10 +172,20 @@ extension GatewayApi on GatewayClient {
         : null;
     // hasMore 从应答取真值（此前硬编码 false 导致列表到头也不提示加载更多）。
     final hasMore = r['hasMore'] == true;
+    // 字节预算裁剪标记（history-byte-budget-v1）：真裁剪才带这两个字段，
+    // 未裁剪时字段缺席 —— 不能把「缺席」当成「裁剪了」。
+    final truncated = r['truncated'] == true;
+    final bytes = r['bytes'] is int ? r['bytes'] as int : null;
+    final format = r['historyFormatVersion'] is int
+        ? r['historyFormatVersion'] as int
+        : null;
     return HistoryPage.fromEvents(
       events,
       projections: projections,
       hasMore: hasMore,
+      truncated: truncated,
+      bytes: bytes,
+      historyFormatVersion: format,
     );
   }
 
@@ -379,3 +402,10 @@ extension GatewayApi on GatewayClient {
   Future<String?> selectAgentPreset(String sessionId, String presetId) =>
       gatewaySelectAgentPreset(this, sessionId, presetId);
 }
+
+/// 图片交接的请求路径（纯函数，便于单测把「两个 query 都在」钉死）：
+/// `name` 是裸文件名（64 位 hex + 扩展名）、`sessionId` 是当前会话；
+/// 两者都必填，缺一 bridge 回 400 BODY_INVALID。
+String imageHandoffPath(String name, String sessionId) =>
+    '/api/v1/image-handoff?name=${Uri.encodeComponent(name)}'
+    '&sessionId=${Uri.encodeComponent(sessionId)}';

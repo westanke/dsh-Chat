@@ -41,6 +41,39 @@ String normalizeTaskLists(String text) {
 /// 行首缩进 + 列表符号 + 勾选框 → 只留勾选框。
 final RegExp _taskListLine = RegExp(r'^\s*[-*+]\s+(\[[ xX]\])\s+(.*)$');
 
+/// 紧贴上一行的表格块前补一个空行。
+///
+/// gpt_markdown 1.4.0 的块解析只在「空行之后」才开始认 GFM 表格
+/// （block_parser.dart:415-470；离屏探针实测 `说明：\n| A | B |\n| --- |` 得到 tables=0），
+/// 于是整段被吞成普通段落 —— 屏幕上就是一堆竖线文字贴在说明行下面。
+/// 官方 Web 渲染器认这种写法（GFM 规范也允许表格紧跟段落），所以这里先规整再交给引擎：
+/// **只补换行，不动任何单元格内容**；围栏代码块内部整段跳过（代码里的 `|` 不是表格）。
+String normalizeTables(String text) {
+  if (!text.contains('|')) return text;
+  final lines = text.split('\n');
+  final out = <String>[];
+  var inFence = false;
+  for (final line in lines) {
+    final trimmed = line.trimLeft();
+    if (trimmed.startsWith('```') || trimmed.startsWith('~~~')) {
+      inFence = !inFence;
+      out.add(line);
+      continue;
+    }
+    if (!inFence && _isTableRow(line) && out.isNotEmpty) {
+      final prev = out.last;
+      if (prev.trim().isNotEmpty && !_isTableRow(prev)) {
+        out.add('');
+      }
+    }
+    out.add(line);
+  }
+  return out.join('\n');
+}
+
+/// 行首（可带缩进）就是 `|` —— 表格行的最小充分特征。
+bool _isTableRow(String line) => line.trimLeft().startsWith('|');
+
 /// 对话里的一条 Markdown 内容（助手回复 / 思考流共用）。
 class DsMarkdownView extends StatelessWidget {
   const DsMarkdownView({
@@ -145,7 +178,7 @@ class DsMarkdownView extends StatelessWidget {
     return GptMarkdownTheme(
       gptThemeData: theme,
       child: GptMarkdown(
-        normalizeTaskLists(text),
+        normalizeTables(normalizeTaskLists(text)),
         style: base,
         isStreaming: streaming,
         useDollarSignsForLatex: true,

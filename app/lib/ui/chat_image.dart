@@ -185,7 +185,8 @@ class _DsChatImageState extends State<DsChatImage> {
 }
 
 /// 默认下载器：attachment 走 attachments 接口，handoff 走 image-handoff。
-/// [sessionId] 是 attachments 接口的必填 query（内核按会话事件校验引用）。
+/// [sessionId] 是**两个接口都必填**的 query：附件按会话事件校验引用，
+/// image-handoff 由 bridge `attachmentsAndImage()` 强制 name+sessionId。
 ImageFetcher gatewayImageFetcher(GatewayClient gateway, String sessionId) {
   return (DsImageRef ref) async {
     final Uint8List bytes;
@@ -196,7 +197,7 @@ ImageFetcher gatewayImageFetcher(GatewayClient gateway, String sessionId) {
       );
     } else {
       bytes = Uint8List.fromList(
-        await gateway.fetchImageHandoff(ref.handoffName!),
+        await gateway.fetchImageHandoff(ref.handoffName!, sessionId),
       );
     }
     // 简单校验：非空、且像图片（PNG/JPEG/GIF/WebP 魔数）。

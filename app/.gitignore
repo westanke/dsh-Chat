@@ -44,5 +44,8 @@ app.*.map.json
 /android/app/profile
 /android/app/release
 
+# Kotlin 增量编译缓存（Gradle 每次构建生成，不入库）
+/android/.kotlin/
+
 # Widget Preview related
 .widget_preview/

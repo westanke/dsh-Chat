@@ -11,9 +11,7 @@ part of 'chat_state.dart';
 void _onGatewayEvent(ChatState state, GatewayEvent event) {
   switch (event) {
     case DeltaEvent(:final delta):
-      DshLog.w(
-        'ui delta kind=${delta.kind} len=${delta.text.length} sid=${delta.sessionId}',
-      );
+      // 逐条 delta 不写诊断日志：流式期间每帧一条同步写盘会拖死 UI 线程（真机 ANR）。
       if (!state._isCurrent(delta.sessionId)) return;
       switch (delta.kind) {
         case 'text':
@@ -119,6 +117,17 @@ void _onGatewayEvent(ChatState state, GatewayEvent event) {
     case ApprovalResolvedEvent(:final sessionId, :final approvalId):
       DshLog.w('ui approval resolved id=$approvalId sid=$sessionId');
       state.hitl.onApprovalResolved(approvalId);
+    case LinkClosedEvent(:final code, :final reason):
+      // 语义化 close（协议对齐）：4001 = 设备吊销/鉴权失败（重连无意义），
+      // 1009 = 单帧超过 1 MiB。旧实现只当普通掉线，用户看到「已断开」却
+      // 不知道要重新配对还是等它自己好（companion 坑「掉线不分因」）。
+      DshLog.w('ui link closed code=$code reason=$reason');
+      if (event.revoked) {
+        state.lastError = '设备已被吊销（close 4001），请重新配对';
+      } else if (event.frameTooLarge) {
+        state.lastError = '请求内容超过 1 MiB，连接已重置';
+      }
+      state._notify();
     case ModelsUpdatedEvent():
       // 模型目录推送（桥 v2.11.0，issue #1）：模型面板打开时必重拉
       // models 帧，这里无需处理；显式 case 保 switch 穷尽并留扩展点。

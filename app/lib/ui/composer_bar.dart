@@ -176,26 +176,44 @@ class _ComposerBar extends StatelessWidget {
                 colors: c,
                 onTap: onPickPermission,
               ),
-              const Spacer(),
-              if (pendingImageName != null)
-                Padding(
-                  padding: const EdgeInsets.only(right: 8),
-                  child: Chip(
-                    avatar: Icon(
-                      Icons.image_outlined,
-                      size: DsSpacing.chipIconSize,
-                      color: c.chipSelectedFg,
-                    ),
-                    label: Text(
-                      pendingImageName!,
-                      style: DsTypography.caption.copyWith(
-                        color: c.chipSelectedFg,
+              // 待发送图片 chip（真机反馈 2026-11-17）：
+              // 文件名过长时 Chip 无界变宽，会把 Spacer 吃掉、把右侧加图钮与
+              // 发送钮挤出 Row（表现为「长文件名盖住发送键、发不出去」）。
+              // 修法：有图时用 Expanded+右对齐吃点剩余空间（无图仍是 Spacer），
+              // 再叠 ConstrainedBox 封顶 + label 单行省略号，双保险不溢出。
+              if (pendingImageName == null)
+                const Spacer()
+              else
+                Expanded(
+                  child: Align(
+                    alignment: Alignment.centerRight,
+                    child: Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(
+                          maxWidth: DsSpacing.composerImageChipMaxWidth,
+                        ),
+                        child: Chip(
+                          avatar: Icon(
+                            Icons.image_outlined,
+                            size: DsSpacing.chipIconSize,
+                            color: c.chipSelectedFg,
+                          ),
+                          label: Text(
+                            pendingImageName!,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: DsTypography.caption.copyWith(
+                              color: c.chipSelectedFg,
+                            ),
+                          ),
+                          onDeleted: onRemoveImage,
+                          backgroundColor: c.chipSelectedBg,
+                          side: BorderSide.none,
+                          visualDensity: VisualDensity.compact,
+                        ),
                       ),
                     ),
-                    onDeleted: onRemoveImage,
-                    backgroundColor: c.chipSelectedBg,
-                    side: BorderSide.none,
-                    visualDensity: VisualDensity.compact,
                   ),
                 ),
               // 加图按钮常驻（真机反馈 2026-11-04 第二轮 D）：

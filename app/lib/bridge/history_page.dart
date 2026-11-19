@@ -124,11 +124,27 @@ class HistoryPage {
     required this.hasMore,
     this.rawEvents = const [],
     this.projections,
+    this.truncated = false,
+    this.bytes,
+    this.historyFormatVersion,
   });
 
   /// 已装配为 UI 消息（user/assistant/process；tool/turn 等装配进 process）。
   final List<ChatMessage> items;
   final bool hasMore;
+
+  /// 服务端按**字节预算**裁掉了最旧端的事件（`history-byte-budget-v1`，
+  /// bridge history-budget.ts：单次 2 MiB、单条事件 512 KiB）。真裁剪时
+  /// 应答才带 `truncated:true` 与 `bytes`；未裁剪时这两个字段不出现。
+  /// UI 必须明说「部分历史未显示」，否则用户把裁剪当成「对话丢了」。
+  final bool truncated;
+
+  /// 本次应答的字节数（仅 [truncated] 为真时由服务端给出）。
+  final int? bytes;
+
+  /// 历史事件**形状**版本（bridge `HISTORY_FORMAT_VERSION`，当前 1）。
+  /// 只在 `/messages` 应答里；本轮只声明不校验，客户端记下来用于诊断。
+  final int? historyFormatVersion;
 
   /// 原始事件（已剥掉 REST `{event:...}` 外包装，保留 `{type,seq,time,data}`）。
   /// 轨迹 Sheet 由客户端本地分组用，不参与消息流装配（对照 companion
@@ -157,6 +173,9 @@ class HistoryPage {
     List<dynamic> rawEvents, {
     Map<String, dynamic>? projections,
     bool hasMore = false,
+    bool truncated = false,
+    int? bytes,
+    int? historyFormatVersion,
   }) {
     final items = <ChatMessage>[];
     final normalized = <Map<String, dynamic>>[];
@@ -385,6 +404,9 @@ class HistoryPage {
       hasMore: hasMore,
       rawEvents: normalized,
       projections: projections,
+      truncated: truncated,
+      bytes: bytes,
+      historyFormatVersion: historyFormatVersion,
     );
   }
 }

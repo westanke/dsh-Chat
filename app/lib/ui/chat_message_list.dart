@@ -242,6 +242,35 @@ class _MessageListState extends State<_MessageList> {
         ),
       );
     }
+    // 历史被服务端按字节预算裁剪过（history-byte-budget-v1：单次 2 MiB、
+    // 单条事件 512 KiB，从最旧端丢并置 truncated）——最新的一屏也可能不全，
+    // 必须明说，否则用户把裁剪当成「对话丢了」。
+    if (state.historyTruncated) {
+      items.add(
+        Padding(
+          padding: const EdgeInsets.only(bottom: DsSpacing.blockGap),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.info_outline,
+                size: 14,
+                color: colors.labelSecondary,
+              ),
+              const SizedBox(width: DsSpacing.liGap),
+              Flexible(
+                child: Text(
+                  '会话过长，更早的部分未显示',
+                  style: DsTypography.small.copyWith(
+                    color: colors.labelSecondary,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
     // 「收起后显示的回复」（官方通用设置）：finalOnly 且轮完成时只保留
     // 每轮最终回答（流式中永不过滤）。index 仍用原 i——regenerateAt
     // 依赖原列表下标，不能按可见序列号重排。

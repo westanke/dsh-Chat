@@ -75,4 +75,31 @@ void main() {
 
     expect(tester.takeException(), isNull);
   });
+
+  test('表格紧贴段落时补空行（GFM 允许，引擎不认）', () {
+    const glued = '下面是结果：\n| A | B |\n| --- | --- |\n| 1 | 2 |';
+    final fixed = normalizeTables(glued);
+    expect(fixed.split('\n').take(3).toList(),
+        ['下面是结果：', '', '| A | B |']);
+    // 单元格内容一个字都不动
+    expect(fixed.replaceAll('\n', ''), glued.replaceAll('\n', ''));
+  });
+
+  test('表格前本来就有空行 / 表格连续行 → 不重复插空行', () {
+    const ok = '段落\n\n| A | B |\n| --- | --- |\n| 1 | 2 |';
+    expect(normalizeTables(ok), ok);
+    expect('| A |\n| --- |'.split('\n').length,
+        normalizeTables('| A |\n| --- |').split('\n').length);
+  });
+
+  test('围栏代码块里的竖线不算表格（整段原样保留）', () {
+    const code = '看这个：\n```\n| A | B |\n|---|---|\n```';
+    expect(normalizeTables(code), code);
+    const tilde = '看这个：\n~~~md\n| A |\n~~~';
+    expect(normalizeTables(tilde), tilde);
+  });
+
+  test('没有竖线 → 原样返回（不扫全篇）', () {
+    expect(normalizeTables('纯文本\n第二行'), '纯文本\n第二行');
+  });
 }

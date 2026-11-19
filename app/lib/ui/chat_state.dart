@@ -116,6 +116,10 @@ class ChatState extends ChangeNotifier with GroupExpandState {
   bool historyHasMore = false;
   bool loadingOlder = false;
 
+  /// 服务端按字节预算裁掉了最旧端事件（history 应答 `truncated`，
+  /// bridge history-byte-budget-v1）。列表头显示一次「部分历史未显示」。
+  bool historyTruncated = false;
+
   /// 翻页刚 prepend 过更早消息（第二轮反馈 A）：列表层消费后清零，
   /// 用于跳过一次贴底跟随，保住用户阅读位置。
   bool historyPageJustLoaded = false;
@@ -180,6 +184,7 @@ class ChatState extends ChangeNotifier with GroupExpandState {
     historyHasMore = false;
     loadingOlder = false;
     historyPageJustLoaded = false;
+    historyTruncated = false;
     // 流式缓冲一并清（2026-11-15 反馈）：A 会话执行中切到 B，残留的
     // streamReasoning/streamText 会以流式气泡（_StreamingItem）挂在 B 页
     // 尾部——「深度思考未按照对应会话显示」正是这个残留；若 B 也在执行，
@@ -215,6 +220,7 @@ class ChatState extends ChangeNotifier with GroupExpandState {
     historyHasMore = false;
     loadingOlder = false;
     historyPageJustLoaded = false;
+    historyTruncated = false;
     // 目录选择随新会话重置回「手机会话」默认（不沿用上次选择）。
     pendingLocation = null;
     _clearStream();
@@ -427,7 +433,28 @@ class ChatState extends ChangeNotifier with GroupExpandState {
     _toolBuffer.clear();
   }
 
+  /// 服务端统计投影（`session-stats` 帧：sessionStats/tokenUsage/contextPressure）。
+  /// null = 没拉过，或桥太老（< 2.12 没有这一帧，回 UNKNOWN_TYPE）。
+  Map<String, dynamic>? serverStats;
+
+  /// 拉服务端统计（统计 Sheet 打开时调；失败静默回落本地估算）。
+  Future<void> loadServerStats() async {
+    final id = sessionId;
+    if (id == null || id.isEmpty) return;
+    try {
+      serverStats = await _gateway.sessionStats(id);
+      notifyListeners();
+    } on RequestException catch (e) {
+      DshLog.w('ui session-stats failed ${e.code}');
+      notifyListeners();
+    }
+  }
+
   void _onGatewayState(GatewayState s) {
+    if (s == GatewayState.authFailed) {
+      // 4001 吊销 / 令牌失效：只有重新配对能恢复，别让用户干等重连。
+      lastError = '连接鉴权失败：设备可能已被吊销，请重新配对';
+    }
     if (s == GatewayState.ready) {
       // 断线重连成功：重拉会话与当前历史（resync 兜底）。
       loadSessions();

@@ -22,10 +22,13 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 
 import 'models.dart';
 import 'gateway_events.dart';
+import 'gateway_liveness.dart';
+import 'gateway_pending.dart';
 import 'questions.dart';
 export 'gateway_api.dart';
 export 'gateway_events.dart';
 export 'gateway_http.dart';
+export 'gateway_pending.dart';
 export 'gateway_rest.dart';
 export 'questions.dart';
 
@@ -47,13 +50,26 @@ class GatewayClient {
   /// hello.data.device（配对后的设备档案：name/id/scopes/rootIds/platform/model）。
   Map<String, dynamic>? device;
 
+  /// hello.data.capabilities（`<能力>-v<主版本>`，只增不撤）。协议要求**用能力位
+  /// 探测特性、不硬比版本**；位名权威来源 bridge `src/host/capabilities.ts`。
+  List<String> capabilities = const [];
+
+  /// hello.data.port：LAN 直连与隧道数据端口不同，诊断页用它说清接入通道。
+  int? listenerPort;
+
   int _requestSeq = 0;
-  final Map<String, Completer<Map<String, dynamic>>> _pending = {};
+  final PendingRegistry _pending = PendingRegistry();
+  final Liveness _live = Liveness();
   Timer? _heartbeat;
   StreamSubscription<dynamic>? _sub;
   int _backoffIndex = 0;
   bool _disposed = false;
   bool _authDead = false;
+
+  /// 同一次掉线只收口一次。`_sendRaw`/心跳/onDone 三处都会调 `_onDown`，
+  /// 而 failAll 会同步触发调用方的失败处理（常立刻重发请求 → 又 `_onDown`），
+  /// 无闸门时打成无限微任务循环：真机上 UI 线程 100%+、5s 无响应（ANR）。
+  bool _downHandled = false;
 
   final _stateCtrl = StreamController<GatewayState>.broadcast();
   final _eventCtrl = StreamController<GatewayEvent>.broadcast();
@@ -103,6 +119,8 @@ class GatewayClient {
   }) async {
     if (_disposed) return;
     _setState(GatewayState.connecting);
+    _downHandled = false; // 新连接：掉线闸门复位
+    _helloCompleter = null; // 每次连接都要等新的 hello，别复用已完成的旧 future
     try {
       final ws = IOWebSocketChannel.connect(
         Uri.parse(_wsUrl),
@@ -113,8 +131,10 @@ class GatewayClient {
       await ws.ready.timeout(const Duration(seconds: 10));
       _sub = ws.stream.listen(
         _onFrame,
-        onDone: _onDone,
-        onError: (Object e) => _onDone(),
+        // close code 只能从 channel 取（onDone/onError 回调不带参数），
+        // 且必须在 teardown 之前读，晚一步就是 null。
+        onDone: () => _onDown(ws.closeCode, ws.closeReason),
+        onError: (Object e) => _onDown(ws.closeCode, ws.closeReason),
       );
       _startHeartbeat();
       // hello 会异步到达；等它确认协议版本。
@@ -144,6 +164,7 @@ class GatewayClient {
   }
 
   void _onFrame(dynamic raw) {
+    _live.seenAt(DateTime.now()); // 收到帧就算活着（坏帧也算）
     Map<String, dynamic> frame;
     try {
       frame = Map<String, dynamic>.from(jsonDecode(raw as String) as Map);
@@ -155,7 +176,8 @@ class GatewayClient {
     // requestId 回显在 data 里（ws-protocol.ts:611 withRequestIdEcho 注入 data.requestId），
     // 顶层没有；两处都兜着读。
     final requestId = (frame['requestId'] ?? data['requestId']) as String?;
-    if (kind != 'pong') DshLog.w('gw <- kind=$kind rid=$requestId');
+    // 逐帧日志会写死 UI 线程（真机：流式期间同步写盘 → tap 5s 无响应 → ANR）。
+    if (kind != 'pong' && kind != 'event') DshLog.w('gw <- kind=$kind rid=$requestId');
     switch (kind) {
       case 'hello':
         final protocol = (data['protocol'] ?? 0) as int;
@@ -169,6 +191,16 @@ class GatewayClient {
         if (data['device'] is Map) {
           device = Map<String, dynamic>.from(data['device'] as Map);
         }
+        // 能力位与监听端口：每次 hello 现算，重连后可能变化（桥 apply 期
+        // 惰性解析 + 每次现算，见 bridge STATUS「hello 能力位每次现算」）。
+        final caps = data['capabilities'];
+        capabilities = [
+          if (caps is List)
+            for (final c in caps)
+              if (c is String) c,
+        ];
+        listenerPort = data['port'] is int ? data['port'] as int : null;
+        DshLog.w('gw hello caps=${capabilities.length} port=$listenerPort');
         _backoffIndex = 0;
         _authDead = false;
         _setState(GatewayState.ready);
@@ -190,27 +222,27 @@ class GatewayClient {
         DshLog.w('gw resync dropped=$dropped');
         _eventCtrl.add(ResyncEvent(dropped));
       case 'error':
-        debugPrint(
-          '[dsh-gw] error code=${data['code']} msg=${data['message']}',
-        );
-        DshLog.w('gw error code=${data['code']} msg=${data['message']}');
-        final requestId = data['requestId'] as String?;
-        final pending = requestId == null ? null : _pending.remove(requestId);
-        if (pending != null && !pending.isCompleted) {
-          pending.completeError(
-            RequestException(
-              (data['code'] ?? 'ERROR') as String,
-              (data['message'] ?? '') as String,
-            ),
-          );
+        final code = (data['code'] ?? 'ERROR') as String;
+        final message = (data['message'] ?? '') as String;
+        final requestType = data['requestType'] as String?;
+        DshLog.w('gw error code=$code msg=$message type=$requestType rid=$requestId');
+        final pending = _pending.take(requestId);
+        if (pending != null) {
+          PendingRegistry.fail(pending, RequestException(code, message));
+          break;
+        }
+        // 分发前被拒（UNKNOWN_TYPE / INVALID_FRAME / MISSING_TYPE）只回
+        // requestType、不回 requestId（ws-protocol.ts），不兜底就干挂 30s。
+        if (requestType != null) {
+          _pending.failOfType(requestType, code, message);
         }
       default:
-        // 应答帧：requestId 回显关联（协议统一规则）。
-        final requestId = data['requestId'] as String?;
-        final pending = requestId == null ? null : _pending.remove(requestId);
-        if (pending != null && !pending.isCompleted) {
-          debugPrint('[dsh-gw] resp kind=$kind');
-          pending.complete(data);
+        // 应答帧：requestId 回显关联（协议统一规则）。排除表见 bridge
+        // REQUEST_ID_ECHO_EXCLUDED_KINDS：subscribed / event /
+        // approval-resolved / kernel-endpoints 等不回显，它们各有分支。
+        final p = _pending.take(requestId);
+        if (p != null && !p.isCompleted) {
+          p.completer.complete(data);
         }
     }
   }
@@ -218,7 +250,8 @@ class GatewayClient {
   void _onEventData(Map<String, dynamic> data) {
     final type = (data['type'] ?? '') as String;
     final payload = Map<String, dynamic>.from(data['data'] as Map? ?? const {});
-    DshLog.w('gw event $type sid=${payload['sessionId']}');
+    // delta 最高频（流式每帧一条），逐条记会刷爆日志文件。
+    if (type != 'chat.message.delta') DshLog.w('gw event $type sid=${payload['sessionId']}');
     switch (type) {
       case 'chat.message.delta':
         _deltaCount++;
@@ -321,27 +354,55 @@ class GatewayClient {
     }
   }
 
-  void _onDone() {
+  /// 掉线收口（onDone/onError 共用；code/reason 来自 close 帧，须在 teardown 前读）。
+  void _onDown(int? code, String? reason) {
+    if (_downHandled) return; // 幂等：重入会与 failAll 的失败处理打成正反馈死循环
+    _downHandled = true;
+    final revoked = code == 4001;
+    if (revoked) _authDead = true;
+    DshLog.w('gw down code=$code reason=$reason');
+    // 在途请求立刻失败，别让它们各自干挂到 30s 超时（companion 坑
+    // 「请求悬挂」：掉线后按钮一直转圈，用户以为卡死）。
+    _pending.failAll('连接已断开${code == null ? '' : '（close $code）'}');
+    if (code != null && code != 1000 && code != 1005) {
+      _eventCtrl.add(LinkClosedEvent(code, reason));
+    }
     _teardown().then((_) {
-      if (_disposed || _authDead) {
+      if (_disposed) {
         _setState(GatewayState.closed);
         return;
       }
-      // 退避重连：1,2,4,8,16… 封顶 30s。
-      final delay = Duration(seconds: min(30, 1 << _backoffIndex));
-      _backoffIndex = min(_backoffIndex + 1, 5);
-      _setState(GatewayState.connecting);
-      Timer(delay, () {
-        if (!_disposed && !_authDead && _ws == null) {
-          connect().catchError((Object e) {
-            if (e is RequestException && e.code == 'CONNECT_FAIL') {
-              _setState(GatewayState.closed);
-            }
-          });
+      if (revoked) {
+        _setState(GatewayState.authFailed); // 设备已吊销：重连无意义
+        return;
+      }
+      _scheduleReconnect();
+    });
+  }
+
+  /// 退避重连 1,2,4,8,16,30s（index 封顶 5）。重连失败**不是终点**（companion 坑
+  /// 「重连链提前终止」）：只有凭据/协议类收口，拒连/429/握手超时按退避接力。
+  void _scheduleReconnect() {
+    if (_disposed || _authDead) return;
+    final delay = Duration(seconds: min(30, 1 << _backoffIndex));
+    _backoffIndex = min(_backoffIndex + 1, 5);
+    _setState(GatewayState.connecting);
+    Timer(delay, () {
+      if (_disposed || _authDead || _ws != null) return;
+      connect().catchError((Object e) {
+        if (e is RequestException &&
+            (e.code == 'NO_TOKEN' || e.code == 'PROTOCOL')) {
+          _authDead = true;
+          _setState(GatewayState.authFailed);
+          return;
         }
+        if (_ws == null) _scheduleReconnect();
       });
     });
   }
+
+  /// 能力位探测（`<能力>-v<主版本>`，只增不撤），如 `mobile-session-stats-v1`。
+  bool hasCapability(String name) => capabilities.contains(name);
 
   Future<void> _teardown() async {
     _heartbeat?.cancel();
@@ -358,9 +419,14 @@ class GatewayClient {
   }
 
   void _startHeartbeat() {
-    _heartbeat?.cancel();
-    // 服务端 30s 周期缺 2 次 pong 即断；客户端 25s 主动 ping 保持活性。
+    _live.reset();
+    _heartbeat?.cancel(); // 服务端 30s 缺 2 次 pong 即断；客户端 25s 主动 ping 保活
     _heartbeat = Timer.periodic(const Duration(seconds: 25), (_) {
+      // 静默只记录不断链：判死权在服务端（缺 2 次 pong 才 terminate），客户端抢先
+      // 收口会误杀活连接——真机表现为每 ~50s 一次无谓重连，收尾把主线程拖住 → ANR。
+      if (_live.isStaleAt(DateTime.now())) {
+        DshLog.w('gw peer silent=${_live.silentFor(DateTime.now())}（仅记录）');
+      }
       _sendRaw({'type': 'ping'});
     });
   }
@@ -368,6 +434,9 @@ class GatewayClient {
   bool _sendRaw(Map<String, dynamic> frame) {
     final ws = _ws;
     if (ws == null) return false;
+    // 半死连接**不由客户端判死**：对端静默只是「没东西可推」，写进去的帧照样会到
+    // （桥重启时由 onDone/onError 收口，服务端心跳也会主动断）。这里若抢先收口，
+    // 会把活连接打成「每 ~50s 一次无谓重连」的循环。
     try {
       ws.sink.add(jsonEncode(frame));
       return true;
@@ -377,8 +446,7 @@ class GatewayClient {
   }
 
   /// request/response：发 {type, ...payload, requestId}，等回显 requestId 的帧。
-  /// request 的可自定义超时版（session-wait 等长轮询帧用：请求超时要随
-  /// wait 时长走，固定 30s 会在应答回来前先到——桥侧 RPC 超时同样放宽）。
+  /// 可自定义超时版（session-wait 长轮询用：固定 30s 会先于应答到期）。
   Future<Map<String, dynamic>> requestWithTimeout(
     String type,
     Map<String, dynamic> payload,
@@ -387,17 +455,19 @@ class GatewayClient {
     final requestId =
         'r${++_requestSeq}-${DateTime.now().millisecondsSinceEpoch}';
     final completer = Completer<Map<String, dynamic>>();
-    _pending[requestId] = completer;
+    // 带上帧类型：error 帧在分发前被拒时只回 requestType（没有 requestId），
+    // 靠它把同类型在途请求立刻结算。
+    _pending.add(requestId, type, completer);
     final sent = _sendRaw({'type': type, ...payload, 'requestId': requestId});
     DshLog.w('gw -> $type rid=$requestId sent=$sent');
     if (!sent) {
-      _pending.remove(requestId);
+      _pending.take(requestId);
       throw RequestException('NOT_CONNECTED', '连接未建立，发送失败');
     }
     return completer.future.timeout(
       timeout,
       onTimeout: () {
-        _pending.remove(requestId);
+        _pending.take(requestId);
         throw RequestException('TIMEOUT', '请求 $type 超时');
       },
     );
@@ -411,9 +481,8 @@ class GatewayClient {
 
   // ---- 业务封装（实现在 gateway_api.dart 的 extension GatewayApi）----
 
-  /// 订阅会话推送。subscribed 帧在 bridge 的 REQUEST_ID_ECHO_EXCLUDED_KINDS
-  /// 排除表里（不回显 requestId），不能走 request() 等应答——发出即成功，
-  /// 与 kotlin-sdk MobileGatewayClient.subscribe() 一致。
+  /// 订阅会话推送。subscribed 在 REQUEST_ID_ECHO_EXCLUDED_KINDS 里（不回显
+  /// requestId），不能走 request() 等应答——发出即成功（同 kotlin-sdk）。
   void subscribe(String? sessionId) {
     if (sessionId == null || sessionId.isEmpty) return;
     _sendRaw({'type': 'subscribe', 'sessionId': sessionId});
@@ -427,5 +496,5 @@ class GatewayClient {
   }
 }
 
-/// REST 字节下载（附件 / 图片交接共用）：实现拆到 gateway_http.dart
-/// （宪法 §7 单文件 ≤500 行），这里 export 让消费方继续只 import gateway。
+/// REST 字节下载（附件 / 图片交接）实现在 gateway_http.dart（§7 单文件 ≤500 行），
+/// 这里 export 让消费方只需 import gateway。

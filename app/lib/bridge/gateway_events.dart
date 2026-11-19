@@ -54,6 +54,22 @@ class ResyncEvent extends GatewayEvent {
   final int dropped;
 }
 
+/// 连接被服务端关闭（非 1000/1005 的正常收尾）。桥的语义化关闭码：
+/// - 4001 鉴权失败/设备已吊销（ws-handler `close(4001,'Device revoked')`）——
+///   重连无意义，收口到 [GatewayState.authFailed]，用户须重新配对；
+/// - 1009 单帧超过 1 MiB（桥的帧上限）——客户端发了过大请求；
+/// - 1013 服务端忙（连接数上限，HTTP 层伴随 429 + Retry-After: 5）。
+/// 老实现不读 close code，把三类全当普通掉线（companion 坑位「WS 半死/掉线
+/// 不分因」），用户只看到「已断开」，不知道该重新配对还是等。
+class LinkClosedEvent extends GatewayEvent {
+  LinkClosedEvent(this.code, this.reason);
+  final int? code;
+  final String? reason;
+
+  bool get revoked => code == 4001;
+  bool get frameTooLarge => code == 1009;
+}
+
 class SessionEventReceived extends GatewayEvent {
   SessionEventReceived(this.sessionId, this.eventType);
   final String sessionId;

@@ -8,6 +8,7 @@ library;
 
 import '../bridge/dlog.dart';
 import '../bridge/gateway.dart'; // RequestException / HistoryPage
+import '../bridge/models.dart';
 import 'chat_state.dart';
 
 /// 已加载的最小 seq（下一页 beforeSeq）；-1 = 流式中的临时消息，跳过。
@@ -19,22 +20,64 @@ int? oldestSeqOf(ChatState state) {
   return null;
 }
 
+/// 刷新结果与「已翻出来的更早历史」合并（companion PITFALLS「刷新历史把『加载更早』
+/// 的成果抹掉」）：重拉拿到的是**最后一页**，整体替换会把用户翻出来的旧页冲掉，
+/// 视口停在原像素偏移上就变成一片空白。
+///
+/// 规则：保留新页第一条 seq **之前**的历史（旧页 seq 一定更小，不重叠）并前置，
+/// 旧页结论延续（更早的确实还没读完）；新页为空或没有 seq 时原样返回新页。
+({List<ChatMessage> messages, bool keptOlder}) mergeRefreshedHistory(
+  List<ChatMessage> previous,
+  List<ChatMessage> fresh,
+) {
+  final firstSeq = fresh.where((m) => m.seq >= 0).isEmpty
+      ? null
+      : fresh.firstWhere((m) => m.seq >= 0).seq;
+  if (firstSeq == null) return (messages: fresh, keptOlder: false);
+  final older = previous.where((m) => m.seq >= 0 && m.seq < firstSeq).toList();
+  if (older.isEmpty) return (messages: fresh, keptOlder: false);
+  return (messages: [...older, ...fresh], keptOlder: true);
+}
+
+/// 原始事件同口径合并（轨迹面板依赖它，旧页事件不能丢）。
+List<Map<String, dynamic>> mergeRefreshedRawEvents(
+  List<Map<String, dynamic>> previous,
+  List<Map<String, dynamic>> fresh,
+) {
+  final firstSeq = fresh.isEmpty ? null : _seqOf(fresh.first);
+  if (firstSeq == null) return fresh;
+  final older = previous
+      .where((e) => (_seqOf(e) ?? -1) >= 0 && _seqOf(e)! < firstSeq)
+      .toList();
+  return older.isEmpty ? fresh : [...older, ...fresh];
+}
+
+int? _seqOf(Map<String, dynamic> event) {
+  final v = event['seq'];
+  return v is int ? v : null;
+}
+
 /// 重拉当前会话历史（openSession / 事件防抖 / 命令卡 / 停止后都会调）。
 Future<void> reloadChatHistory(ChatState state) async {
   final id = state.sessionId;
   if (id == null || id.isEmpty) return;
   try {
     final page = await state.gateway.history(id, maxMessages: 200);
+    if (id != state.sessionId) return; // 过期应答：期间切了会话，整块丢弃
     DshLog.w('ui history id=$id items=${page.items.length} '
         'raw=${page.rawEvents.length} '
         'projections=${page.projections != null} '
-        'hasMore=${page.hasMore}');
-    state.messages = page.items;
+        'hasMore=${page.hasMore} truncated=${page.truncated}');
+    final merged = mergeRefreshedHistory(state.messages, page.items);
+    state.messages = merged.messages;
     // 去重：持久过程组已含这些工具，按 callId 从流式缓冲摘除对应行
     // （缓冲空后 streamingProcess 为 null，页面上只剩持久组）。
     state.dropPersistedToolRows();
-    state.rawEvents = page.rawEvents;
-    state.historyHasMore = page.hasMore;
+    state.rawEvents = mergeRefreshedRawEvents(state.rawEvents, page.rawEvents);
+    // 旧页还在 → 延续旧结论（更早的确实还没读完），别被「最后一页没更多」覆盖。
+    state.historyHasMore = merged.keptOlder ? state.historyHasMore : page.hasMore;
+    // 字节预算裁剪：只有真裁剪时服务端才带 truncated（未裁剪时字段缺席）。
+    state.historyTruncated = page.truncated;
     // 命令卡保留（第六轮反馈 m03878）：reloadHistory 重建 messages，
     // 本地命令卡（role=='command'，seq=-1）会被冲掉——重灌回列表尾部。
     final cards = state.messages.where((m) => m.role == 'command').toList();
@@ -93,6 +136,8 @@ Future<void> loadOlderMessages(ChatState state) async {
       state.historyPageJustLoaded = true;
     }
     state.historyHasMore = page.hasMore;
+    // 翻页也应答 truncated（从最旧端丢）：合并进同一个提示位，不覆盖。
+    if (page.truncated) state.historyTruncated = true;
     state.notifyUi();
   } on RequestException catch (e) {
     state.lastError = '加载更早消息失败：${e.message}';

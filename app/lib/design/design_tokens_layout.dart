@@ -86,6 +86,13 @@ class DsSpacing {
   /// 两个圆按钮中心间距（官方 (931-878)/3 ≈ 17.7dp → 按钮间空隙约 10dp）。
   static const composerButtonGap = 17.0;
 
+  /// 待发送图片 chip 的宽度上限（真机反馈 2026-11-17）。
+  /// 输入条内容宽 = 360dp 屏 - 2×screenPad(22) - 2×composerPadH(10) = 296dp；
+  /// 同一行还有权限 chip(≈80)、加图/文件夹两钮(48)、按钮间距(17)、发送钮(24)，
+  /// 合计约 169dp，余 127dp；文件名 chip 封顶 128dp 保证右侧按钮永远不被挤出。
+  /// Android 侧原先没有上限（长文件名会把 Spacer 与发送钮顶出 Row ⇒ 发不出去）。
+  static const composerImageChipMaxWidth = 128.0;
+
   /// 输入条底部免责提示与容器间距。
   static const composerHintGap = 10.0;
 
