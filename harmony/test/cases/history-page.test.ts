@@ -190,3 +190,19 @@ test('fromEvents：hasMore/projections 透传；纯图 user 上屏；空事件�
   assert.equal(empty.items.length, 0);
   assert.equal(empty.rawEvents.length, 0);
 });
+
+test('截断标记（history-byte-budget-v1）：truncated/bytes/historyFormatVersion 透传', () => {
+  // bridge 只在真裁剪时带 truncated 与 bytes；historyFormatVersion 恒在（当前 1）。
+  const page: HistoryPage = HistoryPage.fromEvents([
+    ev('user/message', 1, 100, { content: 'hi' }),
+  ], null, false, true, 2097152, 1);
+  assert.equal(page.truncated, true);
+  assert.equal(page.bytes, 2097152);
+  assert.equal(page.historyFormatVersion, 1);
+
+  // 未裁剪：三个字段缺省（老调用点不传也不炸）
+  const plain: HistoryPage = HistoryPage.fromEvents([], null, false);
+  assert.equal(plain.truncated, false);
+  assert.equal(plain.bytes, 0);
+  assert.equal(plain.historyFormatVersion, 0);
+});

@@ -20,16 +20,17 @@ export struct CommandCard {
   build() {
     Row({ space: 8 }) {
       Text('⌨')
-        .fontSize(16)
+        .fontSize(DsTypography.base.size)
         .fontColor(this.text.includes('\u2717') ? this.c().danger : this.c().chipSelectedFg)
         .margin({ top: 2 })
       Column({ space: 2 }) {
         Text(this.text.split('\n')[0])
-          .fontSize(DsTypography.small.size).fontFamily('monospace').fontColor(this.c().labelPrimary)
+          .fontSize(DsTypography.small.size).lineHeight(DsTypography.small.lineHeight)
+          .fontFamily('monospace').fontColor(this.c().labelPrimary)
           .width('100%')
         if (this.text.includes('\n')) {
           Text(this.text.split('\n').slice(1).join('\n'))
-            .fontSize(DsTypography.small.size)
+            .fontSize(DsTypography.small.size).lineHeight(DsTypography.small.lineHeight)
             .fontColor(this.text.includes('\u2717') ? this.c().danger : this.c().labelTertiary).width('100%')
         }
       }
@@ -70,14 +71,16 @@ export struct DeliverableCard {
       ForEach(this.files, (f: DeliverableFile) => {
         Row({ space: 8 }) {
           Text(this.isMarkdown(f.path) ? '📄' : '📎')
-            .fontSize(16)
+            .fontSize(DsTypography.base.size)
           Column({ space: 2 }) {
             Text(f.name.length > 0 ? f.name : f.path)
-              .fontSize(DsTypography.small.size).fontColor(this.c().labelPrimary).maxLines(1)
+              .fontSize(DsTypography.small.size).lineHeight(DsTypography.small.lineHeight)
+              .fontColor(this.c().labelPrimary).maxLines(1)
               .textOverflow({ overflow: TextOverflow.Ellipsis }).width('100%')
             if (f.description !== null) {
               Text(f.description as string)
-                .fontSize(DsTypography.caption.size).fontColor(this.c().labelTertiary).maxLines(1)
+                .fontSize(DsTypography.caption.size).lineHeight(DsTypography.caption.lineHeight)
+                .fontColor(this.c().labelTertiary).maxLines(1)
                 .textOverflow({ overflow: TextOverflow.Ellipsis }).width('100%')
             }
           }
@@ -110,7 +113,7 @@ export struct ErrorBar {
 
   build() {
     Text(this.text === '' ? '执行失败' : this.text)
-      .fontSize(14).lineHeight(20)
+      .fontSize(DsTypography.small.size).lineHeight(DsTypography.small.lineHeight)
       .fontColor(this.c().danger)
       .width('100%')
       .padding({ left: 12, right: 12, top: 8, bottom: 8 })

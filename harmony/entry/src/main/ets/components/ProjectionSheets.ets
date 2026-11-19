@@ -1,7 +1,8 @@
 /**
  * 投影面板四件 + 统计 —— 对照安卓 projection_sheets.dart/stats_sheet.dart：
  * 运行轨迹（本地 rawEvents 分组，点节点展开原始 JSON）/ 智能团队（成员/任务/
- * 子会话 + 三枚指挥话术）/ 任务 / 会话统计。全部本地只读，不发请求。
+ * 子会话 + 三枚指挥话术）/ 任务 / 会话统计。除统计会在打开时拉一次
+ * `session-stats` 投影（core/ChatStats.ts）外，其余全部本地只读，不发请求。
  * 各面板由 ChatView 挂 bindSheet。骨架（title+subtitle+内容区）每件内联
  * （ArkTS @BuilderParam 传 lambda 不可靠，不用）。
  * 智能团队 / 任务已切到 ProjectionTeamSheets.ets（单文件 ≤500 行）。
@@ -10,6 +11,7 @@
 import { ChatStore } from '../core/ChatStore';
 import { TrajectoryTurn, TrajectoryNode, TrajectoryNodeKind, trajectoryOf,
   prettyJson, chatStatsOf } from '../core/Projections';
+import { ServerStatRow, serverStatRows, loadServerStatsIn } from '../core/ChatStats';
 import { ChatMessage } from '../core/HistoryPage';
 import { GatewayState } from '../core/GatewayEvents';
 import { DsColors, DsTypography, DsSpacing } from '../ui/theme';
@@ -17,9 +19,25 @@ import { DsColors, DsTypography, DsSpacing } from '../ui/theme';
 @Component
 export struct StatsSheet {
   store: ChatStore | null = null;
+  /** ChatStore.changed() 的版本号：服务端统计是异步回来的，靠它触发重抄。 */
+  @Prop @Watch('syncStats') version: number = 0;
   @StorageProp('dshDark') dark: boolean = false;
   /** 键序稳定（Map.forEach 顺序即插入序）。 */
   @State keys: string[] = ['消息总数', '用户消息', '助手回复', '工具过程组', '错误提示', '工具调用', '思考块'];
+  /** 服务端统计拍平后的行（空 = 桥没这一帧或还在路上）。 */
+  @State serverRows: ServerStatRow[] = [];
+
+  aboutToAppear(): void {
+    const st: ChatStore | null = this.store;
+    if (st !== null) {
+      loadServerStatsIn(st); // 打开即拉一次；失败静默（老桥没有这一帧是常态）
+    }
+  }
+
+  syncStats(): void {
+    const st: ChatStore | null = this.store;
+    this.serverRows = st === null ? [] : serverStatRows(st.serverStats);
+  }
 
   private c(): DsColors {
     return new DsColors(this.dark);
@@ -38,9 +56,32 @@ export struct StatsSheet {
         .fontWeight(FontWeight.Medium)
         .fontColor(this.c().labelPrimary)
         .width('100%')
-      Text('由当前会话已加载的消息本地计算，不产生网络请求。')
+      Text('本地统计由已加载消息计算；服务端统计来自桥的 session-stats 投影。')
         .fontSize(DsTypography.small.size)
         .fontColor(this.c().labelSecondary)
+        .width('100%')
+        .margin({ top: DsSpacing.liGap })
+      // 服务端半边（键名原样透传，不猜语义 —— 见 core/ChatStats.ts 文件头）。
+      Repeat<ServerStatRow>(this.serverRows)
+        .each((item: RepeatItem<ServerStatRow>) => {
+          Row() {
+            Text(item.item.label)
+              .fontSize(DsTypography.small.size)
+              .fontColor(this.c().labelSecondary)
+              .layoutWeight(1)
+            Text(item.item.value)
+              .fontSize(DsTypography.smallStrong.size)
+              .fontWeight(FontWeight.Medium)
+              .fontColor(this.c().labelPrimary)
+          }
+          .width('100%')
+          .padding({ top: DsSpacing.liGap, bottom: DsSpacing.liGap })
+        })
+        .key((item: ServerStatRow) => item.group + '/' + item.label)
+      Text('本地统计')
+        .fontSize(DsTypography.smallStrong.size)
+        .fontWeight(FontWeight.Medium)
+        .fontColor(this.c().labelPrimary)
         .width('100%')
         .margin({ top: DsSpacing.liGap })
       Repeat<string>(this.keys)

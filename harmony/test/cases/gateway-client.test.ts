@@ -412,3 +412,101 @@ test('dispose → CLOSED、连接关闭、在途请求打回 NOT_CONNECTED', asy
   timers.advance(60000);
   assert.equal(socket.openCountOf(), 1);
 });
+
+// ---------------------------------------------------------------------------
+// 协议对齐（2026-11-19）：hello 能力位 + WS close code 语义
+// ---------------------------------------------------------------------------
+
+test('hello 带 capabilities/port → 存下来，hasCapability 精确匹配', async () => {
+  const socket: FakeSocket = new FakeSocket();
+  const timers: FakeTimers = new FakeTimers();
+  const c: GatewayClient = makeClient(socket, timers);
+  const p: Promise<void> = c.connect();
+  socket.serverOpen();
+  socket.serverHello(3, '', ['history-v1', 'mobile-session-stats-v1', 'kernel-call-v1'], 39876);
+  await p;
+  assert.equal(c.hasCapability('mobile-session-stats-v1'), true);
+  assert.equal(c.hasCapability('speech-transcription-v1'), false);
+  // 前缀不算命中（能力位是整串匹配，别用 startsWith 近似）
+  assert.equal(c.hasCapability('history'), false);
+  assert.equal(c.getListenerPort(), 39876);
+  assert.equal(c.getCapabilities().length, 3);
+});
+
+test('老桥 hello 无 capabilities → 空数组，探测一律 false 不抛', async () => {
+  const socket: FakeSocket = new FakeSocket();
+  const timers: FakeTimers = new FakeTimers();
+  const c: GatewayClient = makeClient(socket, timers);
+  const p: Promise<void> = c.connect();
+  socket.serverOpen();
+  socket.serverHello();
+  await p;
+  assert.equal(c.getCapabilities().length, 0);
+  assert.equal(c.hasCapability('history-v1'), false);
+  assert.equal(c.getListenerPort(), 0);
+});
+
+test('close 4001（设备吊销）→ AUTH_FAILED 且不排重连，并上报 LINK_CLOSED', async () => {
+  const socket: FakeSocket = new FakeSocket();
+  const timers: FakeTimers = new FakeTimers();
+  const c: GatewayClient = makeClient(socket, timers);
+  const events: GatewayEvent[] = [];
+  c.setEventListener((e: GatewayEvent): void => {
+    events.push(e);
+  });
+  const p: Promise<void> = c.connect();
+  socket.serverOpen();
+  socket.serverHello();
+  await p;
+
+  socket.serverDown('Device revoked', 4001);
+  assert.equal(c.getState(), GatewayState.AUTH_FAILED);
+  // 重连必然被同样打回：不许留下退避链（留下就是无限重连刷屏）
+  assert.equal(timers.pendingCount(), 0);
+  const link: GatewayEvent = events.filter((e: GatewayEvent): boolean =>
+    e.type === GatewayEventType.LINK_CLOSED)[0];
+  assert.notEqual(link, undefined);
+  assert.equal(link.linkCode, 4001);
+  assert.equal(link.linkReason, 'Device revoked');
+});
+
+test('close 1009（单帧超限）→ 上报 LINK_CLOSED 但仍按退避重连', async () => {
+  const socket: FakeSocket = new FakeSocket();
+  const timers: FakeTimers = new FakeTimers();
+  const c: GatewayClient = makeClient(socket, timers);
+  const events: GatewayEvent[] = [];
+  c.setEventListener((e: GatewayEvent): void => {
+    events.push(e);
+  });
+  const p: Promise<void> = c.connect();
+  socket.serverOpen();
+  socket.serverHello();
+  await p;
+
+  socket.serverDown('frame too large', 1009);
+  assert.equal(c.getState(), GatewayState.CONNECTING);
+  assert.equal(timers.nextDelay(), 1000);
+  const link: GatewayEvent = events.filter((e: GatewayEvent): boolean =>
+    e.type === GatewayEventType.LINK_CLOSED)[0];
+  assert.equal(link.linkCode, 1009);
+});
+
+test('close 1000（正常关）/ 无 code → 不上报 LINK_CLOSED', async () => {
+  const socket: FakeSocket = new FakeSocket();
+  const timers: FakeTimers = new FakeTimers();
+  const c: GatewayClient = makeClient(socket, timers);
+  const events: GatewayEvent[] = [];
+  c.setEventListener((e: GatewayEvent): void => {
+    events.push(e);
+  });
+  const p: Promise<void> = c.connect();
+  socket.serverOpen();
+  socket.serverHello();
+  await p;
+
+  socket.serverDown('bye', 1000);
+  socket.serverDown('plain');
+  const links: GatewayEvent[] = events.filter((e: GatewayEvent): boolean =>
+    e.type === GatewayEventType.LINK_CLOSED);
+  assert.equal(links.length, 0);
+});

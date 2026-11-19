@@ -127,14 +127,23 @@ export class FakeSocket implements WebSocketTransport {
     return typeof frame['requestId'] === 'string' ? frame['requestId'] as string : '';
   }
 
-  serverHello(protocol: number = 3, requestId: string = ''): void {
-    this.serverFrame({ kind: 'hello', data: { protocol, device: { platform: 'test' } },
-      requestId });
+  /** 注入 hello；capabilities/port 只在给了值时出现（对齐 bridge 现算语义）。 */
+  serverHello(protocol: number = 3, requestId: string = '',
+              capabilities: string[] = [], port: number = 0): void {
+    const data: Record<string, unknown> = { protocol, device: { platform: 'test' } };
+    if (capabilities.length > 0) {
+      data['capabilities'] = capabilities;
+    }
+    if (port > 0) {
+      data['port'] = port;
+    }
+    this.serverFrame({ kind: 'hello', data, requestId });
   }
 
-  serverDown(reason: string): void {
+  /** 注入掉线；`code` 是 WS close code（4001 吊销 / 1009 帧超限 / 1000 正常关）。 */
+  serverDown(reason: string, code?: number): void {
     if (this.callbacks !== null) {
-      this.callbacks.onDown(reason);
+      this.callbacks.onDown(reason, code);
     }
   }
 

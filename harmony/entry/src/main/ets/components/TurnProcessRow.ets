@@ -109,7 +109,7 @@ export struct TurnProcessRow {
         Blank().layoutWeight(1)
         if (this.canCollapse()) {
           Text(this.open ? '⌃' : '⌄')
-            .fontSize(14)
+            .fontSize(DsTypography.small.size)
             .fontColor(this.labelColor())
             .width(14)
             .textAlign(TextAlign.Center)

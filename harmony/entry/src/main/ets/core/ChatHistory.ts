@@ -19,6 +19,48 @@ import type { ChatStore } from './ChatStore';
 
 const HISTORY_MAX_MESSAGES: number = 200;
 
+/** 原始事件里的 seq（没有就 null）。 */
+function rawSeqOf(event: JsonMap): number | null {
+  const v: Object | undefined = event['seq'];
+  return typeof v === 'number' ? v as number : null;
+}
+
+/**
+ * 刷新结果与「已翻出来的更早历史」合并（companion PITFALLS「刷新历史把『加载更早』
+ * 的成果抹掉」）：重拉拿到的是最后一页，整体替换会把旧页冲掉、视口停在原偏移
+ * 就是一片空白。保留新页首条 seq 之前的历史，旧页结论（hasMore）由调用方延续。
+ */
+export function mergeRefreshedHistory(previous: ChatMessage[], previousRaw: JsonMap[],
+  fresh: ChatMessage[], freshRaw: JsonMap[]): [ChatMessage[], JsonMap[], boolean] {
+  let firstSeq: number = -1;
+  for (const m of fresh) {
+    if (m.seq >= 0) {
+      firstSeq = m.seq;
+      break;
+    }
+  }
+  if (firstSeq < 0) {
+    return [fresh, freshRaw, false];
+  }
+  const older: ChatMessage[] = [];
+  for (const m of previous) {
+    if (m.seq >= 0 && m.seq < firstSeq) {
+      older.push(m);
+    }
+  }
+  if (older.length === 0) {
+    return [fresh, freshRaw, false];
+  }
+  const olderRaw: JsonMap[] = [];
+  for (const e of previousRaw) {
+    const s: number | null = rawSeqOf(e);
+    if (s !== null && s >= 0 && s < firstSeq) {
+      olderRaw.push(e);
+    }
+  }
+  return [[...older, ...fresh], [...olderRaw, ...freshRaw], true];
+}
+
 /** 重拉当前会话历史（openSession / 事件防抖 / 停止后都会调）。 */
 export function reloadHistoryIn(store: ChatStore): Promise<void> {
   const id: string | null = store.sessionId;
@@ -34,9 +76,17 @@ export function reloadHistoryIn(store: ChatStore): Promise<void> {
     }
   }
   return store.api.history(id, HISTORY_MAX_MESSAGES, 0).then((page: HistoryPage): void => {
-    store.messages = localCards.length === 0 ? page.items : [...page.items, ...localCards];
-    store.rawEvents = page.rawEvents;
-    store.historyHasMore = page.hasMore;
+    if (store.sessionId !== id) {
+      return; // 过期应答：期间切了会话，整块丢弃（companion #16 同款）
+    }
+    const merged: [ChatMessage[], JsonMap[], boolean] =
+      mergeRefreshedHistory(store.messages, store.rawEvents, page.items, page.rawEvents);
+    const base: ChatMessage[] = merged[0];
+    store.messages = localCards.length === 0 ? base : [...base, ...localCards];
+    store.rawEvents = merged[1];
+    // 旧页还在 → 延续旧结论（更早的确实还没读完），别被「最后一页没更多」覆盖。
+    store.historyHasMore = merged[2] ? store.historyHasMore : page.hasMore;
+    store.historyTruncated = page.truncated;
     // 翻页/刷新时 projections 可能缺席：保留上一份（同会话），避免面板闪空。
     if (page.projections !== null) {
       store.projections = page.projections;
@@ -80,6 +130,9 @@ export function loadOlderIn(store: ChatStore): Promise<void> {
       store.historyPageJustLoaded = true;
     }
     store.historyHasMore = page.hasMore;
+    if (page.truncated) {
+      store.historyTruncated = true; // 只置位不清零：提示一旦出现就不该被翻页抹掉
+    }
     store.changed();
   }).catch((e: Error): void => {
     if (e instanceof RequestException) {

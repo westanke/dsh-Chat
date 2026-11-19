@@ -58,6 +58,9 @@ export struct MessageList {
   /** turn.end reason=max-tokens：列表尾「回答被截断」提示（官方 client.js:6707 文案）。 */
   @State maxTokensNotice: boolean = false;
   @State hasMore: boolean = false;
+  /** 服务端按字节预算裁掉更早事件（history-byte-budget-v1）：列表头提示；
+   *  与「加载更早消息」并存（hasMore=还能翻，truncated=翻到底也不是会话开头）。 */
+  @State truncated: boolean = false;
   /** 正在翻页（按钮换 spinner）。 */
   @State loadingOlder: boolean = false;
   /** 流式正文/思考快照（core 里累积，syncVersion 抄写；本端原先完全没渲染，2026-11-17 补）。 */
@@ -85,13 +88,24 @@ export struct MessageList {
   private bubbleMaxWidth(): Length {
     return '86.4%';
   }
-  /** 流式块是否需要出现（官方：流式进行中，或残留增量未清）。 */
+  /**
+   * 流式块是否需要出现 —— 唯一判据是 store.streaming（安卓同口径：
+   * app/lib/ui/chat_message_list.dart:302 `if (state.streaming)`）。
+   *
+   * 原来还兜了「残留增量未清」（streamTextView/streamReasoningView 非空），
+   * 2026-11-17 真机证明这个兜底会把轮尾占位钉死：TURN_END 丢帧后
+   * streaming 收口成 false，但两个缓冲还留着旧文本，兜底让本块继续存在，
+   * 而缓冲被清成空串的那一帧 StreamingBlock 又正好走「两串皆空 → 正在思考…」
+   * 分支 —— 服务端早已 running:false，屏上却永远挂着「正在思考…」。
+   * 缓冲的清理归 core（TURN_END / TURN_FAILED / cancelTurnIn / resync 对账），
+   * 视图层不再自作主张。
+   */
   private streamingVisible(): boolean {
     const st: ChatStore | null = this.store;
     if (st === null) {
       return false;
     }
-    return st.streaming || this.streamTextView !== '' || this.streamReasoningView !== '';
+    return st.streaming;
   }
 
   build() {
@@ -130,6 +144,17 @@ export struct MessageList {
           })
         }
       }
+      if (this.truncated) {
+        ListItem() {
+          Row({ space: 6 }) {
+            Text('ⓘ').fontSize(DsTypography.small.size).fontColor(this.c().labelSecondary)
+            Text('会话过长，更早的部分未显示')
+              .fontSize(DsTypography.small.size).fontColor(this.c().labelSecondary)
+          }
+          .width('100%').justifyContent(FlexAlign.Center)
+          .padding({ top: 6, bottom: 6 })
+        }
+      }
       LazyForEach(this.ds, (m: ChatMessage) => {
         ListItem() {
           this.itemOf(m)
@@ -137,6 +162,9 @@ export struct MessageList {
       }, (m: ChatMessage) => this.keyOf(m))
       // 流式块（对照安卓 _StreamingItem）：思考中先出「思考」块，正文增量走 MdView。
       // 必须排在已提交消息之后、截断提示之前，跟着内容长。
+      // 注意：send() 那一刻 store.streaming 就已是 true（core/ChatStore.ts:250-251），
+      // 本块因此会在**首个增量到达前**被建成空实例 —— 其子组件的入参必须全是 @Prop，
+      // 否则后续增量灌不进去（2026-11-17 真机「流式思考不显示」的真因）。
       if (this.streamingVisible()) {
         ListItem() {
           StreamingBlock({
@@ -195,6 +223,7 @@ export struct MessageList {
     this.streamTextView = st === null ? '' : st.streamText;
     this.streamReasoningView = st === null ? '' : st.streamReasoning;
     this.hasMore = st !== null && st.historyHasMore;
+    this.truncated = st !== null && st.historyTruncated;
     this.loadingOlder = st !== null && st.loadingOlder;
     const justLoaded: boolean = st !== null && st.consumeHistoryPageJustLoaded();
     if (!justLoaded && (this.loadingOlder || this.anchorIdx >= 0)) {
@@ -370,7 +399,10 @@ export struct MessageList {
       Text(m.text === '' ? ' ' : m.text)
         .fontSize(16)
         .fontColor(this.c().labelPrimary)
-        .lineHeight(22)
+        // 安卓用户气泡是 `DsTypography.base.copyWith(height: 24 / 16)`
+        // （app/lib/ui/chat_message_items.dart:227-229），即 16/24 —— 不是 base 的
+        // 16/28（那是助手正文）。此处取 24 对齐安卓，原 22 偏挤。
+        .lineHeight(24)
         .constraintSize({ maxWidth: this.bubbleMaxWidth() })
         .padding({ left: 14, right: 14, top: 10, bottom: 10 })
         .backgroundColor(this.c().userBubble)

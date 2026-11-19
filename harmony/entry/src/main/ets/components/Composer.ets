@@ -444,8 +444,10 @@ export struct Composer {
             })
         } else {
           // 发送键对齐官方：实心品牌色圆 + 白色向上箭头（字号 20、加粗，官方图标是
-          // 线宽较粗的 arrow-up）；禁用态浅灰底 + 中灰箭头，不再用纯白底（
-          // 白底 + 浅灰箭头在浅色主题下几乎看不见，2026-11-16 用户反馈）。
+          // 线宽较粗的 arrow-up）。禁用态刻意不用 `.enabled(false)`：ArkUI 会给禁用
+          // 组件整体叠一层约 0.4 的透明度，真机实测把浅灰底和灰箭头一起混白，对比度
+          // 只剩 1.91:1（远低于 WCAG AA 4.5:1），且纯黑混白上限也只有 2.6:1，所以
+          // 改 token 色号无效。改为保持可点、在 onClick 里判空实现同样的禁用语义。
           Button('↑', { type: ButtonType.Circle })
             .width(44)
             .height(44)
@@ -453,11 +455,8 @@ export struct Composer {
             .fontColor(this.sendEnabled() ? this.c().onBrand : this.c().sendDisabledFg)
             .fontSize(20)
             .fontWeight(this.sendEnabled() ? FontWeight.Bold : FontWeight.Medium)
-            .enabled(this.sendEnabled())
             .accessibilityText(this.sendEnabled() ? '发送' : '发送（未就绪）')
-            .onClick(() => {
-              this.send();
-            })
+            .onClick(() => { if (this.sendEnabled()) { this.send(); } })
         }
       }
       .width('100%')

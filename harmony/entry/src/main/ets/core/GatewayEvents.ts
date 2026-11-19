@@ -39,6 +39,8 @@ export class GatewayEventType {
   static readonly TURN_START: string = 'turnStart';
   /** chat.turn.end：一轮结束（reason.kind 判收起/截断提示，官方 client.js:4935）。 */
   static readonly TURN_END: string = 'turnEnd';
+  /** 连接被服务端语义化关闭（4001 吊销 / 1009 帧超限），UI 提示用。 */
+  static readonly LINK_CLOSED: string = 'linkClosed';
 }
 
 /**
@@ -64,6 +66,10 @@ export class GatewayEvent {
   toolResult: ToolResultEvent | null = null;
   /** turn.end 的 reason.kind（'aborted'|'interrupted'|'error'|'max-tokens'|…；''=无）。 */
   turnReasonKind: string = '';
+  /** linkClosed 的 WS close code（4001 吊销 / 1009 帧超限；0=未携带）。 */
+  linkCode: number = 0;
+  /** linkClosed 的 close reason 原文。 */
+  linkReason: string = '';
 
   static delta(d: MessageDelta): GatewayEvent {
     const e: GatewayEvent = new GatewayEvent();
@@ -151,6 +157,14 @@ export class GatewayEvent {
     e.type = GatewayEventType.TURN_END;
     e.sessionId = sessionId;
     e.turnReasonKind = reasonKind;
+    return e;
+  }
+
+  static linkClosed(code: number, reason: string): GatewayEvent {
+    const e: GatewayEvent = new GatewayEvent();
+    e.type = GatewayEventType.LINK_CLOSED;
+    e.linkCode = code;
+    e.linkReason = reason;
     return e;
   }
 

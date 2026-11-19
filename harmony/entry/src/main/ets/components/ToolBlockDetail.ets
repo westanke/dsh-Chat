@@ -33,6 +33,7 @@ export struct ToolBlockDetail {
       Row() {
         Text(this.call.name === '' ? 'tool' : this.call.name)
           .fontSize(DsTypography.codeBlockLabel.size)
+          .lineHeight(DsTypography.codeBlockLabel.lineHeight)
           .fontFamily('monospace')
           .fontColor(this.c().labelSecondary)
           .maxLines(1)
@@ -41,11 +42,13 @@ export struct ToolBlockDetail {
         if (formatDuration(this.call.durationMs) !== null) {
           Text(formatDuration(this.call.durationMs) as string)
             .fontSize(DsTypography.caption.size)
+            .lineHeight(DsTypography.caption.lineHeight)
             .fontColor(this.c().labelTertiary)
             .margin({ left: 6 })
         }
         Text(this.call.failed ? '✗' : '✓')
           .fontSize(DsTypography.caption.size)
+          .lineHeight(DsTypography.caption.lineHeight)
           .fontColor(this.call.failed ? this.c().danger : this.c().labelTertiary)
           .margin({ left: 6 })
       }
@@ -100,11 +103,13 @@ export struct ToolBlockDetail {
       Row() {
         Text(l.prefix)
           .fontSize(DsTypography.codeBlock.size)
+          .lineHeight(DsTypography.codeBlock.lineHeight)
           .fontFamily('monospace')
           .fontColor(this.diffFg(l))
           .width(14)
         Text(l.text)
           .fontSize(DsTypography.codeBlock.size)
+          .lineHeight(DsTypography.codeBlock.lineHeight)
           .fontFamily('monospace')
           .fontColor(this.diffFg(l))
           .maxLines(1)
@@ -112,7 +117,9 @@ export struct ToolBlockDetail {
           .layoutWeight(1)
       }
       .width('100%')
-      .padding({ top: 1, bottom: 1, left: 4, right: 4 })
+      // 纵向交给 lineHeight（22）撑出行距；原来 top/bottom 各 1 不在 R003 间距集（只有 0,2,4…），
+      // 内联 1vp 也看不出差异，直接去掉。
+      .padding({ left: 4, right: 4 })
       .borderRadius(2)
       .backgroundColor(this.diffBg(l))
     }, (l: DiffLineRow, idx: number) => l.prefix + l.text + '-' + idx.toString())
@@ -177,6 +184,7 @@ export struct ToolBlockDetail {
       ForEach(this.readWindow(), (line: string, idx: number) => {
         Text(line === '' ? ' ' : line)
           .fontSize(DsTypography.codeBlock.size)
+          .lineHeight(DsTypography.codeBlock.lineHeight)
           .fontFamily('monospace')
           .fontColor(this.c().labelSecondary)
           .width('100%')
@@ -219,6 +227,7 @@ export struct ToolBlockDetail {
   searchDetail() {
     Text(searchSummaryOf(this.call))
       .fontSize(DsTypography.caption.size)
+      .lineHeight(DsTypography.caption.lineHeight)
       .fontColor(this.c().labelTertiary)
       .width('100%')
     if (this.call.resultText !== null && this.call.resultText.trim() !== '') {
@@ -234,6 +243,7 @@ export struct ToolBlockDetail {
     } else {
       Text(webSummaryOf(this.call))
         .fontSize(DsTypography.caption.size)
+        .lineHeight(DsTypography.caption.lineHeight)
         .fontColor(this.c().labelTertiary)
         .width('100%')
     }
@@ -251,11 +261,13 @@ export struct ToolBlockDetail {
     } else {
       Text(askSummaryOf(this.call, this.answerable(this.call.callId)))
         .fontSize(DsTypography.caption.size)
+        .lineHeight(DsTypography.caption.lineHeight)
         .fontColor(this.c().labelTertiary)
         .width('100%')
       ForEach(askQuestionsOf(this.call), (q: UserQuestion) => {
         Text(q.question)
           .fontSize(DsTypography.small.size)
+          .lineHeight(DsTypography.small.lineHeight)
           .fontColor(this.c().labelSecondary)
           .width('100%')
       }, (q: UserQuestion) => q.id)
@@ -267,17 +279,20 @@ export struct ToolBlockDetail {
     Column({ space: 4 }) {
       Text(q.question)
         .fontSize(DsTypography.small.size)
+        .lineHeight(DsTypography.small.lineHeight)
         .fontColor(this.c().brand)
         .width('100%')
       ForEach(this.answersOf(q, entries), (a: string) => {
         Text(a)
           .fontSize(DsTypography.small.size)
+          .lineHeight(DsTypography.small.lineHeight)
           .fontColor(this.c().labelPrimary)
           .width('100%')
       }, (a: string) => a)
       if (this.answersOf(q, entries).length === 0) {
         Text(ASK_NOT_ANSWERED)
           .fontSize(DsTypography.small.size)
+          .lineHeight(DsTypography.small.lineHeight)
           .fontColor(this.c().labelTertiary)
           .width('100%')
       }
@@ -327,11 +342,13 @@ export struct ToolBlockDetail {
     Column() {
       Text(label)
         .fontSize(DsTypography.caption.size)
+        .lineHeight(DsTypography.caption.lineHeight)
         .fontColor(this.c().labelTertiary)
         .width('100%')
       Scroll() {
         Text(body)
           .fontSize(DsTypography.codeBlock.size)
+          .lineHeight(DsTypography.codeBlock.lineHeight)
           .fontFamily('monospace')
           .fontColor(bodyColor)
           .width('100%')

@@ -83,7 +83,7 @@ export struct MdCodeBlock {
           .layoutWeight(1)
         Row() {
           Text(this.copied ? '✓' : '⧉')
-            .fontSize(14)
+            .fontSize(DsTypography.small.size)
             .fontColor(this.c().labelTertiary)
           Text(this.copied ? '已复制' : '复制')
             .fontSize(DsTypography.codeBlockLabel.size)
@@ -136,10 +136,13 @@ export struct MdCodeBlock {
   renderLine(row: HlSpan[], lineIdx: number) {
     Row() {
       if (row.length === 0) {
+        // 空行也要有行高，否则前后空行比可见行矮，代码块纵向节奏不齐。
         Text(' ')
           .fontSize(DsTypography.codeBlock.size)
+          .lineHeight(DsTypography.codeBlock.lineHeight)
           .fontFamily(DsTypography.codeFamily)
       } else {
+        // 行高只能落在宿主 Text 上（Span 没有 lineHeight 属性）。
         Text() {
           Repeat<HlSpan>(row)
             .each((entry: RepeatItem<HlSpan>) => {
@@ -150,6 +153,7 @@ export struct MdCodeBlock {
             })
             .key((entry: HlSpan, index: number) => index.toString() + '-' + entry.text.length.toString())
         }
+        .lineHeight(DsTypography.codeBlock.lineHeight)
       }
     }
     .alignItems(VerticalAlign.Center)

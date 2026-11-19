@@ -10,13 +10,18 @@
  * - 心跳 25s（自续一次性调度，替代 Android 的 periodic Timer）；
  * - 掉线自动重连，退避 1→2→4→8→16→30→30…秒（1<<index 封顶 30，index 封顶 5）；
  * - 请求超时→TIMEOUT（pending 移除）；未连接发送→NOT_CONNECTED；
- * - subscribe 帧响应不回显 requestId，发出即成功（服务端排除表）。
+ * - subscribe 帧响应不回显 requestId，发出即成功（服务端排除表）；
+ * - hello 带 `capabilities[]` + `port`，存下来供 `hasCapability()` 探测特性
+ *   （bridge 口径：用能力位判特性、不要比版本号；能力位每次连接现算）；
+ * - WS close code 4001 = 令牌/设备被吊销：**停止重连链**转 AUTH_FAILED，
+ *   并上报 LINK_CLOSED 事件（否则用户只会看到无限重连，不知道要重新配对）。
  * 与 Android 的已知偏差（见 harmony/docs/PORT-MAP.md）：Android 初连失败不自动重连
  * （onDone 不触发）；鸿蒙平台层 open 失败走 onDown，初连失败也会进自动重连
  * ——与姊妹仓 EventsChannel 行为一致（真机验证过），不视为缺陷。
  */
 
 import { JsonAccess, JsonMap } from './JsonAccess';
+import { LinkLiveness } from './LinkLiveness';
 import { onFrameOn, requestOn, requestWithTimeoutOn, subscribeOn } from './GatewayRequests';
 import { WireBuilder } from './Wire';
 import { MessageDelta, MessageCommitted } from './Models';
@@ -46,6 +51,8 @@ export interface GatewayDeps {
 
   /** 可选诊断出口（真机 hilog 拿不到应用日志时落盘取证用；不传则静默）。 */
   trace?: (message: string) => void;
+  /** 可选时钟（活着判定用；不传走 Date.now，单测注入假钟）。 */
+  now?: () => number;
 }
 
 export class GatewayClient {
@@ -82,9 +89,18 @@ export class GatewayClient {
    * （真机实证：1s 档被 2s 档顶掉）。0 表示尚无（attempt 从 1 起）。
    */
   private downAttempt: number = 0;
+  /** 连接活性（半死判据；见 LinkLiveness）。 */
+  readonly live: LinkLiveness = new LinkLiveness();
 
   /** hello 帧里服务端的 device 信息（设备表占位名换真名用）。 */
   private serverDevice: JsonMap | null = null;
+  /**
+   * 本次连接协商到的能力位（bridge `connection.ready`/`hello` 的 capabilities[]）。
+   * 空 = 老桥或尚未握手；判特性用它，别比版本号（bridge AGENTS 明令）。
+   */
+  private capabilities: string[] = [];
+  /** hello 回的本连接实际端口（隧道专用端口时为隧道数据端口）。0=未携带。 */
+  private listenerPort: number = 0;
   /** hello 是否已结算（初始 true：未连接时 settleHello 是 no-op）。 */
   private helloSettled: boolean = true;
   private helloResolve: (() => void) | null = null;
@@ -127,16 +143,32 @@ export class GatewayClient {
   }
 
   /** REST 拼 URL 用（GatewayApi 的 restJson/fetchAttachment）。 */
-  getBaseUrl(): string {
-    return this.baseUrl;
+  getBaseUrl(): string { return this.baseUrl; }
+
+  getToken(): string { return this.token; }
+
+  getServerDevice(): JsonMap | null { return this.serverDevice; }
+
+  /** 对端静默时长（诊断用；判死不在这里做，见 scheduleHeartbeat 的注释）。 */
+  notePeerSilence(): void {
+    if (this.live.isStale(this.nowMs())) {
+      this.traceMsg('peer silent=' + this.live.silentFor(this.nowMs()).toString() + '（仅记录）');
+    }
+  }
+  /** 时钟（注入优先；单测用假钟推进静默）。 */
+  nowMs(): number { return this.deps.now === undefined ? Date.now() : this.deps.now(); }
+  /** 能力位探测（bridge 用 `<能力>-v<主版本>` 命名、只增不撤；缺失=不支持该特性）。 */
+  hasCapability(name: string): boolean {
+    return this.capabilities.indexOf(name) >= 0;
   }
 
-  getToken(): string {
-    return this.token;
+  getCapabilities(): string[] {
+    return this.capabilities;
   }
 
-  getServerDevice(): JsonMap | null {
-    return this.serverDevice;
+  /** 本连接实际端口（隧道数据端口场景用于诊断；0=hello 未携带）。 */
+  getListenerPort(): number {
+    return this.listenerPort;
   }
 
   setToken(token: string, deviceName: string): void {
@@ -165,6 +197,7 @@ export class GatewayClient {
       const headers: Map<string, string> = new Map();
       headers.set('Authorization', 'Bearer ' + this.token);
       const self: GatewayClient = this;
+      self.live.reset(); // 新连接还没收到帧之前的静默不算死
       const callbacks: WebSocketCallbacks = {
         onOpen: (): void => {
           self.armHelloTimeout();
@@ -172,8 +205,8 @@ export class GatewayClient {
         onMessage: (text: string): void => {
           self.onFrame(text);
         },
-        onDown: (reason: string): void => {
-          self.onDown(myAttempt, reason);
+        onDown: (reason: string, code?: number): void => {
+          self.onDown(myAttempt, reason, code === undefined ? 0 : code);
         },
       };
       this.handle = this.deps.ws.open(this.wsUrl(), headers, callbacks, 'dsh-mobile-v1', 10000);
@@ -223,6 +256,8 @@ export class GatewayClient {
   // ------------------------------------------------------------------
 
   private onFrame(text: string): void {
+    // 活着 = 收到了帧（坏帧也算）：判据前移到解析之前（companion #46）。
+    this.live.seen(this.nowMs());
     onFrameOn(this, text, (event: GatewayEvent): void => { this.emit(event); },
       (data: JsonMap | null, requestId: string): void => { this.onHello(data, requestId); });
   }
@@ -237,6 +272,10 @@ export class GatewayClient {
       return;
     }
     this.serverDevice = data !== null ? JsonAccess.obj(data, 'device') : null;
+    this.capabilities = JsonAccess.strArr(data, 'capabilities');
+    this.listenerPort = JsonAccess.numOr(data, 'port', 0);
+    this.traceMsg('hello caps=' + this.capabilities.length.toString()
+      + ' port=' + this.listenerPort.toString());
     this.backoffIndex = 0;
     this.reconnecting = false;
     this.applyState(GatewayState.READY);
@@ -256,7 +295,7 @@ export class GatewayClient {
   // 内部：连接生命周期
   // ------------------------------------------------------------------
 
-  private onDown(attemptOfThisConnection: number, reason: string): void {
+  private onDown(attemptOfThisConnection: number, reason: string, code: number = 0): void {
     if (attemptOfThisConnection !== this.attempt) {
       return; // 陈旧回调（连接已被替换/关闭），忽略。
     }
@@ -267,13 +306,30 @@ export class GatewayClient {
     this.traceMsg('onDown#' + attemptOfThisConnection.toString() + ' ' + reason
       + ' state=' + this.state.toString());
     const wasReady: boolean = this.state === GatewayState.READY;
+    const revoked: boolean = code === 4001;
+    const frameTooLarge: boolean = code === 1009;
     this.teardown();
     // hello 尚未结算时把 connect() 的 Promise 打回去（已结算则是 no-op）。
-    this.settleHello(new RequestException('CONNECT_FAIL', '连接中断: ' + reason));
+    this.settleHello(new RequestException(revoked ? 'AUTH_REVOKED' : 'CONNECT_FAIL',
+      '连接中断: ' + reason));
 
     if (this.disposed) {
       this.applyState(GatewayState.CLOSED);
       return;
+    }
+    if (code !== 1000 && code !== 1005 && code !== 0) {
+      // 语义化 close 上报 UI（正常关不上报）：4001 要用户重新配对、1009 是单帧超限。
+      this.emit(GatewayEvent.linkClosed(code, reason));
+    }
+    if (revoked) {
+      // 令牌/设备撤销即时生效（bridge ws-handler close(4001,'Device revoked')）：
+      // 继续重连只会被同样打回，停链转 AUTH_FAILED（Android 同口径）。
+      this.reconnecting = false;
+      this.applyState(GatewayState.AUTH_FAILED);
+      return;
+    }
+    if (frameTooLarge) {
+      this.traceMsg('frame too large (1009)，连接已由服务端重置');
     }
     // 已经在重连链里：任意一次重连尝试又掉了（TCP 未连上就 close、握手失败），
     // 也继续按退避接力 —— 安卓 _onDone 无条件退避同口径。
@@ -378,6 +434,10 @@ export class GatewayClient {
       if (self.state !== GatewayState.READY || self.handle === null) {
         return;
       }
+      // 静默只记录，**不主动断链**：判死权在服务端（桥 30s 一次 ping、连缺两次 pong
+      // 才 terminate）。客户端抢先换代会在活连接上误杀，真机上表现为每 ~50s 一次
+      // 无谓重连，且收尾把主线程拖住（tap 5s 不响应 → ANR）。
+      self.notePeerSilence();
       const b: WireBuilder = new WireBuilder();
       b.put('type', 'ping');
       self.handle.send(JSON.stringify(b.buildMap()));

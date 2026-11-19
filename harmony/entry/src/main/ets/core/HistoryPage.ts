@@ -145,6 +145,16 @@ export class HistoryPage {
    * 「读不到投影」当成「没有这个功能」（v2.2.44 真机踩过）。
    */
   projections: JsonMap | null = null;
+  /**
+   * 服务端因字节预算（单次 2 MiB / 单条 512 KiB）裁掉了更早的事件。
+   * 只有真裁剪时 bridge 才带这个字段（history-byte-budget-v1），缺席=false。
+   * UI 必须提示「更早的部分未显示」，否则用户会以为会话只有这么长。
+   */
+  truncated: boolean = false;
+  /** 裁剪时的响应体字节数（未裁剪时 0）。 */
+  bytes: number = 0;
+  /** 历史事件格式版本（bridge HISTORY_FORMAT_VERSION，当前 1；0=未携带）。 */
+  historyFormatVersion: number = 0;
 
   /**
    * 从 REST events / WS history 的 events 数组装配。
@@ -160,8 +170,13 @@ export class HistoryPage {
    * 4. 过程组内只有 1 次工具调用时照样产出一组，折不折由 UI 决定。
    */
   static fromEvents(rawEvents: Object[], projections: JsonMap | null,
-                    hasMore: boolean): HistoryPage {
+                    hasMore: boolean, truncated: boolean = false,
+                    bytes: number = 0,
+                    historyFormatVersion: number = 0): HistoryPage {
     const page: HistoryPage = new HistoryPage();
+    page.truncated = truncated;
+    page.bytes = bytes;
+    page.historyFormatVersion = historyFormatVersion;
     const items: ChatMessage[] = [];
     const normalized: JsonMap[] = [];
 

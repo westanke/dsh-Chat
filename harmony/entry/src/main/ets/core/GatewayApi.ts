@@ -189,6 +189,23 @@ export class GatewayApi {
   // 消息与会话推进
   // ------------------------------------------------------------------
 
+  /**
+   * 服务端统计投影（`session-stats` 帧：sessionStats / tokenUsage / contextPressure）。
+   * 桥 < 2.12 没有这一帧（回 UNKNOWN_TYPE），调用方要能容忍失败。
+   */
+  sessionStats(sessionId: string): Promise<JsonMap> {
+    const b: WireBuilder = new WireBuilder();
+    b.put('sessionId', sessionId);
+    return this.client.request('session-stats', b.buildMap());
+  }
+
+  /** 上下文占用（`context-usage` 帧，同 session-stats 少一个 sessionStats）。 */
+  contextUsage(sessionId: string): Promise<JsonMap> {
+    const b: WireBuilder = new WireBuilder();
+    b.put('sessionId', sessionId);
+    return this.client.request('context-usage', b.buildMap());
+  }
+
   /** 会话历史（history 帧，支持 beforeSeq 翻页）。projections 只在首屏应答带。 */
   history(sessionId: string, maxMessages: number = 0,
           beforeSeq: number = 0): Promise<HistoryPage> {
@@ -200,7 +217,10 @@ export class GatewayApi {
       const events: Object[] = JsonAccess.arr(data, 'events');
       const projections: JsonMap | null = JsonAccess.obj(data, 'projections');
       const hasMore: boolean = JsonAccess.boolOr(data, 'hasMore', false);
-      return HistoryPage.fromEvents(events, projections, hasMore);
+      return HistoryPage.fromEvents(events, projections, hasMore,
+        JsonAccess.boolOr(data, 'truncated', false),
+        JsonAccess.numOr(data, 'bytes', 0),
+        JsonAccess.numOr(data, 'historyFormatVersion', 0));
     });
   }
 

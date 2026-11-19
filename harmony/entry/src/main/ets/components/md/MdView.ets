@@ -4,7 +4,7 @@
 import { parseMarkdown, MdBlock, MdListItem } from '../../core/MdParser';
 import { InlineSeg } from '../../core/MdInline';
 import { LatexNode, parseLatex } from '../../core/LatexLite';
-import { DsColors, DsTypography, DsSpacing } from '../../ui/theme';
+import { DsColors, DsTypography, DsSpacing, DsFont } from '../../ui/theme';
 import { common, Want } from '@kit.AbilityKit';
 import { MdCodeBlock } from './MdCodeBlock';
 import { MdTable } from './MdTable';
@@ -12,7 +12,10 @@ import { MdLatexView } from './MdLatex';
 
 @Component
 export struct MdView {
-  text: string = '';
+  /// 必须是 @Prop + @Watch（真机反馈 2026-11-17「流式思考/正文一直空白」）：
+  /// 普通成员只在父层重建组件时才赋值，流式增量灌不进来；即便灌进来，
+  /// blocks 也只在 aboutToAppear 里解析过一次。改为 @Watch 后每来一段增量重解析。
+  @Prop @Watch('onTextChange') text: string = '';
   streaming: boolean = false;
   small: boolean = false;
   @StorageProp('dshDark') dark: boolean = false;
@@ -24,17 +27,26 @@ export struct MdView {
     return new DsColors(this.dark);
   }
 
+  /// 流式增量到货：文本变长则整体重解析（块数通常 < 50，开销可接受）。
+  /// 由 @Prop text 的 @Watch 触发，外部（StreamingBlock/MdView.reload）无需再调。
+  onTextChange(): void {
+    this.blocks = parseMarkdown(this.text);
+  }
+
   aboutToAppear(): void {
     this.blocks = parseMarkdown(this.text);
   }
 
-  /// 流式增量：文本变长则整体重解析（块数通常 < 50，开销可接受）。
+  /// 保留旧入口：写回 text 交给 @Watch 统一重解析，避免双份解析逻辑。
   reload(text: string): void {
-    this.text = text;
-    this.blocks = parseMarkdown(text);
+    if (this.text !== text) {
+      this.text = text;
+    } else {
+      this.blocks = parseMarkdown(text);
+    }
   }
 
-  private headFont(level: number): Font {
+  private headFont(level: number): DsFont {
     if (level === 1) {
       return DsTypography.h1;
     }
@@ -47,7 +59,7 @@ export struct MdView {
     return DsTypography.h4;
   }
 
-  private segFont(): Font {
+  private segFont(): DsFont {
     return this.small ? DsTypography.small : DsTypography.base;
   }
 
@@ -75,6 +87,7 @@ export struct MdView {
       }
       .fontSize(this.headFont(b.level).size)
       .fontWeight(FontWeight.Bold)
+      .lineHeight(this.headFont(b.level).lineHeight)
       .fontColor(this.c().labelPrimary)
       .width('100%')
       .margin({ top: b.level <= 3 ? DsSpacing.blockGap : DsSpacing.blockGap / 2, bottom: 8 })
@@ -137,11 +150,13 @@ export struct MdView {
       } else if (kind === 'ul') {
         Text('•')
           .fontSize(this.segFont().size)
+          .lineHeight(this.segFont().lineHeight)
           .fontColor(this.c().listMarker)
           .margin({ right: 8 })
       } else {
         Text((itemIdx + 1) + '.')
           .fontSize(this.segFont().size)
+          .lineHeight(this.segFont().lineHeight)
           .fontColor(this.c().listMarker)
           .margin({ right: 6 })
       }
@@ -174,6 +189,7 @@ export struct MdView {
       } else if (s.link.length > 0) {
         Text(s.text)
           .fontSize(this.segFont().size)
+          .lineHeight(this.segFont().lineHeight)
           .fontColor(this.c().link)
           .decoration({ type: TextDecorationType.None })
           .accessibilityText('打开链接：' + s.link)
@@ -193,6 +209,8 @@ export struct MdView {
             .fontFamily(s.code ? DsTypography.codeFamily : undefined)
             .backgroundColor(s.code ? this.c().mdInlineCodeBg : Color.Transparent)
         }
+        // 行高只能落在宿主 Text 上（Span 没有 lineHeight 属性）。
+        .lineHeight(this.segFont().lineHeight)
         .margin({ right: s.code ? 4 : 0 })
       }
   }

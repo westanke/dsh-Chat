@@ -319,7 +319,7 @@ export struct ChatView {
   @Builder
   sheetContent() {
     if (this.statsSheet) {
-      StatsSheet({ store: this.store })
+      StatsSheet({ store: this.store, version: this.version })
     } else if (this.trajectorySheet) {
       TrajectorySheet({ store: this.store })
     } else if (this.teamSheet) {

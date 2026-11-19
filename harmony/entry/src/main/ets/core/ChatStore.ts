@@ -16,6 +16,7 @@ import {
   syncLiveRowsIntoMessagesIn, reattachLiveRowsIn,
 } from './ChatStreamTools';
 import { onEventIn } from './ChatEvents';
+import { syncStreamingWithServerIn } from './ChatResync';
 import { GatewayClient } from './GatewayClient';
 import { GatewayApi } from './GatewayApi';
 import {
@@ -56,15 +57,34 @@ export class ChatStore {
   streamText: string = '';
   streamReasoning: string = '';
   streaming: boolean = false;
+  /**
+   * resync 对账拿到的结论：服务端说这个会话「没在跑」（'' = 还没有结论）。
+   *
+   * 用途是挡住**迟到的增量**：重连对账把流式态收口之后，网络上还可能飘着
+   * 该回合的 delta / tool-call 帧，它们一律 `streaming = true`（ChatEvents），
+   * 而这一轮的 TURN_END 早就消费过、不会再来 —— 不挡就又会永久卡住。
+   * 新回合开始（TURN_START / 本端 send）时清掉，见 clearServerIdle()。
+   */
+  serverIdleSession: string = '';
   lastError: string | null = null;
   /** turn.end reason=max-tokens 置位：列表尾提示「回答被截断…」（MessageList 渲染）。 */
   maxTokensNotice: boolean = false;
   historyHasMore: boolean = false;
+  /**
+   * 服务端把更早的事件按字节预算裁掉了（history-byte-budget-v1）。
+   * 列表层在「加载更早消息」入口上方提示（Android chat_message_list 同款）。
+   */
+  historyTruncated: boolean = false;
   loadingOlder: boolean = false;
   /** 翻页刚 prepend 过更早消息：列表层消费后清零，跳过一次贴底跟随。 */
   historyPageJustLoaded: boolean = false;
   rawEvents: JsonMap[] = [];
   projections: JsonMap | null = null;
+  /**
+   * 服务端统计投影（`session-stats` 帧原样；null = 没拉过或桥没这一帧）。
+   * 拍平与拉取在 core/ChatStats.ts，UI 只读 serverStatRows(store.serverStats)。
+   */
+  serverStats: JsonMap | null = null;
 
   // 切换中的会话 id（createSession 应答未落时收推送用；prepareSessionFor 写）
   pendingSessionId: string | null = null;
@@ -205,12 +225,15 @@ export class ChatStore {
     this.maxTokensNotice = false;
     this.rawEvents = [];
     this.projections = null;
+    this.serverStats = null;
     this.historyHasMore = false;
+    this.historyTruncated = false;
     this.loadingOlder = false;
     this.historyPageJustLoaded = false;
     this.streaming = false;
     this.streamText = '';
     this.streamReasoning = '';
+    this.serverIdleSession = '';
     this.lastError = null;
     // 展开集合与 Agent 预设镜像一并清（新会话新账；尾部 changed() 顺带刷 UI）。
     this.workSteps.resetSessionView();
@@ -247,6 +270,8 @@ export class ChatStore {
       this.streamReasoning = '';
     }
     this.maxTokensNotice = false;
+    // 本端主动开新回合：撤销 resync 的「没在跑」结论，否则新回合的增量会被挡掉。
+    this.serverIdleSession = '';
     this.streaming = true;
     this.changed();
     const self: ChatStore = this;
@@ -324,10 +349,25 @@ export class ChatStore {
   private onGatewayState(state: GatewayState): void {
     if (state === GatewayState.READY) {
       // 断线重连成功：重拉会话与当前历史（resync 兜底）。
-      this.loadSessions();
+      // 会话列表回来后必须核对流式态：断线期间该回合可能已经结束，
+      // TURN_END 帧丢了就永远收不到（2026-11-17 真机：重连后一直卡在
+      // 「正在思考…」，服务端 running:false 而本地 streaming 仍为 true）。
+      this.loadSessions().then((): void => {
+        syncStreamingWithServerIn(this);
+      }).catch((): void => {});
       this.reloadHistory();
     }
     this.changed();
+  }
+
+  /** 该会话是否已被 resync 判定「服务端没在跑」（迟到增量据此丢弃）。 */
+  isServerIdle(sid: string | null): boolean {
+    return this.serverIdleSession !== '' && sid === this.serverIdleSession;
+  }
+
+  /** 新回合开始（TURN_START）时撤销「没在跑」结论。 */
+  clearServerIdle(): void {
+    this.serverIdleSession = '';
   }
 
   // ---- HITL（实现见 ChatHitl.ts：全连接挂起表；UI 只渲染当前会话条目）----

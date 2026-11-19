@@ -307,6 +307,145 @@ test('READY 状态回调触发 UI 通知', async () => {
   assert.equal(store.sessions.length, 0); // sessions 请求已发，应答未到
 });
 
+/** 取最近一次指定 type 请求帧的 requestId（重连后会连发 sessions/history）。 */
+function requestIdOfType(socket: FakeSocket, type: string): string {
+  for (let i = socket.sent.length - 1; i >= 0; i--) {
+    const f: Record<string, unknown> = JSON.parse(socket.sent[i]) as Record<string, unknown>;
+    if (f['type'] === type) {
+      return typeof f['requestId'] === 'string' ? f['requestId'] as string : '';
+    }
+  }
+  return '';
+}
+
+/** 断线 → 退避 1s → 重连 READY（READY 分支会重发 sessions + history）。 */
+function reconnect(ctx: ReadyCtx): void {
+  ctx.socket.serverDown('drop');
+  ctx.timers.advance(1000);
+  ctx.socket.serverOpen();
+  ctx.socket.serverHello();
+}
+
+test('READY 重连：服务端说会话没在跑 → 本地流式态收口（不卡「正在思考…」）', async () => {
+  const ctx: ReadyCtx = makeReady();
+  await ctx.p;
+  await openSession1(ctx, [userItem(1, 'q')]);
+  // 流式中断线：delta 已到，TURN_END 帧永远收不到了。
+  ctx.socket.serverFrame({ kind: 'event', data: {
+    type: 'chat.message.delta', sessionId: 's1', kind: 'reasoning', text: '思考中' } });
+  await drain();
+  assert.equal(ctx.store.streaming, true);
+
+  reconnect(ctx);
+  await drain();
+  // 会话列表回来后核对：服务端 running:false 说明该回合其实已经结束。
+  const sessionsReq: string = requestIdOfType(ctx.socket, 'sessions');
+  assert.notEqual(sessionsReq, '');
+  ctx.socket.serverFrame({ kind: 'reply', requestId: sessionsReq, data: {
+    sessions: [{ id: 's1', updatedAt: 5, running: false }] } });
+  await drain();
+  await drain();
+
+  assert.equal(ctx.store.streaming, false);
+  assert.equal(ctx.store.streamReasoning, '');
+  assert.equal(ctx.store.streamText, '');
+});
+
+test('READY 重连：服务端说会话还在跑 → 本地流式态保留（等后续 delta）', async () => {
+  const ctx: ReadyCtx = makeReady();
+  await ctx.p;
+  await openSession1(ctx, [userItem(1, 'q')]);
+  ctx.socket.serverFrame({ kind: 'event', data: {
+    type: 'chat.message.delta', sessionId: 's1', kind: 'reasoning', text: '思考中' } });
+  await drain();
+
+  reconnect(ctx);
+  await drain();
+  const sessionsReq: string = requestIdOfType(ctx.socket, 'sessions');
+  ctx.socket.serverFrame({ kind: 'reply', requestId: sessionsReq, data: {
+    sessions: [{ id: 's1', updatedAt: 5, running: true }] } });
+  await drain();
+  await drain();
+
+  assert.equal(ctx.store.streaming, true);
+  assert.equal(ctx.store.streamReasoning, '思考中');
+});
+
+test('READY 重连：streaming 已 false 但缓冲有残留 → 一样清干净（轮尾占位不钉死）', async () => {
+  const ctx: ReadyCtx = makeReady();
+  await ctx.p;
+  await openSession1(ctx, [userItem(1, 'q')]);
+  ctx.socket.serverFrame({ kind: 'event', data: {
+    type: 'chat.message.delta', sessionId: 's1', kind: 'reasoning', text: '残留思考' } });
+  await drain();
+  // 模拟「streaming 已收口、缓冲没清」：旧版 syncStreamingWithServer 的
+  // `if (!this.streaming) return;` 会在这里直接早退，残留永远留着。
+  ctx.store.streaming = false;
+
+  reconnect(ctx);
+  await drain();
+  const sessionsReq: string = requestIdOfType(ctx.socket, 'sessions');
+  ctx.socket.serverFrame({ kind: 'reply', requestId: sessionsReq, data: {
+    sessions: [{ id: 's1', updatedAt: 5, running: false }] } });
+  await drain();
+  await drain();
+
+  assert.equal(ctx.store.streamReasoning, '');
+  assert.equal(ctx.store.streamText, '');
+  assert.equal(ctx.store.streaming, false);
+});
+
+test('对账判定没在跑之后：迟到增量丢弃，不再把 streaming 抬回 true', async () => {
+  const ctx: ReadyCtx = makeReady();
+  await ctx.p;
+  await openSession1(ctx, [userItem(1, 'q')]);
+  ctx.socket.serverFrame({ kind: 'event', data: {
+    type: 'chat.message.delta', sessionId: 's1', kind: 'reasoning', text: '思考中' } });
+  await drain();
+  reconnect(ctx);
+  await drain();
+  const sessionsReq: string = requestIdOfType(ctx.socket, 'sessions');
+  ctx.socket.serverFrame({ kind: 'reply', requestId: sessionsReq, data: {
+    sessions: [{ id: 's1', updatedAt: 5, running: false }] } });
+  await drain();
+  await drain();
+  assert.equal(ctx.store.streaming, false);
+
+  // 网络上飘着的旧回合增量（TURN_END 已丢，不会再来）——必须丢弃。
+  ctx.socket.serverFrame({ kind: 'event', data: {
+    type: 'chat.message.delta', sessionId: 's1', kind: 'reasoning', text: '迟到' } });
+  ctx.socket.serverFrame({ kind: 'event', data: {
+    type: 'chat.message.delta', sessionId: 's1', kind: 'text', text: '迟到正文' } });
+  await drain();
+  assert.equal(ctx.store.streaming, false);
+  assert.equal(ctx.store.streamReasoning, '');
+  assert.equal(ctx.store.streamText, '');
+});
+
+test('对账判定没在跑之后：新回合 turn.start 撤销结论，增量照常收', async () => {
+  const ctx: ReadyCtx = makeReady();
+  await ctx.p;
+  await openSession1(ctx, [userItem(1, 'q')]);
+  reconnect(ctx);
+  await drain();
+  const sessionsReq: string = requestIdOfType(ctx.socket, 'sessions');
+  ctx.socket.serverFrame({ kind: 'reply', requestId: sessionsReq, data: {
+    sessions: [{ id: 's1', updatedAt: 5, running: false }] } });
+  await drain();
+  await drain();
+  assert.equal(ctx.store.isServerIdle('s1'), true);
+
+  ctx.socket.serverFrame({ kind: 'event', data: {
+    type: 'chat.turn.start', sessionId: 's1' } });
+  await drain();
+  assert.equal(ctx.store.isServerIdle('s1'), false);
+  ctx.socket.serverFrame({ kind: 'event', data: {
+    type: 'chat.message.delta', sessionId: 's1', kind: 'reasoning', text: '新一轮' } });
+  await drain();
+  assert.equal(ctx.store.streaming, true);
+  assert.equal(ctx.store.streamReasoning, '新一轮');
+});
+
 test('deviceLabel/connectionLabel/sessionTitle 取值口径', () => {
   const ctx: ReadyCtx = makeReady('DSH Bridge 手机端');
   assert.equal(ctx.store.deviceLabel, 'DSH Bridge 手机端');

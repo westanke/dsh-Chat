@@ -214,7 +214,7 @@ export struct ProcessGroup {
           .textAlign(TextAlign.Center)
         if (this.chevronVisible()) {
           Text(this.expanded ? '⌃' : '⌄')
-            .fontSize(14)
+            .fontSize(DsTypography.small.size)
             .fontColor(this.headColor())
             .width(14)
             .textAlign(TextAlign.Center)

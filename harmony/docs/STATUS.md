@@ -728,3 +728,122 @@ R014（嵌套 10-11 层，info 级）。
 `npm --prefix harmony/test test` 243/243 全绿、`bash scripts/ci/docs-check.sh` 通过、
 `bash scripts/package.sh --no-test` BUILD SUCCESSFUL、签名装机真机复验通过
 （版本 `1.0.0+1000000`、朗读图标 `🔊↔⏹`、复制 `⧉→✓`）。
+
+## 阶段 5 第十七批：用户四项真机缺陷 + 两项自查缺陷（2026-11-17）
+
+用户报障（原话见会话记录）：①安卓带长文件名图片时发送键被覆盖无法发送；②鸿蒙发送键禁用态
+灰到看不见；③鸿蒙流式思考不显示；④鸿蒙会话页字号行距偏小、表格列对不齐。四项均已在真机
+验收；排查中另发现并修掉两项缺陷（E、F）。
+
+### 缺陷 A：安卓上传图片文件名过长覆盖发送键
+
+- 真因：`app/lib/ui/composer_bar.dart` 底部 Row 里图片 `Chip` 的 `label: Text(pendingImageName!)`
+  没有宽度上限、没有 `maxLines`/`overflow`。`Spacer` 之后是**无界宽度**场景，Flutter `Chip`
+  的 `_labelConstraintsFrom` 只在父级 maxWidth 有限时才裁 label，于是 Chip 无限变宽把右侧
+  按钮挤出 Row。
+- 修法：无图仍用 `const Spacer()`；有图改成 `Expanded(Align(centerRight, ...))` 吃剩余空间，
+  再叠 `ConstrainedBox(maxWidth: DsSpacing.composerImageChipMaxWidth = 128)` 封顶，label 加
+  `maxLines: 1` + `TextOverflow.ellipsis`。128 的推导：360dp − 2×screenPad(22) − 2×composerPadH(10)
+  = 296dp 可用，同排权限 chip≈80 + 两个圆钮 48 + composerButtonGap(17) + composerButtonSize(24)
+  ≈ 169dp，余 127dp。
+- 回归用例：`app/test/composer_image_name_test.dart`（新建）。走真实链路 mock
+  `MethodChannel('dsh/platform')` 的 `pickImage` 返回 100 字符长名，断言 chip 文字宽 ≤ 128、
+  发送键 `rect.right ≤ 360` 且可点、无溢出异常。**该用例在修复前的代码上会抛
+  `A RenderFlex overflowed by 1252 pixels`**，判别力已验证。
+  - 两个测试基建坑：①`pickComposerImage` 有真 IO，必须 `tester.runAsync` 包 tap，否则
+    fake async 里 Future 不 resolve、图片永远挂不上；②material_ui 主题下 Chip 的删除图标
+    不是 `Icons.close`，只能靠 `find.descendant(...).last` 取。
+
+### 缺陷 B：鸿蒙发送键禁用态灰到看不见
+
+- 现象：禁用态实测对比度仅 **1.91:1**（圆内 `#F7F8FA`、箭头 `#B5B6B8`）。
+- 真因：**ArkUI 对 `.enabled(false)` 的组件整体叠了约 0.4 透明度**，token 颜色与底色一起被
+  混白（`0.4×#EBEEF2 + 0.6×#FFFFFF = #F7F8FA`）。推论：`.enabled(false)` 下前景再深也到不了
+  WCAG AA 4.5:1 —— 纯黑混白 = `#999999`，在该底上上限只有 2.6:1。**所以改 token 色号这条路
+  本质无效**（先前一轮只改 `sendDisabledFg` 到 c700 仍未达标，就是踩在这里）。
+- 修法：`Composer.ets` 发送键删掉 `.enabled(this.sendEnabled())`，改为保持可点 +
+  `.onClick(() => { if (this.sendEnabled()) { this.send(); } })` 判空实现禁用语义；底色/前景/
+  字重/无障碍文案按 `sendEnabled()` 分支自己给。禁用态实测升到 **6.95:1**，可用态仍是品牌蓝
+  4.74:1（未变形）；「点了不发」经前后截图逐像素比对确认（仅状态栏时钟等噪声）。
+- 口径沉淀进 `docs/design-tokens.md` §4.5.1：其它图标按钮需要精确控制禁用对比度时不要走
+  `.enabled(false)`，要弱化就显式 `.opacity()`。
+- 教训：注释里不要出现 `#` 开头的 hex，否则 `harmony_check` R003 判「颜色字面量」error。
+
+### 缺陷 C：鸿蒙流式思考不显示
+
+- 两段断链（纯视图层，数据层无问题）：
+  1. `ChatStore.send()`（`core/ChatStore.ts:245-251`）在用户按下发送的**那一刻**就 `streaming = true`
+     并 `changed()`；`MessageList` 的 `streamingVisible()` 因此在第一个 reasoning delta 到达前
+     就建出 `StreamingBlock({ reasoning: '', text: '' })` 空实例。而 `StreamingBlock.reasoning/text`
+     当时是**普通成员**（非 `@Prop`），父层再传新值不重建 → 后续所有增量灌不进已存在实例，
+     `if (this.reasoning !== '')` 永不成立，`ThinkBlock` 从未被创建（屏上只剩「正在思考…」占位）。
+  2. 即使 `ThinkBlock.text` 变成 `@Prop`，其内层 `MdView.text` 也是普通成员、只在
+     `aboutToAppear` 里 `parseMarkdown` 一次（`reload()` 全仓无调用点）→ 展开区内容刷不出。
+- 修法：`StreamingBlock` 的 `reasoning`/`text`/`showPreview` 与 `ThinkBlock.text` 全改 `@Prop`；
+  `MdView.text` 改 `@Prop @Watch('onTextChange')` 并在回调里重解析，`reload()` 收敛为写回
+  `text` 交给 @Watch；`ThinkBlock` 展开区传 `reasoningText(this.text)`（对齐安卓
+  `chat_message_blocks.dart:106`，否则 `<signature>` 标签会被当 Markdown 渲染）。
+- 明确**不改** `reasoningHidden`：只有「以 `<signature>` 开头且剥完为空」才隐藏，官方 Web 与安卓
+  同规则，本机 sessions 里 `<signature>` 出现 0 次。留 3 行注释说明。
+- 回归：新增 `harmony/test/cases/stream-render.test.ts`（7 例），其中 4 条是源码契约
+  （`assert.match(s, /@Prop\s+reasoning\s*:\s*string/)` 等）—— 谁把成员改回普通成员，npm test 立刻红。
+
+### 缺陷 D：鸿蒙会话页字号行距偏小 + 表格列对不齐
+
+- 行距：ArkTS 内置 `Font` 无 `lineHeight` 字段，鸿蒙此前**全仓只有 3 处显式行高**，正文
+  `MdView` 只给 `fontSize` 不给行高。修法：新增 `export interface DsFont { size; weight; lineHeight }`，
+  19 个排版 token 由 `Font` 改 `DsFont` 并补行高，`DsTypography.x.size/.weight` 那 174 处既有
+  用法零改动（全仓 `Font` 标注只有 3 处）。真落 `.lineHeight()` 共 31 处。对照表见
+  `docs/design-tokens.md` §2.1（base 16/28、small 14/24、inlineCode 14/22、codeBlock 12/22、
+  table 16/26、caption 12/18 …）。**有意不加行高三处**：ProcessGroup / ToolBlock /
+  TurnProcessRow（固定 28/33vp 单行，加了会撑爆）、MdLatex（自绘符号流会错位）。
+  用户气泡单独从 22 改 24 —— 安卓 `chat_message_items.dart:227-229` 是
+  `DsTypography.base.copyWith(height: 24/16)` = 16/**24**，不是 base 的 16/28。
+  - 真机量化验收：安卓正文行距 84–85px / 密度 3.0 = **28.0dp**；鸿蒙 87–88px / 密度 3.13 =
+    **27.8vp** → 已对齐。
+- 表格：原 `renderRow` 每格 `.layoutWeight(1) + constraintSize({minWidth: 100})` 按**每行内部**
+  等分，各行列数/文本长短不同就会列边界错位。修法：全表统一列宽 —— `columns()` 取全表最大
+  列数（短行补空串），逐列取 `max(估算宽 + 2×cellPadH)` 并夹在 `[cellMinWidth 100,
+  tableColMaxWidth 240]`，自然总宽 < 外框实测宽则等比放大铺满、否则横向 Scroll；所有行共用
+  同一组绝对 vp 宽。估算宽 = 逐字符 `charCodeAt > 0x2E80 ? 字号 : 字号×0.55`（注释已标「估算值，
+  真机再校」）。补位空格子透明且不画右边线。放弃百分比方案：表格体在横向 Scroll 里，
+  Scroll 子节点宽度由内容决定，百分比没有参照宽会把多列表格压扁。
+- **额外踩到的坑**：`Row().width('100%')` 在这个横向 Scroll 场景被解析成 Scroll 视口宽
+  （956px），而列宽总和 1114px 更大 → 单元格被 flexShrink 压缩（第 3 列实测只剩 52vp，
+  「山东烟台」只露「山东」），同时 Scroll 内容宽 == 外框宽 → 横向滚不动。改成
+  `.width(this.colTotalWidth())` 后三列恢复 100/156/100vp、内容宽 1114px > 外框 956px，
+  横向拖动可见完整第 3 列。已写入 `docs/design-tokens.md` §3.2。
+- **ArkUI 语法坑**：`Repeat`/`ForEach` 的生成器体内**只能写 UI 组件语法**，写 `const` 声明会报
+  `Only UI component syntax can be written here`。派生值必须下沉成普通方法（本处新增
+  `cellDisplay()`/`cellPresent()`）。
+
+### 缺陷 E（自查新增）：WS 重连后卡在「正在思考…」
+
+- 现象：断线时该会话正在 streaming，重连后 UI 永远停在占位不动；服务端 `GET /api/v1/chat/sessions`
+  已 `running: false`。切会话可恢复。
+- 真因：`streaming = false` 只在 `ChatEvents.ts:102` 的 TURN_END 分支（及 TURN_FAILED）里做，
+  **帧丢了就永远不清**；`ChatHistory.ts:45` 的 `reloadHistory` 里 `if (store.streaming)` 只
+  `reattachLiveRows()` 重挂工具行、不改标志；`ChatStore.onGatewayState` 的 READY 分支只
+  `loadSessions + reloadHistory`，没有流式态对账。
+- 修法：READY 分支改成 `loadSessions().then(() => syncStreamingWithServer())`，新增
+  `syncStreamingWithServer()`：只在「本地 streaming 且会话列表里当前会话 `running === false`」时
+  收口（清两个流式缓冲、`clearStreamToolsIn`、`changed()`、再 `reloadHistory()`）；服务端在跑
+  时不凭空造气泡，等下一个 delta 自己开。
+- 回归：`harmony/test/cases/chat-store.test.ts` 增 2 例（服务端没在跑 → 收口；还在跑 → 保留），
+  用新增的 `requestIdOfType()`（重连后 sessions/history 连发，`lastRequestId()` 只能拿最后一帧）
+  与 `reconnect()` 辅助。
+- **安卓同缺陷存在且未修**：`app/lib/ui/chat_state.dart:430-436 _onGatewayState` 同样只
+  `loadSessions(); reloadHistory();`。
+
+### 门禁
+
+`flutter test` 255 全绿；`npm --prefix harmony/test test` **345 pass / 0 fail**；
+`bash scripts/ci/docs-check.sh` 五道全 ✅；`harmony/scripts/package.sh --no-test` BUILD SUCCESSFUL；
+各改动文件 `harmony_check review` error 0（`theme.ets` 例外：`total:65 error:64` 系基线就有 ——
+64 条是 DsPalette/DsColors 的 hex 字面量，属 token 文件职责，`git show HEAD:` 版同样 65/64，
+**该文件不能用 verdict 当门禁**）。
+
+真机验收（鸿蒙 3AX0225103005398 / 安卓 9540718532001JR）：流式思考 ✅（思考行带摘要 + 正文
+并存 + 可折叠）、发送键禁用态 6.95:1 ✅、行距 27.8vp vs 28.0dp ✅、表格列对齐 + 横向滚动 ✅
+（第 3 列「山东烟台/海南澄迈/广东茂名」完整可见）、安卓长文件名 chip ✅（chip 截断 + ✕ +
+全部按钮在屏内）。缺陷 E 的修复已构建装机，真机复验待设备解锁后进行。

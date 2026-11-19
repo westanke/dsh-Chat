@@ -25,6 +25,10 @@ export const REQUEST_TIMEOUT_MS: number = 30000;
 export const HTTP_TIMEOUT_MS: number = 30000;
 /** WS 心跳间隔（Android 口径 25s）。 */
 export const HEARTBEAT_INTERVAL_MS: number = 25000;
+/** 连接静默上限：超过它就认定半死（心跳 25s × 2 - 5s；companion PITFALLS「WS 半死」）。 */
+export const LINK_LIVENESS_MS: number = 45000;
+/** 「还没收到过任何入站帧」的哨兵值（别用 0：真机时钟与假时钟语义会撞）。 */
+export const NO_INBOUND_YET: number = -1;
 /** 重连退避封顶秒数（Android 口径 30s；序列 1,2,4,8,16,30,30…）。 */
 export const MAX_BACKOFF_SECONDS: number = 30;
 /** 退避序列最大指数（1<<5=32 → min 30）。 */
@@ -85,7 +89,13 @@ export interface WebSocketCallbacks {
 
   onMessage(text: string): void;
 
-  onDown(reason: string): void;
+  /**
+   * 掉线回调（一次掉线只报一次）。
+   * `code` 是 WS close code（平台能给就给）：4001 = 令牌/设备被吊销（重连无意义，
+   * 必须重新配对）、1009 = 单帧超过 1 MiB、1005/1000 = 正常关。
+   * 平台层拿不到时传 0/省略，按普通掉线处理。
+   */
+  onDown(reason: string, code?: number): void;
 }
 
 /** 已打开的 WS 句柄。 */

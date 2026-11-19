@@ -130,7 +130,10 @@ export class GatewayRest {
     return this.restJson('GET', path, null, [200]).then((data: JsonMap): HistoryPage => {
       const events: Object[] = JsonAccess.arr(data, 'events');
       const hasMore: boolean = JsonAccess.boolOr(data, 'hasMore', false);
-      return HistoryPage.fromEvents(events, null, hasMore);
+      return HistoryPage.fromEvents(events, null, hasMore,
+        JsonAccess.boolOr(data, 'truncated', false),
+        JsonAccess.numOr(data, 'bytes', 0),
+        JsonAccess.numOr(data, 'historyFormatVersion', 0));
     });
   }
 

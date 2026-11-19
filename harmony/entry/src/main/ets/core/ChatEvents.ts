@@ -21,6 +21,11 @@ export function onEventIn(store: ChatStore, event: GatewayEvent): void {
     if (delta === null || !store.isCurrent(delta.sessionId)) {
       return;
     }
+    // resync 已判定该会话「服务端没在跑」：这一轮的 TURN_END 不会再来了，
+    // 迟到的增量若放进来会把 streaming 重新抬成 true 并永久卡住（见 ChatStore.serverIdleSession）。
+    if (store.isServerIdle(delta.sessionId)) {
+      return;
+    }
     // 工具参数流式帧：进 streamTools 行状态机，不进文本/思考累积。
     if (delta.kind === 'tool-call') {
       store.streamTools.applyDelta(delta);
@@ -48,7 +53,7 @@ export function onEventIn(store: ChatStore, event: GatewayEvent): void {
   }
   if (event.type === GatewayEventType.TOOL_CALL) {
     const call: ToolCallEvent | null = event.toolCall;
-    if (call === null || !store.isCurrent(call.sessionId)) {
+    if (call === null || !store.isCurrent(call.sessionId) || store.isServerIdle(call.sessionId)) {
       return;
     }
     store.streamTools.applyCall(call.callId, call.name, call.arguments);
@@ -57,7 +62,8 @@ export function onEventIn(store: ChatStore, event: GatewayEvent): void {
   }
   if (event.type === GatewayEventType.TOOL_RESULT) {
     const result: ToolResultEvent | null = event.toolResult;
-    if (result === null || !store.isCurrent(result.sessionId)) {
+    if (result === null || !store.isCurrent(result.sessionId)
+      || store.isServerIdle(result.sessionId)) {
       return;
     }
     store.streamTools.applyResult(result.callId, result.isError,
@@ -90,6 +96,8 @@ export function onEventIn(store: ChatStore, event: GatewayEvent): void {
     if (!store.isCurrent(event.sessionId)) {
       return;
     }
+    // 新回合真的开始了：撤销 resync 的「没在跑」结论，后续增量照常收。
+    store.clearServerIdle();
     store.streaming = true;
     store.maxTokensNotice = false;
     store.changed();
@@ -127,6 +135,17 @@ export function onEventIn(store: ChatStore, event: GatewayEvent): void {
     // 清实时流；防抖重拉一次让持久行带上 stopped/cancelled/failed 终态。
     clearStreamToolsIn(store);
     store.scheduleToolRefresh();
+    store.changed();
+    return;
+  }
+  if (event.type === GatewayEventType.LINK_CLOSED) {
+    // 语义化掉线（协议对齐）：4001 = 令牌/设备被吊销，只有重新配对能恢复；
+    // 1009 = 单帧超过 1 MiB。其余 close 只记诊断不打扰用户（自然重连会好）。
+    if (event.linkCode === 4001) {
+      store.lastError = '设备已被吊销（close 4001），请重新配对';
+    } else if (event.linkCode === 1009) {
+      store.lastError = '请求内容超过 1 MiB，连接已重置';
+    }
     store.changed();
     return;
   }

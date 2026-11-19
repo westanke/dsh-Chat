@@ -185,8 +185,13 @@ export class DsColors {
     return this.dark ? DsPalette.c800 : DsPalette.c100;
   }
 
+  /// 禁用态箭头色（2026-11-17 用户真机反馈「灰色不明显」二次抬高对比度）：
+  /// 原 c500(#979DA6) 在 c100(#EBEEF2) 浅灰底上对比度只有 2.35:1，
+  /// 看上去「灰底灰箭头糊成一片」。改 c700(#61666B) 后 4.98:1（WCAG AA 正文 4.5:1）。
+  /// 深色主题原 c400 在 c800 上为 5.67:1，一并抬到 c300(#CFD3D6) 得 8.03:1。
+  /// 底仍是浅灰（不抢品牌色），箭头明显加深 ⇒ 形状看得清、也读得出「不可用」。
   get sendDisabledFg(): string {
-    return this.dark ? DsPalette.c400 : DsPalette.c500;
+    return this.dark ? DsPalette.c300 : DsPalette.c700;
   }
 
   /// 品牌实心控件上的前景（白，两套主题一致）。
@@ -261,26 +266,42 @@ export class DsColors {
   }
 }
 
-/// 字号（官方 token，fp；行高换算）。
+/// 字体 token 类型：字号 + 字重 + 行高（三者一体，对齐安卓 TextStyle）。
+/// 不能用内置 `Font`（它没有 lineHeight 字段），故自定义 interface。
+/// 它仍能直接喂给接受 `Font` 的 API（如 `TextInput.placeholderFont(...)`）—— 多出的
+/// lineHeight 只是附加属性，结构化赋值不受影响（不能写成 `extends Font`：那会在
+/// `size: number` 收窄 `size?: Length` 时编译报错）。
+/// 既有 `DsTypography.x.size` / `.weight` 用法完全不变，只多一个 `.lineHeight`。
+export interface DsFont {
+  size: number;
+  weight: FontWeight;
+  /// 行高（vp）。安卓 tokens.dart 的 TextStyle.height = 行高/字号，此处直接给行高值；
+  /// 用户反馈「行距有点小」（2026-11-17）后补齐，落位表见 docs/design-tokens.md §2.1。
+  lineHeight: number;
+}
+
+/// 字号（官方 token，fp）+ 行高（vp）。行高由 UI 落点显式 `.lineHeight(f.lineHeight)`
+/// 施加（Span 无 lineHeight，必须落在宿主 Text 上）。
 export class DsTypography {
-  static readonly h1: Font = { size: 24, weight: FontWeight.Bold };
-  static readonly h2: Font = { size: 22, weight: FontWeight.Bold };
-  static readonly h3: Font = { size: 20, weight: FontWeight.Bold };
-  static readonly h4: Font = { size: 16, weight: FontWeight.Medium };
-  static readonly base: Font = { size: 16, weight: FontWeight.Normal };
-  static readonly baseStrong: Font = { size: 16, weight: FontWeight.Medium };
-  static readonly small: Font = { size: 14, weight: FontWeight.Normal };
-  static readonly smallStrong: Font = { size: 14, weight: FontWeight.Medium };
-  static readonly inlineCode: Font = { size: 14, weight: FontWeight.Normal };
+  static readonly h1: DsFont = { size: 24, weight: FontWeight.Bold, lineHeight: 34 };
+  static readonly h2: DsFont = { size: 22, weight: FontWeight.Bold, lineHeight: 32 };
+  static readonly h3: DsFont = { size: 20, weight: FontWeight.Bold, lineHeight: 30 };
+  static readonly h4: DsFont = { size: 16, weight: FontWeight.Medium, lineHeight: 28 };
+  static readonly base: DsFont = { size: 16, weight: FontWeight.Normal, lineHeight: 28 };
+  static readonly baseStrong: DsFont = { size: 16, weight: FontWeight.Medium, lineHeight: 28 };
+  static readonly small: DsFont = { size: 14, weight: FontWeight.Normal, lineHeight: 24 };
+  static readonly smallStrong: DsFont = { size: 14, weight: FontWeight.Medium, lineHeight: 24 };
+  static readonly inlineCode: DsFont = { size: 14, weight: FontWeight.Normal, lineHeight: 22 };
   // 13/15 不在鸿蒙 R023 字号阶梯内，按「规范就近落位」口径取 12/16（视觉差 ≤1vp）。
-  static readonly codeBlock: Font = { size: 12, weight: FontWeight.Normal };
-  static readonly codeBlockLabel: Font = { size: 12, weight: FontWeight.Normal };
-  static readonly table: Font = { size: 16, weight: FontWeight.Normal };
-  static readonly tableHead: Font = { size: 16, weight: FontWeight.Medium };
-  static readonly inputPlaceholder: Font = { size: 16, weight: FontWeight.Normal };
-  static readonly pageTitle: Font = { size: 16, weight: FontWeight.Medium };
-  static readonly caption: Font = { size: 12, weight: FontWeight.Normal };
-  static readonly greeting: Font = { size: 18, weight: FontWeight.Medium };
+  static readonly codeBlock: DsFont = { size: 12, weight: FontWeight.Normal, lineHeight: 22 };
+  static readonly codeBlockLabel: DsFont = { size: 12, weight: FontWeight.Normal, lineHeight: 20 };
+  // 安卓 table 15/25 → 字号落 16（R023 无 15），行高按 25 同比放 1vp 取 26。
+  static readonly table: DsFont = { size: 16, weight: FontWeight.Normal, lineHeight: 26 };
+  static readonly tableHead: DsFont = { size: 16, weight: FontWeight.Medium, lineHeight: 26 };
+  static readonly inputPlaceholder: DsFont = { size: 16, weight: FontWeight.Normal, lineHeight: 24 };
+  static readonly pageTitle: DsFont = { size: 16, weight: FontWeight.Medium, lineHeight: 24 };
+  static readonly caption: DsFont = { size: 12, weight: FontWeight.Normal, lineHeight: 18 };
+  static readonly greeting: DsFont = { size: 18, weight: FontWeight.Medium, lineHeight: 26 };
   /// 等宽字体族（官方 --ds-font-family-code 兜底序）。
   static readonly codeFamily: string = 'monospace';
 }
@@ -306,6 +327,9 @@ export class DsSpacing {
   static readonly cellPadV: number = 10;
   static readonly cellPadH: number = 16;
   static readonly cellMinWidth: number = 100;
+  /// 表格单元格宽度上限（安卓 md_table 的 max-width min(30vw,320px) 收窄到 240vp）。
+  /// 列宽由 MdTable 按全表内容估算后全表统一，见 docs/design-tokens.md §3.2。
+  static readonly tableColMaxWidth: number = 240;
   static readonly quotePadLeft: number = 14;
   static readonly quoteBarWidth: number = 2;
   static readonly inlineCodeRadius: number = 6;

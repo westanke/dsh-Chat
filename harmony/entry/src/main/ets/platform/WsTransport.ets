@@ -76,10 +76,22 @@ export class WsTransport implements WebSocketTransport {
       // ArrayBuffer 非 JSON 文本帧（协议 v3 全是文本），忽略。
     });
 
-    socket.on('close', (err: BusinessError | undefined): void => {
-      Dlog.warn('[ws] close err=' + (err ? err.message : 'none'));
+    socket.on('close', (err: BusinessError | undefined,
+      value: webSocket.CloseResult): void => {
+      // close code 透传给 core：4001 = 令牌/设备被吊销（重连无意义）、
+      // 1009 = 单帧超 1 MiB。拿不到就当 0（core 按普通掉线处理）。
+      let code: number = 0;
+      let why: string = 'close';
+      if (value !== undefined && value !== null) {
+        code = value.code;
+        if (value.reason !== undefined && value.reason !== '') {
+          why = value.reason;
+        }
+      }
+      Dlog.warn('[ws] close code=' + code.toString() + ' ' + why
+        + (err ? ' err=' + err.message : ''));
       if (claimDown()) {
-        callbacks.onDown('close');
+        callbacks.onDown(why, code);
       }
     });
 
