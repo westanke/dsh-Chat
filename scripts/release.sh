@@ -248,10 +248,17 @@ atomgit_release() {
   [ -z "$AT" ] && { warn "无 AtomGit token，跳过"; return 0; }
   local cur
   cur=$(curl -s -H "Authorization: Bearer $AT" \
-        "https://atomgit.com/api/v5/repos/$REPO_ATOMGIT/releases?per_page=1" \
-        | python3 -c "import json,sys
-try: d=json.load(sys.stdin); print((d[0] if isinstance(d,list) and d else {}).get('tag_name',''))
-except Exception: print('')" 2>/dev/null || true)
+        "https://atomgit.com/api/v5/repos/$REPO_ATOMGIT/releases?per_page=100" \
+        | TAG="$TAG" python3 -c "import json,os,sys
+# 该接口按创建时间**升序**返回（companion v2.2.x 踩过）：取首项等于取最老的那个，
+# 刚发的 tag 永远判「不存在」。改成在整页里找本 tag。
+try:
+    d=json.load(sys.stdin)
+    want=os.environ.get('TAG','')
+    tags=[r.get('tag_name','') for r in d] if isinstance(d,list) else []
+    print(want if want in tags else '')
+except Exception:
+    print('')" 2>/dev/null || true)
   if [ "$cur" = "$TAG" ]; then
     ok "AtomGit Release 已存在（$TAG），跳过"
   else
