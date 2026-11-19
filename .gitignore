@@ -85,3 +85,4 @@ harmony/local.properties
 *.hap
 *.har
 *.hsp
+artifacts/*.ipa
