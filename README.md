@@ -7,7 +7,7 @@
 </p>
 
 <p align="center">
-  <img alt="Version" src="https://img.shields.io/badge/version-1.0.21-087f8c">
+  <img alt="Version" src="https://img.shields.io/badge/version-1.0.22-087f8c">
   <img alt="License" src="https://img.shields.io/badge/license-AGPL--3.0-2da44e">
   <img alt="Platforms" src="https://img.shields.io/badge/platform-Android%20%7C%20iOS-586069">
   <img alt="Built with Flutter" src="https://img.shields.io/badge/built%20with-Flutter-02569B">
@@ -41,6 +41,13 @@
   「思考中」标签有一道来回扫的亮光，下方是三行高的实时窗口（写满一行匀速上滑一行，
   块高不变，列表不跟着思考变长而抖）；正文开始后收成一行首行摘要，轮结束自动收起；
   点一下展开全文（Markdown），再点收回。
+- **改动与产出**：每轮结束在消息流里补两张卡 —— 「改动了 N 个文件」（逐文件 `+N −M`，点开进
+  逐文件 diff 页：文件切换、连续修改分块、红绿行）与「生成了 N 个文件」（缩略图 + 类型说明，
+  可复制路径/分享）；数据从工具结果的 `meta.diffs` 本地推导，不依赖服务端接口。
+- **输入条**：一次可带多张图片（最多 6 张、逐张可删）、`@` 可引用工程文件与历史会话
+  （会话插 `@[标题](dsh-session:<id>)`）、`/` 斜杠命令；输入条上方常驻任务条
+  「N/M · 正在/下一步」（点开展开清单）。
+
 - **深色模式**：跟随系统，两套色板分别校准。
 - **侧边抽屉**：即时搜索 + 日期分组 + 设备账号栏；凭证持久化，配对一次后自动重连。
 - **失败可见**：`turn/end` 失败（限流、额度耗尽等）以错误条呈现，不静默。
@@ -50,7 +57,7 @@
 
 | 平台 | 状态 |
 |---|---|
-| APK | [`dsh-Chat-v1.0.21.apk`](https://gitee.com/westanke/dsh-Chat/releases/download/v1.0.21/dsh-Chat-v1.0.21.apk)<br>26,022,440 字节 · SHA-256 `1b3dd90140f2a3eca682f03d58970f87946aaee35c23c381774b4bb1f1bc53d7` |
+| APK | [`dsh-Chat-v1.0.22.apk`](https://gitee.com/westanke/dsh-Chat/releases/download/v1.0.22/dsh-Chat-v1.0.22.apk)<br>26,154,480 字节 · SHA-256 `fee18e99369460d5adc6b96583a0b0b0c6702e1a13956423ee8dd4e68614d028` |
 | APK | [`dsh-Chat-v1.0.20.apk`](https://gitee.com/westanke/dsh-Chat/releases/download/v1.0.20/dsh-Chat-v1.0.20.apk)<br>26,022,440 字节 · SHA-256 `04bc3c5d23b6fb8679688ce51b179d001ce17bcebeca990de63da9ed234a95da` |
 | APK | [`dsh-Chat-v1.0.19.apk`](https://gitee.com/westanke/dsh-Chat/releases/download/v1.0.19/dsh-Chat-v1.0.19.apk)<br>26,022,440 字节 · SHA-256 `0072ebdece94c43b8f482a6e8ea542d9c10638041ce0013923852f483857e538` |
 | APK | [`dsh-Chat-v1.0.18.apk`](https://gitee.com/westanke/dsh-Chat/releases/download/v1.0.18/dsh-Chat-v1.0.18.apk)<br>25,956,904 字节 · SHA-256 `6dd4da2ef6d4ad946f03b89611fa2a6899249b1a37e336cfa3d4f4f797992a23` |
@@ -73,7 +80,7 @@
 | Android | **已装机验证**（vivo V2080A 真机）：配对、自动重连、流式对话、Markdown 全家福、工具行五态与专属详情、过程组四档、轮尾行、思考预览、提问卡、抽屉、深色模式 |
 | iOS | **未验证**。`ios/Runner` 平台壳（IANA 时区通道、显示名、ATS 放行）已就位，但未在 iOS 设备或模拟器上构建运行过 |
 | 鸿蒙（HarmonyOS） | `harmony/` 是同一套协议的 ArkTS 客户端（bundleName `com.dsh.dshchat`，独立版本线 1.0.0）。**已装机验证**（鸿蒙真机 3AX0225103005398）：配对、会话、工具行五态、过程组、轮尾行、思考预览、设置页。**未发版**——签名材料目前只有绑定单台设备 UDID 的调试 Profile，公开发布需先补 AGC 发布证书与发布 Profile（口径见 `harmony/docs/RELEASE.md`） |
-| 版本 | `app/pubspec.yaml` 为 `1.0.21+22`；tag `v1.0.21`，产物见下方「下载安装」 |
+| 版本 | `app/pubspec.yaml` 为 `1.0.22+23`；tag `v1.0.22`，产物见下方「下载安装」 |
 
 未验证的功能不会被写成「已完成」。真机截图是唯一验收证据。
 
@@ -83,10 +90,10 @@
 
 | 产物 | 说明 |
 |---|---|
-| APK | [`dsh-Chat-v1.0.21.apk`](https://gitee.com/westanke/dsh-Chat/releases/download/v1.0.21/dsh-Chat-v1.0.21.apk)<br>26,022,440 字节 · SHA-256 `1b3dd90140f2a3eca682f03d58970f87946aaee35c23c381774b4bb1f1bc53d7` |
-| 校验 | `sha256sum -c` 前先比对上方 SHA-256；tag `v1.0.21` 内的 `artifacts/SHA256SUMS.txt` 为权威值 |
+| APK | [`dsh-Chat-v1.0.22.apk`](https://gitee.com/westanke/dsh-Chat/releases/download/v1.0.22/dsh-Chat-v1.0.22.apk)<br>26,154,480 字节 · SHA-256 `fee18e99369460d5adc6b96583a0b0b0c6702e1a13956423ee8dd4e68614d028` |
+| 校验 | `sha256sum -c` 前先比对上方 SHA-256；tag `v1.0.22` 内的 `artifacts/SHA256SUMS.txt` 为权威值 |
 
-> 版本号以 [`app/pubspec.yaml`](app/pubspec.yaml) 的 `version` 为准（当前 `1.0.21+22`）。
+> 版本号以 [`app/pubspec.yaml`](app/pubspec.yaml) 的 `version` 为准（当前 `1.0.22+23`）。
 
 ## 怎么跑
 
