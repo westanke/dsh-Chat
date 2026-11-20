@@ -186,7 +186,7 @@ class ChatState extends ChangeNotifier with GroupExpandState {
     historyPageJustLoaded = false;
     historyTruncated = false;
     // 流式缓冲一并清（2026-11-15 反馈）：A 会话执行中切到 B，残留的
-    // streamReasoning/streamText 会以流式气泡（_StreamingItem）挂在 B 页
+    // streamReasoning/streamText 会以流式正文挂在 B 页
     // 尾部——「深度思考未按照对应会话显示」正是这个残留；若 B 也在执行，
     // B 的 delta 追加在 A 残留后面，两段内容混在一起。切回 A 时缓冲从零
     // 累积，与 reloadHistory 拉回的落库内容衔接、不重复。

@@ -1,9 +1,28 @@
-part of 'chat_page.dart';
-
 // ---------- 消息项（从 chat_page.dart 拆出，宪法 §7 控行数） ----------
 
-class _MessageItem extends StatelessWidget {
-  const _MessageItem({
+library;
+
+import 'package:flutter/services.dart';
+import 'package:material_ui/material_ui.dart';
+
+import '../bridge/gateway.dart';
+import '../bridge/models.dart';
+import '../bridge/platform.dart';
+import '../design/app_settings.dart';
+import '../design/tokens.dart';
+import 'chat_expand_state.dart';
+import 'chat_image.dart';
+import 'chat_state.dart';
+import 'chat_thinking.dart';
+import 'md_view.dart';
+import 'md_viewer.dart';
+import 'message_actions.dart';
+import 'process_group.dart';
+import 'work_steps.dart';
+
+class MessageItem extends StatelessWidget {
+  const MessageItem({
+    super.key,
     required this.message,
     required this.colors,
     required this.index,
@@ -15,8 +34,8 @@ class _MessageItem extends StatelessWidget {
   final int index;
   final ChatState state;
 
-  /// 下载器（chat_page build 时注入，见 _imageFetcher）。
-  static ImageFetcher? _imageFetcher;
+  /// 下载器（chat_page build 时注入，见 imageFetcher）。
+  static ImageFetcher? imageFetcher;
 
   /// 助手消息文本里的 image-handoff 占位（纯文本模型发图回路）。
   DsImageRef? get _handoff => handoffRefOf(message.text);
@@ -70,20 +89,17 @@ class _MessageItem extends StatelessWidget {
         // verbose 完全展开：无组标题，逐条工具行（每条自带详情展开）。
         final calls = message.toolCalls;
         if (calls.isEmpty) return const SizedBox.shrink();
-        return Padding(
-          padding: const EdgeInsets.only(top: DsSpacing.blockGap),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              for (final call in calls)
-                DsToolRow(
-                  call: call,
-                  colors: colors,
-                  allowDetail: true,
-                  answerable: _answerable,
-                ),
-            ],
-          ),
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            for (final call in calls)
+              DsToolRow(
+                call: call,
+                colors: colors,
+                allowDetail: true,
+                answerable: _answerable,
+              ),
+          ],
         );
       }
       // 展开态托管在 ChatState（key=首个 callId，跨 reload 稳定）；
@@ -111,7 +127,7 @@ class _MessageItem extends StatelessWidget {
     }
     // 文件卡（第四轮反馈 6）：present 工具交付的文件列表。
     if (message.role == 'files') {
-      return _DeliverablesCard(
+      return DeliverablesCard(
         files: message.files,
         colors: colors,
         gateway: state.gateway,
@@ -123,7 +139,6 @@ class _MessageItem extends StatelessWidget {
       final lines = message.text.split('\n');
       final failed = message.text.contains('\n✗');
       return Container(
-        margin: const EdgeInsets.only(top: DsSpacing.blockGap),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
           color: colors.bgLayer1,
@@ -171,7 +186,6 @@ class _MessageItem extends StatelessWidget {
     // 这里同样用 danger 色块呈现，而不是静默什么都不显示。
     if (message.isError) {
       return Container(
-        margin: const EdgeInsets.only(top: DsSpacing.blockGap),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
           color: colors.danger.withValues(alpha: 0.08),
@@ -195,10 +209,7 @@ class _MessageItem extends StatelessWidget {
               return Align(
             alignment: Alignment.centerRight,
             child: Container(
-              margin: const EdgeInsets.only(
-                top: DsSpacing.blockGap,
-                left: DsSpacing.hMargin,
-              ),
+              margin: const EdgeInsets.only(left: DsSpacing.hMargin),
               padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 12),
               constraints: BoxConstraints(
                 maxWidth: avail * DsSpacing.userBubbleMaxFraction,
@@ -218,7 +229,7 @@ class _MessageItem extends StatelessWidget {
                       child: DsChatImage(
                         ref: ref,
                         colors: colors,
-                        fetcher: _imageFetcher!,
+                        fetcher: imageFetcher!,
                       ),
                     ),
                   if (message.text.isNotEmpty)
@@ -235,39 +246,36 @@ class _MessageItem extends StatelessWidget {
            ); // Align（气泡容器，return 结束）
            },
          )
-        : Padding(
-            padding: const EdgeInsets.only(top: DsSpacing.blockGap),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                if (message.reasoning.isNotEmpty)
-                  _ThinkBlock(
-                    text: message.reasoning,
-                    colors: colors,
-                    // concise 档折叠态只留标题，不显示正文预览。
-                    showPreview: appSettings
-                        .workStepsDetail.settledReasoningPreview,
-                  ),
-                // 纯文本模型的图片交接（反馈第 8 条手机端显示回路）：
-                // 文本里的 [Image: source: .../<sha256>.<ext>] 占位换成取回的图。
-                if (_handoff != null)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: DsChatImage(
-                      ref: _handoff!,
-                      colors: colors,
-                      fetcher: _imageFetcher!,
-                    ),
-                  ),
-                DsMarkdownView(text: message.text, colors: colors),
-                DsMessageActions(
+        : Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (message.reasoning.isNotEmpty)
+                ThinkingRow(
+                  text: message.reasoning,
                   colors: colors,
-                  text: message.text,
-                  sentAt: message.startedAt,
-                  onRegenerate: () => state.regenerateAt(index),
+                  // concise 档折叠态只留标题，不显示正文预览。
+                  showPreview:
+                      appSettings.workStepsDetail.settledReasoningPreview,
                 ),
-              ],
-            ),
+              // 纯文本模型的图片交接（反馈第 8 条手机端显示回路）：
+              // 文本里的 [Image: source: .../<sha256>.<ext>] 占位换成取回的图。
+              if (_handoff != null)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: DsChatImage(
+                    ref: _handoff!,
+                    colors: colors,
+                    fetcher: imageFetcher!,
+                  ),
+                ),
+              DsMarkdownView(text: message.text, colors: colors),
+              DsMessageActions(
+                colors: colors,
+                text: message.text,
+                sentAt: message.startedAt,
+                onRegenerate: () => state.regenerateAt(index),
+              ),
+            ],
           );
     return GestureDetector(
       onDoubleTap: () => _copyAll(context),
@@ -276,32 +284,30 @@ class _MessageItem extends StatelessWidget {
   }
 }
 
-class _StreamingItem extends StatelessWidget {
-  const _StreamingItem({required this.state, required this.colors});
+class StreamingItem extends StatelessWidget {
+  const StreamingItem({super.key, required this.state, required this.colors});
 
   final ChatState state;
   final DsColors colors;
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(top: DsSpacing.blockGap),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          if (state.streamReasoning.isNotEmpty)
-            _ThinkBlock(
-              text: state.streamReasoning,
-              colors: colors,
-              streaming: true,
-            ),
-          DsMarkdownView(
-            text: state.streamText,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (state.streamReasoning.isNotEmpty)
+          ThinkingRow(
+            text: state.streamReasoning,
             colors: colors,
             streaming: true,
+            answerStarted: state.streamText.isNotEmpty,
           ),
-        ],
-      ),
+        DsMarkdownView(
+          text: state.streamText,
+          colors: colors,
+          streaming: true,
+        ),
+      ],
     );
   }
 }
@@ -312,8 +318,9 @@ class _StreamingItem extends StatelessWidget {
 /// 点击：.md/.markdown → 全屏 Markdown 渲染页（resolve + readContent 取字节）；
 /// 其他类型 → 系统打开（openFile，FileProvider + ACTION_VIEW）；
 /// 都失败回退系统分享。md 渲染页需要 gateway（长文档滚动可读）。
-class _DeliverablesCard extends StatelessWidget {
-  const _DeliverablesCard({
+class DeliverablesCard extends StatelessWidget {
+  const DeliverablesCard({
+    super.key,
     required this.files,
     required this.colors,
     required this.gateway,
@@ -397,7 +404,6 @@ class _DeliverablesCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.only(top: DsSpacing.blockGap),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
       decoration: BoxDecoration(
         color: colors.bgLayer1,

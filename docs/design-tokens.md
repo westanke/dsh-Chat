@@ -382,6 +382,77 @@ Scroll 视口宽（1080px 屏上 = 956px），但列宽总和比它大，各格 
 ioCard/轮尾行/思考行全部复用既有语义色（mdCodeBlockBg/borderL1/borderL2/labelTertiary/labelSecondary/danger 等），无新增色值；分段布局 [label\|content] 在 Flutter 侧用 Row+Expanded 近似官方 grid（label sticky 偏差：App 侧标签随内容滚动）。
 
 
+## 4.12 会话页整页移植 · dsh-go 结构（2026-11-20 task-6）
+
+会话页的**结构**移植自 dsh-go（App 侧 `chat_screen.dart` 的 `_ChatLayout` 分槽外壳、
+`chat_header.dart` 的标题+状态顶栏、`chat_rows.dart` 的行模型、`chat_list.dart` 的
+居中锚定列表）。**颜色配方、既有组件与文案仍用本仓 token**，不复刻 dsh-go 的玻璃自绘顶栏；
+本节只登记移植带来的新布局/动效/状态色。
+
+外壳分槽（`ui/chat_shell.dart`）：`header`（顶栏）/ `body`（正文列表）/ `composer`（输入条）/
+`veil`（底部渐隐带）。输入条先量高度，正文区因此从顶栏下沿开始、伸到输入条上沿以下
+`chatListOverlap`；渐隐带盖住正文与输入条交界处，文字滑到输入条后面时淡出而不是被裁一刀。
+
+| 元素 | token | 取值 | 依据 |
+|---|---|---|---|
+| 正文最大阅读宽度 | `DsSpacing.chatReadingWidth` | 720 | 官方 Web `--dsh-chat-content-width: 748px` 同档 |
+| 浮层控件离阅读列两边距离 | `DsSpacing.chatFloatInset` | 14 | 手机态边距 22，浮层比正文窄 4（各边 2） |
+| 浮层控件最大宽度 | `DsSpacing.chatFloatingWidth` | 692 | readingWidth − 2×floatInset |
+| 正文伸到输入条上沿以下的距离 | `DsSpacing.chatListOverlap` | 6 | dsh-go `_ChatLayout.overlap` |
+| 底部渐隐带高度（羽化） | `DsSpacing.chatVeilFeather` | 14 | dsh-go `BackdropVeil.feather` |
+| 输入条底部安全区余量 | `DsSpacing.chatComposerBottomPad` | 8 | dsh-go composer 槽 SafeArea minimum |
+| 顶栏状态点直径 | `DsSpacing.chatStatusDot` | 6 | dsh-go `chat_header.dart` `_dot` |
+| 状态点与文字间距 | `DsSpacing.chatStatusDotGap` | 5 | dsh-go `_dotGap` |
+| 顶栏状态行高 | `DsSpacing.chatStatusRowHeight` | 20 | 本工程自定（官方单行顶栏 44 + 状态行） |
+| 换轮竖向间距 | `DsSpacing.chatGapNewTurn` | 24 | dsh-go page-design 组间 24 |
+| 同轮内部间距 | `DsSpacing.chatGapSameTurn` | 8 | 本工程自定 |
+| 相邻过程行间距 | `DsSpacing.chatGapProcess` | 0 | 过程行成组，不额外拉开 |
+| 卡片与上下内容间距 | `DsSpacing.chatGapCard` | 12 | 本工程自定 |
+| 脚注行上方间距 | `DsSpacing.chatGapFootnote` | 4 | 本工程自定 |
+| 列表行入场淡入 | `DsMotion.rowFadeIn` | 160ms | 本工程自定 |
+| 视口尺寸变化后的滚动校正上限 | `DsMotion.viewportCorrectionLimit` | 240 | dsh-go `_glideReach` 同量级 |
+| 状态点呼吸周期（busy） | `DsMotion.statusPulse` | 1200ms | dsh-go `StatusDot` 呼吸 1200ms |
+| 状态点颜色（正常 / 进行中 / 警告 / 错误 / 空闲） | `DsColors.chatStatusOk` / `brand` / `DsColors.chatStatusWarn` / `danger` / `labelTertiary` | 浅 #337250 / #3964FE / #936123 / #D93F3F / #ADB2B8；深 #8BCCA6 / #5686FE / #E6BD7C / #CFD3D6 / #81858C | dsh-go `semantic_colors.dart`（success/warning）+ 本仓 danger/brand |
+
+顶栏状态机（`ui/chat_header_status.dart`）：未连接→idle「未连接」；连接中→busy「连接中」；
+已断开/鉴权失败→error「已断开」；等待审批→warn「等待审批」；等待回答→warn「等待回答」；
+生成中→busy「生成中」；正常→ok（显示主机名）。颜色只是辅助，状态一律带文字。
+
+
+## 4.13 会话页思考行 · dsh-go 形态（2026-11-20 task-7）
+
+思考行的**结构**移植自 dsh-go（`app/lib/ui/chat/widgets/thinking_pill.dart` +
+`stream_row.dart`）：图形列 + 标签 + 实时窗口 + 展开全文，过程行与工具行同一套解剖。
+**颜色仍用本仓 brand 配方**（`DsColors.brand`），图标与光点环为本工程自绘，
+不复用官方素材、不搬 dsh-go 的 orb 引擎。
+
+| 元素 | token | 取值 | 依据 |
+|---|---|---|---|
+| 图形列宽度 | `DsSpacing.thinkLeadWidth` | 24 | dsh-go `StreamRow.lead` |
+| 图形列与文字列间距 | `DsSpacing.thinkColumnGap` | 8 | dsh-go `StreamRow.gap` |
+| 展开正文左缩进 | `DsSpacing.thinkBodyIndent` | 32 | dsh-go `StreamRow.indent`（图形列 + 间距） |
+| 展开正文上下留白 | `DsSpacing.thinkBodyPadTop` / `thinkBodyPadBottom` | 4 / 8 | dsh-go ThinkingPill body padding |
+| 展开内容左侧细线宽 | `DsSpacing.thinkRailWidth` | 1 | dsh-go `_RailPainter` |
+| 实时窗口行数 | `DsSpacing.thinkTickerRows` | 3 | dsh-go `ThinkingTicker.rows` |
+| 静止图标直径 | `DsSpacing.thinkGlyphSize` | 15 | dsh-go `ThinkGlyph` size 15 |
+| 呼吸光点环直径 | `DsSpacing.thinkOrbSize` | 18 | dsh-go `ThinkingOrb` displaySize 18 |
+| 图形底色 | `DsColors.thinkGlyphBg` | brand 浅色 10% / 深色 18% | dsh-go ThinkingPill 图形底 |
+| 实时窗口滚动时长 | `DsMotion.thinkingTicker` | 160ms | dsh-go `AppMotion.quick` |
+| 标签扫光时长 / 周期 / 首次延迟 | `DsMotion.thinkingSweep` / `thinkingSweepPeriod` / `thinkingSweepLead` | 1000ms / 4000ms / 600ms | dsh-go `ThinkingLabel` |
+| 呼吸光点环周期 | `DsMotion.thinkingBreath` | 2400ms | dsh-go `AppMotion.breath` |
+
+思考行三态（`ui/chat_thinking.dart`）：
+
+- **思考中**（助手正文还没开始）：图形列是呼吸光点环，标签「思考中」带横向扫光；
+  下方是**三行恒高实时窗口**——写满一行整段匀速上滑一行，块高从头到尾不变，
+  列表不会一行一行地追底。
+- **正文开始后**：思考行收成一行摘要（正文首行），点行展开全文。
+- **轮结束**：思考过程并进这一轮的助手消息，思考行折叠、只留首行预览，点行展开全文。
+
+展开态左侧有一条 1px 细线走图形列中线，正文从缩进 32 起——与工具行展开同一套解剖。
+颜色只是辅助，状态一律带文字。
+
+
 ## 5. 截图资产（ref/）
 - official-login-page.png 登录页（+86 152 1388 0002 / 验证码输入 / 发送验证码按钮）
 - official-welcome.png 欢迎引导页（开启对话主按钮）

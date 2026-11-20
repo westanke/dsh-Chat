@@ -249,6 +249,82 @@ class DsSpacing {
 
   /// 展开详情整体滚动最大高度（bodyScroll max-height 260px）。
   static const bodyScrollMaxHeight = 260.0;
+
+  // ---- 会话页外壳（整页移植自 dsh-go 的分槽外壳，docs/design-tokens.md §4.12）----
+  /// 正文最大阅读宽度：宽屏（平板 / 横屏）时正文居中，两侧留白。
+  /// 与官方 Web 的 `--dsh-chat-content-width: 748px` 同档。
+  static const chatReadingWidth = 720.0;
+
+  /// 浮在阅读列上的控件（输入条、待办条）离阅读列两边的距离：
+  /// 和手机上离屏幕两边一样 22，所以比正文两边各宽 4。
+  static const chatFloatInset = 14.0;
+
+  /// 浮层控件的最大宽度 = 阅读列减两边 [chatFloatInset]。
+  static const chatFloatingWidth = chatReadingWidth - 2 * chatFloatInset;
+
+  /// 列表视口伸到输入条上沿以下的距离：底色在那里已经是实心，看不见裁切。
+  static const chatListOverlap = 6.0;
+
+  /// 列表顶部留白（顶栏之下）。
+  static const chatListTopGap = 8.0;
+
+  // ---- 会话页行距阶梯（docs/design-tokens.md §4.12）----
+  /// 换轮（上一轮回答 → 下一条用户消息）的竖向间距。
+  static const chatGapNewTurn = 24.0;
+
+  /// 同一轮内部（工具行 ↔ 正文）的竖向间距。
+  static const chatGapSameTurn = 8.0;
+
+  /// 相邻过程行之间没有间距（它们是一组）。
+  static const chatGapProcess = 0.0;
+
+  /// 卡片（改动卡 / 产物卡 / 审批卡）与上下内容的间距。
+  static const chatGapCard = 12.0;
+
+  /// 脚注行与上方内容的间距。
+  static const chatGapFootnote = 4.0;
+
+  // ---- 会话页外壳细部（docs/design-tokens.md §4.12）----
+  /// 底部渐隐带的羽化高度：正文滑到输入条后面时淡出而不是被裁一刀。
+  static const chatVeilFeather = 14.0;
+
+  /// 输入条底部的安全区余量（键盘弹起时贴着键盘上沿）。
+  static const chatComposerBottomPad = 8.0;
+
+  /// 顶栏状态点直径。
+  static const chatStatusDot = 6.0;
+
+  /// 状态点与状态文字之间的间距。
+  static const chatStatusDotGap = 5.0;
+
+  /// 顶栏状态行高（标题下方那一行）。
+  static const chatStatusRowHeight = 20.0;
+
+  // ---- 思考行（docs/design-tokens.md §4.13）----
+  /// 图形列宽度：原子图标 / 呼吸光点环待在这列里。
+  static const thinkLeadWidth = 24.0;
+
+  /// 图形列与文字列之间的间距。
+  static const thinkColumnGap = 8.0;
+
+  /// 展开正文的左缩进（图形列 + 间距）。
+  static const thinkBodyIndent = 32.0;
+
+  /// 展开正文上下的留白。
+  static const thinkBodyPadTop = 4.0;
+  static const thinkBodyPadBottom = 8.0;
+
+  /// 展开内容左侧细线的宽度。
+  static const thinkRailWidth = 1.0;
+
+  /// 实时窗口的行数（流式思考固定露出几行）。
+  static const thinkTickerRows = 3;
+
+  /// 静止态原子图标的直径。
+  static const thinkGlyphSize = 15.0;
+
+  /// 呼吸光点环的直径。
+  static const thinkOrbSize = 18.0;
 }
 
 /// 聊天页滚动相关动效（本工程自定义，docs/design-tokens.md §4.6）。
@@ -276,4 +352,28 @@ class DsMotion {
 
   /// 标题/摘要 shimmer 呼吸周期（官方 TextShimmer 循环 ~0.9s）。
   static const Duration shimmerCycle = Duration(milliseconds: 900);
+
+  /// 列表行入场淡入时长（新行落地时淡入，避免整块闪出）。
+  static const Duration rowFadeIn = Duration(milliseconds: 160);
+
+  /// 视口尺寸变化后校正滚动位置的最长单帧修正量（居中锚定）。
+  static const double viewportCorrectionLimit = 240.0;
+
+  /// 顶栏状态点呼吸周期（busy 态淡入淡出）。
+  static const Duration statusPulse = Duration(milliseconds: 1200);
+
+  /// 实时窗口上移一行的时长（匀速）。
+  static const Duration thinkingTicker = Duration(milliseconds: 160);
+
+  /// 思考标签扫光一次的长度。
+  static const Duration thinkingSweep = Duration(milliseconds: 1000);
+
+  /// 思考标签两次扫光之间的间隔。
+  static const Duration thinkingSweepPeriod = Duration(milliseconds: 4000);
+
+  /// 思考标签开始扫光前的延迟（开始思考后先静一会儿）。
+  static const Duration thinkingSweepLead = Duration(milliseconds: 600);
+
+  /// 呼吸光点环的周期。
+  static const Duration thinkingBreath = Duration(milliseconds: 2400);
 }

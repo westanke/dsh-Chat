@@ -1,0 +1,293 @@
+// 会话列表的行模型。
+//
+// 列表只认行，不认消息：消息序列在不同折叠档位下派生出不同的行序列。
+// 每行有一个稳定主键（key）——列表 diff、视口锚定、行级缓存都靠它。
+//
+// 结构参照 dsh-go（app/lib/ui/chat/chat_rows.dart），只借结构：
+// 视觉、措辞、组件仍用本仓的 token 与既有 widget。
+
+import 'package:dshchat/bridge/models.dart';
+import 'package:dshchat/design/app_settings.dart';
+import 'package:dshchat/ui/chat_expand_state.dart';
+import 'package:dshchat/ui/work_steps.dart';
+
+/// 会话列表的一行。由 [deriveRows] 从消息序列派生。
+sealed class ChatRow {
+  const ChatRow();
+
+  /// 稳定主键：同一批消息在多次派生之间保持不变。
+  String get key;
+
+  /// 用作视口分界锚点的候选：内容不会再被合并 / 替换的行。
+  bool get stable => false;
+
+  /// 这行对应的消息在消息列表里的下标；不属于任何消息的行取 -1。
+  int get index => -1;
+
+  /// 这一行的外观能否缓存。
+  ///
+  /// 内容不来自行自身的行不能缓存：流式正文每次重建都不同，
+  /// 缓存下来会把最新一段文字冻住。
+  bool get cacheable => true;
+}
+
+/// 用户消息。
+final class UserRow extends ChatRow {
+  const UserRow(this.message, {required this.index});
+
+  final ChatMessage message;
+  @override
+  final int index;
+
+  @override
+  String get key => message.seq >= 0
+      ? 'u${message.seq}'
+      : 'pu${identityHashCode(message)}';
+
+  @override
+  bool get stable => message.seq >= 0;
+}
+
+/// 助手正文。
+final class AssistantRow extends ChatRow {
+  const AssistantRow(this.message, {required this.index});
+
+  final ChatMessage message;
+  @override
+  final int index;
+
+  @override
+  String get key => message.seq >= 0
+      ? 'a${message.seq}'
+      : 'pa${identityHashCode(message)}';
+
+  @override
+  bool get stable => message.seq >= 0;
+}
+
+/// 工具过程组（一组工具调用）。
+final class ProcessRow extends ChatRow {
+  const ProcessRow(this.message, {required this.index});
+
+  final ChatMessage message;
+  @override
+  final int index;
+
+  @override
+  String get key => 'g${processGroupKeyOf(message)}';
+}
+
+/// 失败提示行（内核在轮出错时给的那条）。
+final class ErrorRow extends ChatRow {
+  const ErrorRow(this.message, {required this.index});
+
+  final ChatMessage message;
+  @override
+  final int index;
+
+  @override
+  String get key => 'e${message.seq}';
+}
+
+/// 交付文件卡。
+final class FilesRow extends ChatRow {
+  const FilesRow(this.message, {required this.index});
+
+  final ChatMessage message;
+  @override
+  final int index;
+
+  @override
+  String get key => 'fl${message.seq}';
+}
+
+/// 本机命令卡。
+final class CommandRow extends ChatRow {
+  const CommandRow(this.message, {required this.index});
+
+  final ChatMessage message;
+  @override
+  final int index;
+
+  @override
+  String get key => 'c${message.seq}';
+
+  /// 命令卡的正文会在原消息对象上就地改写（执行结果回填），
+  /// 缓存下来会把旧结果冻住。
+  @override
+  bool get cacheable => false;
+}
+
+/// 轮尾行：这一轮结束的摘要（用时 / 失败），点按可收起轮内过程组。
+final class TurnEndRow extends ChatRow {
+  const TurnEndRow(this.turn, {required this.hasProcess});
+
+  final TurnRange turn;
+
+  /// 这一轮里有没有过程组（没有就不出轮尾行）。
+  final bool hasProcess;
+
+  @override
+  String get key => 'te${turn.start}';
+
+  @override
+  bool get stable => true;
+}
+
+/// 「加载更早消息」入口。
+final class HistoryMoreRow extends ChatRow {
+  const HistoryMoreRow();
+
+  @override
+  String get key => 'hm';
+}
+
+/// 「更早的历史被服务端裁剪掉」提示。
+final class HistoryTruncatedRow extends ChatRow {
+  const HistoryTruncatedRow();
+
+  @override
+  String get key => 'ht';
+}
+
+/// 流式工具组（工具帧实时缓冲合成，尚未落盘）。
+final class StreamingProcessRow extends ChatRow {
+  const StreamingProcessRow(this.group);
+
+  final ChatMessage group;
+
+  @override
+  String get key => 'sg${processGroupKeyOf(group)}';
+
+  @override
+  bool get cacheable => false;
+}
+
+/// 流式正文。
+final class StreamingTextRow extends ChatRow {
+  const StreamingTextRow();
+
+  @override
+  String get key => 'st';
+
+  @override
+  bool get cacheable => false;
+}
+
+/// 「回答被截断」提示。
+final class MaxTokensRow extends ChatRow {
+  const MaxTokensRow();
+
+  @override
+  String get key => 'mt';
+}
+
+/// 链路错误提示。
+final class LinkErrorRow extends ChatRow {
+  const LinkErrorRow(this.message);
+
+  final String message;
+
+  @override
+  String get key => 'le${message.hashCode}';
+}
+
+/// 派生行序列所需的输入。
+class ChatRowsInput {
+  const ChatRowsInput({
+    required this.messages,
+    required this.folded,
+    required this.streaming,
+    required this.hasMoreHistory,
+    required this.historyTruncated,
+    required this.streamingProcess,
+    required this.maxTokensNotice,
+    required this.linkError,
+  });
+
+  final List<ChatMessage> messages;
+  final FoldedReplies folded;
+  final bool streaming;
+  final bool hasMoreHistory;
+  final bool historyTruncated;
+  final ChatMessage? streamingProcess;
+  final bool maxTokensNotice;
+  final String? linkError;
+
+  /// 派生结果的输入指纹：变了才重算。
+  Object get signature => (
+    messages.length,
+    messages.isEmpty ? 0 : messages.last.seq,
+    messages.isEmpty ? 0 : identityHashCode(messages.last),
+    folded,
+    streaming,
+    hasMoreHistory,
+    historyTruncated,
+    streamingProcess == null ? 0 : identityHashCode(streamingProcess),
+    maxTokensNotice,
+    linkError,
+  );
+}
+
+/// 把消息序列折成列表行。
+///
+/// 规则：
+/// - 「收起后显示的回复」= [FoldedReplies.finalOnly] 且轮已完成时，
+///   轮里只留最终回答（流式中永不过滤）；
+/// - 工具过程组、用户消息、文件卡、命令卡、失败提示恒可见；
+/// - 每轮最后补一条 [TurnEndRow]（轮内没有过程组时不出）。
+List<ChatRow> deriveRows(ChatRowsInput input) {
+  final messages = input.messages;
+  final visible = Set<ChatMessage>.identity()
+    ..addAll(visibleMessagesOf(messages, input.folded, input.streaming));
+  final turns = turnsOf(messages);
+  final rows = <ChatRow>[];
+
+  if (input.hasMoreHistory) rows.add(const HistoryMoreRow());
+  if (input.historyTruncated) rows.add(const HistoryTruncatedRow());
+
+  for (var i = 0; i < messages.length; i++) {
+    final message = messages[i];
+    if (!visible.contains(message)) continue;
+    rows.add(_rowFor(message, i));
+    final turn = _turnEndingAt(turns, i);
+    if (turn == null) continue;
+    if (!_turnHasProcess(messages, turn)) continue;
+    rows.add(TurnEndRow(turn, hasProcess: true));
+  }
+
+  final streamingGroup = input.streamingProcess;
+  if (streamingGroup != null) rows.add(StreamingProcessRow(streamingGroup));
+  if (input.streaming) rows.add(const StreamingTextRow());
+  if (input.maxTokensNotice) rows.add(const MaxTokensRow());
+  final error = input.linkError;
+  if (error != null) rows.add(LinkErrorRow(error));
+
+  return rows;
+}
+
+/// 一条消息对应哪一行。
+ChatRow _rowFor(ChatMessage message, int index) {
+  if (message.isUser) return UserRow(message, index: index);
+  if (message.isProcess) return ProcessRow(message, index: index);
+  if (message.isError) return ErrorRow(message, index: index);
+  if (message.role == 'files') return FilesRow(message, index: index);
+  if (message.role == 'command') return CommandRow(message, index: index);
+  return AssistantRow(message, index: index);
+}
+
+/// 找以 [index] 结尾的轮。
+TurnRange? _turnEndingAt(List<TurnRange> turns, int index) {
+  for (final turn in turns) {
+    if (turn.end - 1 == index) return turn;
+  }
+  return null;
+}
+
+/// 一轮里有没有过程组。
+bool _turnHasProcess(List<ChatMessage> messages, TurnRange turn) {
+  for (var i = turn.start + 1; i < turn.end; i++) {
+    if (messages[i].isProcess) return true;
+  }
+  return false;
+}

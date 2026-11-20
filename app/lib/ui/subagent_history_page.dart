@@ -192,8 +192,8 @@ class _SubagentHistoryPageState extends State<SubagentHistoryPage> {
 }
 
 /// 子会话历史的轻量消息渲染（只读）：正文 / 过程组短语 / 错误 / 文件卡。
-/// 不复用 _MessageItem——那是 chat_page 库的私有 part，且挂着
-/// regenerate/复制整条等交互回路；此处只读展示足够。
+/// 不复用 MessageItem——那个组件挂着 regenerate/复制整条等交互回路，
+/// 子会话历史是只读展示，足够。
 class _SubagentMessageItem extends StatelessWidget {
   const _SubagentMessageItem({required this.message, required this.colors});
 

@@ -2,40 +2,28 @@
 /// 布局对齐官方 App（docs/design-tokens.md 布局节：内容 x30dp 起、顶栏 44dp）。
 library;
 
-import 'dart:async';
-
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 
 import '../bridge/gateway.dart';
-import '../bridge/models.dart';
-import '../bridge/platform.dart';
 import '../design/app_settings.dart';
 import '../design/tokens.dart';
 import 'brand_mark.dart';
-import 'chat_expand_state.dart';
+import 'chat_header_status.dart';
 import 'chat_image.dart';
+import 'chat_list.dart';
+import 'chat_message_items.dart';
+import 'chat_shell.dart';
 import 'chat_state.dart';
+import 'chat_top_bar.dart';
 import 'composer.dart';
-import 'md_view.dart';
-import 'md_viewer.dart';
-import 'message_actions.dart';
 import 'model_sheet.dart';
-import 'process_group.dart';
-import 'session_location_sheet.dart';
-import 'reasoning_text.dart';
 import 'projection_sheets.dart';
 import 'question_card.dart';
-import 'scroll_follow.dart';
+import 'session_location_sheet.dart';
 import 'sessions_drawer.dart';
 import 'stats_sheet.dart';
-import 'turn_process_row.dart';
-import 'work_steps.dart';
 import 'work_view_sheet.dart';
-
-part 'chat_message_blocks.dart';
-part 'chat_message_items.dart';
-part 'chat_message_list.dart';
 
 class ChatPage extends StatefulWidget {
   const ChatPage({
@@ -73,7 +61,7 @@ class _ChatPageState extends State<ChatPage>
     // 都走 REST，token 从 gateway 拿；sessionId 在 _onChange 里随会话刷新。
     final sid0 = st.sessionId;
     if (sid0 != null && sid0.isNotEmpty) {
-      _MessageItem._imageFetcher = gatewayImageFetcher(st.gateway, sid0);
+      MessageItem.imageFetcher = gatewayImageFetcher(st.gateway, sid0);
     }
     _drawerCtrl = AnimationController(
       vsync: this,
@@ -99,7 +87,7 @@ class _ChatPageState extends State<ChatPage>
     // （内核按会话事件校验引用），换会话就换下载器。
     final sid = st.sessionId;
     if (sid != null && sid.isNotEmpty) {
-      _MessageItem._imageFetcher = gatewayImageFetcher(st.gateway, sid);
+      MessageItem.imageFetcher = gatewayImageFetcher(st.gateway, sid);
     }
     if (mounted) setState(() {});
   }
@@ -207,16 +195,19 @@ class _ChatPageState extends State<ChatPage>
     return Scaffold(
       key: _scaffoldKey,
       backgroundColor: c.bgBase,
-      appBar: _TopBar(
+      // 外壳自绘（dsh-go 的分槽布局）：顶栏 / 正文 / 输入条 / 渐隐带四槽。
+      // Scaffold 不再放 appBar，顶部安全区由顶栏自己吃掉。
+      body: ChatShell(
         colors: c,
-        title: st.sessionTitle,
-        onMenu: _openDrawer,
-        onNewChat: () => st.newChat(),
-        connected: st.connectionState == GatewayState.ready,
-        state: st,
-      ),
-      body: SafeArea(
-        child: Column(
+        header: ChatTopBar(
+          colors: c,
+          title: st.sessionTitle,
+          status: _headerStatus,
+          onMenu: _openDrawer,
+          onNewChat: () => st.newChat(),
+          trailing: _OverflowMenu(colors: c, state: st),
+        ),
+        body: Column(
           children: [
             // HITL 问答/审批卡（DSH 向用户提问；无挂起项时不占空间）。
             HitlPanel(
@@ -229,98 +220,38 @@ class _ChatPageState extends State<ChatPage>
             Expanded(
               child: st.isEmpty
                   ? _Greeting(colors: c, state: st)
-                  : _MessageList(state: st, colors: c),
-            ),
-            Composer(
-              colors: c,
-              enabled: st.connectionState == GatewayState.ready,
-              onSend: st.send,
-              onSendWithImage: st.sendWithImage,
-              onCancel: st.cancelTurn,
-              onCommand: st.runCommand,
-              streaming: st.streaming,
-              sessionId: st.sessionId,
-              gateway: st.gateway,
-              currentPermission: st.currentPermission,
+                  : ChatList(
+                      state: st,
+                      colors: c,
+                      onToggleTurn: (turn) => toggleTurn(st, turn),
+                    ),
             ),
           ],
+        ),
+        composer: Composer(
+          colors: c,
+          enabled: st.connectionState == GatewayState.ready,
+          onSend: st.send,
+          onSendWithImage: st.sendWithImage,
+          onCancel: st.cancelTurn,
+          onCommand: st.runCommand,
+          streaming: st.streaming,
+          sessionId: st.sessionId,
+          gateway: st.gateway,
+          currentPermission: st.currentPermission,
         ),
       ),
     );
   }
-}
 
-// ---------- 顶栏 ----------
-
-class _TopBar extends StatelessWidget implements PreferredSizeWidget {
-  const _TopBar({
-    required this.colors,
-    required this.title,
-    required this.onMenu,
-    required this.onNewChat,
-    required this.connected,
-    required this.state,
-  });
-
-  final DsColors colors;
-  final String title;
-  final VoidCallback onMenu;
-  final VoidCallback onNewChat;
-  final bool connected;
-  final ChatState state;
-
-  @override
-  Size get preferredSize => const Size.fromHeight(DsSpacing.topBarHeight);
-
-  @override
-  Widget build(BuildContext context) {
-    return SafeArea(
-      bottom: false,
-      child: SizedBox(
-        height: DsSpacing.topBarHeight,
-        child: Row(
-          children: [
-            IconButton(
-              icon: const Icon(Icons.menu),
-              color: colors.labelPrimary,
-              onPressed: onMenu,
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                title,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: DsTypography.pageTitle.copyWith(
-                  color: colors.labelPrimary,
-                ),
-              ),
-            ),
-            const SizedBox(width: 8),
-            const SizedBox(width: 18),
-            // 官方「新建对话」加号：此前是纯展示 Icon，onNewChat 参数没接上（死交互）。
-            Tooltip(
-              message: '新建对话',
-              child: InkResponse(
-                onTap: onNewChat,
-                radius: 20,
-                child: Icon(
-                  Icons.add_circle_outline,
-                  size: 24,
-                  color: colors.labelPrimary,
-                ),
-              ),
-            ),
-            // 溢出菜单收纳三个「本地投影」面板与会话统计
-            // （对照 companion ChatHeader 的 ⋯ 菜单：轨迹 / 团队 / 统计 /
-            // 后台任务 …；TODO 面板在 companion 是消息区内嵌，这里收进同一菜单）。
-            _OverflowMenu(colors: colors, state: state),
-            const SizedBox(width: DsSpacing.screenPad),
-          ],
-        ),
-      ),
-    );
-  }
+  /// 顶栏状态：连接态 + 生成态 + 等待审批/回答（dsh-go 的顶栏状态机）。
+  ChatHeaderStatus get _headerStatus => chatHeaderStatus(
+        connection: st.connectionState,
+        streaming: st.streaming,
+        waitingApproval: st.hitl.sessionApprovals(st.sessionId).isNotEmpty,
+        waitingAnswer: st.hitl.sessionQuestions(st.sessionId).isNotEmpty,
+        hostLabel: st.deviceLabel,
+      );
 }
 
 // ---------- 顶栏溢出菜单（本地投影面板入口） ----------
@@ -469,5 +400,5 @@ class _Greeting extends StatelessWidget {
   }
 }
 
-// 消息列表（含滚动冻结 / 贴底跟随 / 跳转最新 FAB）已拆到
-// chat_message_list.dart（本库 part）；消息项拆到 chat_message_items.dart。
+// 消息列表已拆到 chat_list.dart（居中锚定的两段滚动）；
+// 消息项拆到 chat_message_items.dart；行渲染层拆到 chat_row_view.dart。

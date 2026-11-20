@@ -196,6 +196,20 @@ class DsColors {
   /// diff 删除行底色：同上（浅色无行底）。
   Color get diffRemoveBg =>
       dark ? const Color(0xFFCD6660).withValues(alpha: 0.12) : none;
+
+  // ---- 会话页顶栏状态点（dsh-go 语义色，docs/design-tokens.md §4.12）----
+  /// 顶栏状态点「正常」色（浅 #337250 / 深 #8BCCA6）。
+  Color get chatStatusOk =>
+      dark ? const Color(0xFF8BCCA6) : const Color(0xFF337250);
+
+  /// 顶栏状态点「等待审批 / 等待回答」色（浅 #936123 / 深 #E6BD7C）。
+  Color get chatStatusWarn =>
+      dark ? const Color(0xFFE6BD7C) : const Color(0xFF936123);
+
+  // ---- 思考行（docs/design-tokens.md §4.13）----
+  /// 思考行图形列的底色：品牌色淡染（浅 10% / 深 18%）。
+  Color get thinkGlyphBg =>
+      brand.withValues(alpha: dark ? 0.18 : 0.10);
 }
 
 /// 字号（官方 token，sp；行高随 dp 换算）。

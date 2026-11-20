@@ -79,71 +79,69 @@ class DsProcessGroup extends StatelessWidget {
       reasoningHint: reasoningHint,
     );
 
-    return Padding(
-      padding: const EdgeInsets.only(top: DsSpacing.blockGap),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          InkWell(
-            onTap: canExpand ? onToggle : null,
-            child: SizedBox(
-              height: DsSpacing.processRowHeight,
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
+    // 行间距由列表行框统一给（chat_row_gap.dart），这里不再自带顶距。
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        InkWell(
+          onTap: canExpand ? onToggle : null,
+          child: SizedBox(
+            height: DsSpacing.processRowHeight,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.only(
+                    right: DsSpacing.processIconGap,
+                  ),
+                  child: Icon(
+                    toolIcon(_groupActivityKind(group)),
+                    size: DsSpacing.processIconSize,
+                    color: headColor,
+                  ),
+                ),
+                // 官方 ProcessGroupHeader：chevron 紧跟图标、都在标题左侧。
+                if (canExpand)
                   Padding(
                     padding: const EdgeInsets.only(
-                      right: DsSpacing.processIconGap,
+                      right: DsSpacing.chipIconGap,
                     ),
                     child: Icon(
-                      toolIcon(_groupActivityKind(group)),
-                      size: DsSpacing.processIconSize,
+                      open ? Icons.expand_less : Icons.expand_more,
+                      size: 16,
                       color: headColor,
                     ),
                   ),
-                  // 官方 ProcessGroupHeader：chevron 紧跟图标、都在标题左侧。
-                  if (canExpand)
-                    Padding(
-                      padding: const EdgeInsets.only(
-                        right: DsSpacing.chipIconGap,
-                      ),
-                      child: Icon(
-                        open ? Icons.expand_less : Icons.expand_more,
-                        size: 16,
-                        color: headColor,
-                      ),
-                    ),
-                  Flexible(
-                    child: Text(
-                      title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: DsTypography.small.copyWith(color: headColor),
-                    ),
+                Flexible(
+                  child: Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: DsTypography.small.copyWith(color: headColor),
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
-          if (canExpand && open)
-            Padding(
-              padding: const EdgeInsets.only(top: 4, bottom: 4),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  for (final t in calls)
-                    DsToolRow(
-                      call: t,
-                      colors: c,
-                      // standard 只到工具行（标题+摘要），不渲染详情。
-                      allowDetail: detail != WorkStepsDetail.standard,
-                      answerable: answerable,
-                    ),
-                ],
-              ),
+        ),
+        if (canExpand && open)
+          Padding(
+            padding: const EdgeInsets.only(top: 4, bottom: 4),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                for (final t in calls)
+                  DsToolRow(
+                    call: t,
+                    colors: c,
+                    // standard 只到工具行（标题+摘要），不渲染详情。
+                    allowDetail: detail != WorkStepsDetail.standard,
+                    answerable: answerable,
+                  ),
+              ],
             ),
-        ],
-      ),
+          ),
+      ],
     );
   }
 }
