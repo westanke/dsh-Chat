@@ -10,6 +10,7 @@ import 'package:material_ui/material_ui.dart';
 import '../bridge/questions.dart';
 import '../design/tokens.dart';
 import 'hitl_state.dart';
+import 'window_class.dart';
 
 /// 挂起提问/审批卡列表（放在消息列表上方；无挂起项时不占空间）。
 class HitlPanel extends StatelessWidget {
@@ -44,21 +45,36 @@ class HitlPanel extends StatelessWidget {
     // （2026-11-15 用户反馈），故面板最大占屏高一半，超出可上下滑动。
     final maxH =
         MediaQuery.sizeOf(context).height * DsSpacing.hitlPanelMaxFraction;
+    // 宽窗把卡片收在会话页读宽上（§4.16）：手机是无穷大，卡片照旧铺满正文列；
+    // 平板横屏若不收，一张审批卡会被拉成 1181dp 的横幅。
+    final maxW = windowClassOf(context).hitlMaxWidth;
     return ConstrainedBox(
       constraints: BoxConstraints(maxHeight: maxH),
-      child: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            for (final a in approvals)
-              _ApprovalCard(
-                approval: a,
-                colors: colors,
-                onDecide: onDecide,
-              ),
-            for (final q in questions)
-              _QuestionCard(question: q, colors: colors, onAnswer: onAnswer),
-          ],
+      // heightFactor: 1 —— 按内容的高度收缩，不吃满 maxH（否则半屏空白留在
+      // 列表顶上），横向才居中限宽。
+      child: Center(
+        heightFactor: 1,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxWidth: maxW),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                for (final a in approvals)
+                  _ApprovalCard(
+                    approval: a,
+                    colors: colors,
+                    onDecide: onDecide,
+                  ),
+                for (final q in questions)
+                  _QuestionCard(
+                    question: q,
+                    colors: colors,
+                    onAnswer: onAnswer,
+                  ),
+              ],
+            ),
+          ),
         ),
       ),
     );

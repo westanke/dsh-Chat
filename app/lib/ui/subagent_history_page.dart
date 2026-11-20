@@ -11,6 +11,7 @@ import '../bridge/models.dart';
 import '../bridge/projections.dart';
 import '../design/tokens.dart';
 import 'md_view.dart';
+import 'window_class.dart';
 
 // ---------- 子会话历史查看页（第四轮反馈 3） ----------
 
@@ -129,26 +130,30 @@ class _SubagentHistoryPageState extends State<SubagentHistoryPage> {
         child: _loading
             ? const Center(child: CircularProgressIndicator(strokeWidth: 2))
             : _error != null
-                ? Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(DsSpacing.screenPad),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            _error!,
-                            textAlign: TextAlign.center,
-                            style: DsTypography.small.copyWith(
-                              color: c.danger,
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          TextButton(onPressed: _load, child: const Text('重试')),
-                        ],
+            ? Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(DsSpacing.screenPad),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        _error!,
+                        textAlign: TextAlign.center,
+                        style: DsTypography.small.copyWith(color: c.danger),
                       ),
-                    ),
-                  )
-                : ListView.builder(
+                      const SizedBox(height: 12),
+                      TextButton(onPressed: _load, child: const Text('重试')),
+                    ],
+                  ),
+                ),
+              )
+            : Center(
+                child: ConstrainedBox(
+                  // 二级页正文列（§4.16）：手机上无穷大，宽窗收在 720 上。
+                  constraints: BoxConstraints(
+                    maxWidth: windowClassOf(context).pageColumnMaxWidth,
+                  ),
+                  child: ListView.builder(
                     padding: EdgeInsets.symmetric(
                       horizontal: DsSpacing.hMargin,
                       vertical: DsSpacing.screenPad,
@@ -158,8 +163,9 @@ class _SubagentHistoryPageState extends State<SubagentHistoryPage> {
                       if (_page!.hasMore && i == 0) {
                         return Center(
                           child: Padding(
-                            padding:
-                                const EdgeInsets.only(bottom: DsSpacing.blockGap),
+                            padding: const EdgeInsets.only(
+                              bottom: DsSpacing.blockGap,
+                            ),
                             child: _loadingOlder
                                 ? const Padding(
                                     padding: EdgeInsets.all(8),
@@ -167,13 +173,16 @@ class _SubagentHistoryPageState extends State<SubagentHistoryPage> {
                                       width: 18,
                                       height: 18,
                                       child: CircularProgressIndicator(
-                                          strokeWidth: 2),
+                                        strokeWidth: 2,
+                                      ),
                                     ),
                                   )
                                 : TextButton.icon(
                                     onPressed: _loadOlder,
-                                    icon: const Icon(Icons.expand_less,
-                                        size: 18),
+                                    icon: const Icon(
+                                      Icons.expand_less,
+                                      size: 18,
+                                    ),
                                     label: const Text('加载更早消息'),
                                   ),
                           ),
@@ -186,6 +195,8 @@ class _SubagentHistoryPageState extends State<SubagentHistoryPage> {
                       );
                     },
                   ),
+                ),
+              ),
       ),
     );
   }
@@ -233,8 +244,11 @@ class _SubagentMessageItem extends StatelessWidget {
                 padding: const EdgeInsets.only(top: 6),
                 child: Row(
                   children: [
-                    Icon(Icons.insert_drive_file_outlined,
-                        size: 18, color: c.brand),
+                    Icon(
+                      Icons.insert_drive_file_outlined,
+                      size: 18,
+                      color: c.brand,
+                    ),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
@@ -270,14 +284,17 @@ class _SubagentMessageItem extends StatelessWidget {
                   alignment: Alignment.centerRight,
                   child: Container(
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 14, vertical: 10),
+                      horizontal: 14,
+                      vertical: 10,
+                    ),
                     constraints: BoxConstraints(
                       maxWidth: avail * DsSpacing.userBubbleMaxFraction,
                     ),
                     decoration: BoxDecoration(
                       color: c.userBubble,
-                      borderRadius:
-                          BorderRadius.circular(DsSpacing.bubbleRadius),
+                      borderRadius: BorderRadius.circular(
+                        DsSpacing.bubbleRadius,
+                      ),
                     ),
                     child: Text(
                       m.text,

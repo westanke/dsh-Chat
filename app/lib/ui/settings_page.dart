@@ -26,6 +26,7 @@ import '../bridge/platform.dart';
 import '../bridge/release_check.dart';
 import '../design/app_settings.dart';
 import '../design/tokens.dart';
+import 'window_class.dart';
 
 part 'settings_sections.dart';
 part 'settings_widgets.dart';
@@ -76,8 +77,9 @@ class SettingsPage extends StatelessWidget {
             ),
             child: Center(
               child: ConstrainedBox(
-                constraints: const BoxConstraints(
-                  maxWidth: DsSpacing.settingsMaxWidth,
+                // 手机上无穷大（整屏），宽窗收在二级页正文列上（§4.16）。
+                constraints: BoxConstraints(
+                  maxWidth: windowClassOf(context).pageColumnMaxWidth,
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -100,10 +102,7 @@ class SettingsPage extends StatelessWidget {
                     _SendSection(colors: c),
                     _DiagnosticsSection(colors: c),
                     _AboutSection(colors: c),
-                    _DisconnectSection(
-                      colors: c,
-                      onDisconnect: onDisconnect,
-                    ),
+                    _DisconnectSection(colors: c, onDisconnect: onDisconnect),
                   ],
                 ),
               ),

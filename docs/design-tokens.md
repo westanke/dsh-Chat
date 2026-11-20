@@ -527,6 +527,33 @@ ioCard/轮尾行/思考行全部复用既有语义色（mdCodeBlockBg/borderL1/b
 > 平板横屏若整页推 320，顶栏右侧的 ⊕/⋮ 会越出右缘被裁掉。
 
 
+## 4.16 宽窗内容列 · 卡片与二级页（2026-11-20 task-10）
+
+§4.15 解决的是「外壳三件（顶栏 / 抽屉 / 正文）」在宽窗下的对齐。这一节管另外两块
+**还按手机屏幕宽度排版**的界面：会话页顶部的 HITL 卡片（审批 / 提问），以及从会话页
+推出去的二级页（设置、Markdown 阅读、子会话历史、目录浏览）。
+
+两者在手机上本来就铺满整屏，所以**限宽只在宽窗生效**——判据取同一个尺寸类：
+
+- `hitlMaxWidth`：紧凑窗 `double.infinity`（卡片铺满正文列），中等 / 扩展窗取
+  `hitlPanelMaxWidth` = [chatReadingWidth]。平板横屏若不收，一张审批卡会被拉成
+  1181dp 的横幅，标题和按钮隔着一屏远。
+- `pageColumnMaxWidth`：紧凑窗 `double.infinity`，其余取 `pageColumnMaxWidth`
+  = [settingsMaxWidth] 720。二级页与会话页正文同一竖轴，翻进翻出不横向跳。
+
+| 元素 | token | 取值 | 依据 |
+|---|---|---|---|
+| HITL 卡片宽上限（宽窗） | `DsSpacing.hitlPanelMaxWidth` | 720（= `chatReadingWidth`） | 与正文同一竖轴；卡片自带左右 22 边距，实际卡片宽 676 |
+| 二级页正文列（宽窗） | `DsSpacing.pageColumnMaxWidth` | 720（= `settingsMaxWidth`） | 设置页原本就是 720，其余二级页跟着它 |
+
+> **判据为什么放在尺寸类里而不是各页各写 `MediaQuery`**：写一次的地方只有三处
+> （`DsWindowClass.hitlMaxWidth` / `pageColumnMaxWidth`），而调用点有七八处；散着写
+> 就会出现「设置页收了、子会话历史没收」这种半宽半满的页面。
+>
+> **手机上为什么返回无穷大而不是屏宽**：卡片与二级页外层本来就有
+> `screenPad` / `hMargin` 的左右边距，返回 `double.infinity` 让
+> `ConstrainedBox` 不产生任何约束，布局与改动前逐字相同——不需要给手机回归新数值。
+
 ## 5. 截图资产（ref/）
 - official-login-page.png 登录页（+86 152 1388 0002 / 验证码输入 / 发送验证码按钮）
 - official-welcome.png 欢迎引导页（开启对话主按钮）

@@ -10,6 +10,7 @@ import 'package:material_ui/material_ui.dart';
 import '../bridge/gateway.dart';
 import '../design/tokens.dart';
 import 'md_view.dart';
+import 'window_class.dart';
 
 class MdViewerPage extends StatefulWidget {
   const MdViewerPage({
@@ -49,8 +50,10 @@ class _MdViewerPageState extends State<MdViewerPage> {
       _error = null;
     });
     try {
-      final resolved = await gatewayResolvePath(widget.gateway,
-          widget.absolutePath);
+      final resolved = await gatewayResolvePath(
+        widget.gateway,
+        widget.absolutePath,
+      );
       final bytes = await gatewayReadFileBytes(
         widget.gateway,
         resolved.rootId,
@@ -112,32 +115,39 @@ class _MdViewerPageState extends State<MdViewerPage> {
         child: _loading
             ? const Center(child: CircularProgressIndicator(strokeWidth: 2))
             : _error != null
-                ? Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(DsSpacing.screenPad),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            _error!,
-                            textAlign: TextAlign.center,
-                            style: DsTypography.small.copyWith(
-                              color: c.danger,
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          TextButton(onPressed: _load, child: const Text('重试')),
-                        ],
+            ? Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(DsSpacing.screenPad),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        _error!,
+                        textAlign: TextAlign.center,
+                        style: DsTypography.small.copyWith(color: c.danger),
                       ),
-                    ),
-                  )
-                : SingleChildScrollView(
+                      const SizedBox(height: 12),
+                      TextButton(onPressed: _load, child: const Text('重试')),
+                    ],
+                  ),
+                ),
+              )
+            : Center(
+                child: ConstrainedBox(
+                  // 二级页正文列（§4.16）：手机上无穷大（整屏），宽窗收在
+                  // 720 上，与会话页正文同一竖轴。
+                  constraints: BoxConstraints(
+                    maxWidth: windowClassOf(context).pageColumnMaxWidth,
+                  ),
+                  child: SingleChildScrollView(
                     padding: EdgeInsets.symmetric(
                       horizontal: DsSpacing.hMargin,
                       vertical: DsSpacing.screenPad,
                     ),
                     child: DsMarkdownView(text: _text ?? '', colors: c),
                   ),
+                ),
+              ),
       ),
     );
   }

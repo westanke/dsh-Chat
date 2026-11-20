@@ -27,10 +27,7 @@ void main() {
     });
 
     test('横屏平板 1181×738 是扩展', () {
-      expect(
-        DsWindowClass.of(const Size(1181, 738)),
-        DsWindowClass.expanded,
-      );
+      expect(DsWindowClass.of(const Size(1181, 738)), DsWindowClass.expanded);
     });
   });
 
@@ -55,9 +52,15 @@ void main() {
       // 平板横屏 1181 让 320 后还剩 861，页面把这一条让出去而不是被推出屏。
       expect(DsWindowClass.compact.pageInsetFor(360), DsSpacing.drawerWidth);
       expect(360 - DsWindowClass.compact.pageInsetFor(360), 72);
-      expect(DsWindowClass.expanded.pageInsetFor(1181), DsSpacing.drawerSidebarWidth);
+      expect(
+        DsWindowClass.expanded.pageInsetFor(1181),
+        DsSpacing.drawerSidebarWidth,
+      );
       expect(1181 - DsWindowClass.expanded.pageInsetFor(1181), 861);
-      expect(DsWindowClass.medium.pageInsetFor(738), DsSpacing.drawerSidebarWidth);
+      expect(
+        DsWindowClass.medium.pageInsetFor(738),
+        DsSpacing.drawerSidebarWidth,
+      );
     });
 
     test('窗口比抽屉还窄时不让出比窗口更多的距离', () {
@@ -71,6 +74,24 @@ void main() {
       expect(DsWindowClass.medium.sidebarWidth, DsSpacing.drawerSidebarWidth);
       expect(DsWindowClass.expanded.sidebarWidth, DsSpacing.drawerSidebarWidth);
       expect(DsSpacing.drawerSidebarWidth, greaterThan(DsSpacing.drawerWidth));
+    });
+
+    test('HITL 卡宽：手机不限、宽窗收在正文读宽上', () {
+      // 手机上返回无穷大 = 卡片照旧铺满正文列（与改动前逐字相同）；
+      // 平板横屏收在 720，否则一张审批卡会被拉成一整条横幅。
+      expect(DsWindowClass.compact.hitlMaxWidth, double.infinity);
+      expect(DsWindowClass.medium.hitlMaxWidth, DsSpacing.hitlPanelMaxWidth);
+      expect(DsWindowClass.expanded.hitlMaxWidth, DsSpacing.hitlPanelMaxWidth);
+      expect(DsSpacing.hitlPanelMaxWidth, DsSpacing.chatReadingWidth);
+    });
+
+    test('二级页正文列：手机不限、宽窗收在 720', () {
+      expect(DsWindowClass.compact.pageColumnMaxWidth, double.infinity);
+      expect(
+        DsWindowClass.expanded.pageColumnMaxWidth,
+        DsSpacing.pageColumnMaxWidth,
+      );
+      expect(DsSpacing.pageColumnMaxWidth, DsSpacing.settingsMaxWidth);
     });
 
     test('内容列宽与输入条同一列', () {

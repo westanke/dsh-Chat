@@ -6,8 +6,8 @@
 // 这也是 Android 按最短边分手机和平板的理由。
 //
 // 三种窗口共用同一套**抽屉式**列表（真机反馈 2026-11-20：平板横屏也不要常驻侧栏，
-// 抽屉式够用，且不该把会话页整个推出屏外）。尺寸类只决定两件事：
-// 抽屉多宽、页面被推走多少。docs/design-tokens.md §4.15。
+// 抽屉式够用，且不该把会话页整个推出屏外）。尺寸类决定三件事：
+// 抽屉多宽、页面让出多少、卡片与二级页的正文列宽。docs/design-tokens.md §4.15/§4.16。
 
 library;
 
@@ -53,6 +53,17 @@ enum DsWindowClass {
 
   /// 顶栏与输入条共用的内容列宽上限：紧凑窗比这更窄，自然退化为整屏宽。
   double get contentMaxWidth => DsSpacing.chatFloatingWidth;
+
+  /// HITL 卡片（审批 / 提问）的宽度上限。
+  ///
+  /// 手机上限仍是「屏宽的 100%」，卡片铺满正文列；宽窗收在会话页读宽上，
+  /// 与正文同一竖轴——否则平板横屏会把审批卡拉成一整条横幅。
+  double get hitlMaxWidth =>
+      this == compact ? double.infinity : DsSpacing.hitlPanelMaxWidth;
+
+  /// 二级页（设置 / Markdown / 子会话历史 / 目录浏览）的正文列宽上限。
+  double get pageColumnMaxWidth =>
+      this == compact ? double.infinity : DsSpacing.pageColumnMaxWidth;
 }
 
 /// 当前窗口的尺寸类（随旋转、分屏、折叠展开而变化）。

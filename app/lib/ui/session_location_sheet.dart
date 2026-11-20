@@ -17,6 +17,7 @@ import '../bridge/gateway.dart';
 import '../bridge/models.dart';
 import '../design/tokens.dart';
 import 'chat_state.dart';
+import 'window_class.dart';
 
 /// 弹出目录选择 Sheet。数据取自 [state]（最近候选）与 [lister]（浏览；
 /// null = state.gateway.listDirectory，测试可注入假页）。
@@ -37,12 +38,11 @@ Future<void> showSessionLocationSheet(
 
 /// 目录数据获取注入点：默认走 gateway.listDirectory（file-list 帧）；
 /// 测试可注入假页（sheet 不绑死网络）。
-typedef DirectoryLister =
-    Future<DshDirectoryPage> Function({
-      String? rootId,
-      String path,
-      String? cursor,
-    });
+typedef DirectoryLister = Future<DshDirectoryPage> Function({
+  String? rootId,
+  String path,
+  String? cursor,
+});
 
 // ---------- 主列表：默认项 + 最近使用 + 浏览入口 ----------
 
@@ -149,9 +149,7 @@ class _LocationSheet extends StatelessWidget {
                         ),
                         subtitle: Text(
                           '当前选择',
-                          style: DsTypography.small.copyWith(
-                            color: c.brand,
-                          ),
+                          style: DsTypography.small.copyWith(color: c.brand),
                         ),
                         trailing: Icon(Icons.check, size: 18, color: c.brand),
                         onTap: () => Navigator.of(context).pop(),
@@ -170,7 +168,10 @@ class _LocationSheet extends StatelessWidget {
                             item.rootId != loc.rootId ||
                             item.cwd != loc.cwd)
                           ListTile(
-                            leading: Icon(Icons.folder, color: c.labelSecondary),
+                            leading: Icon(
+                              Icons.folder,
+                              color: c.labelSecondary,
+                            ),
                             title: Text(
                               item.label,
                               style: DsTypography.base.copyWith(
@@ -240,8 +241,7 @@ class _LocationSheet extends StatelessWidget {
 }
 
 /// 目录显示名：'' = 授权根本身；否则显示相对路径。
-String locationLabel(String cwd) =>
-    cwd.isEmpty ? '根目录' : cwd;
+String locationLabel(String cwd) => cwd.isEmpty ? '根目录' : cwd;
 
 // ---------- 浏览页：file-list 逐级目录 ----------
 
@@ -276,12 +276,10 @@ class _BrowseRootsPageState extends State<_BrowseRootsPage> {
 
   DirectoryLister get _lister =>
       widget.lister ??
-      ({String? rootId, String path = '', String? cursor}) =>
-          widget.state.gateway.listDirectory(
-            rootId: rootId,
-            path: path,
-            cursor: cursor,
-          );
+      ({String? rootId, String path = '', String? cursor}) => widget
+          .state
+          .gateway
+          .listDirectory(rootId: rootId, path: path, cursor: cursor);
 
   Future<void> _load(String cursor) async {
     setState(() {
@@ -297,9 +295,7 @@ class _BrowseRootsPageState extends State<_BrowseRootsPage> {
       if (!mounted) return;
       setState(() {
         rootId = page.rootId;
-        entries = cursor.isEmpty
-            ? page.entries
-            : [...entries, ...page.entries];
+        entries = cursor.isEmpty ? page.entries : [...entries, ...page.entries];
         nextCursor = page.nextCursor;
         loading = false;
       });
@@ -345,121 +341,129 @@ class _BrowseRootsPageState extends State<_BrowseRootsPage> {
           style: DsTypography.pageTitle.copyWith(color: c.labelPrimary),
         ),
       ),
-      body: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          // 面包屑：根 / a / b，逐级可点回退。
-          Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: DsSpacing.screenPad,
-              vertical: DsSpacing.liGap,
-            ),
-            child: Row(
-              children: [
-                Icon(Icons.folder, size: 16, color: c.brand),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: Text(
-                    path.isEmpty ? '根目录' : path,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: DsTypography.small.copyWith(
-                      color: c.labelPrimary,
-                    ),
-                  ),
-                ),
-                if (path.isNotEmpty)
-                  IconButton(
-                    icon: Icon(Icons.arrow_upward, size: 18, color: c.brand),
-                    onPressed: _up,
-                    tooltip: '上一级',
-                  ),
-              ],
-            ),
+      body: Center(
+        // 二级页正文列（§4.16）：手机上无穷大（整屏），宽窗收在 720 上。
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxWidth: windowClassOf(context).pageColumnMaxWidth,
           ),
-          Expanded(
-            child: loading && entries.isEmpty
-                ? const Center(child: CircularProgressIndicator())
-                : error != null
-                ? Center(
-                    child: Text(
-                      '读取目录失败：$error',
-                      style: DsTypography.small.copyWith(
-                        color: c.danger,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // 面包屑：根 / a / b，逐级可点回退。
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: DsSpacing.screenPad,
+                  vertical: DsSpacing.liGap,
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.folder, size: 16, color: c.brand),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        path.isEmpty ? '根目录' : path,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: DsTypography.small.copyWith(
+                          color: c.labelPrimary,
+                        ),
                       ),
                     ),
-                  )
-                : dirs.isEmpty
-                ? Center(
-                    child: Text(
-                      '此目录下没有子目录',
-                      style: DsTypography.small.copyWith(
-                        color: c.labelTertiary,
+                    if (path.isNotEmpty)
+                      IconButton(
+                        icon: Icon(
+                          Icons.arrow_upward,
+                          size: 18,
+                          color: c.brand,
+                        ),
+                        onPressed: _up,
+                        tooltip: '上一级',
+                      ),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: loading && entries.isEmpty
+                    ? const Center(child: CircularProgressIndicator())
+                    : error != null
+                    ? Center(
+                        child: Text(
+                          '读取目录失败：$error',
+                          style: DsTypography.small.copyWith(color: c.danger),
+                        ),
+                      )
+                    : dirs.isEmpty
+                    ? Center(
+                        child: Text(
+                          '此目录下没有子目录',
+                          style: DsTypography.small.copyWith(
+                            color: c.labelTertiary,
+                          ),
+                        ),
+                      )
+                    : ListView(
+                        children: [
+                          for (final d in dirs)
+                            ListTile(
+                              leading: Icon(
+                                Icons.folder,
+                                color: c.labelSecondary,
+                              ),
+                              title: Text(
+                                d.name,
+                                style: DsTypography.base.copyWith(
+                                  color: c.labelPrimary,
+                                ),
+                              ),
+                              onTap: () => _enter(d),
+                            ),
+                          if (nextCursor != null)
+                            ListTile(
+                              title: Text(
+                                loading ? '加载中…' : '加载更多',
+                                style: DsTypography.small.copyWith(
+                                  color: c.brand,
+                                ),
+                              ),
+                              onTap: loading ? null : () => _load(nextCursor!),
+                            ),
+                        ],
+                      ),
+              ),
+              // 选定当前目录（'' = 根，同样合法：会话直接落授权根）。
+              SafeArea(
+                top: false,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(
+                    DsSpacing.screenPad,
+                    DsSpacing.liGap,
+                    DsSpacing.screenPad,
+                    DsSpacing.blockGap,
+                  ),
+                  child: FilledButton(
+                    style: FilledButton.styleFrom(
+                      backgroundColor: c.brand,
+                      foregroundColor: c.onBrand,
+                      minimumSize: const Size.fromHeight(48),
+                    ),
+                    onPressed: () => Navigator.of(context).pop(
+                      SessionLocation(
+                        rootId: rootId,
+                        cwd: path,
+                        label: locationLabel(path),
                       ),
                     ),
-                  )
-                : ListView(
-                    children: [
-                      for (final d in dirs)
-                        ListTile(
-                          leading: Icon(
-                            Icons.folder,
-                            color: c.labelSecondary,
-                          ),
-                          title: Text(
-                            d.name,
-                            style: DsTypography.base.copyWith(
-                              color: c.labelPrimary,
-                            ),
-                          ),
-                          onTap: () => _enter(d),
-                        ),
-                      if (nextCursor != null)
-                        ListTile(
-                          title: Text(
-                            loading ? '加载中…' : '加载更多',
-                            style: DsTypography.small.copyWith(
-                              color: c.brand,
-                            ),
-                          ),
-                          onTap: loading
-                              ? null
-                              : () => _load(nextCursor!),
-                        ),
-                    ],
-                  ),
-          ),
-          // 选定当前目录（'' = 根，同样合法：会话直接落授权根）。
-          SafeArea(
-            top: false,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(
-                DsSpacing.screenPad,
-                DsSpacing.liGap,
-                DsSpacing.screenPad,
-                DsSpacing.blockGap,
-              ),
-              child: FilledButton(
-                style: FilledButton.styleFrom(
-                  backgroundColor: c.brand,
-                  foregroundColor: c.onBrand,
-                  minimumSize: const Size.fromHeight(48),
-                ),
-                onPressed: () => Navigator.of(context).pop(
-                  SessionLocation(
-                    rootId: rootId,
-                    cwd: path,
-                    label: locationLabel(path),
+                    child: Text(
+                      '在此目录新建会话',
+                      style: DsTypography.base.copyWith(color: c.onBrand),
+                    ),
                   ),
                 ),
-                child: Text(
-                  '在此目录新建会话',
-                  style: DsTypography.base.copyWith(color: c.onBrand),
-                ),
               ),
-            ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
