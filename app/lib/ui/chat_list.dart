@@ -26,6 +26,7 @@ import '../design/app_settings.dart';
 import '../design/tokens.dart';
 import 'chat_expand_state.dart';
 import 'chat_row_gap.dart';
+import 'window_class.dart';
 import 'chat_row_view.dart';
 import 'chat_rows.dart';
 import 'chat_state.dart';
@@ -93,9 +94,10 @@ class _ChatListState extends State<ChatList> {
   List<ChatRow> _rows = const [];
   Map<String, int> _index = const {};
 
-  /// 行级 widget 缓存：行对象和它上方的间距都没变就复用同一个 widget。
+  /// 行级 widget 缓存：行对象、上方向距、正文列宽都没变就复用同一个 widget。
   /// 行内容来自行自身的才进缓存（ChatRow.cacheable），流式正文不进。
-  final Map<String, ({ChatRow row, double gap, Widget widget})> _built = {};
+  final Map<String, ({ChatRow row, double gap, double columnMax, Widget widget})>
+      _built = {};
 
   /// 上一批行的主键，用来判「哪些是新行」（新行播入场动画）。
   Set<String> _previousKeys = const {};
@@ -217,8 +219,7 @@ class _ChatListState extends State<ChatList> {
       widget.state.historyPageJustLoaded = false;
       return;
     }
-    final hasItems =
-        widget.state.messages.isNotEmpty || widget.state.streaming;
+    final hasItems = widget.state.messages.isNotEmpty || widget.state.streaming;
     if (!shouldAutoFollow(
       wantsBottom: _wantsBottom,
       hasItems: hasItems,
@@ -283,9 +284,7 @@ class _ChatListState extends State<ChatList> {
     // 但缓存要清：行数组下标变了，缓存里的控件是按行对象记的。
     final previousMessages = _previousMessages;
     _previousMessages = state.messages;
-    final prepended = previousMessages.isNotEmpty &&
-        state.messages.length > previousMessages.length &&
-        _oldestSeq(state.messages) < _oldestSeq(previousMessages);
+    final prepended = didPrependHistory(previousMessages, state.messages);
     if (prepended) {
       _built.clear();
     } else {
@@ -301,14 +300,6 @@ class _ChatListState extends State<ChatList> {
 
   /// 本批新出现的主键（新行播入场动画）。
   Set<String> _freshKeys = const {};
-
-  static int _oldestSeq(List<ChatMessage> messages) {
-    var oldest = 1 << 30;
-    for (final m in messages) {
-      if (m.seq >= 0 && m.seq < oldest) oldest = m.seq;
-    }
-    return oldest;
-  }
 
   /// 取一行的控件。
   ///
@@ -334,6 +325,9 @@ class _ChatListState extends State<ChatList> {
     return LayoutBuilder(
       builder: (context, constraints) {
         _viewport = constraints.maxHeight;
+        // 正文列宽按这一块**实际拿到的宽度**算（§4.16）：抽屉打开时页面被
+        // 缩窄，列宽跟着收；用 MediaQuery 的整窗宽会算出比页面还宽的列。
+        final columnMax = readableColumnWidth(constraints.maxWidth);
         // 零滚动线落在视口底部往上「输入条占高」的位置。
         // anchor = (视口高 - 底部留白) / 视口高；底部留白 = 渐隐带 + 输入条。
         final bottomPad = DsSpacing.chatListOverlap + DsSpacing.chatVeilFeather;
@@ -365,7 +359,7 @@ class _ChatListState extends State<ChatList> {
                     SliverList(
                       key: _beforeKey,
                       delegate: SliverChildBuilderDelegate(
-                        (context, i) => _buildRow(_split - 1 - i, state),
+                        (context, i) => _buildRow(_split - 1 - i, state, columnMax),
                         childCount: _split,
                       ),
                     ),
@@ -373,7 +367,7 @@ class _ChatListState extends State<ChatList> {
                     SliverList(
                       key: _centerKey,
                       delegate: SliverChildBuilderDelegate(
-                        (context, i) => _buildRow(_split + i, state),
+                        (context, i) => _buildRow(_split + i, state, columnMax),
                         childCount: _rows.length - _split,
                       ),
                     ),
@@ -420,7 +414,7 @@ class _ChatListState extends State<ChatList> {
     return 0;
   }
 
-  Widget _buildRow(int index, ChatState state) {
+  Widget _buildRow(int index, ChatState state, double columnMax) {
     if (index < 0 || index >= _rows.length) return const SizedBox.shrink();
     final row = _rows[index];
     final previous = index > 0 ? _rows[index - 1] : null;
@@ -434,18 +428,19 @@ class _ChatListState extends State<ChatList> {
       if (cached != null &&
           identical(cached.row, row) &&
           cached.gap == gap &&
+          cached.columnMax == columnMax &&
           !fresh) {
         return cached.widget;
       }
     }
 
     final body = _rowWidget(row, state);
-    // 正文读宽上限：平板上不让一行铺满整屏。行框居中并限宽。
+    // 正文可读列（§4.16）：≤720 用满，更宽按 0.9 缩放；居中对齐。
     final keyed = KeyedSubtree(
       key: ValueKey<String>(row.key),
       child: Center(
         child: ConstrainedBox(
-          constraints: BoxConstraints(maxWidth: DsSpacing.chatReadingWidth),
+          constraints: BoxConstraints(maxWidth: columnMax),
           child: Padding(
             padding: EdgeInsets.fromLTRB(
               DsSpacing.screenPad,
@@ -459,7 +454,7 @@ class _ChatListState extends State<ChatList> {
       ),
     );
     if (row.cacheable && !fresh) {
-      _built[row.key] = (row: row, gap: gap, widget: keyed);
+      _built[row.key] = (row: row, gap: gap, columnMax: columnMax, widget: keyed);
     }
     return keyed;
   }

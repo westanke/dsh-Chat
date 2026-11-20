@@ -291,3 +291,21 @@ bool _turnHasProcess(List<ChatMessage> messages, TurnRange turn) {
   }
   return false;
 }
+
+/// 这次派生是不是「前插了更早的历史」：消息变多，且最老的非负 seq 变小。
+///
+/// 前插时老行的 delegate 下标不变（不变量见 chat_list.dart 文件头），
+/// 列表不需要校正锚点；但行缓存要整体清掉——缓存按行对象记，
+/// 行数组头部多了一段后旧的按下标算出来的间距会错位。
+bool didPrependHistory(List<ChatMessage> previous, List<ChatMessage> next) {
+  if (previous.isEmpty || next.length <= previous.length) return false;
+  return _oldestSeq(next) < _oldestSeq(previous);
+}
+
+int _oldestSeq(List<ChatMessage> messages) {
+  var oldest = 1 << 30;
+  for (final m in messages) {
+    if (m.seq >= 0 && m.seq < oldest) oldest = m.seq;
+  }
+  return oldest;
+}

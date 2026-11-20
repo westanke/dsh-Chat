@@ -249,7 +249,7 @@ Scroll 视口宽（1080px 屏上 = 956px），但列宽总和比它大，各格 
 | 只读信息行 / 权限药丸底 | 浅纯白(c00) / 深 `#2C2C2E`(c850) | `DsColors.settingsField` |
 | 明文 HTTP 警告条底 | `#F5A623` 10% 透明（浅/深通用） | `DsColors.settingsWarnBg` |
 | 警告条文字 | 浅 `#8A5A00` / 深 `#FFC24B` | `DsColors.settingsWarnFg` |
-| 内容最大宽度 | 720dp（仿 companion `widthIn(max=720.dp)`） | `DsSpacing.settingsMaxWidth` |
+| 内容列宽 | 随窗口：≤720dp 铺满，更宽按 0.9 缩放（§4.16） | `readableColumnWidth()` |
 | 根外边距 | 左右 20 / 上下 28（仿 companion `padding(h20,v28)`） | `settingsPadH=20` / `settingsPadV=28` |
 | 分区间距 | 22dp | `settingsSectionGap` |
 | 卡片圆角 / 内边距 | 14dp / 左右 16、上下 6 | `settingsCardRadius` / `settingsCardPadH` / `settingsCardPadV` |
@@ -400,9 +400,9 @@ ioCard/轮尾行/思考行全部复用既有语义色（mdCodeBlockBg/borderL1/b
 
 | 元素 | token | 取值 | 依据 |
 |---|---|---|---|
-| 正文最大阅读宽度 | `DsSpacing.chatReadingWidth` | 720 | 官方 Web `--dsh-chat-content-width: 748px` 同档 |
+| 正文列基准宽度 | `DsSpacing.readableBaseWidth` | 720 | 屏宽 ≤ 此值用满；更宽按 `readableScale` 缓增（§4.16，**不是上限**） |
 | 浮层控件离阅读列两边距离 | `DsSpacing.chatFloatInset` | 14 | 手机态边距 22，浮层比正文窄 4（各边 2） |
-| 浮层控件最大宽度 | `DsSpacing.chatFloatingWidth` | 692 | readingWidth − 2×floatInset |
+| 浮层控件列宽 | `floatingColumnWidth(页宽)` | 可读列 − 2×floatInset；没有富余时铺满 | 手机上 360（原 692 也比屏宽，效果相同） |
 | 正文伸到输入条上沿以下的距离 | `DsSpacing.chatListOverlap` | 6 | dsh-go `_ChatLayout.overlap` |
 | 底部渐隐带高度（羽化） | `DsSpacing.chatVeilFeather` | 14 | dsh-go `BackdropVeil.feather` |
 | 列表底部留白（末尾 spacer，与 anchor 同值） | `DsSpacing.chatListOverlap` + `DsSpacing.chatVeilFeather` | 20 | dsh-go `chat_list.dart` 末尾 `SliverToBoxAdapter(SizedBox(height: bottomPad))`，其 bottomPad 同时喂给 anchor |
@@ -485,7 +485,7 @@ ioCard/轮尾行/思考行全部复用既有语义色（mdCodeBlockBg/borderL1/b
 ## 4.15 宽窗适配 · 手机与平板同一套布局（2026-11-20 task-9）
 
 会话页从手机（360dp 宽）搬到平板（横屏 1181×738dp）后暴露的问题不是「控件太小」，
-而是**同一条几何在两种窗口上说了两种话**：正文被 `chatReadingWidth` 居中限宽，
+而是**同一条几何在两种窗口上说了两种话**：正文被 720 的读宽居中限宽，
 顶栏却横铺整屏；抽屉按手机的 80% 屏宽写死 288、推挤位移也写死 288。所以适配的
 落点不是给平板另做一套，而是**先把窗口分成尺寸类，再让既有几何按类取参数**——
 手机上的每一个数值都不变。
@@ -501,17 +501,20 @@ ioCard/轮尾行/思考行全部复用既有语义色（mdCodeBlockBg/borderL1/b
 | 扩展窗起（宽） | `DsSpacing.windowExpandedMin` | 840 | M3 expanded 断点；dsh-go `WindowClass.expandedMin` |
 | 紧凑窗高上限 | `DsSpacing.windowCompactHeight` | 480 | M3 compact height；手机横屏（412 高）因此仍是紧凑类 |
 | 平板抽屉宽 | `DsSpacing.drawerSidebarWidth` | 320 | dsh-go `AdaptiveMetrics.sidebarWidth`；比手机抽屉（288）宽一档，会话标题多显示几个字 |
-| 顶栏内容列宽 | 同 `DsSpacing.chatFloatingWidth` | 720 − 2×14 = 692 | 与输入条同一列：≡ 与输入条左缘对齐，⊕/⋮ 与右缘对齐，顶栏不再是「横铺整屏」 |
+| 顶栏 / 输入条内容列宽 | `floatingColumnWidth(页宽)` | 可读列（§4.16）两侧各再窄 `chatFloatInset`；手机 = 屏宽 | 三者共用一列：≡ 与正文左缘对齐，⊕/⋮ 与右缘对齐；宽窗按可读屏宽缩放 |
 | 页面让出距离 | `DsWindowClass.pageInsetFor(窗口宽)` | = 抽屉宽 | 让路距离必须跟抽屉走：手机上让 288 剩 72（官方残条），平板横屏让 320 剩 861，会话页整页可见 |
 
 **三档行为（三档共用同一套抽屉）**：
 
 1. **紧凑**（宽 < 600 或高 < 480）——就是今天手机上的样子：抽屉式推挤，
-   正文与输入条各自居中限宽，顶栏内容列因 692 > 屏宽而自然退化为整屏宽。
-2. **中等**（600 ≤ 宽 < 840）——同上，抽屉改用 `drawerSidebarWidth`；
-   正文列与顶栏列已经对齐。
+   正文、顶栏、输入条都按屏宽排（≤720 时 `readableColumnWidth` 返回屏宽，
+   与改动前逐字相同）。
+2. **中等**（600 ≤ 宽 < 840）——抽屉改用 `drawerSidebarWidth`；正文列按
+   §4.16 的 `readableColumnWidth` 缩放（738 宽时是 720），顶栏与输入条
+   再窄两侧各 `chatFloatInset`。
 3. **扩展**（宽 ≥ 840）——同上，抽屉宽 320。**页面只让出抽屉那一条**，
-   右侧剩下的整页宽（横屏 1181 − 320 = 861）全部给会话页，不会被推出屏外。
+   右侧剩下的整页宽（横屏 1181 − 320 = 861）给会话页，不会被推出屏外；
+   正文列在这 861 里按可读屏宽算（775），两侧只留少量余量，不再二次居中收窄。
 
 > **为什么不常驻侧栏**：真机反馈 2026-11-20——平板横屏要的是「显示完整」，
 > 抽屉式会话列表够方便；常驻侧栏白占 320dp，换来的只是少点一次。所以三种窗口
@@ -521,38 +524,64 @@ ioCard/轮尾行/思考行全部复用既有语义色（mdCodeBlockBg/borderL1/b
 > 平板上若还让 288，抽屉宽 320 就比页面让出的多 32，右侧错出一条——所以
 > `pageInsetFor` 直接取抽屉宽，让出多少就占多少，两边严丝合缝。
 >
+> **宽窗为什么不再收在 720**：真机反馈 2026-11-21——平板横屏把正文居中收在 720，
+> 两侧各空出 230dp，看着像一列邮票贴在白纸上。用户口径（2026-11-21）：
+> 整个 App 所有界面都不再限制 720 宽，按可读屏宽缩放少量——尺子见 §4.16。
+>
 > **手机上「推走」、宽窗上「缩窄」**：紧凑窗整页 `Transform.translate` 推走，
 > 页面宽度不变，右边露出残条（官方 official-drawer.png 的样子）；中等 / 扩展窗
 > 改为 `Padding(left:)` 把页面**缩窄**到剩余宽度。真机反馈 2026-11-20：
 > 平板横屏若整页推 320，顶栏右侧的 ⊕/⋮ 会越出右缘被裁掉。
 
 
-## 4.16 宽窗内容列 · 卡片与二级页（2026-11-20 task-10）
+## 4.16 全 App 可读列宽 · 不再固定 720（2026-11-21 task-11）
 
-§4.15 解决的是「外壳三件（顶栏 / 抽屉 / 正文）」在宽窗下的对齐。这一节管另外两块
-**还按手机屏幕宽度排版**的界面：会话页顶部的 HITL 卡片（审批 / 提问），以及从会话页
-推出去的二级页（设置、Markdown 阅读、子会话历史、目录浏览）。
+§4.15 定外壳怎么分槽、抽屉怎么让路；这一节管**内容列到底多宽**。会话页正文、
+HITL 卡片、设置、Markdown 阅读、子会话历史、目录浏览，以及所有模态 sheet，
+全部走同一条尺（`lib/ui/window_class.dart`）：
 
-两者在手机上本来就铺满整屏，所以**限宽只在宽窗生效**——判据取同一个尺寸类：
+```text
+readableColumnWidth(可用宽)
+  = 可用宽                                   （可用宽 ≤ 720）
+  = min(可用宽, 可用宽 × readableScale)        （可用宽 > 720，readableScale = 0.9）
+```
 
-- `hitlMaxWidth`：紧凑窗 `double.infinity`（卡片铺满正文列），中等 / 扩展窗取
-  `hitlPanelMaxWidth` = [chatReadingWidth]。平板横屏若不收，一张审批卡会被拉成
-  1181dp 的横幅，标题和按钮隔着一屏远。
-- `pageColumnMaxWidth`：紧凑窗 `double.infinity`，其余取 `pageColumnMaxWidth`
-  = [settingsMaxWidth] 720。二级页与会话页正文同一竖轴，翻进翻出不横向跳。
+| 窗口宽 | 列宽 | 两侧各留 |
+|---|---|---|
+| 360（手机） | 360 | 0 |
+| 738（平板竖屏） | 720 | 9 |
+| 861（横屏 · 抽屉打开后） | 775 | 43 |
+| 1181（平板横屏） | 1063 | 59 |
+| 1600 | 1440 | 80 |
 
-| 元素 | token | 取值 | 依据 |
-|---|---|---|---|
-| HITL 卡片宽上限（宽窗） | `DsSpacing.hitlPanelMaxWidth` | 720（= `chatReadingWidth`） | 与正文同一竖轴；卡片自带左右 22 边距，实际卡片宽 676 |
-| 二级页正文列（宽窗） | `DsSpacing.pageColumnMaxWidth` | 720（= `settingsMaxWidth`） | 设置页原本就是 720，其余二级页跟着它 |
+- **手机上列宽就是屏宽**，与改动前逐字相同（旧值 720 / 692 都比 360 大，
+  经 `ConstrainedBox` 后一样铺满，所以手机不需要回归新数值）。
+- **超过 720 后按 0.9 跟着屏宽长，没有第二道上限**。用户口径（2026-11-21）：
+  「整个 App 所有都不应该限制 720 宽，应该按照可读屏幕视图缩放少量」。
+  这是对 dsh-go 的有意偏离（`app/lib/ui/theme/shapes.dart:83` 仍是 720 硬上限）。
+- 浮层控件（顶栏、输入条）比正文列再窄两侧各 `chatFloatInset`（14）：
+  `floatingColumnWidth`。屏幕上没有富余时（手机）直接铺满，不缩。
 
-> **判据为什么放在尺寸类里而不是各页各写 `MediaQuery`**：写一次的地方只有三处
-> （`DsWindowClass.hitlMaxWidth` / `pageColumnMaxWidth`），而调用点有七八处；散着写
-> 就会出现「设置页收了、子会话历史没收」这种半宽半满的页面。
+| 位置 | 取值 | 说明 |
+|---|---|---|
+| 正文行（会话页） | `readableColumnWidth(LayoutBuilder 实际宽)` | 抽屉缩窄页面时跟着收，不看向整窗宽 |
+| 顶栏 / 输入条 | `floatingColumnWidth(同宽)` | 比正文窄 14/侧；手机 = 屏宽 |
+| HITL 卡（审批 / 提问） | `readableColumnWidth(同宽)` | 与正文同轴，卡片右缘对得上消息 |
+| 二级页 | `readableColumnWidth(MediaQuery 窗宽)` | 全屏路由，没有抽屉，直接用窗宽 |
+| 模态 sheet | `modalSheetConstraints(context)` | 覆盖 M3 默认的 `maxWidth: 640` |
+
+> **为什么不直接写 0.9 × 屏宽**：屏宽 360 时 0.9 只剩 324，手机反而更窄。
+> 先「不足 720 用满」再缩放，手机逐字不变，平板才开始长。
 >
-> **手机上为什么返回无穷大而不是屏宽**：卡片与二级页外层本来就有
-> `screenPad` / `hMargin` 的左右边距，返回 `double.infinity` 让
-> `ConstrainedBox` 不产生任何约束，布局与改动前逐字相同——不需要给手机回归新数值。
+> **为什么不是 `double.infinity`**：上一轮 WIP 曾用无穷大直接铺满，
+> 一行 1181dp 读起来要来回摆头；0.9 正是用户要的「缩放少量」。
+>
+> **sheet 为什么要显式传 constraints**：M3 的模态 bottom sheet 默认
+> `BoxConstraints(maxWidth: 640)`（`bottom_sheet.dart` 的 `_BottomSheetDefaultsM3`），
+> 宽窗下比正文列还窄；不覆盖就会在平板中间留一条比正文窄的「浮岛」。
+>
+> **二级页为什么也用同一条尺**：设置、Markdown、子会话历史、目录浏览都从会话页
+> 推出去，翻进翻出若横向跳宽，观感像两个 App。同一个函数各页各算，得到的是同一个数。
 
 ## 5. 截图资产（ref/）
 - official-login-page.png 登录页（+86 152 1388 0002 / 验证码输入 / 发送验证码按钮）

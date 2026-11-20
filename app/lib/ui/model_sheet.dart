@@ -7,6 +7,7 @@ import 'package:material_ui/material_ui.dart';
 import '../bridge/gateway.dart';
 import '../bridge/models_view.dart';
 import '../design/tokens.dart';
+import 'window_class.dart';
 
 /// 弹出模型选择面板。返回是否切换成功（用于外层刷新）。
 Future<bool> showModelSheet(
@@ -43,6 +44,7 @@ Future<bool> showModelSheet(
 
   final changed = await showModalBottomSheet<bool>(
     context: context,
+    constraints: modalSheetConstraints(context),
     backgroundColor: colors.bgLayer1,
     isScrollControlled: true,
     shape: const RoundedRectangleBorder(

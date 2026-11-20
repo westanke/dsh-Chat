@@ -17,6 +17,7 @@ import '../design/tokens.dart';
 import 'chat_state.dart';
 import 'code_diff.dart';
 import 'projection_sheets.dart';
+import 'window_class.dart';
 
 /// 单个差异块最多渲染的行数（write 大文件保护；超出截断并提示总行数）。
 const int _maxDiffLines = 400;
@@ -28,6 +29,7 @@ void showWorkViewSheet(
 ) {
   showModalBottomSheet<void>(
     context: context,
+    constraints: modalSheetConstraints(context),
     backgroundColor: colors.bgLayer1,
     isScrollControlled: true,
     builder: (context) => _WorkViewSheet(state: state, colors: colors),

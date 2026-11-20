@@ -75,29 +75,80 @@ void main() {
       expect(DsWindowClass.expanded.sidebarWidth, DsSpacing.drawerSidebarWidth);
       expect(DsSpacing.drawerSidebarWidth, greaterThan(DsSpacing.drawerWidth));
     });
+  });
 
-    test('HITL 卡宽：手机不限、宽窗收在正文读宽上', () {
-      // 手机上返回无穷大 = 卡片照旧铺满正文列（与改动前逐字相同）；
-      // 平板横屏收在 720，否则一张审批卡会被拉成一整条横幅。
-      expect(DsWindowClass.compact.hitlMaxWidth, double.infinity);
-      expect(DsWindowClass.medium.hitlMaxWidth, DsSpacing.hitlPanelMaxWidth);
-      expect(DsWindowClass.expanded.hitlMaxWidth, DsSpacing.hitlPanelMaxWidth);
-      expect(DsSpacing.hitlPanelMaxWidth, DsSpacing.chatReadingWidth);
+  group('可读列宽：全 App 不再钉死 720（§4.16）', () {
+    test('屏宽不超过 720 时用满：手机逐字不变', () {
+      expect(readableColumnWidth(360), 360);
+      expect(readableColumnWidth(600), 600);
+      expect(readableColumnWidth(720), 720);
     });
 
-    test('二级页正文列：手机不限、宽窗收在 720', () {
-      expect(DsWindowClass.compact.pageColumnMaxWidth, double.infinity);
+    test('超过 720 后按 0.9 随屏宽长，不设第二道上限', () {
+      // 738×0.9 = 664.2 < 720，仍取 720；再宽才真正开始长。
+      expect(readableColumnWidth(738), DsSpacing.readableBaseWidth);
+      expect(readableColumnWidth(861), closeTo(774.9, 1e-9));
+      expect(readableColumnWidth(1181), closeTo(1062.9, 1e-9));
+      expect(readableColumnWidth(1600), closeTo(1440.0, 1e-9));
       expect(
-        DsWindowClass.expanded.pageColumnMaxWidth,
-        DsSpacing.pageColumnMaxWidth,
+        readableColumnWidth(2000),
+        greaterThan(readableColumnWidth(1600)),
+        reason: '没有上限，宽屏继续长',
       );
-      expect(DsSpacing.pageColumnMaxWidth, DsSpacing.settingsMaxWidth);
     });
 
-    test('内容列宽与输入条同一列', () {
-      for (final cls in DsWindowClass.values) {
-        expect(cls.contentMaxWidth, DsSpacing.chatFloatingWidth);
+    test('列宽单调不减，且永远不超过可用宽', () {
+      var previous = 0.0;
+      for (var w = 200.0; w <= 2400; w += 7) {
+        final column = readableColumnWidth(w);
+        expect(column, greaterThanOrEqualTo(previous));
+        expect(column, lessThanOrEqualTo(w));
+        previous = column;
       }
+    });
+
+    test('无界输入（父约束缺省）仍返回无界，由上层兜底', () {
+      expect(readableColumnWidth(double.infinity), double.infinity);
+    });
+
+    test('浮层列宽：手机没有富余就铺满，宽窗才窄两侧各 14', () {
+      expect(floatingColumnWidth(360), 360);
+      expect(floatingColumnWidth(600), 600);
+      expect(floatingColumnWidth(738), closeTo(692, 1e-9));
+      expect(floatingColumnWidth(1181), closeTo(1062.9 - 28, 1e-9));
+    });
+
+    testWidgets('模态 sheet 不再被 M3 默认的 640 卡住', (tester) async {
+      tester.view.physicalSize = const Size(1181, 738);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      late BuildContext pageContext;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Builder(
+            builder: (context) {
+              pageContext = context;
+              return const Scaffold(body: SizedBox.expand());
+            },
+          ),
+        ),
+      );
+      showModalBottomSheet<void>(
+        context: pageContext,
+        constraints: modalSheetConstraints(pageContext),
+        builder: (_) => const SizedBox(
+          key: ValueKey('sheetBody'),
+          width: double.infinity,
+          height: 100,
+        ),
+      );
+      await tester.pumpAndSettle();
+      // BottomSheet 自己仍吃满整屏（Align），限宽后内容才落在那一列上。
+      expect(
+        tester.getSize(find.byKey(const ValueKey('sheetBody'))).width,
+        closeTo(1062.9, 0.5),
+      );
     });
   });
 }

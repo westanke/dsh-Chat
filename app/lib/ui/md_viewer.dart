@@ -134,10 +134,9 @@ class _MdViewerPageState extends State<MdViewerPage> {
               )
             : Center(
                 child: ConstrainedBox(
-                  // 二级页正文列（§4.16）：手机上无穷大（整屏），宽窗收在
-                  // 720 上，与会话页正文同一竖轴。
+                  // 二级页可读列（§4.16）：手机上就是屏宽，与会话页正文同一竖轴。
                   constraints: BoxConstraints(
-                    maxWidth: windowClassOf(context).pageColumnMaxWidth,
+                    maxWidth: readableColumnWidth(MediaQuery.sizeOf(context).width),
                   ),
                   child: SingleChildScrollView(
                     padding: EdgeInsets.symmetric(

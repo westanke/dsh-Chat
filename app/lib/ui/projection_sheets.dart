@@ -16,6 +16,7 @@ import '../bridge/projections.dart';
 import '../design/tokens.dart';
 import 'chat_state.dart';
 import 'subagent_history_page.dart';
+import 'window_class.dart';
 
 // ---------- 公共骨架 ----------
 
@@ -87,6 +88,7 @@ void showTrajectorySheet(
 ) {
   showModalBottomSheet<void>(
     context: context,
+    constraints: modalSheetConstraints(context),
     backgroundColor: colors.bgLayer1,
     isScrollControlled: true,
     builder: (context) => _TrajectorySheet(state: state, colors: colors),
@@ -251,6 +253,7 @@ void showTeamSheet(
 ) {
   showModalBottomSheet<void>(
     context: context,
+    constraints: modalSheetConstraints(context),
     backgroundColor: colors.bgLayer1,
     isScrollControlled: true,
     builder: (context) => _TeamSheet(state: state, colors: colors),
@@ -385,6 +388,7 @@ void showTodoSheet(
 ) {
   showModalBottomSheet<void>(
     context: context,
+    constraints: modalSheetConstraints(context),
     backgroundColor: colors.bgLayer1,
     isScrollControlled: true,
     builder: (context) => _TodoSheet(state: state, colors: colors),

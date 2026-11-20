@@ -12,6 +12,7 @@ import 'package:flutter/foundation.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../design/tokens.dart';
+import 'window_class.dart';
 
 /// 外壳的四个槽位。
 enum ChatShellSlot { body, veil, header, composer }
@@ -70,10 +71,15 @@ class _ChatShellState extends State<ChatShell> {
         ),
         LayoutId(
           id: ChatShellSlot.veil,
-          child: IgnorePointer(child: _Veil(colors: c, solidHeight: _veilSolid)),
+          child: IgnorePointer(
+            child: _Veil(colors: c, solidHeight: _veilSolid),
+          ),
         ),
         LayoutId(id: ChatShellSlot.header, child: widget.header),
-        LayoutId(id: ChatShellSlot.composer, child: _ComposerSlot(colors: c, child: widget.composer)),
+        LayoutId(
+          id: ChatShellSlot.composer,
+          child: _ComposerSlot(colors: c, child: widget.composer),
+        ),
       ],
     );
   }
@@ -103,8 +109,10 @@ class ChatShellLayout extends MultiChildLayoutDelegate {
 
     // 正文伸到输入条上沿以下 chatListOverlap：底色在那里已经是实心，看不见裁切。
     final bodyTop = header.height;
-    final bodyHeight =
-        math.max(0.0, composerTop + DsSpacing.chatListOverlap - bodyTop);
+    final bodyHeight = math.max(
+      0.0,
+      composerTop + DsSpacing.chatListOverlap - bodyTop,
+    );
     layoutChild(
       ChatShellSlot.body,
       BoxConstraints.tight(Size(width, bodyHeight)),
@@ -145,7 +153,7 @@ class _Veil extends StatelessWidget {
 
 class _VeilPainter extends CustomPainter {
   _VeilPainter({required this.colors, required this.solidHeight})
-      : super(repaint: solidHeight);
+    : super(repaint: solidHeight);
 
   final DsColors colors;
   final ValueListenable<double> solidHeight;
@@ -178,7 +186,7 @@ class _VeilPainter extends CustomPainter {
       oldDelegate.colors != colors;
 }
 
-/// 输入条槽：底部安全区 + 居中限宽。
+/// 输入条槽：底部安全区 + 浮层列宽（§4.16：可读列两侧各窄 chatFloatInset）。
 class _ComposerSlot extends StatelessWidget {
   const _ComposerSlot({required this.colors, required this.child});
 
@@ -189,16 +197,19 @@ class _ComposerSlot extends StatelessWidget {
   Widget build(BuildContext context) {
     return SafeArea(
       top: false,
-      minimum: const EdgeInsets.only(
-        bottom: DsSpacing.chatComposerBottomPad,
-      ),
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(
-            maxWidth: DsSpacing.chatFloatingWidth,
-          ),
-          child: child,
-        ),
+      minimum: const EdgeInsets.only(bottom: DsSpacing.chatComposerBottomPad),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          // 按实际拿到的宽度算：抽屉打开时页面缩窄，输入条跟着收。
+          // 手机上没有富余，floatingColumnWidth 返回屏宽，与改动前一致。
+          final columnMax = floatingColumnWidth(constraints.maxWidth);
+          return Center(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(maxWidth: columnMax),
+              child: child,
+            ),
+          );
+        },
       ),
     );
   }

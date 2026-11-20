@@ -77,9 +77,9 @@ class SettingsPage extends StatelessWidget {
             ),
             child: Center(
               child: ConstrainedBox(
-                // 手机上无穷大（整屏），宽窗收在二级页正文列上（§4.16）。
+                // 二级页可读列（§4.16）：手机上就是屏宽，宽窗按 0.9 缩放。
                 constraints: BoxConstraints(
-                  maxWidth: windowClassOf(context).pageColumnMaxWidth,
+                  maxWidth: readableColumnWidth(MediaQuery.sizeOf(context).width),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,

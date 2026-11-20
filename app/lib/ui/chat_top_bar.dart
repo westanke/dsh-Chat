@@ -8,6 +8,7 @@ library;
 import 'package:material_ui/material_ui.dart';
 
 import '../design/tokens.dart';
+import 'window_class.dart';
 import 'chat_header_status.dart';
 
 /// 顶栏：左菜单 + 会话名 + 新对话 + 右侧溢出菜单，下面一行状态。
@@ -34,69 +35,71 @@ class ChatTopBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = colors;
-    // 宽窗：顶栏内容列与输入条同一列（chatFloatingWidth 居中限宽），
-    // ≡ 与输入条左缘对齐、⊕/⋮ 与右缘对齐；窄窗这列比屏还宽，自然退化为整屏。
     return ColoredBox(
       color: c.bgBase,
       child: SafeArea(
         bottom: false,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(
-                  maxWidth: DsSpacing.chatFloatingWidth,
-                ),
-                child: SizedBox(
-                  height: DsSpacing.topBarHeight,
-                  child: Row(
-                    children: [
-                      IconButton(
-                        icon: Icon(Icons.menu),
-                        color: c.labelPrimary,
-                        onPressed: onMenu,
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          title,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: DsTypography.pageTitle
-                              .copyWith(color: c.labelPrimary),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      const SizedBox(width: 18),
-                      Tooltip(
-                        message: '新建对话',
-                        child: InkResponse(
-                          radius: 20,
-                          onTap: onNewChat,
-                          child: Icon(
-                            Icons.add_circle_outline,
-                            size: 24,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            // 顶栏与输入条同一浮层列（§4.16）：比正文列窄两侧各 chatFloatInset。
+            // 宽度取实际拿到的布局宽度——抽屉打开时页面变窄，顶栏跟着收。
+            final columnMax = floatingColumnWidth(constraints.maxWidth);
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Center(
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(maxWidth: columnMax),
+                    child: SizedBox(
+                      height: DsSpacing.topBarHeight,
+                      child: Row(
+                        children: [
+                          IconButton(
+                            icon: Icon(Icons.menu),
                             color: c.labelPrimary,
+                            onPressed: onMenu,
                           ),
-                        ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              title,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: DsTypography.pageTitle.copyWith(
+                                color: c.labelPrimary,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          const SizedBox(width: 18),
+                          Tooltip(
+                            message: '新建对话',
+                            child: InkResponse(
+                              radius: 20,
+                              onTap: onNewChat,
+                              child: Icon(
+                                Icons.add_circle_outline,
+                                size: 24,
+                                color: c.labelPrimary,
+                              ),
+                            ),
+                          ),
+                          trailing,
+                          const SizedBox(width: DsSpacing.screenPad),
+                        ],
                       ),
-                      trailing,
-                      const SizedBox(width: DsSpacing.screenPad),
-                    ],
+                    ),
                   ),
                 ),
-              ),
-            ),
-            Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(
-                  maxWidth: DsSpacing.chatFloatingWidth,
+                Center(
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(maxWidth: columnMax),
+                    child: _StatusLine(colors: c, status: status),
+                  ),
                 ),
-                child: _StatusLine(colors: c, status: status),
-              ),
-            ),
-          ],
+              ],
+            );
+          },
         ),
       ),
     );
@@ -142,12 +145,12 @@ class _StatusLine extends StatelessWidget {
 
 /// 状态点颜色：颜色只是辅助，旁边的文字才是状态本身。
 Color statusDotColor(DsColors c, ChatStatusTone tone) => switch (tone) {
-      ChatStatusTone.ok => c.chatStatusOk,
-      ChatStatusTone.busy => c.brand,
-      ChatStatusTone.warn => c.chatStatusWarn,
-      ChatStatusTone.error => c.danger,
-      ChatStatusTone.idle => c.labelTertiary,
-    };
+  ChatStatusTone.ok => c.chatStatusOk,
+  ChatStatusTone.busy => c.brand,
+  ChatStatusTone.warn => c.chatStatusWarn,
+  ChatStatusTone.error => c.danger,
+  ChatStatusTone.idle => c.labelTertiary,
+};
 
 /// 状态点：busy 时呼吸（淡入淡出），其余静态。
 class ChatStatusDot extends StatefulWidget {
@@ -199,16 +202,14 @@ class _ChatStatusDotState extends State<ChatStatusDot>
     final dot = Container(
       width: DsSpacing.chatStatusDot,
       height: DsSpacing.chatStatusDot,
-      decoration: BoxDecoration(
-        color: widget.color,
-        shape: BoxShape.circle,
-      ),
+      decoration: BoxDecoration(color: widget.color, shape: BoxShape.circle),
     );
     if (!widget.pulsing) return dot;
     return FadeTransition(
-      opacity: Tween<double>(begin: 0.35, end: 1.0).animate(
-        CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
-      ),
+      opacity: Tween<double>(
+        begin: 0.35,
+        end: 1.0,
+      ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut)),
       child: dot,
     );
   }

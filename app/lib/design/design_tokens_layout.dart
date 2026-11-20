@@ -176,23 +176,6 @@ class DsSpacing {
   static const drawerAvatarGap = 10.0;
 
   // ---- 设置页（本工程自定义布局，docs/design-tokens.md §4.4）----
-  /// 设置页内容最大宽度（仿 companion SettingsScreen widthIn(max=720.dp)）。
-  static const settingsMaxWidth = 720.0;
-
-  // ---- 宽窗内容列（docs/design-tokens.md §4.16）----
-  /// 二级页（设置、Markdown 阅读、子会话历史、目录浏览）的正文列宽上限。
-  ///
-  /// 与设置页同一个数：这些页在手机上本来就是整屏，限宽只在平板上起作用，
-  /// 让它们和会话页的 720 列同一竖轴——翻页时正文不横向跳。
-  static const pageColumnMaxWidth = settingsMaxWidth;
-
-  /// 宽窗下 HITL 卡片的宽度上限。
-  ///
-  /// 手机上限仍是「屏宽的 100% − 两侧边距」（卡片本来就铺满正文列）；
-  /// 宽窗改用会话页的读宽 720 再减两侧边距——审批卡、提问卡与正文同一竖轴，
-  /// 不会在 1181dp 的平板上被拉成一整条横幅。
-  static const hitlPanelMaxWidth = chatReadingWidth;
-
   /// 设置页根左右 / 上下外边距（仿 companion padding(h20, v28)）。
   static const settingsPadH = 20.0;
   static const settingsPadV = 28.0;
@@ -273,16 +256,18 @@ class DsSpacing {
   static const bodyScrollMaxHeight = 260.0;
 
   // ---- 会话页外壳（整页移植自 dsh-go 的分槽外壳，docs/design-tokens.md §4.12）----
-  /// 正文最大阅读宽度：宽屏（平板 / 横屏）时正文居中，两侧留白。
-  /// 与官方 Web 的 `--dsh-chat-content-width: 748px` 同档。
-  static const chatReadingWidth = 720.0;
+  /// 正文列基准宽度：屏宽不超过它时正文用满，超过后从这里按 [readableScale]
+  /// 缓增。**这是起点，不是上限**（用户 2026-11-21：整个 App 不再限制 720 宽）。
+  /// 数值与官方 Web 的 `--dsh-chat-content-width: 748px` 同档。
+  static const readableBaseWidth = 720.0;
 
-  /// 浮在阅读列上的控件（输入条、待办条）离阅读列两边的距离：
+  /// 宽窗下正文列随屏宽缩放的斜率：屏宽每多 1dp，列宽多 0.9dp。
+  /// 用户口径「按可读屏宽缩放少量」；不是「最多占 90%」的硬规则。
+  static const readableScale = 0.9;
+
+  /// 浮在阅读列上的控件（顶栏、输入条、待办条）离阅读列两边的距离：
   /// 和手机上离屏幕两边一样 22，所以比正文两边各宽 4。
   static const chatFloatInset = 14.0;
-
-  /// 浮层控件的最大宽度 = 阅读列减两边 [chatFloatInset]。
-  static const chatFloatingWidth = chatReadingWidth - 2 * chatFloatInset;
 
   /// 列表视口伸到输入条上沿以下的距离：底色在那里已经是实心，看不见裁切。
   static const chatListOverlap = 6.0;

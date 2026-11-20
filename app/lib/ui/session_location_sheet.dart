@@ -29,6 +29,7 @@ Future<void> showSessionLocationSheet(
 }) {
   return showModalBottomSheet<void>(
     context: context,
+    constraints: modalSheetConstraints(context),
     backgroundColor: colors.bgLayer1,
     isScrollControlled: true,
     builder: (sheetContext) =>
@@ -342,10 +343,10 @@ class _BrowseRootsPageState extends State<_BrowseRootsPage> {
         ),
       ),
       body: Center(
-        // 二级页正文列（§4.16）：手机上无穷大（整屏），宽窗收在 720 上。
+        // 二级页可读列（§4.16）：手机上就是屏宽，宽窗按 0.9 缩放。
         child: ConstrainedBox(
           constraints: BoxConstraints(
-            maxWidth: windowClassOf(context).pageColumnMaxWidth,
+            maxWidth: readableColumnWidth(MediaQuery.sizeOf(context).width),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,

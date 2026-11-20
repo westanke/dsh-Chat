@@ -15,6 +15,7 @@ import '../bridge/models.dart';
 import '../bridge/permissions.dart';
 import '../bridge/platform.dart';
 import '../design/tokens.dart';
+import 'window_class.dart';
 
 part 'composer_widgets.dart';
 part 'composer_panels.dart';
@@ -383,6 +384,7 @@ class _ComposerState extends State<Composer> {
     if (!mounted || options.isEmpty) return;
     final selected = await showModalBottomSheet<PermissionOption>(
       context: context,
+      constraints: modalSheetConstraints(context),
       backgroundColor: c.bgLayer1,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(

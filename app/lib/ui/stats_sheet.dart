@@ -12,6 +12,7 @@ import 'package:material_ui/material_ui.dart';
 import '../bridge/models.dart';
 import '../design/tokens.dart';
 import 'chat_state.dart';
+import 'window_class.dart';
 
 /// 纯函数：由消息列表计算统计（便于单测）。
 Map<String, int> chatStatsOf(List<ChatMessage> messages) {
@@ -95,6 +96,7 @@ void showChatStatsSheet(
   unawaited(state.loadServerStats());
   showModalBottomSheet<void>(
     context: context,
+    constraints: modalSheetConstraints(context),
     backgroundColor: c.bgLayer1,
     builder: (context) => AnimatedBuilder(
       animation: state,

@@ -149,9 +149,9 @@ class _SubagentHistoryPageState extends State<SubagentHistoryPage> {
               )
             : Center(
                 child: ConstrainedBox(
-                  // 二级页正文列（§4.16）：手机上无穷大，宽窗收在 720 上。
+                  // 二级页可读列（§4.16）：手机上就是屏宽，宽窗按 0.9 缩放。
                   constraints: BoxConstraints(
-                    maxWidth: windowClassOf(context).pageColumnMaxWidth,
+                    maxWidth: readableColumnWidth(MediaQuery.sizeOf(context).width),
                   ),
                   child: ListView.builder(
                     padding: EdgeInsets.symmetric(

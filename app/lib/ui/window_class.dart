@@ -6,10 +6,13 @@
 // 这也是 Android 按最短边分手机和平板的理由。
 //
 // 三种窗口共用同一套**抽屉式**列表（真机反馈 2026-11-20：平板横屏也不要常驻侧栏，
-// 抽屉式够用，且不该把会话页整个推出屏外）。尺寸类决定三件事：
-// 抽屉多宽、页面让出多少、卡片与二级页的正文列宽。docs/design-tokens.md §4.15/§4.16。
+// 抽屉式够用，且不该把会话页整个推出屏外）。尺寸类决定两件事：抽屉多宽、页面让出多少。
+// 内容列宽**不再按尺寸类分档**，全 App 走下面的 [readableColumnWidth]（§4.16）：
+// 2026-11-21 用户口径——所有界面都不再钉死 720，按可读屏宽缩放少量。
 
 library;
+
+import 'dart:math' as math;
 
 import 'package:material_ui/material_ui.dart';
 
@@ -18,7 +21,7 @@ import '../design/tokens.dart';
 /// 窗口尺寸类（docs/design-tokens.md §4.15）。
 enum DsWindowClass {
   /// 宽 < [DsSpacing.windowMediumMin]，或高 < [DsSpacing.windowCompactHeight]。
-  /// 手机（竖屏、横屏都是）：抽屉覆盖式推挤，正文与输入条各自居中限宽。
+  /// 手机（竖屏、横屏都是）：抽屉覆盖式推挤。
   compact,
 
   /// 600 ≤ 宽 < 840：折叠屏展开、小平板竖屏。抽屉式，宽度用平板侧栏宽。
@@ -50,21 +53,39 @@ enum DsWindowClass {
   ///   ——「抽屉式列表很方便，只要别把会话推出屏外」。
   double pageInsetFor(double windowWidth) =>
       windowWidth > sidebarWidth ? sidebarWidth : windowWidth;
-
-  /// 顶栏与输入条共用的内容列宽上限：紧凑窗比这更窄，自然退化为整屏宽。
-  double get contentMaxWidth => DsSpacing.chatFloatingWidth;
-
-  /// HITL 卡片（审批 / 提问）的宽度上限。
-  ///
-  /// 手机上限仍是「屏宽的 100%」，卡片铺满正文列；宽窗收在会话页读宽上，
-  /// 与正文同一竖轴——否则平板横屏会把审批卡拉成一整条横幅。
-  double get hitlMaxWidth =>
-      this == compact ? double.infinity : DsSpacing.hitlPanelMaxWidth;
-
-  /// 二级页（设置 / Markdown / 子会话历史 / 目录浏览）的正文列宽上限。
-  double get pageColumnMaxWidth =>
-      this == compact ? double.infinity : DsSpacing.pageColumnMaxWidth;
 }
+
+/// 可读列宽：全 App 的内容列都走这一条（docs/design-tokens.md §4.16）。
+///
+/// 屏宽不超过 [DsSpacing.readableBaseWidth]（720）时用满；更宽时按
+/// [DsSpacing.readableScale]（0.9）随屏宽长大，**没有第二道上限**。
+/// 例：360→360、738→720、861→775、1181→1063、1600→1440。
+///
+/// 参数取「这一块实际拿到的宽度」：会话页用 `LayoutBuilder` 的页宽
+/// （抽屉打开时会变窄），全屏二级页用 `MediaQuery.sizeOf(context).width`。
+double readableColumnWidth(double availableWidth) {
+  if (!availableWidth.isFinite) return double.infinity;
+  final scaled = availableWidth * DsSpacing.readableScale;
+  return math.min(availableWidth, math.max(DsSpacing.readableBaseWidth, scaled));
+}
+
+/// 浮层控件（顶栏、输入条、待办条）的列宽：可读列两侧各再窄 [DsSpacing.chatFloatInset]。
+///
+/// 屏幕上没有富余时（手机）直接铺满，不缩——旧口径的 692 是这样，但那时
+/// 692 也比 360 的屏宽大，实际效果同样是铺满；改成按屏宽算后手机像素不变。
+double floatingColumnWidth(double availableWidth) {
+  final column = readableColumnWidth(availableWidth);
+  if (!column.isFinite || column >= availableWidth) return column;
+  return math.max(0.0, column - 2 * DsSpacing.chatFloatInset);
+}
+
+/// 模态 bottom sheet 的宽度约束：跟着可读列走。
+///
+/// Material 3 给 bottom sheet 的默认约束是 `BoxConstraints(maxWidth: 640)`
+/// （`bottom_sheet.dart` 的 `_BottomSheetDefaultsM3`），宽窗下比正文列还窄；
+/// 所有 `showModalBottomSheet` 都传这个，sheet 才不会在平板中间缩成一条浮岛。
+BoxConstraints modalSheetConstraints(BuildContext context) =>
+    BoxConstraints(maxWidth: readableColumnWidth(MediaQuery.sizeOf(context).width));
 
 /// 当前窗口的尺寸类（随旋转、分屏、折叠展开而变化）。
 DsWindowClass windowClassOf(BuildContext context) =>
