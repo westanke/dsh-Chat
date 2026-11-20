@@ -5,10 +5,12 @@ library;
 import 'package:material_ui/material_ui.dart';
 
 import '../bridge/gateway.dart';
-import '../bridge/models.dart';
 import '../design/tokens.dart';
 import 'chat_state.dart';
 import 'session_groups.dart';
+import 'session_search.dart';
+import 'session_search_section.dart';
+import 'sessions_drawer_item.dart';
 
 class SessionsDrawer extends StatefulWidget {
   const SessionsDrawer({
@@ -38,8 +40,27 @@ class SessionsDrawerState extends State<SessionsDrawer> {
   /// 会话收起来，点分组标题展开/收起。
   bool _olderExpanded = false;
 
+  /// 会话**内容**搜索（内核 `session/search`，走 `dshrb-v1` 通用调用面）。
+  ///
+  /// 编排逻辑全在 session_search.dart：这里只负责喂输入、画结果。桥不提供这能力时
+  /// [SessionSearchController.supported] 为 false，列表仍走原来的标题本地过滤——
+  /// 用户感觉不到能力缺失，只是搜不到正文（与接这条之前逐字相同）。
+  SessionSearchController? _content;
+
+  @override
+  void initState() {
+    super.initState();
+    _content = SessionSearchController(gateway: widget.state.gateway)..addListener(_onContentSearch);
+  }
+
+  void _onContentSearch() {
+    if (mounted) setState(() {});
+  }
+
   @override
   void dispose() {
+    _content?.removeListener(_onContentSearch);
+    _content?.dispose();
     _search.dispose();
     super.dispose();
   }
@@ -51,6 +72,11 @@ class SessionsDrawerState extends State<SessionsDrawer> {
     // 官方抽屉：顶部搜索框（圆角胶囊灰底）→ 日期分组标题 → 会话条目 → 底部账号栏。
     final groups = state.sessionGroups;
     final q = _search.text.trim().toLowerCase();
+
+    // 内容搜索（正文命中）只在桥提供 dshrb-v1 + 内核装了 session/search 时才有。
+    // 不支持时整段不出现，列表照旧按标题本地过滤 —— 这就是「降级」。
+    final content = _content;
+    final showContent = content != null && content.supported && content.visible;
     return Drawer(
       width: DsSpacing.drawerWidth,
       backgroundColor: c.bgLayer1,
@@ -96,7 +122,7 @@ class SessionsDrawerState extends State<SessionsDrawer> {
                           isDense: true,
                           contentPadding: EdgeInsets.zero,
                         ),
-                        onChanged: (_) => setState(() {}),
+                        onChanged: (v) => _onSearchChanged(v),
                       ),
                     ),
                   ],
@@ -116,6 +142,15 @@ class SessionsDrawerState extends State<SessionsDrawer> {
                   : ListView(
                       padding: EdgeInsets.zero,
                       children: [
+                        // 正文命中（内容搜索）排在时间分组之前：用户敲的是正文里的词
+                        // 时，最想要的往往是「跳到那个会话」，而不是先看标题过滤结果。
+                        if (showContent)
+                          ...buildContentSearchSection(
+                            content: content,
+                            colors: c,
+                            state: state,
+                            onOpen: widget.onClose,
+                          ),
                         // 时间分组（今天/昨天/更早），桶内按工作区聚簇；
                         // 渲染拆进 _sectionWidgets（宪法 500 行拆分）。
                         for (final g in groups) ..._sectionWidgets(g, q, c, state),
@@ -134,6 +169,12 @@ class SessionsDrawerState extends State<SessionsDrawer> {
         ),
       ),
     );
+  }
+
+  /// 搜索框输入：本地标题过滤立刻生效（不必等网络），内容搜索交给防抖控制器。
+  void _onSearchChanged(String value) {
+    _content?.update(value);
+    setState(() {});
   }
 
   /// 一个时间分组的渲染件：分组标题 + 桶内行（工作区小节标题只在聚簇
@@ -237,60 +278,6 @@ class SessionsDrawerState extends State<SessionsDrawer> {
 /// 单条会话：官方是纯文字行（选中态蓝字），无 card、无分割线。
 /// 行尾可带状态小字（badge）——「待回答/待审批」，对齐电脑端会话列表
 /// status.compact.answer / status.compact.approval 的 trailingLabel。
-class SessionsDrawerItem extends StatelessWidget {
-  const SessionsDrawerItem({
-    super.key,
-    required this.session,
-    required this.selected,
-    this.badge,
-    required this.colors,
-    required this.onTap,
-  });
-
-  final DshSession session;
-  final bool selected;
-
-  /// 行尾状态小字（null = 不显示）。
-  final String? badge;
-  final DsColors colors;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(
-          horizontal: DsSpacing.drawerItemPadH,
-          vertical: DsSpacing.drawerItemPadV,
-        ),
-        child: Row(
-          children: [
-            Expanded(
-              child: Text(
-                session.displayTitle,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: DsTypography.small.copyWith(
-                  color: selected ? colors.brand : colors.labelPrimary,
-                  height: DsSpacing.drawerLineHeight / 14,
-                ),
-              ),
-            ),
-            if (badge != null) ...[
-              const SizedBox(width: DsSpacing.drawerSearchIconGap),
-              Text(
-                badge!,
-                style: DsTypography.small.copyWith(color: colors.brand),
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-}
-
 /// 底部账号栏（真机反馈第三轮 3 + 第五轮）：设置钮+「设置」文字 + 设备名 +
 /// 连接状态点 + host:port 地址。整行可点开设置。
 /// 点色语义（真机反馈第五轮）：绿点 = 桥连接正常（GatewayState.ready），

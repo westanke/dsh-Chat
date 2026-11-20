@@ -458,6 +458,29 @@ ioCard/轮尾行/思考行全部复用既有语义色（mdCodeBlockBg/borderL1/b
 展开态左侧有一条 1px 细线走图形列中线，正文从缩进 32 起——与工具行展开同一套解剖。
 颜色只是辅助，状态一律带文字。
 
+## 4.14 会话内容搜索 · 抽屉正文命中（2026-11-20 task-8）
+
+抽屉搜索框原先只按**标题**本地过滤；本轮接上内核端点 `session/search`（走
+`dshrb-v1` 通用调用面，见 docs/protocol-conformance.md §4.1），正文命中单独成节。
+
+| 元素 | token | 取值 | 依据 |
+|---|---|---|---|
+| 命中条目标题与片段间距 | `DsSpacing.drawerItemSubtitleGap` | 2 | 片段是标题的注脚，比条目上下内边距（12）小一档，行不被撑成两段等重内容 |
+| 片段字体 | `DsTypography.caption` 染 `labelSecondary` | 12 | 比标题（`DsTypography.small` / `labelPrimary`）轻一级——它回答「为什么命中」，不抢标题 |
+| 节标题 | `DsTypography.caption` 染 `drawerGroupLabel` | 12 | 与时间分组标题、工作区小节标题同一套（抽屉里所有小节标题一个样式） |
+| 行尾角标 | `DsTypography.small` 染 `brand` | 14 | 复用既有会话条目的「待回答/待审批」角标位置与样式，正文命中写「正文」、已归档写「已归档」 |
+
+**三件套**（接入一个能力的成本，缺一不可）：
+- **入口**：搜索框输入即搜，300ms 防抖（`SessionSearchController.debounce`）。
+- **降级**：桥不提供 `dshrb-v1`、或内核没装该端点 ⇒ `supported == false` ⇒ 整节不出现，
+  列表退回原来的标题本地过滤——行为与接这条之前逐字相同。
+- **空态**：三种结局分开写——「搜索中…」/「搜索不可用：<原因>」/「没有匹配」。
+  **不承诺索引可用**：本机部署可能把内核会话索引设成 `openAt "never"`，
+  那时端点调得通、结果必然为空，所以空态文案只说「没有匹配」，不写「该会话不存在」。
+
+> 能力位判据是 `kernel-call-v1` + 目录里有 `session/search`，不是「我声明了子协议」。
+> 参数键名以 `kernel-endpoints` 的 `wires` 为准（内核 strict codec 既拒缺键也拒多键）。
+
 
 ## 5. 截图资产（ref/）
 - official-login-page.png 登录页（+86 152 1388 0002 / 验证码输入 / 发送验证码按钮）

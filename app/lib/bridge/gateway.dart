@@ -2,7 +2,9 @@
 /// 协议事实来源：dsh-remote-bridge docs/api/asyncapi.yaml + docs/project/API.md
 /// 「移动端网关 WebSocket」一节；参考实现 kotlin-sdk MobileGatewayClient.kt。
 /// 常量锚点（宪法 §5：只在此处定义）：
-///   - 子协议首位必须是 dsh-mobile-v1
+///   - 子协议 `dsh-mobile-v1` 必须**在清单里**（issue #26 阶段 2 起位置无关；
+///     服务端挑第一个认识的，协商结果永远是 dsh-mobile-v1）
+///   - 子协议 `dshrb-v1` 可选：声明了才启用 kernel-call 通用调用面四帧
 ///   - hello.protocol == 3
 ///   - close 4001 = 鉴权失败/设备吊销（重连无意义）
 ///   - 重连退避 1,2,4,8,16s 封顶 30s
@@ -22,12 +24,14 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 
 import 'models.dart';
 import 'gateway_events.dart';
+import 'gateway_kernel.dart';
 import 'gateway_liveness.dart';
 import 'gateway_pending.dart';
 import 'questions.dart';
 export 'gateway_api.dart';
 export 'gateway_events.dart';
 export 'gateway_http.dart';
+export 'gateway_kernel.dart';
 export 'gateway_pending.dart';
 export 'gateway_rest.dart';
 export 'questions.dart';
@@ -59,6 +63,12 @@ class GatewayClient {
 
   int _requestSeq = 0;
   final PendingRegistry _pending = PendingRegistry();
+  final KernelCallRegistry _kernelCalls = KernelCallRegistry();
+
+  /// 握手后桥推来的内核端点目录（`kernel-endpoints` 帧，白名单 ∩ 运行中内核）。
+  /// 没协商 `dshrb-v1`、或桥的内核服务缺席时恒为空 —— 空表就是「这能力不可用」。
+  List<KernelEndpoint> kernelCatalog = const [];
+
   final Liveness _live = Liveness();
   Timer? _heartbeat;
   StreamSubscription<dynamic>? _sub;
@@ -95,7 +105,7 @@ class GatewayClient {
     deviceId = newDeviceId;
     deviceName = name;
     await _connect(
-      protocols: ['dsh-mobile-v1', 'dsh-pair.$code'],
+      protocols: _subprotocols('dsh-pair.$code'),
       headers: {
         'X-DSH-Device-ID': deviceId,
         'X-DSH-Device-Name': base64Encode(utf8.encode(deviceName)),
@@ -107,11 +117,19 @@ class GatewayClient {
   Future<void> connect() async {
     final t = token;
     if (t == null || t.isEmpty) throw RequestException('NO_TOKEN', '尚未配对');
-    await _connect(
-      protocols: ['dsh-mobile-v1', 'dsh-auth.$t'],
-      headers: const {},
-    );
+    await _connect(protocols: _subprotocols('dsh-auth.$t'), headers: const {});
   }
+
+  /// 子协议清单：`dsh-mobile-v1` 必须在内（位置无关），`dshrb-v1` 是**可选增量**。
+  ///
+  /// 声明 `dshrb-v1` 只影响本连接能不能收发通用内核调用面那四帧（握手回显仍是
+  /// dsh-mobile-v1，桥按**客户端声明的清单**判断，不看协商结果）。老桥不认识它时
+  /// 会照常握手、只是永不推 `kernel-endpoints` ⇒ 本仓的目录为空 ⇒ 调用面判为不可用。
+  List<String> _subprotocols(String credential) => [
+    'dsh-mobile-v1',
+    'dshrb-v1',
+    credential,
+  ];
 
   Future<void> _connect({
     required List<String> protocols,
@@ -200,6 +218,9 @@ class GatewayClient {
               if (c is String) c,
         ];
         listenerPort = data['port'] is int ? data['port'] as int : null;
+        // 目录跟着 hello 作废：重连后桥可能换了内核版本、或这次没协商上
+        // dshrb-v1。留着上一轮的目录会让 UI 以为端点还在，点了才报端点不存在。
+        kernelCatalog = const [];
         DshLog.w('gw hello caps=${capabilities.length} port=$listenerPort');
         _backoffIndex = 0;
         _authDead = false;
@@ -214,6 +235,18 @@ class GatewayClient {
         {
           _sendRaw({'type': 'pong'}); // 服务端应用层 ping
         }
+      case 'kernel-endpoints':
+        // 只在协商到 dshrb-v1 时才会来（握手后立刻推一帧，先于其它业务帧）。
+        // 目录是**唯一**的端点真相来源：不硬编码端点表，只按它判断能调什么。
+        kernelCatalog = parseKernelEndpoints(data['endpoints']);
+        logKernelCatalog(kernelCatalog);
+      case 'kernel-call-result':
+        // 按 callId 配对（这一组**不走** requestId 回显）。取消之后结果仍会来，
+        // 登记表里取不到就静默丢弃 —— 协议要求客户端自己按 callId 去重。
+        _kernelCalls.settle(
+          data['callId'] as String?,
+          parseKernelCallResult(data),
+        );
       case 'event':
         _onEventData(data);
       case 'connection-resync-required':
@@ -364,6 +397,10 @@ class GatewayClient {
     // 在途请求立刻失败，别让它们各自干挂到 30s 超时（companion 坑
     // 「请求悬挂」：掉线后按钮一直转圈，用户以为卡死）。
     _pending.failAll('连接已断开${code == null ? '' : '（close $code）'}');
+    // 内核调用面同理：在途的 kernel-call 也不会再等到结果帧（桥换了连接就认不出
+    // 那批 callId 了），挂着只会拖到 35s 超时。取消过的 callId 已从表里取走，
+    // 晚到的结果帧按协议静默丢弃。
+    _kernelCalls.failAll('连接已断开${code == null ? '' : '（close $code）'}');
     if (code != null && code != 1000 && code != 1005) {
       _eventCtrl.add(LinkClosedEvent(code, reason));
     }
@@ -403,6 +440,13 @@ class GatewayClient {
 
   /// 能力位探测（`<能力>-v<主版本>`，只增不撤），如 `mobile-session-stats-v1`。
   bool hasCapability(String name) => capabilities.contains(name);
+
+  /// 内核调用面的在途登记表：`gateway_kernel.dart` 的 extension 靠它配对结果帧。
+  KernelCallRegistry get kernelCallRegistry => _kernelCalls;
+
+  /// 发一条原始帧（不登记、不等应答）。给 `gateway_kernel.dart` 的通用调用面用：
+  /// 那一组用 callId 配对，不走 requestId 回显，套不进 [requestWithTimeout]。
+  bool sendRawFrame(Map<String, dynamic> frame) => _sendRaw(frame);
 
   Future<void> _teardown() async {
     _heartbeat?.cancel();

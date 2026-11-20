@@ -158,6 +158,10 @@ class DsSpacing {
   /// 抽屉内文字行高（官方会话条目墨高 33px，行高约 24dp）。
   static const drawerLineHeight = 24.0;
 
+  /// 内容命中条目的标题与片段之间的间距（docs/design-tokens.md §4.14）。
+  /// 比条目上下内边距小一档：片段是标题的注脚，不该把行撑成两段等重内容。
+  static const drawerItemSubtitleGap = 2.0;
+
   /// 底部账号栏左右内边距：头像 x44px ≈ 14.7dp（官方 1080 实测）。
   static const drawerFooterPadH = 15.0;
 

@@ -1,7 +1,8 @@
-# 协议一致性报告（对照 dsh-remote-bridge 2.12.1 / issue #26）
+# 协议一致性报告（对照 dsh-remote-bridge 2.13.0 / issue #26）
 
 > 日期：2026-11-20　范围：`app/`（Flutter）+ `harmony/`（ArkTS）
-> 基准：`dsh-remote-bridge` **2.12.1** 已发版契约 + main 上 issue #26 的阶段 5/6/7/8 改动
+> 基准：`dsh-remote-bridge` **2.13.0**（tag `v2.13.0`，a648bd8）已发版契约
+> （含 issue #26 九阶段：内核端点归一 / 通用调用面 / 拆 chat-adapter / 删五个空声明帧）
 > 事实来源：`docs/api/openapi.yaml`(2551 行)、`docs/api/asyncapi.yaml`(1159)、
 > `docs/project/API.md`(1078)、`src/host/ws-protocol.ts`、`src/host/capabilities.ts`、
 > `src/host/ws-handler.ts`、`src/host/ws-goals.ts`
@@ -19,7 +20,8 @@
 | `image-handoff` 的 `sessionId` query | ✅ 本轮修复（安卓侧此前漏传 → 一直 400） |
 | `subscribe` / `unsubscribe` 语义 | ✅ 核对为「累积白名单 / 清空过滤」，本仓做法正确，未改 |
 | 能力位缺位时的降级 | ✅ 老桥回 `UNKNOWN_TYPE` 时静默降级，不报错弹窗 |
-| kernel-call / 插件 / 排程 / 语音 / 文件上传下载 | ⏸ 未消费，见 §4 |
+| kernel-call 通用调用面（`dshrb-v1`） | ✅ 2026-11-20 接入，见 §4.1 |
+| 插件 / 排程 / 语音 / 文件上传下载 | ⏸ 未消费，见 §4 |
 
 ## 2. 逐条核对（客户端行为 ↔ 桥侧契约）
 
@@ -107,7 +109,6 @@ HistoryPage/ChatStore/ChatHistory/ChatEvents/MessageList.ets/ProjectionSheets.et
 
 | 面 | 帧/端点 | 不做的理由 |
 |---|---|---|
-| 内核调用面 | `kernel-call`、`kernel-endpoints` | 需先协商 `dshrb-v1` 子协议；App 侧无内核直调需求（宪法：只消费协议，不越权） |
 | 插件/排程/语音 | `plugin-*`、`schedule-*`、`speech-*` 及 REST 对等面 | 手机端暂时没有对应 UI；接了就是「永不渲染的入口」 |
 | 目标 / 后台任务 / 审批列表 | `goal*`、`jobs`、`GET .../approvals` | 与「手机端只做对话」定位不符；审批走实时 `approval.requested` 已够 |
 | 文件上传/下载分块 | `file-upload-*`、`file-download-*`、`file-resolve` | 当前交付物走 `deliverables.presented` + REST 读字节；分块是 >4 MiB 大文件才需要 |
@@ -118,6 +119,40 @@ HistoryPage/ChatStore/ChatHistory/ChatEvents/MessageList.ets/ProjectionSheets.et
 
 > 判据：**接入一个帧的成本是「入口 + 空态 + 降级」三件套**，只看协议有就接，
 > 会做出永不渲染的入口（本仓 STRUCTURE.md「踩过的协议坑」第 7 条同款教训）。
+
+### 4.1 已接入：通用内核调用面（`dshrb-v1`，2026-11-20）
+
+桥在 2.13.0（issue #26 阶段 5）加了第四个可选子协议：客户端在清单里**声明** `dshrb-v1`
+才启用 `kernel-call` / `kernel-call-cancel` / `kernel-call-result` / `kernel-endpoints`
+四帧。本仓已接（`bridge/gateway_kernel.dart`）。
+
+| 事实 | 依据 |
+|---|---|
+| 声明与否只影响这四帧；握手回显仍是 `dsh-mobile-v1`，老桥不认识 `dshrb-v1` 时照常握手、只是永不推目录 | 桥 `src/host/ws-handler.ts` 的 `offersKernelSubprotocol()` 只看**请求清单**，不看协商结果 |
+| 目录帧在 `hello` 之后**立刻**推一帧 `kernel-endpoints` | 桥 `src/host/ws-kernel-call.ts` 的 `announce()` |
+| 结算走 `callId`（客户端自铸），**不走** `requestId` 回显 | 桥 `src/host/ws-protocol.ts` 的 `KernelCallResultData`；与经典请求/应答是两套 id |
+| 同一个 `callId` 重试命中桥侧 24h 幂等表；换 id 就是新调用 | 桥 `src/host/bridge/kernel-call.ts` |
+| 端点表 = 白名单 ∩ 运行中内核目录，**客户端不许硬编码** | 同上 `endpoints()` |
+| 能力位 `kernel-call-v1` / `kernel-endpoint-catalog-v1` 每次 hello 现算 | 桥 `src/host/capabilities.ts` + `src/index.ts` 的 `capabilityResolver` |
+| 错误码顺序：`METHOD_NOT_ALLOWED` 先于 `kernel/endpoint-unknown` | 桥「先授权再查目录」，防错误码被当成存在性探针 |
+
+**本仓的做法**：
+- `_subprotocols()` 统一生成清单 `['dsh-mobile-v1', 'dshrb-v1', dsh-auth.*|dsh-pair.*]`；
+- `hello` 时把目录清空（重连可能换了内核版本、或这次没协商上），`kernel-endpoints`
+  到达时整体替换；
+- `kernelCallsEnabled` 判的是**能力位**不是「我声明了子协议」——桥可能因内核服务缺席拒开；
+- `kernelEndpoints` 为空 ⇒ 调用方按「这能力不可用」处理，不猜端点；
+- 掉线时 `_onDown` 与经典请求一起 `failAll`，避免在飞调用干挂到 35s 超时。
+
+**当前能多做什么**（白名单 23 条里，本仓原本没有对等能力的）：`session/search`（会话**内容**
+搜索，替换抽屉里「只按标题本地过滤」）、`messageFeedback/*`（消息赞/踩）、
+`workspace/pinSession|unpinSession`（会话收藏）、`pluginMarket/*` 与 `pluginManager/*`
+（插件管理）、`session/state`、`session/canOpenWorkspacePath`、`productAnalytics/enabled`。
+**白名单不含**会话/历史/审批这些主面 —— 那些继续走既有专用帧，不进通用调用面。
+
+> **部署侧提醒**：`session/search` 依赖内核的 `session-query` 索引，本机默认配置是
+> `openAt "never"`（桥 `docs/project/CHANGELOG-DEV.md` 有记），此时端点可调但结果为空。
+> 客户端必须把「空结果」与「能力不可用」分开呈现。
 
 ## 5. 遗留与观察
 
