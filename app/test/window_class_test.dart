@@ -49,18 +49,28 @@ void main() {
     });
   });
 
+  group('抽屉与推挤（三种窗口都是抽屉式）', () {
+    test('页面让出的宽度等于抽屉宽', () {
+      // 手机 360 让 288 后剩 72，仍是官方的残条观感（整页推走）；
+      // 平板横屏 1181 让 320 后还剩 861，页面把这一条让出去而不是被推出屏。
+      expect(DsWindowClass.compact.pageInsetFor(360), DsSpacing.drawerWidth);
+      expect(360 - DsWindowClass.compact.pageInsetFor(360), 72);
+      expect(DsWindowClass.expanded.pageInsetFor(1181), DsSpacing.drawerSidebarWidth);
+      expect(1181 - DsWindowClass.expanded.pageInsetFor(1181), 861);
+      expect(DsWindowClass.medium.pageInsetFor(738), DsSpacing.drawerSidebarWidth);
+    });
+
+    test('窗口比抽屉还窄时不让出比窗口更多的距离', () {
+      expect(DsWindowClass.compact.pageInsetFor(200), 200);
+    });
+  });
+
   group('各档取值', () {
     test('紧凑窗用官方抽屉宽 288，其余用 320', () {
       expect(DsWindowClass.compact.sidebarWidth, DsSpacing.drawerWidth);
       expect(DsWindowClass.medium.sidebarWidth, DsSpacing.drawerSidebarWidth);
       expect(DsWindowClass.expanded.sidebarWidth, DsSpacing.drawerSidebarWidth);
       expect(DsSpacing.drawerSidebarWidth, greaterThan(DsSpacing.drawerWidth));
-    });
-
-    test('只有扩展窗有常驻侧栏', () {
-      expect(DsWindowClass.compact.hasPersistentSidebar, isFalse);
-      expect(DsWindowClass.medium.hasPersistentSidebar, isFalse);
-      expect(DsWindowClass.expanded.hasPersistentSidebar, isTrue);
     });
 
     test('内容列宽与输入条同一列', () {

@@ -5,8 +5,9 @@
 // 键盘再吃掉一半；分栏后每条列只剩一条缝，一根居中的列反而把宽度全留给代码和表格。
 // 这也是 Android 按最短边分手机和平板的理由。
 //
-// 只做判断，不做布局：谁需要按档位改参数（顶栏限宽、抽屉宽度、侧栏常驻），
-// 谁自己 watch。docs/design-tokens.md §4.15。
+// 三种窗口共用同一套**抽屉式**列表（真机反馈 2026-11-20：平板横屏也不要常驻侧栏，
+// 抽屉式够用，且不该把会话页整个推出屏外）。尺寸类只决定两件事：
+// 抽屉多宽、页面被推走多少。docs/design-tokens.md §4.15。
 
 library;
 
@@ -20,10 +21,10 @@ enum DsWindowClass {
   /// 手机（竖屏、横屏都是）：抽屉覆盖式推挤，正文与输入条各自居中限宽。
   compact,
 
-  /// 600 ≤ 宽 < 840：折叠屏展开、小平板竖屏。抽屉仍覆盖式，宽度用平板侧栏宽。
+  /// 600 ≤ 宽 < 840：折叠屏展开、小平板竖屏。抽屉式，宽度用平板侧栏宽。
   medium,
 
-  /// 宽 ≥ 840：横屏平板、大屏。会话列表常驻左列，会话页占右侧剩余宽度。
+  /// 宽 ≥ 840：横屏平板、大屏。抽屉式，但页面只让出抽屉宽，不推出屏外。
   expanded;
 
   /// 按窗口尺寸判断；[size] 取 `MediaQuery.sizeOf(context)`。
@@ -34,13 +35,21 @@ enum DsWindowClass {
     return compact;
   }
 
-  /// 侧栏是否常驻（不再有推挤动画、遮罩、左缘手势热区）。
-  bool get hasPersistentSidebar => this == expanded;
-
   /// 会话列表这一列的宽度：手机 288（屏宽 80% 的官方值），
   /// 平板/折叠屏 320（会话标题多显示几个字）。
   double get sidebarWidth =>
       this == compact ? DsSpacing.drawerWidth : DsSpacing.drawerSidebarWidth;
+
+  /// 抽屉打开时，页面左边要让出多宽（= 抽屉宽）。
+  ///
+  /// 同一个数有两种用法，取决于窗口：
+  /// - **紧凑**（手机）：整页用 `Transform.translate` 推走这么远，页面宽度不变，
+  ///   右边露出那条残条——就是官方 official-drawer.png 的样子；
+  /// - **中等 / 扩展**：页面**缩窄**这么宽（`Padding(left:)`），而不是被推出去。
+  ///   真机反馈 2026-11-20：平板横屏把整页推走时，顶栏右侧的 ⊕/⋮ 会被裁到屏外
+  ///   ——「抽屉式列表很方便，只要别把会话推出屏外」。
+  double pageInsetFor(double windowWidth) =>
+      windowWidth > sidebarWidth ? sidebarWidth : windowWidth;
 
   /// 顶栏与输入条共用的内容列宽上限：紧凑窗比这更窄，自然退化为整屏宽。
   double get contentMaxWidth => DsSpacing.chatFloatingWidth;

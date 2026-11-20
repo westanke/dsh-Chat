@@ -105,6 +105,10 @@ class DsSpacing {
 
   /// 推挤式抽屉：聊天页被推出的位移 = `drawerWidth`（整页滑到屏外，
   /// 右缘与抽屉右缘对齐，官方 official-drawer.png 页面残条为空对齐）。
+  ///
+  /// 只在紧凑窗（手机）用得到：正常按 `DsWindowClass.pageInsetFor(窗口宽)`
+  /// 取抽屉宽 —— 让路的距离必须跟着抽屉宽度走，否则平板横屏让 288 会在右侧
+  /// 多出 32dp 的错位（docs §4.15）。
   static const drawerPageShift = drawerWidth;
 
   /// 搜索框高度：y117..248 = 132px ≈ 44dp。
@@ -308,15 +312,16 @@ class DsSpacing {
   /// 中等窗起点：宽 ≥ 此值（且高度不是紧凑）算平板/折叠屏展开态。
   static const windowMediumMin = 600.0;
 
-  /// 扩展窗起点：宽 ≥ 此值时侧栏常驻，会话页占右侧剩余宽度。
+  /// 扩展窗起点：宽 ≥ 此值时抽屉宽用 [drawerSidebarWidth]（M3 expanded 断点）。
   static const windowExpandedMin = 840.0;
 
   /// 紧凑窗高度上限：矮于此值一律算紧凑（手机横屏 412 高因此仍是紧凑类，
   /// 分栏后每列只剩一条缝，不如一根居中的列）。
   static const windowCompactHeight = 480.0;
 
-  /// 平板常驻侧栏宽度：比手机抽屉（[drawerWidth] 288）宽一档，
+  /// 平板/折叠屏的抽屉宽度：比手机（[drawerWidth] 288）宽一档，
   /// 会话标题能多显示几个字（dsh-go AdaptiveMetrics.sidebarWidth = 320）。
+  /// 注意**不是常驻侧栏宽**：三种窗口都是抽屉式（docs §4.15）。
   static const drawerSidebarWidth = 320.0;
 
   // ---- 思考行（docs/design-tokens.md §4.13）----

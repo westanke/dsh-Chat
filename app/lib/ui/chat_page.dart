@@ -93,28 +93,17 @@ class _ChatPageState extends State<ChatPage>
     if (mounted) setState(() {});
   }
 
-  void _openDrawer() {
-    // 扩展窗：≡ 在侧栏展开时是「折叠」、折叠后是「展开」（dsh-go 的
-    // MenuAction.collapse / expand）；折叠态再点一次就展开回来。
-    if (windowClassOf(context).hasPersistentSidebar) {
-      setState(() => _sidebarOpen = !_sidebarOpen);
-      return;
-    }
-    _drawerCtrl.forward();
-  }
+  void _openDrawer() => _drawerCtrl.forward();
 
   void _closeDrawer() => _drawerCtrl.reverse();
 
-  /// 宽窗（≥ 840dp）时侧栏是否展开；折叠后同样走覆盖式抽屉。
-  /// 手机永远是覆盖式，这个标志只在扩展窗有意义（docs/design-tokens.md §4.15）。
-  bool _sidebarOpen = true;
-
   @override
   Widget build(BuildContext context) {
+    // 三种窗口都用同一套抽屉（真机反馈 2026-11-20：平板横屏也不要常驻侧栏——
+    // 抽屉式够方便，只要别把会话页整个推出屏外）。尺寸类只决定抽屉多宽、
+    // 页面让出多少：推挤距离跟抽屉宽走，宽窗右边永远留着整页会话。
     final cls = windowClassOf(context);
-    // 扩展窗且侧栏展开：列表钉在左列，会话页占右侧剩余宽度 ——
-    // 没有推挤动画、没有遮罩、没有左缘热区（dsh-go 的 sidebar 常驻态）。
-    final persistent = cls.hasPersistentSidebar && _sidebarOpen;
+    final width = MediaQuery.sizeOf(context).width;
     // 深色保留淡遮罩（drawerScrim 深色 0x50000000）；浅色官方无灰幕（全透明），
     // 页面被推走本身就是「打开中」的视觉反馈。
     final scrim = AnimatedBuilder(
@@ -135,35 +124,35 @@ class _ChatPageState extends State<ChatPage>
               ),
             ),
     );
+    // 抽屉打开时页面怎么让路：手机上整页推走（官方残条观感），宽窗上**缩窄**
+    // 到右边剩余宽度——推走会让顶栏的 ⊕/⋮ 越出右缘被裁掉（真机反馈 2026-11-20）。
+    final reflow = cls != DsWindowClass.compact;
     final page = AnimatedBuilder(
       animation: _drawerShift,
-      builder: (context, child) => Transform.translate(
-        offset: Offset(DsSpacing.drawerPageShift * _drawerShift.value, 0),
-        child: child,
-      ),
+      builder: (context, child) {
+        final inset = cls.pageInsetFor(width) * _drawerShift.value;
+        return reflow
+            ? Padding(padding: EdgeInsets.only(left: inset), child: child)
+            : Transform.translate(offset: Offset(inset, 0), child: child);
+      },
       child: _buildChatScaffold(context),
     );
     final drawer = ClipRect(
       child: AnimatedBuilder(
         animation: _drawerShift,
-        builder: (context, child) => persistent
-            ? child!
-            : Align(
-                alignment: Alignment.centerLeft,
-                widthFactor: _drawerShift.value,
-                child: child,
-              ),
+        builder: (context, child) => Align(
+          alignment: Alignment.centerLeft,
+          widthFactor: _drawerShift.value,
+          child: child,
+        ),
         child: SizedBox(
           width: cls.sidebarWidth,
           child: SessionsDrawer(
             state: st,
             colors: c,
             onOpenSettings: widget.onOpenSettings,
-            // 常驻态点会话不该把列表收起来（dsh-go 的 sidebar 也留着）；
-            // 覆盖式要点掉抽屉。
-            onClose: persistent ? () {} : _closeDrawer,
+            onClose: _closeDrawer,
             width: cls.sidebarWidth,
-            persistent: persistent,
           ),
         ),
       ),
@@ -175,9 +164,9 @@ class _ChatPageState extends State<ChatPage>
       canPop: false,
       onPopInvokedWithResult: (didPop, _) {
         if (didPop) return;
-        // 常驻侧栏展开时，返回先折叠侧栏（宽窗下它是「打开中的列」，不是路由）。
-        if (persistent) {
-          setState(() => _sidebarOpen = false);
+        // 抽屉开着时，返回先收起抽屉（宽窗和手机上一样）。
+        if (_drawerShift.value > 0) {
+          _closeDrawer();
           return;
         }
         final now = DateTime.now().millisecondsSinceEpoch;
@@ -194,35 +183,25 @@ class _ChatPageState extends State<ChatPage>
           ),
         );
       },
-      child: persistent
-          ? Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                drawer,
-                Expanded(child: page),
-              ],
-            )
-          : Stack(
-              children: [
-                Positioned.fill(child: page),
-                // 抽屉关闭时给左缘留一条手势热区，可像官方一样从边缘拖出/点按呼出。
-                Positioned(
-                  left: 0,
-                  top: 0,
-                  bottom: 0,
-                  width: _drawerShift.value == 0
-                      ? DsSpacing.drawerEdgeDragWidth
-                      : 0,
-                  child: GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onTap: _openDrawer,
-                    child: const SizedBox.shrink(),
-                  ),
-                ),
-                scrim,
-                drawer,
-              ],
+      child: Stack(
+        children: [
+          Positioned.fill(child: page),
+          // 抽屉关闭时给左缘留一条手势热区，可像官方一样从边缘拖出/点按呼出。
+          Positioned(
+            left: 0,
+            top: 0,
+            bottom: 0,
+            width: _drawerShift.value == 0 ? DsSpacing.drawerEdgeDragWidth : 0,
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: _openDrawer,
+              child: const SizedBox.shrink(),
             ),
+          ),
+          scrim,
+          drawer,
+        ],
+      ),
     );
   }
 
