@@ -34,6 +34,8 @@ class ChatTopBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = colors;
+    // 宽窗：顶栏内容列与输入条同一列（chatFloatingWidth 居中限宽），
+    // ≡ 与输入条左缘对齐、⊕/⋮ 与右缘对齐；窄窗这列比屏还宽，自然退化为整屏。
     return ColoredBox(
       color: c.bgBase,
       child: SafeArea(
@@ -41,44 +43,59 @@ class ChatTopBar extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            SizedBox(
-              height: DsSpacing.topBarHeight,
-              child: Row(
-                children: [
-                  IconButton(
-                    icon: Icon(Icons.menu),
-                    color: c.labelPrimary,
-                    onPressed: onMenu,
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: DsTypography.pageTitle.copyWith(color: c.labelPrimary),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  const SizedBox(width: 18),
-                  Tooltip(
-                    message: '新建对话',
-                    child: InkResponse(
-                      radius: 20,
-                      onTap: onNewChat,
-                      child: Icon(
-                        Icons.add_circle_outline,
-                        size: 24,
+            Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(
+                  maxWidth: DsSpacing.chatFloatingWidth,
+                ),
+                child: SizedBox(
+                  height: DsSpacing.topBarHeight,
+                  child: Row(
+                    children: [
+                      IconButton(
+                        icon: Icon(Icons.menu),
                         color: c.labelPrimary,
+                        onPressed: onMenu,
                       ),
-                    ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: DsTypography.pageTitle
+                              .copyWith(color: c.labelPrimary),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      const SizedBox(width: 18),
+                      Tooltip(
+                        message: '新建对话',
+                        child: InkResponse(
+                          radius: 20,
+                          onTap: onNewChat,
+                          child: Icon(
+                            Icons.add_circle_outline,
+                            size: 24,
+                            color: c.labelPrimary,
+                          ),
+                        ),
+                      ),
+                      trailing,
+                      const SizedBox(width: DsSpacing.screenPad),
+                    ],
                   ),
-                  trailing,
-                  const SizedBox(width: DsSpacing.screenPad),
-                ],
+                ),
               ),
             ),
-            _StatusLine(colors: c, status: status),
+            Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(
+                  maxWidth: DsSpacing.chatFloatingWidth,
+                ),
+                child: _StatusLine(colors: c, status: status),
+              ),
+            ),
           ],
         ),
       ),

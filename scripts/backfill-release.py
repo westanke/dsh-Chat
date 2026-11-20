@@ -46,6 +46,27 @@ def backfill(text: str, ver: str, code: str, size: int, sha: str, apk: str) -> s
 
     # 2)「当前状态」表：在表头后插入本次产物行，保留全部历史 APK 行。
     #    锚点用「当前状态」小节独有的表头；不能用全局 | APK | 正则（会删光历史）。
+    #
+    #    同一个版本重复回填（v1.0.21 时就发生过：一次发版期间 release.sh 跑了
+    #    五遍，README 里攒出五行同版本同文件的产物）—— 先把**「当前状态」小节里**
+    #    本版本已有的行全部摘掉再插一行，保证「一个 tag 一行」。历史版本的行、
+    #    以及「下载安装」小节里那条同版本的行（步骤 5 会原地更新）都不动。
+    same_ver = re.compile(
+        r"^\| APK \| \[`([^`]+)`\]\([^)]*/releases/download/v"
+        + re.escape(ver)
+        + r"/[^)]*\)<br>[^\n]*\n",
+        flags=re.M,
+    )
+    state_head = "## 当前状态"
+    state_start = out.find(state_head)
+    if state_start != -1:
+        nxt = out.find("\n## ", state_start + len(state_head))
+        state_end = nxt if nxt != -1 else len(out)
+        seg = out[state_start:state_end]
+        seg, dropped = same_ver.subn("", seg)
+        if dropped:
+            print(f"  ℹ️ 摘掉本版本已有的 {dropped} 行产物（同一 tag 只保留最新一行）")
+        out = out[:state_start] + seg + out[state_end:]
     out, n = sub1(
         r"(## 当前状态\n\n\| 平台 \| 状态 \|\n\|---\|---\|\n)",
         lambda m: m.group(1) + release_row, out,

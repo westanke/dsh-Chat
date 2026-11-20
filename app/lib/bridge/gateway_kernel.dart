@@ -27,6 +27,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
+import 'dlog.dart';
 import 'gateway.dart';
 
 /// `kernel-endpoints` 里的一条：能调什么、要什么权限、接受哪些 wire 键。
@@ -285,5 +286,9 @@ Map<String, List<KernelEndpoint>> groupKernelEndpointsByScope(
 
 /// 调试用（`debugPrint` 走 DSH 日志前缀，避免混进普通 stdout）。
 void logKernelCatalog(List<KernelEndpoint> catalog) {
-  debugPrint('[dsh-gw] kernel-endpoints ${describeKernelCatalog(catalog)}');
+  // vivo 的 logcat 会滤掉 flutter/debugPrint，真机联调只能靠文件日志：
+  // 目录帧是判断「这次协商成没成」的唯一现场，必须落盘。
+  final line = '[dsh-gw] kernel-endpoints ${describeKernelCatalog(catalog)}';
+  debugPrint(line);
+  DshLog.w(line);
 }

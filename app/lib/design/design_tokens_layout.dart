@@ -304,6 +304,21 @@ class DsSpacing {
   /// 顶栏状态行高（标题下方那一行）。
   static const chatStatusRowHeight = 20.0;
 
+  // ---- 宽窗适配（docs/design-tokens.md §4.15）----
+  /// 中等窗起点：宽 ≥ 此值（且高度不是紧凑）算平板/折叠屏展开态。
+  static const windowMediumMin = 600.0;
+
+  /// 扩展窗起点：宽 ≥ 此值时侧栏常驻，会话页占右侧剩余宽度。
+  static const windowExpandedMin = 840.0;
+
+  /// 紧凑窗高度上限：矮于此值一律算紧凑（手机横屏 412 高因此仍是紧凑类，
+  /// 分栏后每列只剩一条缝，不如一根居中的列）。
+  static const windowCompactHeight = 480.0;
+
+  /// 平板常驻侧栏宽度：比手机抽屉（[drawerWidth] 288）宽一档，
+  /// 会话标题能多显示几个字（dsh-go AdaptiveMetrics.sidebarWidth = 320）。
+  static const drawerSidebarWidth = 320.0;
+
   // ---- 思考行（docs/design-tokens.md §4.13）----
   /// 图形列宽度：原子图标 / 呼吸光点环待在这列里。
   static const thinkLeadWidth = 24.0;

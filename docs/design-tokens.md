@@ -482,6 +482,40 @@ ioCard/轮尾行/思考行全部复用既有语义色（mdCodeBlockBg/borderL1/b
 > 参数键名以 `kernel-endpoints` 的 `wires` 为准（内核 strict codec 既拒缺键也拒多键）。
 
 
+## 4.15 宽窗适配 · 手机与平板同一套布局（2026-11-20 task-9）
+
+会话页从手机（360dp 宽）搬到平板（横屏 1181×738dp）后暴露的问题不是「控件太小」，
+而是**同一条几何在两种窗口上说了两种话**：正文被 `chatReadingWidth` 居中限宽，
+顶栏却横铺整屏；抽屉按手机的 80% 屏宽写死 288。所以适配的落点不是给平板另做一套，
+而是**先把窗口分成尺寸类，再让既有几何按类取参数**——手机上的每一个数值都不变。
+
+尺寸类照 Material 3 断点，外加 dsh-go 的一条规则（app/lib/ui/shell/adaptive/adaptive_layout.dart）：
+**高度 < [compactHeight] 一律紧凑**。手机横屏是 915×412——够宽，但状态栏、顶栏、
+输入条一去只剩几行，键盘再吃掉一半，分栏后每条列就剩下一条缝；一根居中的列反而
+把宽度全留给代码和表格。这也是 Android 一直以来按最短边分手机和平板的理由。
+
+| 元素 | token | 取值 | 依据 |
+|---|---|---|---|
+| 中等窗起（宽） | `DsSpacing.windowMediumMin` | 600 | M3 medium 断点；dsh-go `WindowClass.mediumMin` |
+| 扩展窗起（宽） | `DsSpacing.windowExpandedMin` | 840 | M3 expanded 断点；dsh-go `WindowClass.expandedMin` |
+| 紧凑窗高上限 | `DsSpacing.windowCompactHeight` | 480 | M3 compact height；手机横屏（412 高）因此仍是紧凑类 |
+| 平板侧栏宽 | `DsSpacing.drawerSidebarWidth` | 320 | dsh-go `AdaptiveMetrics.sidebarWidth`；比手机抽屉（288）宽一档，会话标题多显示几个字 |
+| 顶栏内容列宽 | 同 `DsSpacing.chatFloatingWidth` | 720 − 2×14 = 692 | 与输入条同一列：≡ 与输入条左缘对齐，⊕/⋮ 与右缘对齐，顶栏不再是「横铺整屏」 |
+
+**三档行为**：
+
+1. **紧凑**（宽 < 600 或高 < 480）——就是今天手机上的样子：抽屉覆盖式推挤，
+   正文与输入条各自居中限宽，顶栏内容列因 692 > 屏宽而自然退化为整屏宽。
+2. **中等**（600 ≤ 宽 < 840）——抽屉仍覆盖式，宽度改用 `drawerSidebarWidth`；
+   正文列与顶栏列已经对齐。
+3. **扩展**（宽 ≥ 840）——**侧栏常驻**：会话列表钉在左列（宽 `drawerSidebarWidth`），
+   会话页占右侧剩余宽度，不再有推挤动画、遮罩和左缘手势热区。≡ 键在常驻态折叠侧栏，
+   折叠后回到覆盖式抽屉（点 ≡ 或从左缘拖出），与 dsh-go 的 sidebar ⇄ overlay 一致。
+
+> 没有移植 dsh-go 的 rail（68dp 的圆键列）：折叠后本仓直接回到抽屉，
+> 少一个中间态，代价是折叠态下要多点一次才能换会话。**这是有意的偏差，登记在此。**
+
+
 ## 5. 截图资产（ref/）
 - official-login-page.png 登录页（+86 152 1388 0002 / 验证码输入 / 发送验证码按钮）
 - official-welcome.png 欢迎引导页（开启对话主按钮）

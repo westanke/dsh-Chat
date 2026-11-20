@@ -25,6 +25,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
+import '../bridge/dlog.dart';
 import '../bridge/gateway.dart';
 
 /// 内核端点名（白名单里那条，`kernel-endpoints` 目录用它做键）。
@@ -97,9 +98,46 @@ Map<String, dynamic> sessionSearchArgs(KernelEndpoint? endpoint, String query) {
 /// 抽屉只负责「把输入喂进来、把结果画出去」，其余都在这里——这样搜索的状态机
 /// 不散在 UI 里，也能被单测直接驱动。
 class SessionSearchController extends ChangeNotifier {
-  SessionSearchController({required this.gateway, this.debounce = const Duration(milliseconds: 300)});
+  SessionSearchController({required this.gateway, this.debounce = const Duration(milliseconds: 300)}) {
+    // 端点目录是 hello 之后**异步**到达的（重连时还会先清空）。监听它，才能在
+    // 「能力刚可用」的那一刻把用户已经输好的查询补发出去；只听 drawer 自身的
+    // setState 会漏掉这个时刻（真机踩过：输完字这一节整节不出现）。
+    _catalog = gateway.kernelCatalogListenable;
+    _catalogWasSupported = supported;
+    _catalog.addListener(_onCatalogChanged);
+  }
 
   final GatewayClient gateway;
+
+  late final ValueListenable<List<KernelEndpoint>> _catalog;
+  bool _catalogWasSupported = false;
+
+  /// 目录变了：能力从「不可用」变「可用」时把已有的查询补发出去。
+  void _onCatalogChanged() {
+    final now = supported;
+    if (now == _catalogWasSupported) return;
+    _catalogWasSupported = now;
+    if (!now) {
+      // 能力消失（重连把目录清空了）：撤掉命中，别让用户点进一个已经不存在的入口。
+      _timer?.cancel();
+      _seq++;
+      _hits = const [];
+      _busy = false;
+      _error = null;
+      notifyListeners();
+      return;
+    }
+    if (_query.isEmpty) {
+      notifyListeners();
+      return;
+    }
+    // 查询先到、能力后到：补发。
+    _busy = true;
+    _error = null;
+    notifyListeners();
+    _timer?.cancel();
+    _timer = Timer(debounce, () => unawaited(_run(_query)));
+  }
 
   /// 输入停顿多久才真发请求。连打五个字只打一次内核。
   final Duration debounce;
@@ -135,8 +173,12 @@ class SessionSearchController extends ChangeNotifier {
       gateway.kernelCallsEnabled &&
       gateway.kernelEndpoint(kSessionSearchEndpoint) != null;
 
-  /// 是否有话要说（有命中 / 在搜 / 出错）。抽屉据此决定要不要加那一节。
-  bool get visible => _query.isNotEmpty && (_busy || _error != null || _hits.isNotEmpty);
+  /// 是否有话要说。
+  ///
+  /// 判据是「**有没有查询串**」，不是「有没有命中」——空结果恰恰是最需要说出口的
+  /// 结局（真机 v1.0.21 第一次联调就踩了：写成有命中才可见时，搜不到东西整节
+  /// 直接消失，看起来像搜索没生效，而不是「没有匹配」）。
+  bool get visible => _query.isNotEmpty;
 
   /// 输入变化。查询串没变（比如只是光标移动）就什么都不做。
   void update(String raw) {
@@ -154,6 +196,7 @@ class SessionSearchController extends ChangeNotifier {
       return;
     }
     if (!supported) {
+      // 能力还没到（目录异步到）——**留住查询串**，等 _onCatalogChanged 补发。
       _hits = const [];
       _busy = false;
       _error = null;
@@ -184,6 +227,10 @@ class SessionSearchController extends ChangeNotifier {
       kSessionSearchEndpoint,
       args: sessionSearchArgs(gateway.kernelEndpoint(kSessionSearchEndpoint), q),
     );
+    DshLog.w(
+      '[search] q="$q" ok=${result.ok} '
+      'code=${result.code} hits=${result.ok ? parseSessionSearchHits(result.value).length : -1}',
+    );
     if (seq != _seq) return; // 已有更新的查询发出，这批结果作废
     _busy = false;
     if (result.ok) {
@@ -198,6 +245,7 @@ class SessionSearchController extends ChangeNotifier {
 
   @override
   void dispose() {
+    _catalog.removeListener(_onCatalogChanged);
     _timer?.cancel();
     super.dispose();
   }

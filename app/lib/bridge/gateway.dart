@@ -67,7 +67,22 @@ class GatewayClient {
 
   /// 握手后桥推来的内核端点目录（`kernel-endpoints` 帧，白名单 ∩ 运行中内核）。
   /// 没协商 `dshrb-v1`、或桥的内核服务缺席时恒为空 —— 空表就是「这能力不可用」。
-  List<KernelEndpoint> kernelCatalog = const [];
+  ///
+  /// **目录是异步到的**：`hello` 之后桥才推这一帧，重连时 `hello` 还会先把目录
+  /// 清空。所以界面不能只在自身重建时读一次快照 —— 那会让「能力刚可用」和
+  /// 「能力不可用」长得一模一样（真机踩过：抽屉里输完字，这一节整节不出现）。
+  /// 要听变化就用 [kernelCatalogListenable]。
+  final ValueNotifier<List<KernelEndpoint>> _catalog = ValueNotifier<List<KernelEndpoint>>(const []);
+
+  /// 目录的当前快照。
+  List<KernelEndpoint> get kernelCatalog => _catalog.value;
+
+  /// 目录变化通知：能力位和端点表都可能晚于首屏到达。
+  ValueListenable<List<KernelEndpoint>> get kernelCatalogListenable => _catalog;
+
+  /// 测试用：不真的连桥，直接把目录塞进去，验证「能力晚到」这条时序。
+  @visibleForTesting
+  void debugSetKernelCatalog(List<KernelEndpoint> endpoints) => _catalog.value = endpoints;
 
   final Liveness _live = Liveness();
   Timer? _heartbeat;
@@ -220,7 +235,7 @@ class GatewayClient {
         listenerPort = data['port'] is int ? data['port'] as int : null;
         // 目录跟着 hello 作废：重连后桥可能换了内核版本、或这次没协商上
         // dshrb-v1。留着上一轮的目录会让 UI 以为端点还在，点了才报端点不存在。
-        kernelCatalog = const [];
+        _catalog.value = const [];
         DshLog.w('gw hello caps=${capabilities.length} port=$listenerPort');
         _backoffIndex = 0;
         _authDead = false;
@@ -238,8 +253,9 @@ class GatewayClient {
       case 'kernel-endpoints':
         // 只在协商到 dshrb-v1 时才会来（握手后立刻推一帧，先于其它业务帧）。
         // 目录是**唯一**的端点真相来源：不硬编码端点表，只按它判断能调什么。
-        kernelCatalog = parseKernelEndpoints(data['endpoints']);
-        logKernelCatalog(kernelCatalog);
+        final catalog = parseKernelEndpoints(data['endpoints']);
+        _catalog.value = catalog;
+        logKernelCatalog(catalog);
       case 'kernel-call-result':
         // 按 callId 配对（这一组**不走** requestId 回显）。取消之后结果仍会来，
         // 登记表里取不到就静默丢弃 —— 协议要求客户端自己按 callId 去重。
@@ -537,6 +553,7 @@ class GatewayClient {
     _teardown();
     _stateCtrl.close();
     _eventCtrl.close();
+    _catalog.dispose();
   }
 }
 

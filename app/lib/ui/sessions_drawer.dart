@@ -19,6 +19,8 @@ class SessionsDrawer extends StatefulWidget {
     required this.colors,
     required this.onOpenSettings,
     required this.onClose,
+    this.width = DsSpacing.drawerWidth,
+    this.persistent = false,
   });
 
   final ChatState state;
@@ -28,6 +30,14 @@ class SessionsDrawer extends StatefulWidget {
   /// 推挤式抽屉不走 Navigator 路由，条目点选后用这个回调收起抽屉
   /// （原 Scaffold.drawer 方案里是 Navigator.pop，会在 Stack 实现下误弹聊天页）。
   final VoidCallback onClose;
+
+  /// 这一列的宽度：手机 288（屏宽 80% 的官方值），平板/折叠屏 320
+  /// （见 docs/design-tokens.md §4.15 与 window_class.dart）。
+  final double width;
+
+  /// 常驻态：宽窗（≥ 840dp）时列表钉在左列，没有推挤、没有遮罩。
+  /// 此时 [onClose] 收起的是「常驻」这件事（回到抽屉式），而不是关掉整个抽屉。
+  final bool persistent;
 
   @override
   State<SessionsDrawer> createState() => SessionsDrawerState();
@@ -78,7 +88,7 @@ class SessionsDrawerState extends State<SessionsDrawer> {
     final content = _content;
     final showContent = content != null && content.supported && content.visible;
     return Drawer(
-      width: DsSpacing.drawerWidth,
+      width: widget.width,
       backgroundColor: c.bgLayer1,
       child: SafeArea(
         child: Column(
