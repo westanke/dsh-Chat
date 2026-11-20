@@ -6,7 +6,9 @@
 import { PendingQuestion, PendingApproval, QuestionAnswerItem, UserQuestion, UserQuestionOption } from '../core/Questions';
 import { DsColors, DsTypography, DsSpacing } from '../ui/theme';
 import { mediaquery } from '@kit.ArkUI';
-import { BP_SM, BP_QUERY_MD, BP_QUERY_LG, breakpointOf, atLeastMd } from '../core/Breakpoints';
+import {
+  BP_SM, BP_QUERY_MD, BP_QUERY_LG, breakpointOf, atLeastMd, readableColumnWidth
+} from '../core/Breakpoints';
 
 @Component
 export struct HitlPanel {
@@ -14,6 +16,8 @@ export struct HitlPanel {
    * （真机现象：提交后提问卡不消失、审批卡根本不出现）。 */
   @Prop questions: PendingQuestion[] = [];
   @Prop approvals: PendingApproval[] = [];
+  /** 会话页实测可用宽（vp；0 = 未量到，退 100%）：HITL 卡与正文同轴。 */
+  @StorageProp('dshColumnWidthVp') columnWidth: number = 0;
   onAnswer: (q: PendingQuestion, answers: QuestionAnswerItem[]) => void =
     (_q: PendingQuestion, _a: QuestionAnswerItem[]) => {};
   onDecide: (a: PendingApproval, allow: boolean) => void =
@@ -173,7 +177,8 @@ export struct HitlPanel {
       .width('100%')
     }
     .scrollBar(BarState.Off)
-    .constraintSize({ maxHeight: '50%' })
+    .constraintSize({ maxHeight: '50%',
+      maxWidth: this.columnWidth > 0 ? readableColumnWidth(this.columnWidth) : '100%' })
     .width('100%')
   }
 

@@ -23,7 +23,9 @@ import { ArrayDataSource } from './ArrayDataSource';
 import { visibleMessagesOf, parseFoldedReplies, parseWorkStepsDetail } from '../core/WorkSteps';
 import { policyOf, STEP_GROUPING_NONE } from '../core/ToolDetails';
 import { mediaquery } from '@kit.ArkUI';
-import { BP_SM, BP_QUERY_MD, BP_QUERY_LG, breakpointOf, atLeastMd, isLarge, contentMaxWidth } from '../core/Breakpoints';
+import {
+  BP_SM, BP_QUERY_MD, BP_QUERY_LG, breakpointOf, atLeastMd, isLarge, readableColumnWidth
+} from '../core/Breakpoints';
 
 @Component
 export struct MessageList {
@@ -52,6 +54,8 @@ export struct MessageList {
    * 出来但子项恒为 0，即使 store.messages 已有 2 条）。
    */
   @Prop @Watch('syncVersion') version: number = 0;
+  /** 会话页实测可用宽（vp；0 = 未量到，退 100%）：正文列 = readableColumnWidth(它)。 */
+  @StorageProp('dshColumnWidthVp') columnWidth: number = 0;
   /** store 派生消息快照（唯一被观察的数据源）。 */
   @State msgs: ChatMessage[] = [];
   /** 服务端还有更早事件（history 应答 hasMore）—— 决定列表头是否出「加载更早消息」。 */
@@ -184,7 +188,7 @@ export struct MessageList {
       }
     }
     .width('100%')
-    .constraintSize({ maxWidth: contentMaxWidth(this.bp) > 0 ? contentMaxWidth(this.bp) : '100%' })
+    .constraintSize({ maxWidth: this.columnWidth > 0 ? readableColumnWidth(this.columnWidth) : '100%' })
     .layoutWeight(1)
     .padding({ left: DsSpacing.screenPad, right: DsSpacing.contentPadRight,
       top: 12, bottom: DsSpacing.msgPad })

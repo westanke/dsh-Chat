@@ -345,11 +345,11 @@ export class DsSpacing {
   static readonly chipRadius: number = 16;
   static readonly chipGap: number = 18;
   static readonly composerButtonSize: number = 24;
-  // 设置页根外边距（安卓 settingsPadH=20 / settingsPadV=28 / settingsMaxWidth=720；
-  // 鸿蒙按 R003 4/8 档位就近落位 22 / 26，见 docs/design-tokens.md §4.4）
+  // 设置页根外边距（安卓 settingsPadH=20 / settingsPadV=28；
+  // 鸿蒙按 R003 4/8 档位就近落位 22 / 26，见 docs/design-tokens.md §4.4）。
+  // 内容列宽不再有 720 常量：统一走 core/Breakpoints.readableColumnWidth(实测宽)。
   static readonly settingsPadH: number = 22;
   static readonly settingsPadV: number = 26;
-  static readonly settingsMaxWidth: number = 720;
   // 设置卡/投影面板（安卓 tokens.dart:405-414）
   /**
    * 设置页信息行（label · value 同一行）的 label 固定最小宽。

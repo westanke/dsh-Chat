@@ -257,7 +257,7 @@ Scroll 视口宽（1080px 屏上 = 956px），但列宽总和比它大，各格 
 | 图标-文字 / 药丸间距 | 14dp / 7dp | `settingsIconGap` / `settingsChipGap` |
 | 药丸内边距 / 圆角 | 左右 10、上下 6 / 16dp | `settingsChipPadH` / `settingsChipPadV` / `settingsChipRadius` |
 | **鸿蒙偏差**：根外边距 | 左右 22 / 上下 26（ArkUI 触屏边缘余量略大于安卓 20/28 的上下、左右各 +2；`harmony/.../ui/theme.ets`） | `DsSpacing.settingsPadH=22` / `settingsPadV=26` |
-| **鸿蒙偏差**：内容最大宽 | 720vp，MD 档起用 `contentMaxWidth(bp)`（SM 不约束） | `DsSpacing.settingsMaxWidth=720` |
+| **鸿蒙偏差**：内容列宽 | 与安卓同一条尺：`core/Breakpoints.readableColumnWidth(实测宽)`（≤720 用满、更宽按 0.9 缓增，见 §4.16）；原「MD 档 720 / LG 档 840」的 `contentMaxWidth(bp)` 已删 | `harmony/entry/src/main/ets/core/Breakpoints.ts` |
 | **鸿蒙偏差**：信息行 label 固定宽 | 72vp：鸿蒙 `infoRow` 是 label/value 左右两列（安卓 `_InfoRow` 是上下两行），不给 label 定宽时长 value（设备 UUID）会把「设备」挤成竖排 | `DsSpacing.settingsLabelWidth=72` |
 
 字号 / 主题 / 发送模式等行为偏好见 `lib/design/app_settings.dart`（对照 companion `AppPreferences`）：`normalizeFontScale` 夹 0.8–1.5 且 NaN/Inf→1.0，`effectiveFontScale` 与系统字号相乘（对齐 `AppFontScale.kt` 的 `base.fontScale * appScale`，Flutter 侧用自定义 `TextScaler` 包装 `MediaQuery` 平台 scaler，不覆盖系统无障碍字号）。
@@ -582,6 +582,32 @@ readableColumnWidth(可用宽)
 >
 > **二级页为什么也用同一条尺**：设置、Markdown、子会话历史、目录浏览都从会话页
 > 推出去，翻进翻出若横向跳宽，观感像两个 App。同一个函数各页各算，得到的是同一个数。
+
+### 4.16.1 鸿蒙端（`harmony/`）同一条尺
+
+鸿蒙版原先按断点取固定上限：`contentMaxWidth(bp)` → MD 档 720、LG 档 840（SM 不约束），
+平板横屏再宽也停在 840。2026-11-21 跟随安卓改成同一条尺：
+
+```text
+readableColumnWidth(可用宽)   = 可用宽                         （≤ 720）
+                              = min(可用宽, 可用宽 × 0.9)        （> 720，无第二道上限）
+floatingColumnWidth(可用宽)   = 列有富余 ? 列 − 2×14 : 可用宽     （顶栏 / 输入条）
+```
+
+- 纯函数在 `harmony/entry/src/main/ets/core/Breakpoints.ts`（`READABLE_BASE_WIDTH=720`、
+  `READABLE_SCALE=0.9`、`FLOAT_INSET=14`），与安卓 `readableBaseWidth/readableScale/chatFloatInset` 同值；
+  原 `contentMaxWidth` / `sheetMaxWidth` 已删，`sheetMaxWidth` 本来就无调用。
+- 可用宽实测：`ChatView.chatScaffold()` 的根 Column 与 `SettingsView` 的根 Column 各挂
+  `.onAreaChange`，`Area.width` 用 `typeof` 收窄成 vp 数值（ArkTS 不许 number↔string 强转），
+  差值 ≥1 才写 `@State columnWidth`；未量到（0）时约束退回 `'100%'`，首帧不会闪窄列。
+- 落到哪：`MessageList`（正文列）、`ChatView.topBar()` 与 `Composer`（浮层列）、`HitlPanel`
+  （与正文同轴，`maxHeight:'50%'` 保持）、`SettingsView`（二级页）。都是
+  `.constraintSize({ maxWidth })`，父 Column 默认居中。
+- 与安卓的差异：①鸿蒙抽屉仍是整页 `translate` 推挤（不改页面宽），所以列宽按整窗宽算；
+  ②`bindSheet` 没有传宽（系统默认，未接安卓的 `modalSheetConstraints` 等价物）；
+  ③手机档列宽 = 屏宽，外观与改动前逐字相同。
+- 单测：`harmony/test/cases/breakpoints.test.ts`（360→360、720→720、861→774.9、1181→1062.9、
+  1600→1440、2000 继续长、0/负数→0、单调不减且 ≤ 可用宽；floating 738→692、1181→1034.9）。
 
 ## 4.17 本轮改动卡 · 生成文件卡 · 查看改动（2026-11-21 task-12）
 

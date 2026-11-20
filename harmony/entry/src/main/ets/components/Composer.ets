@@ -19,7 +19,7 @@ import { DsColors, DsTypography, DsSpacing } from '../ui/theme';
 import { permissionLabelOf } from '../core/Permissions';
 import { common } from '@kit.AbilityKit';
 import { mediaquery } from '@kit.ArkUI';
-import { BP_SM, BP_QUERY_MD, BP_QUERY_LG, breakpointOf, atLeastMd } from '../core/Breakpoints';
+import { BP_SM, BP_QUERY_MD, BP_QUERY_LG, breakpointOf, atLeastMd, floatingColumnWidth } from '../core/Breakpoints';
 
 type PanelMode = 'none' | 'cmd' | 'at';
 
@@ -27,11 +27,11 @@ type PanelMode = 'none' | 'cmd' | 'at';
 export struct Composer {
   store: ChatStore | null = null;
   @StorageProp('dshDark') dark: boolean = false;
-  /** 窗口宽度断点（R007 一多）：输入区高度与按键尺寸按档放大。 */
+  /** 窗口断点（R007）：输入区高度与按键尺寸按档放大；列宽另读 dshColumnWidthVp。 */
   @StorageProp('dshBreakpoint') bp: string = BP_SM;
-  /** 同 MessageList：@Prop 必须带 @Watch 并把 store 派生值抄进 @State，否则
-   * build 里读普通成员 store.streaming/currentPermission/lastError 不会重建。 */
+  /** 同 MessageList：@Prop 必须带 @Watch 并把 store 派生值抄进 @State，否则 build 里读普通成员（streaming / currentPermission / lastError）不会重建。 */
   @Prop @Watch('syncVersion') version: number = 0;
+  @StorageProp('dshColumnWidthVp') columnWidth: number = 0;
   @State connectedView: boolean = false;
   @State streamingView: boolean = false;
   @State permView: string = '权限未设置';
@@ -478,6 +478,7 @@ export struct Composer {
           .padding({ bottom: 6 })
       }
     }
+    .constraintSize({ maxWidth: this.columnWidth > 0 ? floatingColumnWidth(this.columnWidth) : '100%' })
     .bindSheet($$this.permSheetOpen, this.permissionContent(), {
       height: 320,
       showClose: false,

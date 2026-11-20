@@ -8,7 +8,9 @@ import { window, mediaquery } from '@kit.ArkUI';
 import { ChatStore } from '../core/ChatStore';
 import { DsColors, DsTypography, DsSpacing } from '../ui/theme';
 import { MdView } from '../components/md/MdView';
-import { BP_SM, BP_QUERY_MD, BP_QUERY_LG, breakpointOf, atLeastMd } from '../core/Breakpoints';
+import {
+  BP_SM, BP_QUERY_MD, BP_QUERY_LG, breakpointOf, atLeastMd, readableColumnWidth
+} from '../core/Breakpoints';
 
 @Component
 export struct MdDocViewer {
@@ -25,6 +27,8 @@ export struct MdDocViewer {
   @State loaded: boolean = false;
   /** 状态栏高度（vp）：bindContentCover 全屏模态不自动避让状态栏，须自己让。 */
   @State topInset: number = 0;
+  /** 本页实测宽（vp；0 = 未量到）。正文列 = readableColumnWidth(它)，与二级页同一条尺。 */
+  @State columnWidth: number = 0;
 
   private c(): DsColors {
     return new DsColors(this.dark);
@@ -148,12 +152,19 @@ export struct MdDocViewer {
         .justifyContent(FlexAlign.Center)
       } else {
         Scroll() {
+          // 外层只管一多居中：正文列走 readableColumnWidth，宽窗两侧留白、不再拉满整屏。
           Column() {
-            MdView({ text: this.docText, streaming: false })
+            Column() {
+              MdView({ text: this.docText, streaming: false })
+            }
+            .width('100%')
+            .padding({ left: DsSpacing.screenPad, right: DsSpacing.screenPad,
+              top: DsSpacing.blockGap, bottom: DsSpacing.blockGap * 2 })
+            .constraintSize({ maxWidth: readableColumnWidth(this.columnWidth) > 0
+              ? readableColumnWidth(this.columnWidth) : '100%' })
           }
           .width('100%')
-          .padding({ left: DsSpacing.screenPad, right: DsSpacing.screenPad,
-            top: DsSpacing.blockGap, bottom: DsSpacing.blockGap * 2 })
+          .alignItems(HorizontalAlign.Center)
         }
         .align(Alignment.Top)
         .layoutWeight(1)
@@ -164,5 +175,17 @@ export struct MdDocViewer {
     .height('100%')
     .padding({ top: this.topInset })
     .backgroundColor(this.c().bgBase)
+    .onAreaChange((_oldV: Area, newV: Area) => {
+      const raw = newV.width;
+      let w = 0;
+      if (typeof raw === 'number') {
+        w = raw;
+      } else if (typeof raw === 'string') {
+        w = parseFloat(raw);
+      }
+      if (w > 0 && Math.abs(w - this.columnWidth) >= 1) {
+        this.columnWidth = w;
+      }
+    })
   }
 }

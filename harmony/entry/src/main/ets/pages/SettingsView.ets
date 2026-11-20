@@ -21,7 +21,7 @@ import { BusinessError } from '@kit.BasicServicesKit';
 import { DsColors, DsTypography, DsSpacing } from '../ui/theme';
 import { mediaquery } from '@kit.ArkUI';
 import { BP_SM, BP_QUERY_MD, BP_QUERY_LG, breakpointOf, atLeastMd,
-  contentMaxWidth } from '../core/Breakpoints';
+  readableColumnWidth } from '../core/Breakpoints';
 import { SettingsGeneralSection } from '../components/SettingsGeneralSection';
 import { SettingsDisconnectSection } from '../components/SettingsDisconnectSection';
 
@@ -41,6 +41,8 @@ export struct SettingsView {
   @State updateChecking: boolean = false;
   @State updateHint: string = '';
   @State updateNewTag: string = '';
+  /** 本页实测宽（vp；0 = 未量到）。正文列 = readableColumnWidth(它)。 */
+  @State columnWidth: number = 0;
 
   private c(): DsColors {
     return new DsColors(this.dark);
@@ -167,11 +169,17 @@ export struct SettingsView {
   }
 
 
+  /** 设置页正文列宽（vp）：0 = 还没量到，按 100% 处理。 */
+  private pageColumnWidth(): number {
+    return readableColumnWidth(this.columnWidth);
+  }
+
   build() {
     Column() {
       this.header()
       Scroll() {
-        // 外层只负责一多居中：超宽屏内容列封顶 settingsMaxWidth 后左右留白。
+        // 外层只负责一多居中：内容列走同一条可读列宽（不足 720 用满、更宽按 0.9 缓增），
+        // 不再封顶 720 —— 与安卓二级页同口径（design-tokens §4.16）。
         Column() {
           Column() {
             this.connectionSection()
@@ -187,8 +195,8 @@ export struct SettingsView {
           // settingsCardPadH/V 内边距。
           .padding({ left: DsSpacing.settingsPadH, right: DsSpacing.settingsPadH,
             top: DsSpacing.settingsPadV, bottom: DsSpacing.settingsPadV })
-          .constraintSize({ maxWidth: contentMaxWidth(this.bp) > 0
-            ? contentMaxWidth(this.bp) : DsSpacing.settingsMaxWidth })
+          .constraintSize({ maxWidth: this.pageColumnWidth() > 0
+            ? this.pageColumnWidth() : '100%' })
         }
         .width('100%')
         .alignItems(HorizontalAlign.Center)
@@ -200,6 +208,20 @@ export struct SettingsView {
     .width('100%')
     .height('100%')
     .backgroundColor(this.c().bgBase)
+    .onAreaChange((_oldV: Area, newV: Area) => {
+      // 全屏路由没有抽屉，页面宽就是可用宽。Area.width 静态类型是 Length，
+      // 回调里给 vp 数值；typeof 收窄，不用 as 强转。
+      const raw = newV.width;
+      let w = 0;
+      if (typeof raw === 'number') {
+        w = raw;
+      } else if (typeof raw === 'string') {
+        w = parseFloat(raw);
+      }
+      if (w > 0 && Math.abs(w - this.columnWidth) >= 1) {
+        this.columnWidth = w;
+      }
+    })
   }
 
   @Builder

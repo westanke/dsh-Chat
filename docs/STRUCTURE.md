@@ -228,7 +228,7 @@
 | `ets/platform/PhotoPick.ets` | 系统图库选图（photoAccessHelper PhotoViewPicker）→ 临时文件读字节 + 魔数嗅探 mediaType |
 | `ets/platform/Tts.ets` | CoreSpeechKit 朗读（zh-CN，speak/stopSpeak，音量语速走 extraParams） |
 | `ets/platform/Share.ets` | 系统分享面板（Want ohos.want.action.sendData text/plain） |
-| `ets/core/Breakpoints.ts` | 窗口断点纯逻辑（R007 一多）：`breakpointOf` 归一 sm/md/lg + 三档尺寸查询（contentMaxWidth 0/720/840、drawerWidth 288/352/400、sheetMaxWidth 0/640/720、drawerFraction 0.8/0.4/0.32）；放 core 以便 node 直测 |
+| `ets/core/Breakpoints.ts` | 窗口断点纯逻辑（R007 一多）：`breakpointOf` 归一 sm/md/lg + 抽屉尺寸（drawerWidth 288/352/400、drawerFraction 0.8/0.4/0.32）+ 正文列宽 `readableColumnWidth(实测宽)`（≤720 用满、更宽 ×0.9，无第二道上限）与 `floatingColumnWidth`（顶栏/输入条，列有富余时两侧各收 14；不再有 contentMaxWidth/sheetMaxWidth 硬上限）；放 core 以便 node 直测 |
 | `ets/core/ChatStore.ts` | 会话状态机（chat_state.dart 全语义）：send 乐观上屏+手机工作区预建（ensureMobileWorkspace）、流式收束、防抖重拉 800ms、loadOlder 翻页去重、isCurrent 空态防串台；send() 里 collapseOnSend（next-input 时机）；workSteps:ChatWorkSteps 随会话 reset；事件分派 onEventIn 与流式工具行粘合拆到 ChatEvents/ChatStreamTools（onEvent/reattachLiveRows 转发）；streamTools:StreamToolState 容器；selectAgentPreset/loadAgentPresets 转发；**`serverStats`/`historyTruncated` 两字段（resetSessionView 一并清零，2026-11-19）** |
 | `ets/core/MdParser.ts` | Markdown 块级解析（围栏/#/hr/引用/列表+任务项/表格/块公式/段落）：行扫描产 MdBlock；parseMarkdown 入口 |
 | `ets/core/MdInline.ts` | 行内解析：code/bold/italic/strike/link/裸 URL 最早匹配优先；snake_case 不误判 |

@@ -7,7 +7,9 @@
  */
 
 import { ChatStore } from '../core/ChatStore';
-import { BP_SM, drawerWidth, drawerFraction } from '../core/Breakpoints';
+import {
+  BP_SM, drawerWidth, drawerFraction, floatingColumnWidth
+} from '../core/Breakpoints';
 import { GatewayState } from '../core/GatewayEvents';
 import { DshSession } from '../core/Models';
 import { DsColors, DsTypography, DsSpacing } from '../ui/theme';
@@ -44,6 +46,11 @@ export struct ChatView {
   @State questionsView: PendingQuestion[] = [];
   @State approvalsView: PendingApproval[] = [];
   @State drawerOpen: boolean = false;
+  /**
+   * 会话页实测可用宽（vp）：onAreaChange 量到后写 AppStorage，正文列 / 顶栏 / 输入条 /
+   * HITL 各自 @StorageProp 读它算列宽（readableColumnWidth）。0 = 还没量到，约束退 100%。
+   */
+  @StorageProp('dshColumnWidthVp') columnWidth: number = 0;
   /** 新建会话工作目录面板（空态 chip 打开）。 */
   @State locSheet: boolean = false;
   /** store.pendingLocation 的快照（ArkUI 只观察 build 里读到的 @State）。 */
@@ -198,6 +205,14 @@ export struct ChatView {
     }
     .width('100%')
     .height('100%')
+    .onAreaChange((_oldV: Area, newV: Area) => {
+      // 抽屉是 translate 推挤、不改本 Column 的宽，所以这里量的就是可用宽。
+      // Area.width 静态类型是 Length，typeof 收窄成 vp 数值（ArkTS 不许 number↔string 强转）。
+      const raw = newV.width;
+      let w = 0;
+      if (typeof raw === 'number') { w = raw; } else if (typeof raw === 'string') { w = parseFloat(raw); }
+      if (w > 0 && Math.abs(w - this.columnWidth) >= 1) { AppStorage.setOrCreate('dshColumnWidthVp', w); }
+    })
     .bindSheet(this.sheetOpen(), this.sheetContent(), {
       height: this.sheetHeight(), showClose: true, title: { title: this.sheetTitle() },
       preferType: SheetType.BOTTOM, onDisappear: (): void => {
@@ -404,6 +419,8 @@ export struct ChatView {
     }
     .width('100%')
     .height(DsSpacing.topBarHeight)
+    // 顶栏跟输入条同一列：比正文列两侧各窄 FLOAT_INSET；手机没有富余 = 屏宽。
+    .constraintSize({ maxWidth: this.columnWidth > 0 ? floatingColumnWidth(this.columnWidth) : '100%' })
     .padding({ left: DsSpacing.screenPad - 14, right: DsSpacing.screenPad - 14 })
     .backgroundColor(this.c().bgBase)
   }
