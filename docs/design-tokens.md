@@ -643,10 +643,45 @@ turnChangesOf(messages, turn)
 - 「生成文件」里 markdown 相对路径按**本轮最后一次 bash 的 `meta.cwd`** 拼绝对；
   没有 cwd 就跳过，不猜路径。
 - 正在跑的轮次不出卡（`input.streaming && identical(turns.last, turn)`）。
-- 这是对 dsh-go 的对齐实现（`ui/chat/widgets/change_card.dart` / `artifact_card.dart`
-  / `ui/chat/turn_summary.dart`），**没有**接 `.dsh-mobile` 新插件的
+- 这是对 dsh-go 的对齐实现（dsh-go 的 change_card / artifact_card
+  / turn_summary），**没有**接 `.dsh-mobile` 新插件的
   `workspace-changes-v1`（REST `/api/changes.summary`、`/api/changes.diff`）——
   本仓桥 2.13.0 还没有那组端点，等桥升级再切。
+
+## 4.18 输入条：多图 · @ 引用 · 任务条（2026-11-21 工单 1–5）
+
+**多图（工单 2）**：待发送图片从单个字段改成列表，最多 6 张；chip 横排、右对齐、
+超出可横滑，单个 chip 仍受 `composerImageChipMaxWidth` 封顶（沿用 11-17 的防溢出
+修法）；每张单独删。发送时逐张校验 8 MiB（companion `MAX_SOURCE_IMAGE_BYTES` 口径），
+一帧里多张 `PromptPart.image`，文本可空。
+
+**「+」与文件夹常驻（工单 5）**：两个圆钮不再跟发送键三态联动（旧实现
+`showAddImage: sendKey != stop` 会让运行中空输入时整排消失），改为常驻、
+只在「未连接」时置灰。文件夹钮点一下聚焦输入框并插入 `@`（官方「选择项目中的内容」
+同一路径）。
+
+**@ 面板（工单 3、4）**：
+
+| 分组 | 数据源 | 插入文本 |
+|---|---|---|
+| 对话 | `ChatState.sessions`（抽屉同一份，最多 6 条、去掉当前会话） | `@[标题](dsh-session:<id>)` |
+| 文件与文件夹 | 授权根目录页（`gatewayListEntries`） | `@path`；含空白 `@"path"`；目录以 `/` 结尾 |
+
+- 目录下钻：草稿里的 `/` 之前当目录、之后当过滤片段，按父目录拉一层，不再全树扫。
+- mention 语法以内核为准：文件 `@path`（官方 `formatFileMention`）、会话
+  `@[label](dsh-session:id)`（`renderSessionMention`）。桥的 kernel 白名单没有
+  `fileReferences/list` 与 `sessionReferenceResolver/candidates`，所以客户端自己拼。
+- 多根合并时 `path` 保持根内相对路径（以前拼了 label 前缀，导致 mention 与下钻都错）。
+
+**任务条（工单 6，移植 dsh-go 的 dock/todo_bar（ArkTS 无关的 Flutter 参考实现））**：输入条上方一行摘要
+「2/4 · 正在：跑测试」+ 2px 进度线，点一下原地展开清单（卡内滚动，最高 168vp）。
+全完成显示「全部完成」；运行中且当前项进行中显示「正在：…」；否则「下一步：…」。
+数据走既有投影 `todoItems(state.projections)`，不额外请求内核；无清单时不占位。
+视觉复用 `bgLayer1` / `borderL2` / `brand` / `diffAdd` / `settingsCardRadius`，
+不新增颜色字号。
+
+**历史加载错误条（工单 1）**：断链（`NOT_CONNECTED`）不再写成「加载历史失败」红条
+（顶栏已有连接态，重连成功会自动重拉）；重拉成功后会把残留的「加载历史失败」清掉。
 
 ## 5. 截图资产（ref/）
 - official-login-page.png 登录页（+86 152 1388 0002 / 验证码输入 / 发送验证码按钮）

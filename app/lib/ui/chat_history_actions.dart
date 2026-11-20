@@ -87,8 +87,20 @@ Future<void> reloadChatHistory(ChatState state) async {
     // 翻页/刷新时 projections 可能缺席：保留上一份（同会话），避免面板闪空。
     // 切会话时 newChat()/openSession() 会先清空，不会串台。
     state.projections = page.projections ?? state.projections;
+    // 重连后重拉成功 → 把上一次的「加载历史失败」红条撤掉。
+    // （2026-11-21 工单 1：此前成功路径不清 lastError，重连后红条一直挂着，
+    // 用户看到的就是「连接正常却提示加载历史失败」。）
+    if (state.lastError?.startsWith('加载历史失败') ?? false) {
+      state.lastError = null;
+    }
     state.notifyUi();
   } on RequestException catch (e) {
+    // 断链本身不是「加载失败」：顶栏已有连接态，重连成功会自动重拉。
+    // 不写错误条，避免把一次自动可恢复的抖动报成红字（2026-11-21 工单 1）。
+    if (e.code == 'NOT_CONNECTED') {
+      DshLog.w('ui history deferred (disconnected): ${e.message}');
+      return;
+    }
     state.lastError = '加载历史失败：${e.message}';
     state.notifyUi();
   }

@@ -6,6 +6,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 
 import '../bridge/gateway.dart';
+import '../bridge/projections.dart';
 import '../design/app_settings.dart';
 import '../design/tokens.dart';
 import 'brand_mark.dart';
@@ -23,6 +24,7 @@ import 'question_card.dart';
 import 'session_location_sheet.dart';
 import 'sessions_drawer.dart';
 import 'stats_sheet.dart';
+import 'todo_dock.dart';
 import 'window_class.dart';
 import 'work_view_sheet.dart';
 
@@ -115,11 +117,7 @@ class _ChatPageState extends State<ChatPage>
                 behavior: HitTestBehavior.opaque,
                 onTap: _closeDrawer,
                 child: ColoredBox(
-                  color: Color.lerp(
-                    c.none,
-                    c.drawerScrim,
-                    _drawerShift.value,
-                  )!,
+                  color: Color.lerp(c.none, c.drawerScrim, _drawerShift.value)!,
                 ),
               ),
             ),
@@ -132,7 +130,10 @@ class _ChatPageState extends State<ChatPage>
       builder: (context, child) {
         final inset = cls.pageInsetFor(width) * _drawerShift.value;
         return reflow
-            ? Padding(padding: EdgeInsets.only(left: inset), child: child)
+            ? Padding(
+                padding: EdgeInsets.only(left: inset),
+                child: child,
+              )
             : Transform.translate(offset: Offset(inset, 0), child: child);
       },
       child: _buildChatScaffold(context),
@@ -209,6 +210,11 @@ class _ChatPageState extends State<ChatPage>
   int? _lastExitAt;
 
   Widget _buildChatScaffold(BuildContext context) {
+    // 任务条摘要（dsh-go TodoDock 同口径）：没有清单时为 null，不占位。
+    final todoDock = TodoDockSummary.of(
+      todoItems(st.projections),
+      running: st.streaming,
+    );
     return Scaffold(
       key: _scaffoldKey,
       backgroundColor: c.bgBase,
@@ -245,17 +251,31 @@ class _ChatPageState extends State<ChatPage>
             ),
           ],
         ),
-        composer: Composer(
-          colors: c,
-          enabled: st.connectionState == GatewayState.ready,
-          onSend: st.send,
-          onSendWithImage: st.sendWithImage,
-          onCancel: st.cancelTurn,
-          onCommand: st.runCommand,
-          streaming: st.streaming,
-          sessionId: st.sessionId,
-          gateway: st.gateway,
-          currentPermission: st.currentPermission,
+        composer: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // 输入条上方的任务条（dsh-go TodoDock 移植）：没有清单时不占位。
+            if (todoDock != null)
+              TodoDockBar(
+                summary: todoDock,
+                todos: todoItems(st.projections),
+                colors: c,
+              ),
+            Composer(
+              colors: c,
+              enabled: st.connectionState == GatewayState.ready,
+              onSend: st.send,
+              onSendWithImages: st.sendWithImages,
+              onCancel: st.cancelTurn,
+              onCommand: st.runCommand,
+              streaming: st.streaming,
+              sessionId: st.sessionId,
+              gateway: st.gateway,
+              currentPermission: st.currentPermission,
+              // @ 面板「对话」分组用抽屉同一份会话列表（工单 3）。
+              sessions: st.sessions,
+            ),
+          ],
         ),
       ),
     );
@@ -263,12 +283,12 @@ class _ChatPageState extends State<ChatPage>
 
   /// 顶栏状态：连接态 + 生成态 + 等待审批/回答（dsh-go 的顶栏状态机）。
   ChatHeaderStatus get _headerStatus => chatHeaderStatus(
-        connection: st.connectionState,
-        streaming: st.streaming,
-        waitingApproval: st.hitl.sessionApprovals(st.sessionId).isNotEmpty,
-        waitingAnswer: st.hitl.sessionQuestions(st.sessionId).isNotEmpty,
-        hostLabel: st.deviceLabel,
-      );
+    connection: st.connectionState,
+    streaming: st.streaming,
+    waitingApproval: st.hitl.sessionApprovals(st.sessionId).isNotEmpty,
+    waitingAnswer: st.hitl.sessionQuestions(st.sessionId).isNotEmpty,
+    hostLabel: st.deviceLabel,
+  );
 }
 
 // ---------- 顶栏溢出菜单（本地投影面板入口） ----------
@@ -301,9 +321,8 @@ class _OverflowMenu extends StatelessWidget {
           case 'model':
             final sid = state.sessionId;
             if (sid == null || sid.isEmpty) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('请先打开一个会话再调整模型')),
-              );
+              ScaffoldMessenger.of(context)
+                  .showSnackBar(const SnackBar(content: Text('请先打开一个会话再调整模型')));
               return;
             }
             final changed = await showModelSheet(
@@ -335,9 +354,10 @@ class _OverflowMenu extends StatelessWidget {
           children: [
             Icon(icon, size: 18, color: colors.labelSecondary),
             const SizedBox(width: DsSpacing.chipIconGap),
-            Text(label,
-                style: DsTypography.small
-                    .copyWith(color: colors.labelPrimary)),
+            Text(
+              label,
+              style: DsTypography.small.copyWith(color: colors.labelPrimary),
+            ),
           ],
         ),
       );
@@ -377,10 +397,7 @@ class _Greeting extends StatelessWidget {
             onTap: () => showSessionLocationSheet(context, state, colors),
             borderRadius: BorderRadius.circular(18),
             child: Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 14,
-                vertical: 8,
-              ),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
               decoration: BoxDecoration(
                 color: colors.bgLayer1,
                 borderRadius: BorderRadius.circular(18),

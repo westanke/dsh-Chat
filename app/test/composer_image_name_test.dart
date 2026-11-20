@@ -75,7 +75,7 @@ void main() {
           body: Composer(
             colors: DsColors(false),
             onSend: (_) {},
-            onSendWithImage: (_, _) {},
+            onSendWithImages: (_, _) {},
             onCancel: () {},
             onCommand: (_) {},
           ),

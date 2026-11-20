@@ -35,17 +35,13 @@ class _PermissionSheet extends StatelessWidget {
           for (final o in options)
             ListTile(
               leading: Icon(
-                o.value == current
-                    ? Icons.check_circle
-                    : Icons.circle_outlined,
+                o.value == current ? Icons.check_circle : Icons.circle_outlined,
                 size: 20,
                 color: o.value == current ? colors.brand : colors.labelTertiary,
               ),
               title: Text(
                 o.label,
-                style: DsTypography.base.copyWith(
-                  color: colors.labelPrimary,
-                ),
+                style: DsTypography.base.copyWith(color: colors.labelPrimary),
               ),
               subtitle: o.descriptionLabel == null
                   ? null
@@ -77,9 +73,8 @@ class _ComposerBar extends StatelessWidget {
     required this.permissionLabel,
     required this.permissionActive,
     required this.onPickPermission,
-    required this.pendingImageName,
+    required this.pendingImageNames,
     required this.onRemoveImage,
-    required this.showAddImage,
     required this.canPickImage,
     required this.onPickImage,
     required this.onInsertContent,
@@ -99,12 +94,12 @@ class _ComposerBar extends StatelessWidget {
   final bool permissionActive;
   final VoidCallback onPickPermission;
 
-  /// 待发送图片名（null=无图片 chip）。
-  final String? pendingImageName;
-  final VoidCallback onRemoveImage;
+  /// 待发送图片名（空=无图片 chip；多图按顺序横排）。
+  final List<String> pendingImageNames;
+  final ValueChanged<int> onRemoveImage;
 
-  /// 加图按钮显隐（stop 态隐藏）与可用性（未连接禁用）。
-  final bool showAddImage;
+  /// 加图/文件夹按钮的可用性（未连接时置灰）。按钮**常驻**，不再随发送键
+  /// 三态隐藏——运行中空输入时也要能加图、能 @（2026-11-21 工单 5）。
   final bool canPickImage;
   final VoidCallback? onPickImage;
   final VoidCallback? onInsertContent;
@@ -176,86 +171,90 @@ class _ComposerBar extends StatelessWidget {
                 colors: c,
                 onTap: onPickPermission,
               ),
-              // 待发送图片 chip（真机反馈 2026-11-17）：
-              // 文件名过长时 Chip 无界变宽，会把 Spacer 吃掉、把右侧加图钮与
-              // 发送钮挤出 Row（表现为「长文件名盖住发送键、发不出去」）。
-              // 修法：有图时用 Expanded+右对齐吃点剩余空间（无图仍是 Spacer），
-              // 再叠 ConstrainedBox 封顶 + label 单行省略号，双保险不溢出。
-              if (pendingImageName == null)
+              // 待发送图片（真机反馈 2026-11-17 / 11-21 多图）：
+              // 文件名过长时 Chip 无界变宽，会把 Spacer 吃掉、把右侧按钮挤出
+              // Row。有图时用 Expanded + 横向滚动 + 单行省略号，多个 chip 从左
+              // 往右排，超出可横滑，永远不撑破输入条。
+              if (pendingImageNames.isEmpty)
                 const Spacer()
               else
                 Expanded(
                   child: Align(
                     alignment: Alignment.centerRight,
-                    child: Padding(
-                      padding: const EdgeInsets.only(right: 8),
-                      child: ConstrainedBox(
-                        constraints: const BoxConstraints(
-                          maxWidth: DsSpacing.composerImageChipMaxWidth,
-                        ),
-                        child: Chip(
-                          avatar: Icon(
-                            Icons.image_outlined,
-                            size: DsSpacing.chipIconSize,
-                            color: c.chipSelectedFg,
-                          ),
-                          label: Text(
-                            pendingImageName!,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: DsTypography.caption.copyWith(
-                              color: c.chipSelectedFg,
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      reverse: true,
+                      child: Row(
+                        children: [
+                          for (var i = 0; i < pendingImageNames.length; i++)
+                            Padding(
+                              padding: const EdgeInsets.only(right: 8),
+                              child: ConstrainedBox(
+                                constraints: const BoxConstraints(
+                                  maxWidth: DsSpacing.composerImageChipMaxWidth,
+                                ),
+                                child: Chip(
+                                  avatar: Icon(
+                                    Icons.image_outlined,
+                                    size: DsSpacing.chipIconSize,
+                                    color: c.chipSelectedFg,
+                                  ),
+                                  label: Text(
+                                    pendingImageNames[i],
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: DsTypography.caption.copyWith(
+                                      color: c.chipSelectedFg,
+                                    ),
+                                  ),
+                                  onDeleted: () => onRemoveImage(i),
+                                  backgroundColor: c.chipSelectedBg,
+                                  side: BorderSide.none,
+                                  visualDensity: VisualDensity.compact,
+                                ),
+                              ),
                             ),
-                          ),
-                          onDeleted: onRemoveImage,
-                          backgroundColor: c.chipSelectedBg,
-                          side: BorderSide.none,
-                          visualDensity: VisualDensity.compact,
-                        ),
+                        ],
                       ),
                     ),
                   ),
                 ),
-              // 加图按钮常驻（真机反馈 2026-11-04 第二轮 D）：
-              // 之前只在 disabled 态渲染，先打字就找不到加图入口。
-              // stop（执行中）不可加图；其余态都可。
-              if (showAddImage) ...[
-                _RoundIconButton(
+              // 加图 / @ 引用两个圆钮常驻：不可用时置灰而不是消失
+              // （2026-11-21 工单 5：运行中空输入时整排按钮消失）。
+              _RoundIconButton(
+                colors: c,
+                filled: false,
+                icon: Icons.add,
+                onPressed: canPickImage ? onPickImage : null,
+              ),
+              // 「选择项目中的内容」（官方输入条 @ 引用入口）：
+              // 光标处插 @ 唤起面板，禁用条件与加图钮一致。
+              Tooltip(
+                message: '选择项目中的内容',
+                child: _RoundIconButton(
                   colors: c,
                   filled: false,
-                  icon: Icons.add,
-                  onPressed: canPickImage ? onPickImage : null,
+                  icon: Icons.folder_open_outlined,
+                  onPressed: canPickImage ? onInsertContent : null,
                 ),
-                // 「选择项目中的内容」（官方输入条 @ 引用入口）：
-                // 光标处插 @ 唤起文件面板，禁用条件与加图钮一致。
-                Tooltip(
-                  message: '选择项目中的内容',
-                  child: _RoundIconButton(
-                    colors: c,
-                    filled: false,
-                    icon: Icons.folder_open_outlined,
-                    onPressed: canPickImage ? onInsertContent : null,
-                  ),
-                ),
-                const SizedBox(width: DsSpacing.composerButtonGap),
-              ],
+              ),
+              const SizedBox(width: DsSpacing.composerButtonGap),
               switch (sendState) {
                 _SendKeyState.send ||
-                _SendKeyState.disabled =>
-                  _RoundIconButton(
-                    colors: c,
-                    filled: sendState == _SendKeyState.send,
-                    icon: sendState == _SendKeyState.send
-                        ? Icons.arrow_upward
-                        : Icons.graphic_eq,
-                    onPressed: canSend ? onSend : null,
-                  ),
+                _SendKeyState.disabled => _RoundIconButton(
+                  colors: c,
+                  filled: sendState == _SendKeyState.send,
+                  icon: sendState == _SendKeyState.send
+                      ? Icons.arrow_upward
+                      : Icons.graphic_eq,
+                  onPressed: canSend ? onSend : null,
+                ),
                 _SendKeyState.stop => _RoundIconButton(
-                    colors: c,
-                    filled: true,
-                    icon: Icons.stop,
-                    onPressed: enabled ? onStop : null,
-                  ),
+                  colors: c,
+                  filled: true,
+                  icon: Icons.stop,
+                  onPressed: enabled ? onStop : null,
+                ),
               },
             ],
           ),

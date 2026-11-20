@@ -232,15 +232,15 @@ class ChatState extends ChangeNotifier with GroupExpandState {
 
   Future<void> loadOlder() => loadOlderMessages(this);
 
-  /// 带图发送（真机反馈 2026-11-04 第 2 项）：图片走 PromptPart.image
-  /// （base64 内联，mediaType 白名单），文本可空。
-  Future<void> sendWithImage(String text, PromptPart image) =>
-      send(text, imagePart: image);
+  /// 带图发送（真机反馈 2026-11-04 第 2 项 / 2026-11-21 多图）：每张图一个
+  /// PromptPart.image（base64 内联，mediaType 白名单），文本可空。
+  Future<void> sendWithImages(String text, List<PromptPart> images) =>
+      send(text, imageParts: images);
 
-  Future<void> send(String text, {PromptPart? imagePart}) async {
+  Future<void> send(String text, {List<PromptPart>? imageParts}) async {
     final trimmed = text.trim();
     // 纯图无文字也允许发（图片是完整消息内容）；两者都空才忽略。
-    if (trimmed.isEmpty && imagePart == null) return;
+    if (trimmed.isEmpty && (imageParts == null || imageParts.isEmpty)) return;
     // 不再因 streaming 直接拒绝：运行中再发由「繁忙发送模式」决定语义
     // （对照 companion ComposerSendPolicy：queue 排队 / steer 插话）。
     lastError = null;
@@ -291,7 +291,9 @@ class ChatState extends ChangeNotifier with GroupExpandState {
         sessionId: sessionId,
         text: trimmed,
         mode: mode,
-        contentParts: imagePart == null ? null : [imagePart],
+        contentParts: imageParts == null || imageParts.isEmpty
+            ? null
+            : imageParts,
       );
       DshLog.w('ui send done sid=$sid');
       if (sessionId == null && sid != null) {

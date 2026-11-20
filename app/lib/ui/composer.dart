@@ -8,7 +8,6 @@ import 'dart:io';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 
-import '../bridge/content.dart';
 import '../bridge/gateway.dart';
 import '../bridge/image_media_type.dart';
 import '../bridge/models.dart';
@@ -19,7 +18,17 @@ import 'window_class.dart';
 
 part 'composer_widgets.dart';
 part 'composer_panels.dart';
+part 'composer_at_sessions.dart';
 part 'composer_bar.dart';
+part 'composer_permission.dart';
+
+/// 待发送图片：选图后暂存，随下一条消息一起发（2026-11-21 起支持多张）。
+typedef _PendingImage = ({
+  String path,
+  String name,
+  String mediaType,
+  String base64,
+});
 
 /// 发送键三态（对照 companion 的 ComposerSendPolicy）。
 enum _SendKeyState { send, stop, disabled }
@@ -29,7 +38,7 @@ class Composer extends StatefulWidget {
     super.key,
     required this.colors,
     required this.onSend,
-    required this.onSendWithImage,
+    required this.onSendWithImages,
     required this.onCancel,
     required this.onCommand,
     this.enabled = true,
@@ -37,24 +46,34 @@ class Composer extends StatefulWidget {
     this.sessionId,
     this.gateway,
     this.currentPermission,
+    this.sessions = const [],
   });
 
   final DsColors colors;
   final ValueChanged<String> onSend;
-  /// 带图发送（真机反馈 2026-11-04 第 2 项）：文本可空、图片 part 必带。
-  final void Function(String text, PromptPart image) onSendWithImage;
+
+  /// 带图发送（2026-11-04 单图 / 2026-11-21 多图）：文本可空、图片 part 必带。
+  final void Function(String text, List<PromptPart> images) onSendWithImages;
+
   /// 运行中且输入为空时，发送键变成「停止」并回调这里（session-cancel）。
   final VoidCallback onCancel;
+
   /// 斜杠命令执行回调（整行 `/xxx args` 发送时走这里；chat_state.runCommand）。
   final ValueChanged<String> onCommand;
   final bool enabled;
+
   /// 是否有回合在跑（对照 companion 的 ComposerSendPolicy 三态）。
   final bool streaming;
+
   /// 权限档位 chip 需要：当前会话 id 与网关（拉 permission-options / 切档位）。
   final String? sessionId;
   final GatewayClient? gateway;
+
   /// 当前档位 value（来自会话投影 values.permissions.currentValue；可空）。
   final String? currentPermission;
+
+  /// 历史会话（@ 面板「对话」分组的数据源：抽屉同一份 List）。
+  final List<DshSession> sessions;
 
   @override
   State<Composer> createState() => _ComposerState();
@@ -71,61 +90,54 @@ class _ComposerState extends State<Composer> {
   /// 候选面板当前高亮行（键盘上下键移动；-1=无高亮）。
   int _panelHighlight = -1;
 
-  /// 面板条目总数（命令或 @ 文件，随面板类型切换重置高亮）。
-  int get _panelCount {
-    final at = _atDraft;
-    if (at != null && _slashMatches.isEmpty) {
-      final q = at.query.toLowerCase();
-      final visible = _atMatches
-          .where((e) => q.isEmpty || e.name.toLowerCase().contains(q))
-          .toList();
-      return visible.length;
-    }
-    return _slashMatches.length;
+  /// 当前面板里可见的 @ 条目（按草稿 `/` 后的片段过滤）。
+  List<GatewayEntry> get _visibleAtEntries {
+    final q = _atLeafQuery.toLowerCase();
+    return _atMatches
+        .where((e) => q.isEmpty || e.name.toLowerCase().contains(q))
+        .toList();
   }
+
+  /// 面板条目总数（命令或 @ 文件，随面板类型切换重置高亮）。
+  int get _panelCount => (_atDraft != null && _slashMatches.isEmpty)
+      ? _visibleAtEntries.length
+      : _slashMatches.length;
 
   /// 键盘事件：面板可见时上下键移动高亮、回车选中；否则交还输入框。
   KeyEventResult _onKey(FocusNode node, KeyEvent event) {
-    if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
-      return KeyEventResult.ignored;
-    }
-    final count = _panelCount;
-    if (count == 0) return KeyEventResult.ignored;
     final at = _atDraft;
-    final panelOpen = _slashMatches.isNotEmpty || at != null;
-    if (!panelOpen) return KeyEventResult.ignored;
-    if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
-      setState(() => _panelHighlight = (_panelHighlight + 1).clamp(0, count - 1));
-      return KeyEventResult.handled;
-    }
-    if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
-      setState(() => _panelHighlight = (_panelHighlight - 1).clamp(0, count - 1));
-      return KeyEventResult.handled;
-    }
-    if (event.logicalKey == LogicalKeyboardKey.enter ||
-        event.logicalKey == LogicalKeyboardKey.numpadEnter) {
-      if (_panelHighlight < 0 || _panelHighlight >= count) {
-        return KeyEventResult.ignored;
-      }
-      if (at != null && _slashMatches.isEmpty) {
-        final q = at.query.toLowerCase();
-        final visible = _atMatches
-            .where((e) => q.isEmpty || e.name.toLowerCase().contains(q))
-            .toList();
-        if (_panelHighlight < visible.length) {
-          _applyAtEntry(visible[_panelHighlight]);
-          return KeyEventResult.handled;
-        }
-      } else if (_panelHighlight < _slashMatches.length) {
-        _applyCommand(_slashMatches[_panelHighlight]);
-        return KeyEventResult.handled;
-      }
-    }
-    return KeyEventResult.ignored;
+    return panelKeyEvent(
+      node,
+      event,
+      count: _panelCount,
+      panelOpen: _slashMatches.isNotEmpty || at != null,
+      highlight: _panelHighlight,
+      onHighlight: (i) => setState(() => _panelHighlight = i),
+      onActivate: _activateHighlight,
+    );
   }
 
-  /// 待发送图片（选图后暂存，随下一条消息一起发；真机反馈 2026-11-04 第 2 项）。
-  ({String path, String name, String mediaType, String base64})? _pendingImage;
+  /// 回车选中当前高亮项（@ 条目或斜杠命令）。
+  void _activateHighlight() {
+    final at = _atDraft;
+    if (at != null && _slashMatches.isEmpty) {
+      final visible = _visibleAtEntries;
+      if (_panelHighlight < visible.length) {
+        _applyAtEntry(visible[_panelHighlight]);
+      }
+    } else if (_panelHighlight < _slashMatches.length) {
+      _applyCommand(_slashMatches[_panelHighlight]);
+    }
+  }
+
+  /// 待发送图片（选图后暂存，随下一条消息一起发）。
+  final List<_PendingImage> _pendingImages = [];
+
+  /// 供 part 文件的扩展刷新界面：setState 是 protected，扩展里不能直接调。
+  void _refresh(VoidCallback fn) => setState(fn);
+
+  /// 一条消息最多带几张图（companion 没有硬上限；这里给个界面可控的数）。
+  static const _maxImages = 6;
 
   DsColors get c => widget.colors;
 
@@ -137,7 +149,7 @@ class _ComposerState extends State<Composer> {
   }
 
   bool get _hasText => _controller.text.trim().isNotEmpty;
-  bool get _hasImage => _pendingImage != null;
+  bool get _hasImage => _pendingImages.isNotEmpty;
 
   /// 输入框 onChanged（_ComposerBar 回调）：刷新面板 + 按需拉命令/目录
   ///（m04149：失败不落缓存，下次输入自动重试）。
@@ -146,7 +158,7 @@ class _ComposerState extends State<Composer> {
     if (_slashDraft != null) _ensureCommands();
     final at = _atDraft;
     if (at != null) {
-      _ensureAtEntries(_atLoadedDir ?? '');
+      _ensureAtEntries(_atQueryDir);
     }
   }
 
@@ -198,9 +210,7 @@ class _ComposerState extends State<Composer> {
   void _applyCommand(SlashCommand cmd) {
     final draft = _slashDraft;
     final args = draft?.args ?? '';
-    _controller.text = args.isEmpty
-        ? '/${cmd.name} '
-        : '/${cmd.name} $args';
+    _controller.text = args.isEmpty ? '/${cmd.name} ' : '/${cmd.name} $args';
     _controller.selection = TextSelection.collapsed(
       offset: _controller.text.length,
     );
@@ -212,7 +222,10 @@ class _ComposerState extends State<Composer> {
   /// 当前 @ 草稿（光标前有未完结的 `@片段` 才有）。
   ({String query, int start, int end})? get _atDraft {
     if (!widget.enabled) return null;
-    return parseAtMentionDraft(_controller.text, _controller.selection.baseOffset);
+    return parseAtMentionDraft(
+      _controller.text,
+      _controller.selection.baseOffset,
+    );
   }
 
   /// @ 面板条目：目录 + 文件混合列表（懒加载一次根列表，随后按目录翻页）。
@@ -254,33 +267,65 @@ class _ComposerState extends State<Composer> {
     }
   }
 
-  /// 点选 @ 条目：目录→追加 `/` 继续下钻；文件→整段替换为 `@label/path `。
-  /// 多根合并时条目名带 `label/` 前缀（fetchAtEntries 注入），先剥掉再拼。
+  /// @ 草稿里 `/` 之前的目录（根内相对路径，''=根）。输入 `@src/li` 时列 `src`
+  /// 的内容并用 `li` 过滤——面板只拉当前这一层，不做全树扫描。
+  String get _atQueryDir {
+    final q = _atDraft?.query ?? '';
+    final i = q.lastIndexOf('/');
+    return i < 0 ? '' : q.substring(0, i);
+  }
+
+  /// @ 草稿里 `/` 之后的片段（面板过滤用的名字片段）。
+  String get _atLeafQuery {
+    final q = _atDraft?.query ?? '';
+    final i = q.lastIndexOf('/');
+    return i < 0 ? q : q.substring(i + 1);
+  }
+
+  /// 当前查询命中的历史会话（@ 面板「对话」分组）。
+  List<DshSession> get _atSessionMatches {
+    final id = widget.sessionId;
+    final draft = _atDraft;
+    if (id == null || draft == null) return const [];
+    return sessionMatches(widget.sessions, id, draft.query);
+  }
+
+  /// 点选历史会话：插入内核会话引用 `@[标题](dsh-session:<id>)`。
+  void _applySessionEntry(DshSession session) {
+    final draft = _atDraft;
+    if (draft == null) return;
+    final r = insertSessionMention(
+      _controller.text,
+      draft.start,
+      draft.end,
+      session.title ?? session.id,
+      session.id,
+    );
+    _setDraftText(r.text, r.offset);
+  }
+
+  /// 点选 @ 条目：目录→`@dir/` 并继续下钻；文件→`@path`（含空白加引号）。
   void _applyAtEntry(GatewayEntry e) {
     final draft = _atDraft;
     if (draft == null) return;
-    final relName = _atRoots.length > 1 && e.name.contains('/')
-        ? e.name.substring(e.name.indexOf('/') + 1)
-        : e.name;
+    final r = insertFileMention(
+      _controller.text,
+      draft.start,
+      draft.end,
+      e.path,
+      directory: e.isDirectory,
+    );
+    _setDraftText(r.text, r.offset);
     if (e.isDirectory) {
-      _controller.text =
-          '${_controller.text.substring(0, draft.start)}@${_atLoadedDir ?? ''}$relName/';
-      _controller.selection = TextSelection.collapsed(
-        offset: _controller.text.length,
-      );
-      _atLoadedDir = null; // 触发重新拉取
-      setState(() {});
-      return;
+      _atLoadedDir = null; // 触发按新目录重拉
+      _ensureAtEntries(e.path);
     }
-    // 文件：替换 @片段 为完整相对路径。多根时补根标签前缀便于辨认。
-    final root = _atRoots.isEmpty ? null : _atRoots.first;
-    final display = root == null || root.label.isEmpty
-        ? e.path
-        : '${root.label}/${e.path}';
-    _controller.text =
-        '${_controller.text.substring(0, draft.start)}@$display ${_controller.text.substring(draft.end)}';
-    _controller.selection = TextSelection.collapsed(
-      offset: draft.start + display.length + 2,
+  }
+
+  void _setDraftText(String text, int offset) {
+    _controller.value = TextEditingValue(
+      text: text,
+      selection: TextSelection.collapsed(offset: offset),
     );
     setState(() {});
   }
@@ -288,7 +333,7 @@ class _ComposerState extends State<Composer> {
   /// 发送时若整行是 `/xxx ...`（且没挂图片）→ 走命令执行而非聊天发送。
   bool _trySendCommand() {
     final sid = widget.sessionId;
-    if (sid == null || _pendingImage != null) return false;
+    if (sid == null || _pendingImages.isNotEmpty) return false;
     final text = _controller.text.trim();
     if (!text.startsWith('/')) return false;
     final draft = parseSlashDraft(text);
@@ -316,29 +361,30 @@ class _ComposerState extends State<Composer> {
 
   void _send() {
     final text = _controller.text.trim();
-    if (text.isEmpty && _pendingImage == null) return;
+    if (text.isEmpty && _pendingImages.isEmpty) return;
     // 斜杠命令优先（真机反馈 2026-11-04 第 3 项）：`/xxx args` 不进聊天。
     if (_trySendCommand()) return;
-    final img = _pendingImage;
-    if (img == null) {
+    final imgs = List<_PendingImage>.of(_pendingImages);
+    if (imgs.isEmpty) {
       widget.onSend(text);
     } else {
-      // 图片上限 8MiB 原始字节（companion MAX_SOURCE_IMAGE_BYTES 口径）。
-      final bytes = File(img.path).lengthSync();
-      if (bytes > 8 * 1024 * 1024) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('图片超过 8MB，请选小一点的图')),
-        );
-        return;
+      // 每张图上限 8MiB 原始字节（companion MAX_SOURCE_IMAGE_BYTES 口径）。
+      for (final img in imgs) {
+        final bytes = File(img.path).lengthSync();
+        if (bytes > 8 * 1024 * 1024) {
+          ScaffoldMessenger.of(context)
+              .showSnackBar(SnackBar(content: Text('${img.name} 超过 8MB，请换一张')));
+          return;
+        }
       }
-      widget.onSendWithImage(
-        text,
-        PromptPart.image(img.mediaType, img.base64, name: img.name),
-      );
+      widget.onSendWithImages(text, [
+        for (final img in imgs)
+          PromptPart.image(img.mediaType, img.base64, name: img.name),
+      ]);
     }
     setState(() {
       _controller.clear();
-      _pendingImage = null;
+      _pendingImages.clear();
     });
   }
 
@@ -346,85 +392,6 @@ class _ComposerState extends State<Composer> {
   /// 真实类型由原生侧按字节魔数判定并回传（HEIC 等已转码），这里不再按文件名
   /// 扩展名猜类型（华为 DISPLAY_NAME 常无扩展名，见 huawei-heic-upload-report.md）。
   /// 解析逻辑在 composer_widgets.dart 的 resolvePickedImage（同库顶层函数）。
-  Future<void> _pickImage() async {
-    final picked = await DshPlatform.pickImage();
-    if (picked == null || !mounted) return;
-    final resolved = await resolvePickedImage(picked);
-    if (!mounted) return;
-    if (resolved.error != null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(resolved.error!)),
-      );
-      return;
-    }
-    final img = await pickComposerImage(picked, resolved.mediaType!);
-    if (img == null || !mounted) return;
-    setState(() => _pendingImage = img);
-  }
-
-  /// 拉取权限档位清单并弹出选择菜单（服务端是权威；失败给明确提示）。
-  Future<void> _pickPermission() async {
-    final gw = widget.gateway;
-    if (gw == null || _loadingOptions) return;
-    setState(() => _loadingOptions = true);
-    List<PermissionOption> options;
-    try {
-      final raw = await gw.permissionOptionsRaw();
-      options = parsePermissionCatalog(raw).switchable;
-    } on RequestException catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('权限档位获取失败：${e.message}')),
-        );
-      }
-      return;
-    } finally {
-      if (mounted) setState(() => _loadingOptions = false);
-    }
-    if (!mounted || options.isEmpty) return;
-    final selected = await showModalBottomSheet<PermissionOption>(
-      context: context,
-      constraints: modalSheetConstraints(context),
-      backgroundColor: c.bgLayer1,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(
-          top: Radius.circular(DsSpacing.settingsCardRadius),
-        ),
-      ),
-      builder: (context) => _PermissionSheet(
-        colors: c,
-        options: options,
-        current: widget.currentPermission,
-      ),
-    );
-    if (selected == null || !mounted) return;
-    final sid = widget.sessionId;
-    if (sid == null || sid.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('请先打开一个会话再切换权限档位')),
-      );
-      return;
-    }
-    if (selected.needsConfirm) {
-      final ok = await confirmFullPermission(context, c);
-      if (ok != true || !mounted) return;
-    }
-    try {
-      await widget.gateway!.setPermission(sid, selected.value);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('权限已切换为「${selected.label}」')),
-        );
-      }
-    } on RequestException catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('切换失败：${e.message}')),
-        );
-      }
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final at = _atDraft;
@@ -439,30 +406,51 @@ class _ComposerState extends State<Composer> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (at != null && slashMatches.isEmpty)
-            _AtFilePanel(
-              colors: c,
-              entries: _atMatches,
-              query: at.query,
-              rootLabel: _atRoots.isEmpty ? '' : _atRoots.first.label,
-              loading: _atLoading,
-              failed: _atFailed,
-              onRetry: () {
-                _atLoadedDir = null;
-                _ensureAtEntries('');
-              },
-              highlighted: _panelHighlight,
-              onPick: _applyAtEntry,
-              onHighlightChanged: (i) => setState(() => _panelHighlight = i),
-            )
-          else if (slashMatches.isNotEmpty)
-            _CommandPanel(
-              colors: c,
-              matches: slashMatches,
-              highlighted: _panelHighlight,
-              onPick: _applyCommand,
-              onHighlightChanged: (i) => setState(() => _panelHighlight = i),
+          // 面板整体限高内滚（屏幕 42%）：会话分组 + 文件/命令面板叠起来会顶出屏幕。
+          ConstrainedBox(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.sizeOf(context).height * 0.42,
             ),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (at != null && slashMatches.isEmpty) ...[
+                    if (_atSessionMatches.isNotEmpty)
+                      _AtSessionPanel(
+                        colors: c,
+                        sessions: _atSessionMatches,
+                        onPick: _applySessionEntry,
+                      ),
+                    _AtFilePanel(
+                      colors: c,
+                      entries: _atMatches,
+                      query: _atLeafQuery,
+                      rootLabel: _atRoots.isEmpty ? '' : _atRoots.first.label,
+                      loading: _atLoading,
+                      failed: _atFailed,
+                      onRetry: () {
+                        _atLoadedDir = null;
+                        _ensureAtEntries('');
+                      },
+                      highlighted: _panelHighlight,
+                      onPick: _applyAtEntry,
+                      onHighlightChanged: (i) =>
+                          setState(() => _panelHighlight = i),
+                    ),
+                  ] else if (slashMatches.isNotEmpty)
+                    _CommandPanel(
+                      colors: c,
+                      matches: slashMatches,
+                      highlighted: _panelHighlight,
+                      onPick: _applyCommand,
+                      onHighlightChanged: (i) =>
+                          setState(() => _panelHighlight = i),
+                    ),
+                ],
+              ),
+            ),
+          ),
           _ComposerBar(
             colors: c,
             controller: _controller,
@@ -473,21 +461,21 @@ class _ComposerState extends State<Composer> {
             permissionLabel: _permissionLabel,
             permissionActive: (widget.currentPermission ?? '').isNotEmpty,
             onPickPermission: _pickPermission,
-            pendingImageName: _pendingImage?.name,
-            onRemoveImage: () => setState(() => _pendingImage = null),
-            showAddImage: _sendKeyState != _SendKeyState.stop,
+            pendingImageNames: [for (final i in _pendingImages) i.name],
+            onRemoveImage: (i) => setState(() => _pendingImages.removeAt(i)),
             canPickImage: widget.enabled,
             onPickImage: _pickImage,
-            onInsertContent: () => insertAtMention(_controller, _onChanged),
+            onInsertContent: () {
+              _focus.requestFocus();
+              insertAtMention(_controller, _onChanged);
+            },
             sendState: _sendKeyState,
-            canSend: widget.enabled && _hasText || (_hasImage && widget.enabled),
+            canSend: widget.enabled && (_hasText || _hasImage),
             onSend: _send,
             onStop: widget.onCancel,
           ),
           const SizedBox(height: DsSpacing.composerHintGap),
-          // 免责声明（真机反馈第五轮）：流式思考进行中不显示——
-          // 思考块已在消息流里滚动展示，底部小字会跟着抢注意力；
-          // 无思考（空闲 / 普通回答中）时照常显示。
+          // 免责声明：流式思考中不显示（思考块已在消息流里滚动展示）。
           if (!widget.streaming)
             Text(
               '回答由 AI 生成，仅供参考',

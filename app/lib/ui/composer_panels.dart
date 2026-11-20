@@ -34,73 +34,66 @@ class _CommandPanel extends StatelessWidget {
           ),
         ],
       ),
-      // 超过约 5 行高度可滚动（m03878：命令要能上下滑动选择）。
-      constraints: const BoxConstraints(maxHeight: 320),
-      child: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            for (var i = 0; i < matches.length; i++)
-              InkWell(
-                onTap: () => onPick(matches[i]),
-                onHover: onHighlightChanged == null
-                    ? null
-                    : (h) {
-                        if (h) onHighlightChanged!(i);
-                      },
-                borderRadius: BorderRadius.circular(
-                  DsSpacing.settingsCardRadius,
+      // 高度由 composer 的外层限高容器统一滚动，这里不再自带 320 上限。
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (var i = 0; i < matches.length; i++)
+            InkWell(
+              onTap: () => onPick(matches[i]),
+              onHover: onHighlightChanged == null
+                  ? null
+                  : (h) {
+                      if (h) onHighlightChanged!(i);
+                    },
+              borderRadius: BorderRadius.circular(DsSpacing.settingsCardRadius),
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: DsSpacing.settingsCardPadH,
+                  vertical: DsSpacing.settingsCardPadV + 2,
                 ),
-                child: Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: DsSpacing.settingsCardPadH,
-                    vertical: DsSpacing.settingsCardPadV + 2,
+                decoration: BoxDecoration(
+                  color: i == highlighted ? colors.chipSelectedBg : colors.none,
+                  borderRadius: BorderRadius.circular(
+                    DsSpacing.settingsCardRadius,
                   ),
-                  decoration: BoxDecoration(
-                    color: i == highlighted
-                        ? colors.chipSelectedBg
-                        : colors.none,
-                    borderRadius: BorderRadius.circular(
-                      DsSpacing.settingsCardRadius,
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.terminal,
+                      size: DsSpacing.chipIconSize + 2,
+                      color: colors.chipSelectedFg,
                     ),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.terminal,
-                        size: DsSpacing.chipIconSize + 2,
-                        color: colors.chipSelectedFg,
-                      ),
-                      const SizedBox(width: DsSpacing.chipIconGap + 4),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
+                    const SizedBox(width: DsSpacing.chipIconGap + 4),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '/${matches[i].name}',
+                            style: DsTypography.baseStrong.copyWith(
+                              color: colors.labelPrimary,
+                            ),
+                          ),
+                          if (matches[i].description.isNotEmpty)
                             Text(
-                              '/${matches[i].name}',
-                              style: DsTypography.baseStrong.copyWith(
-                                color: colors.labelPrimary,
+                              matches[i].description,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: DsTypography.caption.copyWith(
+                                color: colors.labelTertiary,
                               ),
                             ),
-                            if (matches[i].description.isNotEmpty)
-                              Text(
-                                matches[i].description,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: DsTypography.caption.copyWith(
-                                  color: colors.labelTertiary,
-                                ),
-                              ),
-                          ],
-                        ),
+                        ],
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               ),
-          ],
-        ),
+            ),
+        ],
       ),
     );
   }
@@ -155,7 +148,6 @@ class _AtFilePanel extends StatelessWidget {
           ),
         ],
       ),
-      constraints: const BoxConstraints(maxHeight: 320),
       child: visible.isEmpty
           ? Padding(
               padding: const EdgeInsets.all(DsSpacing.settingsCardPadH),
@@ -171,8 +163,8 @@ class _AtFilePanel extends StatelessWidget {
                         loading
                             ? '正在加载目录…'
                             : failed
-                                ? '目录加载失败，点按重试'
-                                : '没有匹配的文件或目录',
+                            ? '目录加载失败，点按重试'
+                            : '没有匹配的文件或目录',
                         style: DsTypography.caption.copyWith(
                           color: failed && !loading
                               ? colors.danger
@@ -190,93 +182,91 @@ class _AtFilePanel extends StatelessWidget {
                 ),
               ),
             )
-          : SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(
-                      DsSpacing.settingsCardPadH,
-                      DsSpacing.settingsCardPadV,
-                      DsSpacing.settingsCardPadH,
-                      0,
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(
-                          Icons.folder_outlined,
-                          size: 13,
-                          color: colors.labelTertiary,
-                        ),
-                        const SizedBox(width: 4),
-                        Expanded(
-                          child: Text(
-                            rootLabel.isEmpty ? '/' : rootLabel,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: DsTypography.caption.copyWith(
-                              color: colors.labelTertiary,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
+          : Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(
+                    DsSpacing.settingsCardPadH,
+                    DsSpacing.settingsCardPadV,
+                    DsSpacing.settingsCardPadH,
+                    0,
                   ),
-                  for (var i = 0; i < visible.length; i++)
-                    InkWell(
-                      onTap: () => onPick(visible[i]),
-                      onHover: onHighlightChanged == null
-                          ? null
-                          : (h) {
-                              if (h) onHighlightChanged!(i);
-                            },
-                      borderRadius: BorderRadius.circular(
-                        DsSpacing.settingsCardRadius,
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.folder_outlined,
+                        size: 13,
+                        color: colors.labelTertiary,
                       ),
-                      child: Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: DsSpacing.settingsCardPadH,
-                          vertical: DsSpacing.settingsCardPadV,
-                        ),
-                        decoration: BoxDecoration(
-                          color: i == highlighted
-                              ? colors.chipSelectedBg
-                              : colors.none,
-                          borderRadius: BorderRadius.circular(
-                            DsSpacing.settingsCardRadius,
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: Text(
+                          rootLabel.isEmpty ? '/' : rootLabel,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: DsTypography.caption.copyWith(
+                            color: colors.labelTertiary,
                           ),
                         ),
-                        child: Row(
-                          children: [
-                            Icon(
+                      ),
+                    ],
+                  ),
+                ),
+                for (var i = 0; i < visible.length; i++)
+                  InkWell(
+                    onTap: () => onPick(visible[i]),
+                    onHover: onHighlightChanged == null
+                        ? null
+                        : (h) {
+                            if (h) onHighlightChanged!(i);
+                          },
+                    borderRadius: BorderRadius.circular(
+                      DsSpacing.settingsCardRadius,
+                    ),
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: DsSpacing.settingsCardPadH,
+                        vertical: DsSpacing.settingsCardPadV,
+                      ),
+                      decoration: BoxDecoration(
+                        color: i == highlighted
+                            ? colors.chipSelectedBg
+                            : colors.none,
+                        borderRadius: BorderRadius.circular(
+                          DsSpacing.settingsCardRadius,
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            visible[i].isDirectory
+                                ? Icons.folder
+                                : Icons.insert_drive_file,
+                            size: DsSpacing.chipIconSize,
+                            color: visible[i].isDirectory
+                                ? colors.chipSelectedFg
+                                : colors.labelSecondary,
+                          ),
+                          const SizedBox(width: DsSpacing.chipIconGap + 4),
+                          Expanded(
+                            child: Text(
                               visible[i].isDirectory
-                                  ? Icons.folder
-                                  : Icons.insert_drive_file,
-                              size: DsSpacing.chipIconSize,
-                              color: visible[i].isDirectory
-                                  ? colors.chipSelectedFg
-                                  : colors.labelSecondary,
-                            ),
-                            const SizedBox(width: DsSpacing.chipIconGap + 4),
-                            Expanded(
-                              child: Text(
-                                visible[i].isDirectory
-                                    ? '${visible[i].name}/'
-                                    : visible[i].name,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: DsTypography.base.copyWith(
-                                  color: colors.labelPrimary,
-                                ),
+                                  ? '${visible[i].name}/'
+                                  : visible[i].name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: DsTypography.base.copyWith(
+                                color: colors.labelPrimary,
                               ),
                             ),
-                          ],
-                        ),
+                          ),
+                        ],
                       ),
                     ),
-                ],
-              ),
+                  ),
+              ],
             ),
     );
   }
@@ -299,7 +289,9 @@ Future<List<GatewayEntry>> fetchAtEntries(
         ...entries.map(
           (e) => GatewayEntry(
             name: '${root.label}/${e.name}',
-            path: '${root.label}/${e.path}',
+            // path 保持根内相对路径：@ 面板按目录下钻时要用它拼
+            // gatewayListEntries(root.id, dir)，mention 也直接用它（@path）。
+            path: e.path,
             kind: e.kind,
           ),
         ),
@@ -326,4 +318,108 @@ void insertAtMention(
     selection: TextSelection.collapsed(offset: offset + 1),
   );
   onChanged(controller.text);
+}
+
+/// @ 面板的「对话」分组（2026-11-21 工单 3）：输入 `@` 时把历史会话列在
+/// 文件之前，点一下插入内核会话引用 `@[标题](dsh-session:<id>)`。
+///
+/// 数据源是抽屉同一份 `ChatState.sessions`，不额外请求内核——桥的白名单里
+/// 没有 `sessionReferenceResolver/candidates`，客户端自己拼 mention 即可。
+/// 文件 mention 文本（对齐官方 `formatFileMention`）：无空白 `@path`，含空白
+/// 或引号 `@"path"`，目录以 `/` 结尾。
+String fileMentionText(String path, {required bool directory}) {
+  final p = directory && !path.endsWith('/') ? '$path/' : path;
+  return '@${RegExp(r'[\s"]').hasMatch(p) ? '"${p.replaceAll('"', r'\"')}"' : p}';
+}
+
+/// 会话 mention 文本（对齐内核 `renderSessionMention`）：
+/// `@[标题](dsh-session:<id>)`；标题里的 `]` 换成全角，避免提前闭合。
+String sessionMentionText(String title, String id) {
+  final label = title.trim().isEmpty ? id : title.trim();
+  return '@[${label.replaceAll(']', '］')}](dsh-session:$id)';
+}
+
+/// 把草稿里 [start,end) 这段换成文件 mention，返回新文本与光标位置。
+/// 目录还会补 `@dir/` 让面板继续下钻；文件补一个空格方便接着打字。
+({String text, int offset}) insertFileMention(
+  String text,
+  int start,
+  int end,
+  String path, {
+  required bool directory,
+}) {
+  final mention = fileMentionText(path, directory: directory);
+  final tail = directory ? '' : ' ';
+  return (
+    text: '${text.substring(0, start)}$mention$tail${text.substring(end)}',
+    offset: start + mention.length + tail.length,
+  );
+}
+
+/// 把草稿里 [start,end) 这段换成会话 mention（`@[标题](dsh-session:id)`）。
+({String text, int offset}) insertSessionMention(
+  String text,
+  int start,
+  int end,
+  String title,
+  String id,
+) {
+  final mention = sessionMentionText(title, id);
+  return (
+    text: '${text.substring(0, start)}$mention ${text.substring(end)}',
+    offset: start + mention.length + 1,
+  );
+}
+
+/// 查询命中的历史会话（@ 面板「对话」分组）：去掉当前会话、标题非空、
+/// 按标题子串过滤，最多 [max] 条。
+List<DshSession> sessionMatches(
+  List<DshSession> sessions,
+  String? currentId,
+  String query, {
+  int max = 6,
+}) {
+  final q = query.toLowerCase();
+  final out = <DshSession>[];
+  for (final s in sessions) {
+    if (s.id == currentId) continue;
+    final title = (s.title ?? '').trim();
+    if (title.isEmpty) continue;
+    if (q.isNotEmpty && !title.toLowerCase().contains(q)) continue;
+    out.add(s);
+    if (out.length >= max) break;
+  }
+  return out;
+}
+
+/// 候选面板的键盘导航（从 composer.dart 抽出守 §7 行数）：上下键移动高亮、
+/// 回车选中；面板没开或没有候选时把事件交还输入框。
+KeyEventResult panelKeyEvent(
+  FocusNode node,
+  KeyEvent event, {
+  required int count,
+  required bool panelOpen,
+  required int highlight,
+  required ValueChanged<int> onHighlight,
+  required VoidCallback onActivate,
+}) {
+  if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
+    return KeyEventResult.ignored;
+  }
+  if (!panelOpen || count == 0) return KeyEventResult.ignored;
+  if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
+    onHighlight((highlight + 1).clamp(0, count - 1));
+    return KeyEventResult.handled;
+  }
+  if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
+    onHighlight((highlight - 1).clamp(0, count - 1));
+    return KeyEventResult.handled;
+  }
+  if (event.logicalKey == LogicalKeyboardKey.enter ||
+      event.logicalKey == LogicalKeyboardKey.numpadEnter) {
+    if (highlight < 0 || highlight >= count) return KeyEventResult.ignored;
+    onActivate();
+    return KeyEventResult.handled;
+  }
+  return KeyEventResult.ignored;
 }

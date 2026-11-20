@@ -109,7 +109,7 @@ void main() {
             body: Composer(
               colors: DsColors(false),
               onSend: onSend,
-              onSendWithImage: (_, _) {},
+              onSendWithImages: (_, _) {},
               onCancel: onCancel,
               onCommand: (_) {},
               streaming: streaming,
