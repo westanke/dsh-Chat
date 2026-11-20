@@ -393,6 +393,11 @@ ioCard/轮尾行/思考行全部复用既有语义色（mdCodeBlockBg/borderL1/b
 `veil`（底部渐隐带）。输入条先量高度，正文区因此从顶栏下沿开始、伸到输入条上沿以下
 `chatListOverlap`；渐隐带盖住正文与输入条交界处，文字滑到输入条后面时淡出而不是被裁一刀。
 
+列表两端各留一段呼吸空间（`ui/chat_list.dart`）：顶部是 `chatListTopGap`，底部是
+`chatListBottomPad`——后者与 `anchor` 用同一个值（`chatListOverlap + chatVeilFeather`），
+所以「滚到底时最后一条消息停在哪」与「零滚动线在哪」是同一处几何，不会一处改了一处没跟上。
+没有这段尾部留白时，最后一条消息会紧贴渐隐带，被吃掉一截。
+
 | 元素 | token | 取值 | 依据 |
 |---|---|---|---|
 | 正文最大阅读宽度 | `DsSpacing.chatReadingWidth` | 720 | 官方 Web `--dsh-chat-content-width: 748px` 同档 |
@@ -400,6 +405,7 @@ ioCard/轮尾行/思考行全部复用既有语义色（mdCodeBlockBg/borderL1/b
 | 浮层控件最大宽度 | `DsSpacing.chatFloatingWidth` | 692 | readingWidth − 2×floatInset |
 | 正文伸到输入条上沿以下的距离 | `DsSpacing.chatListOverlap` | 6 | dsh-go `_ChatLayout.overlap` |
 | 底部渐隐带高度（羽化） | `DsSpacing.chatVeilFeather` | 14 | dsh-go `BackdropVeil.feather` |
+| 列表底部留白（末尾 spacer，与 anchor 同值） | `DsSpacing.chatListOverlap` + `DsSpacing.chatVeilFeather` | 20 | dsh-go `chat_list.dart` 末尾 `SliverToBoxAdapter(SizedBox(height: bottomPad))`，其 bottomPad 同时喂给 anchor |
 | 输入条底部安全区余量 | `DsSpacing.chatComposerBottomPad` | 8 | dsh-go composer 槽 SafeArea minimum |
 | 顶栏状态点直径 | `DsSpacing.chatStatusDot` | 6 | dsh-go `chat_header.dart` `_dot` |
 | 状态点与文字间距 | `DsSpacing.chatStatusDotGap` | 5 | dsh-go `_dotGap` |

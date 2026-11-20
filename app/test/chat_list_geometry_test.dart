@@ -171,4 +171,72 @@ void main() {
     expect(topOf('c1'), greaterThan(topOf('c0')));
     expect(topOf('c2'), greaterThan(topOf('c1')));
   });
+
+  // 尾部留白：滚到底时最后一条消息要停在视口底之上 bottomPad 处，
+  // 不能贴着底边（否则会被输入条上沿的渐隐带吃掉一截）。
+  // dsh-go 的做法是末尾挂一个 SliverToBoxAdapter(SizedBox(height: bottomPad))，
+  // 且这个 bottomPad 与 anchor 用同一个值。
+  testWidgets('末尾留白：滚到底时最后一行不贴视口底', (tester) async {
+    const bottomPad = 20.0;
+    final centerKey = GlobalKey();
+
+    Widget build({required double tail}) {
+      return MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            height: 600,
+            child: CustomScrollView(
+              center: centerKey,
+              anchor: (600 - bottomPad) / 600,
+              slivers: [
+                SliverList(
+                  delegate: SliverChildBuilderDelegate(
+                    (context, i) => SizedBox(
+                      key: ValueKey<String>('b$i'),
+                      height: 100,
+                    ),
+                    childCount: 3,
+                  ),
+                ),
+                SliverList(
+                  key: centerKey,
+                  delegate: SliverChildBuilderDelegate(
+                    (context, i) => SizedBox(
+                      key: ValueKey<String>('c$i'),
+                      height: 100,
+                    ),
+                    childCount: 6,
+                  ),
+                ),
+                SliverToBoxAdapter(child: SizedBox(height: tail)),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    double lastBottom() =>
+        tester.getRect(find.byKey(const ValueKey<String>('c5'))).bottom;
+
+    await tester.pumpWidget(build(tail: 0));
+    await tester.pump();
+    var scroll = tester.state<ScrollableState>(find.byType(Scrollable));
+    scroll.position.jumpTo(scroll.position.maxScrollExtent);
+    await tester.pump();
+    final noTail = lastBottom();
+
+    await tester.pumpWidget(build(tail: bottomPad));
+    await tester.pump();
+    scroll = tester.state<ScrollableState>(find.byType(Scrollable));
+    scroll.position.jumpTo(scroll.position.maxScrollExtent);
+    await tester.pump();
+    final withTail = lastBottom();
+
+    // 没有尾部留白时，末行底边正好压在视口底（600）。
+    expect(noTail, closeTo(600, 0.01));
+    // 有留白时，末行底边被抬高 bottomPad。
+    expect(withTail, closeTo(600 - bottomPad, 0.01));
+    expect(withTail, lessThan(noTail));
+  });
 }

@@ -377,6 +377,11 @@ class _ChatListState extends State<ChatList> {
                         childCount: _rows.length - _split,
                       ),
                     ),
+                    // 尾部留白：滚到底时最后一条消息停在渐隐带之上，不贴着
+                    // 输入条上沿被吃掉一截（dsh-go 的
+                    // `SliverToBoxAdapter(SizedBox(height: bottomPad))`；
+                    // 与 anchor 用同一个数，两处几何就自洽）。
+                    SliverToBoxAdapter(child: SizedBox(height: bottomPad)),
                   ],
                 ),
               ),
