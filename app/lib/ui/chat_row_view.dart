@@ -11,6 +11,8 @@ import 'package:material_ui/material_ui.dart';
 import '../bridge/models.dart';
 import '../design/app_settings.dart';
 import '../design/tokens.dart';
+import 'chat_artifact_card.dart';
+import 'chat_change_card.dart';
 import 'chat_expand_state.dart';
 import 'chat_message_items.dart';
 import 'chat_rows.dart';
@@ -94,6 +96,14 @@ Widget chatRowView(
             onToggle: info.canCollapse ? () => onToggleTurn(r.turn) : null,
           );
         },
+      );
+    case final ChangeCardRow r:
+      return ChangeCard(changes: r.changes, colors: colors);
+    case final ArtifactCardRow r:
+      return ArtifactCard(
+        files: r.files,
+        colors: colors,
+        gateway: state.gateway,
       );
     case HistoryMoreRow():
       return _HistoryMoreButton(state: state, colors: colors);

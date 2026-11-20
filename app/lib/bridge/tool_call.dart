@@ -21,6 +21,7 @@ class ToolCallInfo {
     this.rawArguments,
     this.preparing = false,
     this.errorCode,
+    this.meta,
   });
 
   final String callId;
@@ -48,6 +49,15 @@ class ToolCallInfo {
   /// 内核失败分类（chat.tool.result 的 error.code 透传；官方状态机只有
   /// 'interrupted'→已停止、ask 的 'ASK_CANCELLED'→已取消，其余进失败态）。
   final String? errorCode;
+
+  /// `tool/result` 的 `data.meta`（桥原样透传，形状由工具自己定）：
+  /// - edit / write：`{path, operation?, diffs:[{path, oldText, newText}]}`
+  /// - read：`{path, offset, lines:[{number,text}], totalLines}`
+  /// - bash：`{cwd}`；read_image：`{path}`。
+  ///
+  /// 本轮改动卡（ui/turn_changes.dart）优先读 `diffs` 里的真实新旧全文，
+  /// 拿不到才退回 arguments。
+  final Map<String, dynamic>? meta;
 
   /// 折叠行用的主短语（run_code 取第一个，其余就是唯一那个）。
   String get phrase => phrases.isEmpty ? name : phrases.first;
@@ -186,6 +196,7 @@ class RawToolCall {
     required this.time,
     this.resultText,
     this.failed = false,
+    this.meta,
   });
 
   final String callId;
@@ -197,6 +208,9 @@ class RawToolCall {
   String? resultText;
   bool failed;
 
+  /// tool/result 的 `data.meta`（见 [ToolCallInfo.meta]）。
+  Map<String, dynamic>? meta;
+
   ToolCallInfo toInfo() => ToolCallInfo(
     callId: callId,
     name: name,
@@ -205,6 +219,7 @@ class RawToolCall {
     failed: failed,
     resultText: resultText,
     rawArguments: arguments,
+    meta: meta,
   );
 }
 

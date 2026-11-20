@@ -188,6 +188,7 @@ class ToolCallOutcome {
     this.errorCode,
     this.turn = 0,
     this.step = 0,
+    this.meta,
   });
 
   final String sessionId;
@@ -197,6 +198,9 @@ class ToolCallOutcome {
   final String? errorCode;
   final int turn;
   final int step;
+
+  /// `tool/result` 的 `data.meta`（桥原样透传；见 ToolCallInfo.meta）。
+  final Map<String, dynamic>? meta;
 
   factory ToolCallOutcome.from(Map<String, dynamic> d) {
     final message = d['message'] is Map ? d['message'] as Map<String, dynamic> : const {};
@@ -228,6 +232,9 @@ class ToolCallOutcome {
       errorCode: code is String && code.isNotEmpty ? code : null,
       turn: (d['turn'] ?? 0) as int,
       step: (d['step'] ?? 0) as int,
+      meta: d['meta'] is Map
+          ? Map<String, dynamic>.from(d['meta'] as Map)
+          : null,
     );
   }
 }

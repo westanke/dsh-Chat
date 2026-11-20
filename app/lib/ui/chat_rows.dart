@@ -9,6 +9,7 @@
 import 'package:dshchat/bridge/models.dart';
 import 'package:dshchat/design/app_settings.dart';
 import 'package:dshchat/ui/chat_expand_state.dart';
+import 'package:dshchat/ui/turn_changes.dart';
 import 'package:dshchat/ui/work_steps.dart';
 
 /// 会话列表的一行。由 [deriveRows] 从消息序列派生。
@@ -134,6 +135,36 @@ final class TurnEndRow extends ChatRow {
   bool get stable => true;
 }
 
+/// 本轮改动卡：轮尾之后，「改动了 N 个文件」+ 逐文件增删行数。
+final class ChangeCardRow extends ChatRow {
+  const ChangeCardRow(this.changes, {required this.anchorSeq});
+
+  final TurnChanges changes;
+
+  /// 该轮首条消息的 seq（行的稳定主键）。
+  final int anchorSeq;
+
+  @override
+  String get key => 'ch$anchorSeq';
+
+  @override
+  bool get stable => true;
+}
+
+/// 本轮生成文件卡：本轮新建 / 最终回复里引用的图片与文件。
+final class ArtifactCardRow extends ChatRow {
+  const ArtifactCardRow(this.files, {required this.anchorSeq});
+
+  final List<ArtifactFile> files;
+  final int anchorSeq;
+
+  @override
+  String get key => 'ar$anchorSeq';
+
+  @override
+  bool get stable => true;
+}
+
 /// 「加载更早消息」入口。
 final class HistoryMoreRow extends ChatRow {
   const HistoryMoreRow();
@@ -254,6 +285,22 @@ List<ChatRow> deriveRows(ChatRowsInput input) {
     if (turn == null) continue;
     if (!_turnHasProcess(messages, turn)) continue;
     rows.add(TurnEndRow(turn, hasProcess: true));
+    // 正在跑的那轮不出改动/生成卡：工具结果还没到齐，计数会一路跳。
+    final running = input.streaming && identical(turns.last, turn);
+    if (running) continue;
+    final changes = turnChangesOf(messages, turn);
+    if (changes != null && !changes.isEmpty) {
+      rows.add(ChangeCardRow(changes, anchorSeq: changes.anchorSeq));
+    }
+    final artifacts = turnArtifactsOf(messages, turn);
+    if (artifacts.isNotEmpty) {
+      rows.add(
+        ArtifactCardRow(
+          artifacts,
+          anchorSeq: changes?.anchorSeq ?? messages[turn.start].seq,
+        ),
+      );
+    }
   }
 
   final streamingGroup = input.streamingProcess;

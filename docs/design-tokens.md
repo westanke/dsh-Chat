@@ -583,6 +583,45 @@ readableColumnWidth(可用宽)
 > **二级页为什么也用同一条尺**：设置、Markdown、子会话历史、目录浏览都从会话页
 > 推出去，翻进翻出若横向跳宽，观感像两个 App。同一个函数各页各算，得到的是同一个数。
 
+## 4.17 本轮改动卡 · 生成文件卡 · 查看改动（2026-11-21 task-12）
+
+会话页轮尾在「已完成，用时 N 秒」之后追加两类卡（正在跑的一轮不出卡，计数会跳）：
+
+| 卡 | 触发 | 结构 |
+|---|---|---|
+| 改动了 N 个文件 | 本轮有成功的 edit/write | 标题 + 多文件时合计 `+N −M`；最多 3 行（文件名 / 弱化目录 / `+N −M`）；底栏「查看改动」+「还有 N 个文件」 |
+| 生成了 N 个文件 | 本轮 write 新建了文件，或回复里有 markdown 图片/文件链接 | 最多 4 行（40×40 缩略图 / 文件名 / 「图片 · PNG」）；超出收进「全部 N 个文件 ⌄」；行尾 ⋯ 开复制路径 / 分享 |
+
+两张卡都复用既有视觉：`bgLayer1` 底、`bubbleRadius` 圆角、`borderL2` 描边、
+`DsTypography.smallStrong/small/codeBlockLabel`，**不新增颜色与字号**；
+行间距走 `chatGapCard`（与交付文件卡同一档）。
+
+**「查看改动」页**：顶栏（返回 / 「本轮改动」/ 合计 / 复制路径）、横向文件 chips、
+正文文件绝对路径 + `+N −M 修改 K 次`、每个 hunk 标「第 i 次修改」并画红绿行
+（`diffAdd`/`diffRemove`/`mdCodeBlockText`，等宽字体）。
+
+**数据从哪来**（桥没有 workspace-changes 查询面，客户端自己推导）：
+
+```text
+turnChangesOf(messages, turn)
+  只认成功的 edit/write（failed 跳过）
+  meta.diffs[{path, oldText, newText}]      ← tool/result 的 data.meta，桥原样透传
+  拿不到 → 参数 file_path / old_string / new_string / content
+  write 且 meta.operation=create（或 oldText 空）→ created
+  同文件多次编辑：合并 +N/−M，逐次留 hunk（「第 i 次修改」）
+```
+
+- 行级差异用 `diffLinesOf`（`code_diff.dart`）：先裁公共前后缀再做 LCS，
+  中间的公共行也标 ctx——只做前后缀会把改一行算成「后半段全删全加」；
+  表超过 40 万格的大文件退回前后缀裁剪，不拿内存换精度。
+- 「生成文件」里 markdown 相对路径按**本轮最后一次 bash 的 `meta.cwd`** 拼绝对；
+  没有 cwd 就跳过，不猜路径。
+- 正在跑的轮次不出卡（`input.streaming && identical(turns.last, turn)`）。
+- 这是对 dsh-go 的对齐实现（`ui/chat/widgets/change_card.dart` / `artifact_card.dart`
+  / `ui/chat/turn_summary.dart`），**没有**接 `.dsh-mobile` 新插件的
+  `workspace-changes-v1`（REST `/api/changes.summary`、`/api/changes.diff`）——
+  本仓桥 2.13.0 还没有那组端点，等桥升级再切。
+
 ## 5. 截图资产（ref/）
 - official-login-page.png 登录页（+86 152 1388 0002 / 验证码输入 / 发送验证码按钮）
 - official-welcome.png 欢迎引导页（开启对话主按钮）

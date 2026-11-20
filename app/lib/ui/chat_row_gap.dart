@@ -39,5 +39,9 @@ double chatRowGapBefore(ChatRow row, ChatRow? previous) {
   if (row is FilesRow) return DsSpacing.chatGapCard;
   // 轮尾行贴着上面的过程组。
   if (row is TurnEndRow) return DsSpacing.chatGapFootnote;
+  // 本轮改动 / 生成文件卡：卡片之间 12，卡前也留 12（别贴着轮尾那行小字）。
+  if (row is ChangeCardRow || row is ArtifactCardRow) {
+    return DsSpacing.chatGapCard;
+  }
   return DsSpacing.chatGapSameTurn;
 }

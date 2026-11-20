@@ -24,6 +24,7 @@ class _StreamingToolRow {
   bool failed = false;
   String? resultText;
   String? errorCode;
+  Map<String, dynamic>? meta;
 }
 
 /// 聚合器：ChatState 持有一个实例，按事件流顺序喂数据。
@@ -104,6 +105,7 @@ class StreamingToolBuffer {
     row
       ..resultText = text.isEmpty ? null : text
       ..errorCode = r.errorCode
+      ..meta = r.meta
       ..done = true
       ..running = false
       ..failed =
@@ -125,6 +127,7 @@ class StreamingToolBuffer {
         rawArguments: row.argsRaw.isEmpty ? null : row.argsRaw,
         preparing: !row.settled && !row.running && !row.done,
         errorCode: row.errorCode,
+        meta: row.meta,
       ),
   ];
 

@@ -336,9 +336,13 @@ class HistoryPage {
           final idx = groupCalls.indexWhere((c) => c.callId == callId);
           if (idx < 0) break;
           final failed = (msg is Map && msg['isError'] == true);
+          final rawMeta = event.data['meta'];
           raw
             ..failed = failed
-            ..resultText = toolResultText(msg is Map ? msg['content'] : null);
+            ..resultText = toolResultText(msg is Map ? msg['content'] : null)
+            ..meta = rawMeta is Map
+                ? Map<String, dynamic>.from(rawMeta)
+                : null;
           final info = ToolCallInfo(
             callId: callId,
             name: raw.name,
@@ -350,6 +354,7 @@ class HistoryPage {
                 : null,
             resultText: raw.resultText,
             rawArguments: raw.arguments,
+            meta: raw.meta,
           );
           groupCalls[idx] = info;
           groupEnd = event.time;
