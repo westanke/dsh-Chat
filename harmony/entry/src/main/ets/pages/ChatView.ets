@@ -423,7 +423,7 @@ export struct ChatView {
       streaming: this.store !== null && this.store.streaming,
       waitingApproval: this.approvalsView.length > 0,
       waitingAnswer: this.questionsView.length > 0,
-      hostLabel: this.store === null ? '' : this.store.connectionLabel,
+      hostLabel: this.store === null ? '' : this.store.deviceLabel,
       onOpenDrawer: (): void => {
         this.setDrawer(true);
       },

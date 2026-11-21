@@ -1,11 +1,11 @@
 /**
- * 会话抽屉 —— 对照安卓 sessions_drawer.dart 阶段 2 基础版：
- * 新建对话按钮 + 按工作区分组的会话列表 + 顶部连接主机标识。
- * 搜索 / 重命名 / 删除 / 设置入口 / 推挤动画是阶段 4（PORT-MAP ☐）；
- * 阶段 2 用右滑覆盖 + 点遮罩关闭的简化交互。
+ * 会话抽屉 —— 对照安卓 sessions_drawer.dart：
+ * 设备名 + 连接状态点/地址 + 新建对话 + 标题/正文搜索 + 时间分组会话列表
+ * + 底部设置入口；宽窗下以推挤（页面缩窄）方式出现（见 ChatView pageInset）。
  */
 
 import { ChatStore } from '../core/ChatStore';
+import { GatewayState } from '../core/GatewayEvents';
 import { DshSession } from '../core/Models';
 import {
   GROUP_KEY_EARLIER, SessionGroup, SessionRow, groupSessionsByTime, visibleRowsOf,
@@ -245,15 +245,23 @@ export struct SessionsDrawer {
       // 顶部：连接主机 + 新建对话
       Row({ space: 10 }) {
         Column({ space: 2 }) {
-          Text('DSH Chat')
+          Text(this.deviceLabel())
             .fontSize(16)
             .fontWeight(FontWeight.Bold)
             .fontColor(this.c().labelPrimary)
-          Text(this.hostLabel())
-            .fontSize(12)
-            .fontColor(this.c().labelSecondary)
             .maxLines(1)
             .textOverflow({ overflow: TextOverflow.Ellipsis })
+          Row({ space: 5 }) {
+            Circle({ width: 7, height: 7 })
+              .fill(this.connected() ? this.c().chatStatusOk : this.c().danger)
+            Text(this.hostLabel())
+              .fontSize(12)
+              .fontColor(this.c().labelSecondary)
+              .maxLines(1)
+              .textOverflow({ overflow: TextOverflow.Ellipsis })
+              .layoutWeight(1)
+          }
+          .width('100%')
         }
         .alignItems(HorizontalAlign.Start)
         .layoutWeight(1)
@@ -262,7 +270,7 @@ export struct SessionsDrawer {
           .fontSize(12)
           .backgroundColor(this.c().brand)
           .fontColor(this.c().onBrand)
-          .accessibilityText('当前连接：' + this.hostLabel())
+          .accessibilityText('新建对话')
           .onClick(() => {
             const st: ChatStore | null = this.store;
             if (st !== null) {
@@ -332,6 +340,20 @@ export struct SessionsDrawer {
     .height('100%')
     .backgroundColor(this.c().bgLayer1)
     .alignItems(HorizontalAlign.Start)
+  }
+
+  private deviceLabel(): string {
+    const st: ChatStore | null = this.store;
+    if (st === null) {
+      return 'DSH Chat';
+    }
+    return st.deviceLabel;
+  }
+
+  /** 绿点=桥已就绪，红点=未连接（安卓抽屉同口径）。 */
+  private connected(): boolean {
+    const st: ChatStore | null = this.store;
+    return st !== null && st.connectionState === GatewayState.READY;
   }
 
   private hostLabel(): string {
