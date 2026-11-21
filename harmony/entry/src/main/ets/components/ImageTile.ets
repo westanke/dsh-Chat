@@ -13,6 +13,7 @@ import { mediaquery } from '@kit.ArkUI';
 import { BP_SM, BP_QUERY_MD, BP_QUERY_LG, breakpointOf, atLeastMd } from '../core/Breakpoints';
 import { image } from '@kit.ImageKit';
 import { BusinessError } from '@kit.BasicServicesKit';
+import { Dlog } from '../platform/Dlog';
 
 @Component
 export struct ImageTile {
@@ -98,7 +99,10 @@ export struct ImageTile {
         this.error = '图片解码失败';
         src.release();
       });
-    }).catch((): void => {
+    }).catch((e: Error): void => {
+      // 真机排障：把 sid/交接名/错误一起打出来（hilog 域 0xD5C0）。
+      Dlog.warn('image load failed sid=' + this.sid + ' name=' + ref.handoffName
+        + ' err=' + e.message);
       this.loading = false;
       this.error = '图片加载失败';
     });
