@@ -180,7 +180,6 @@ export class HistoryPage {
     const items: ChatMessage[] = [];
     const normalized: JsonMap[] = [];
 
-    // 当前过程组的累积缓冲。
     const groupCalls: ToolCallInfo[] = [];
     const pending: Map<string, RawToolCall> = new Map(); // callId → 调用信息（等 result 补全）
     let groupStart: number | null = null;
@@ -387,6 +386,7 @@ export class HistoryPage {
           const failed: boolean = JsonAccess.boolOr(msg, 'isError', false);
           raw.failed = failed;
           raw.resultText = toolResultText(JsonAccess.raw(msg, 'content'));
+          raw.meta = JsonAccess.obj(ev.data, 'meta');
           // error.code → 行终态（stopped/cancelled/failed；StreamTools 同口径）。
           const errObj: JsonMap | null = JsonAccess.obj(ev.data, 'error');
           const errorCode: string = errObj === null ? '' : JsonAccess.strOr(errObj, 'code', '');
@@ -394,7 +394,7 @@ export class HistoryPage {
             toolPhrases(raw.name, raw.arguments), toolSummary(raw.arguments),
             failed,
             ev.time - raw.time > 0 ? ev.time - raw.time : null,
-            raw.resultText, raw.arguments);
+            raw.resultText, raw.arguments, raw.meta);
           info.status = statusFromErrorCode(errorCode);
           groupCalls[idx] = info;
           groupEnd = ev.time;

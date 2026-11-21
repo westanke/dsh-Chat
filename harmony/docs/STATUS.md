@@ -847,3 +847,55 @@ R014（嵌套 10-11 层，info 级）。
 并存 + 可折叠）、发送键禁用态 6.95:1 ✅、行距 27.8vp vs 28.0dp ✅、表格列对齐 + 横向滚动 ✅
 （第 3 列「山东烟台/海南澄迈/广东茂名」完整可见）、安卓长文件名 chip ✅（chip 截断 + ✕ +
 全部按钮在屏内）。缺陷 E 的修复已构建装机，真机复验待设备解锁后进行。
+
+
+---
+
+## 2026-11-21 · 向安卓 11-20/21 一批提交对齐（dsh-go 会话页 + 宽窗 + 内核面）
+
+安卓侧基准：`3f0cf68`（会话页整页 dsh-go 结构）、`baceb5d`/`b089be6`/`83d8fd3`/`70f20da`
+（宽窗三档与 720 列宽取消）、`a762ce9`（dshrb-v1 + 抽屉正文搜索）、`95c522c`（改动卡/
+生成文件卡/查看改动页）、`5582a7e`（多图/@ 历史会话/任务条）。
+
+### 已落地
+
+- **会话页结构**：两行顶栏（44 操作行 + 20 状态行，状态优先级与 1200ms 呼吸点）、逐行变距
+  （首行 0 / 换轮 24 / 同轮 8 / 过程 0 / 卡片 12 / 脚注 4，去掉统一 14）、列表顶 8 底 20、
+  底部渐隐带（bgBase 同色透明→实心，盖最后 20）、回底 FAB 48（`isAtEnd` 粘性：用户上滑后
+  新帧不再把视口拽回底部）、用户气泡左 32 / 内 16,12 / 最大 86.4%。
+- **思考行新形态**：`core/ThinkingState.ts`（active/summary/ticker/hidden 四元组、
+  剥 signature、折叠空行、尾部 2000 字符、三行窗口）+ ThinkBlock 活跃态（呼吸环 18 +
+  「思考中」+ 三行实时窗口），`answerStarted` 由 StreamingBlock 的 `text !== ''` 驱动。
+- **宽窗**：`core/Breakpoints.ts` 增 `windowClassOf(width,height)`（高 <480 强制 compact）、
+  `windowSidebarWidth`、`pageInsetFor`、`reflowsOnDrawer`；ChatView 紧凑档整页 translate、
+  medium/expanded 用 `padding.left = pageInset` 缩窄，抽屉宽 288/320。
+- **改动卡 / 生成卡 / 查看改动页**：`ToolCallInfo.meta` 全链路（HistoryPage 读
+  `tool/result.data.meta` → StreamTools 合并保 meta）、`core/TurnChanges.ts`（meta.diffs
+  优先、退回工具参数、同文件合并 +N −M、hunk 序号；生成文件=cwd 拼相对路径 + 正文
+  markdown 引用）、`core/CodeDiff.ts` 增 LCS `diffLinesOf`（空串不产假 del 行，>40 万格
+  退回裁剪版）、`core/TurnCards.ts` 只挂闭合轮；UI 三件套 + MessageList 接线。
+- **多图 / @ 历史会话 / 任务条**：Composer 最多 6 张、单张 ≤8MiB、逐张删；`@[标题](dsh-session:id)`
+  插入（全角］）与「对话」分组；`@src/li` 目录下钻 + 叶子过滤（修掉整段 query 前缀过滤）；
+  TodoDock（首个 in_progress 优先、进度线、展开 168 内滚、空态不占位）。
+- **dshrb-v1 内核面**：`KernelCall/KernelPlane/GatewayKernel/SessionSearch` 四件；子协议清单
+  `dsh-mobile-v1,dshrb-v1`（SDK API18 `protocol` 只收单值，只能传逗号串，服务端按逗号 split）；
+  目录为唯一真相；35s 客户端超时、同 callId 幂等重试、断连 failAll、cancel 只发帧；
+  `kernel-endpoints`/`kernel-call-result` 两帧在取 `data` 之前分派。抽屉搜索接 `session/search`，
+  300ms 防抖、目录晚到补发、不可用静默降级为标题过滤。
+
+### 门禁与验证
+
+- `npm --prefix harmony/test test`：**410 pass / 0 fail**（新增 turn-changes 20、kernel-search 6、
+  thinking-state 5、chat-header-status 7、todo-dock、breakpoints 2、code-diff 4、at-mention 3）。
+- `bash scripts/ci/docs-check.sh`：五道全 ✅（19 个新文件已登记）。
+- `hvigorw assembleHap --no-daemon`：BUILD SUCCESSFUL；单文件行数：ChatView 495、
+  MessageList 499、Composer 467、SessionsDrawer 392、GatewayClient 499。
+- 真机验收：**待做**（安装新包后重点验 dshrb 子协议是否被 @ohos 接受、抽屉正文搜索端到端、
+  宽窗横屏抽屉缩窄、思考行三行窗口、两张卡与 diff 页）。
+
+### 已知缺口
+
+- 生成文件卡 40×40 缩略图已接（resolvePath → `/roots/{id}/content` 字节 → PixelMap；失败退回类型字形）。
+- 思考行活跃态无横向扫光动画（静态圆环 + 三行窗口；动效 token 已登记）。
+- 列表贴底用 `scroller.isAtEnd()`，无安卓的 48vp 容差与 140ms 解冻；FAB 入场无 140ms 淡入。
+- 内核搜索空态文案未区分「索引未开」与「真没有」；Android 侧同样只做宽容解析。

@@ -89,6 +89,57 @@ export function floatingColumnWidth(availableWidth: number): number {
   return Math.max(0, column - 2 * FLOAT_INSET);
 }
 
+/** 中等窗起（宽，vp）：M3 medium 断点；安卓 `windowMediumMin` 同值。 */
+export const WINDOW_MEDIUM_MIN: number = 600;
+/** 扩展窗起（宽，vp）：M3 expanded 断点；安卓 `windowExpandedMin` 同值。 */
+export const WINDOW_EXPANDED_MIN: number = 840;
+/** 紧凑窗高度上限（vp）：矮窗一律算紧凑（手机横屏 412 高）；安卓 `windowCompactHeight` 同值。 */
+export const WINDOW_COMPACT_HEIGHT: number = 480;
+/** 平板抽屉宽（vp）：比手机抽屉（288）宽一档；安卓 `drawerSidebarWidth` 同值。 */
+export const DRAWER_SIDEBAR_WIDTH: number = 320;
+
+/** 窗口尺寸类常量（安卓 DsWindowClass 同名词）。 */
+export const WC_COMPACT: string = 'compact';
+export const WC_MEDIUM: string = 'medium';
+export const WC_EXPANDED: string = 'expanded';
+
+/**
+ * 窗口尺寸类（安卓 `DsWindowClass.of` 同口径）：
+ * 高 < 480 一律紧凑；宽 ≥ 840 扩展；≥ 600 中等；否则紧凑。
+ * 传 0/负数（还没量到）按紧凑处理。
+ */
+export function windowClassOf(width: number, height: number): string {
+  if (!(height > 0) || height < WINDOW_COMPACT_HEIGHT) {
+    return WC_COMPACT;
+  }
+  if (width >= WINDOW_EXPANDED_MIN) {
+    return WC_EXPANDED;
+  }
+  if (width >= WINDOW_MEDIUM_MIN) {
+    return WC_MEDIUM;
+  }
+  return WC_COMPACT;
+}
+
+/** 会话抽屉这一列的宽度（vp）：手机 288，中等/扩展 320。 */
+export function windowSidebarWidth(cls: string): number {
+  return cls === WC_COMPACT ? 288 : DRAWER_SIDEBAR_WIDTH;
+}
+
+/**
+ * 抽屉打开时页面让出的宽度（vp）：紧凑窗整页推走（位移 = 抽屉宽），
+ * 宽窗把页面缩窄同样的宽度。都取 `min(窗宽, 抽屉宽)`。
+ */
+export function pageInsetFor(windowWidth: number, cls: string): number {
+  const sidebar: number = windowSidebarWidth(cls);
+  return windowWidth > sidebar ? sidebar : Math.max(0, windowWidth);
+}
+
+/** 非紧凑窗（中等/扩展）抽屉以「缩窄页面」呈现，紧凑窗才是整页推走。 */
+export function reflowsOnDrawer(cls: string): boolean {
+  return cls !== WC_COMPACT;
+}
+
 /** 会话抽屉宽度（vp）：手机上 320 已够，大屏按档加宽避免右侧留白突兀。 */
 export function drawerWidth(bp: string): number {
   if (bp === BP_MD) {

@@ -3,7 +3,6 @@
  * 引用面板（含「选择项目中的内容」入口）+ 图片 chip + 权限档位 chip
  * （bindSheet 二次确认）+ 发送键三态 + 免责声明；面板壳在 ComposerPanels.ets。
  */
-
 import { ChatStore } from '../core/ChatStore';
 import { GatewayState } from '../core/GatewayEvents';
 import { parseSlashDraft, parseAtMentionDraft, AtMentionDraft, SlashCommandList, SlashCommand,
@@ -12,9 +11,12 @@ import { GatewayRoot } from '../core/Files';
 import { JsonMap } from '../core/JsonAccess';
 import { PermissionSheet } from './PermissionSheet';
 import { PickedImage, pickImageFromGallery } from '../platform/PhotoPick';
+import { ImageChips } from './ImageChips';
+import { ComposerActions } from './ComposerActions';
 import { CommandPanel, AtFilePanel } from './ComposerPanels';
 import { ErrorBanner, HintBanner } from './ComposerBanners';
-import { AtEntry, AtMentionMerge, loadMergedAtEntries, inSubDirectory } from '../core/AtMention';
+import { AtEntry, AtSessionHit, AtMentionMerge, loadMergedAtEntries, inSubDirectory,
+  sessionMatches, insertSessionMention, atLeafQuery, atQueryDir, joinAtDir } from '../core/AtMention';
 import { DsColors, DsTypography, DsSpacing } from '../ui/theme';
 import { permissionLabelOf } from '../core/Permissions';
 import { common } from '@kit.AbilityKit';
@@ -44,7 +46,8 @@ export struct Composer {
   /** 斜杠命令缓存（切会话失效，同安卓 _commands/_commandsSid）。 */
   @State commands: SlashCommandList = SlashCommandList.empty();
   @State commandsSid: string = '';
-  @State pendingImage: PickedImage | null = null;
+  /** 待发送图片（一条最多 6 张，安卓同口径）。 */
+  @State pendingImages: PickedImage[] = [];
   @State imageError: string = '';
   /** @ 面板状态。 */
   @State atDraft: AtMentionDraft | null = null;
@@ -52,6 +55,7 @@ export struct Composer {
   @State atLoading: boolean = false;
   @State atFailed: boolean = false;
   @State atDir: string = '';
+  @State atSessions: AtSessionHit[] = [];
   private atRoots: GatewayRoot[] = []; // 授权根缓存
   @State permSheetOpen: boolean = false;
   /** 权限切换结果提示（成功/失败；点一下清除）。 */
@@ -115,7 +119,15 @@ export struct Composer {
   }
 
   private hasImage(): boolean {
-    return this.pendingImage !== null && this.pendingImage.error.length === 0;
+    return this.pendingImages.length > 0;
+  }
+
+  private imageNames(): string[] {
+    const out: string[] = [];
+    for (const img of this.pendingImages) {
+      out.push(img.name);
+    }
+    return out;
   }
 
   /** ---------- 面板状态推导 ---------- */
@@ -142,11 +154,15 @@ export struct Composer {
     if (at !== null) {
       this.panel = 'at';
       this.atDraft = at;
+      const st: ChatStore | null = this.store;
+      this.atSessions = sessionMatches(st === null ? [] : st.sessions,
+        st === null ? null : st.sessionId, atLeafQuery(at.query));
       this.ensureAtEntries();
       return;
     }
     this.panel = 'none';
     this.atDraft = null;
+    this.atSessions = [];
   }
 
   /** 命令清单缓存（切会话失效；失败不落缓存，onChanged 自动重试）。 */
@@ -196,7 +212,8 @@ export struct Composer {
     this.atFailed = false;
     // 取数与合并下沉 core/AtMention.loadMergedAtEntries（逐根容错、多根才带
     // label/ 前缀）：Composer 只做状态搬运。
-    loadMergedAtEntries(st.api, this.atRoots, this.atDir, query)
+    const dir: string = joinAtDir(this.atDir, atQueryDir(query));
+    loadMergedAtEntries(st.api, this.atRoots, dir, atLeafQuery(query))
       .then((merged: AtMentionMerge): void => {
         this.atEntries = merged.items;
         this.atLoading = false;
@@ -206,6 +223,17 @@ export struct Composer {
         this.atLoading = false;
         this.atFailed = true;
       });
+  }
+
+  private applySession(h: AtSessionHit): void {
+    const at: AtMentionDraft | null = this.atDraft;
+    if (at === null) {
+      return;
+    }
+    this.draft = insertSessionMention(this.draft, at, h.id, h.title);
+    this.panel = 'none';
+    this.atDraft = null;
+    this.atSessions = [];
   }
 
   private applyCommand(cmd: SlashCommand): void {
@@ -253,13 +281,17 @@ export struct Composer {
     }
     const busyMode: string = AppStorage.get<string>('dshBusySend') ?? 'queue';
     const text: string = this.draft.trim();
-    const img: PickedImage | null = this.pendingImage;
+    const images: PickedImage[] = this.pendingImages;
     this.draft = '';
-    this.pendingImage = null;
+    this.pendingImages = [];
     this.cursor = 0;
     this.panel = 'none';
-    if (img !== null && img.error.length === 0) {
-      st.sendWithImage(text, PromptPart.image(img.mediaType, img.base64, img.name), busyMode);
+    if (images.length > 0) {
+      const parts: PromptPart[] = [];
+      for (const img of images) {
+        parts.push(PromptPart.image(img.mediaType, img.base64, img.name));
+      }
+      st.send(text, parts, busyMode);
       return;
     }
     const slash = parseSlashDraft(text);
@@ -288,7 +320,11 @@ export struct Composer {
       }
       this.imageError = img.error;
       if (img.error.length === 0) {
-        this.pendingImage = img;
+        if (this.pendingImages.length >= 6) {
+          this.imageError = '一条消息最多带 6 张图片';
+          return;
+        }
+        this.pendingImages = [...this.pendingImages, img];
       }
     }).catch((): void => {
       this.imageError = '图片读取失败';
@@ -331,8 +367,10 @@ export struct Composer {
           loading: this.atLoading,
           failed: this.atFailed,
           dirPath: this.atDir,
+          sessions: this.atSessions,
           onPick: (e: AtEntry): void => this.applyAtEntry(e),
           onRetry: (): void => this.retryAt(),
+          onPickSession: (h: AtSessionHit): void => this.applySession(h),
         })
       }
       // 官方输入框：文本框 + 底部按钮行（＋ / 权限 / 发送）共处一个圆角容器内。
@@ -363,105 +401,34 @@ export struct Composer {
           }
         })
         .enabled(this.connected())
-      if (this.pendingImage !== null) {
-        Row({ space: 6 }) {
-          Text('🖼 ' + (this.pendingImage.name.length > 24
-            ? this.pendingImage.name.substring(0, 24) : this.pendingImage.name))
-            .fontSize(12)
-            .fontColor(this.c().chipSelectedFg)
-            .maxLines(1)
-          Text('✕')
-            .fontSize(12)
-            .fontColor(this.c().labelTertiary)
-            .accessibilityText('移除待发送图片')
-            .onClick(() => {
-              this.pendingImage = null;
-            })
-        }
-        .padding({ left: 10, right: 10, top: 6, bottom: 6 })
-        .borderRadius(DsSpacing.chipRadius)
-        .backgroundColor(this.c().chipSelectedBg)
-        .margin({ top: 6 })
-      }
-      // 底部行对齐官方输入框：左「＋」→「📁 选择项目中的内容」→ 权限 chip（盾牌
-      // + 展开箭头），右发/停圆键。
-      Row({ space: 8 }) {
-        Text('＋')
-          .fontSize(20)
-          .fontColor(this.hasImage() ? this.c().onBrand : this.c().labelPrimary)
-          .width(DsSpacing.composerButtonSize)
-          .height(DsSpacing.composerButtonSize)
-          .borderRadius(DsSpacing.composerButtonSize / 2)
-          .backgroundColor(this.hasImage() ? this.c().brand : this.c().bgLayer1)
-          .border({ width: 1, color: this.c().borderL1 })
-          .textAlign(TextAlign.Center)
-          .accessibilityText('添加图片')
-          .onClick(() => {
-            this.pickImage();
-          })
-        Text('📁')
-          .fontSize(12)
-          .fontColor(this.c().labelPrimary)
-          .width(DsSpacing.composerButtonSize)
-          .height(DsSpacing.composerButtonSize)
-          .borderRadius(DsSpacing.composerButtonSize / 2)
-          .backgroundColor(this.c().bgLayer1)
-          .border({ width: 1, color: this.c().borderL1 })
-          .textAlign(TextAlign.Center)
-          .accessibilityText('选择项目中的内容')
-          .onClick(() => {
-            this.openProjectPanel();
-          })
-        Row({ space: 4 }) {
-          Text('🛡')
-            .fontSize(12)
-            .fontColor(this.c().labelSecondary)
-          Text(this.permissionLabel())
-            .fontSize(12)
-            .fontColor(this.c().labelSecondary)
-            .maxLines(1)
-            .textOverflow({ overflow: TextOverflow.Ellipsis })
-          Text('⌄')
-            .fontSize(12)
-            .fontColor(this.c().labelSecondary)
-        }
-        .constraintSize({ maxWidth: 200 })
-        .accessibilityText('会话权限：' + this.permissionLabel())
-        .onClick(() => {
-          this.permSheetOpen = true;
+      if (this.pendingImages.length > 0) {
+        ImageChips({
+          names: this.imageNames(),
+          onRemove: (index: number): void => {
+            const next: PickedImage[] = [];
+            for (let i = 0; i < this.pendingImages.length; i++) {
+              if (i !== index) {
+                next.push(this.pendingImages[i]);
+              }
+            }
+            this.pendingImages = next;
+          }
         })
-        Blank()
-        if (this.streaming()) {
-          Button('■', { type: ButtonType.Circle })
-            .width(this.atLeastMd() ? 48 : 44)
-            .height(this.atLeastMd() ? 48 : 44)
-            .backgroundColor(this.c().brand)
-            .fontColor(this.c().onBrand)
-            .fontSize(16)
-            .accessibilityText('停止生成')
-            .onClick(() => {
-              this.stop();
-            })
-        } else {
-          // 发送键对齐官方：实心品牌色圆 + 白色向上箭头（字号 20、加粗，官方图标是
-          // 线宽较粗的 arrow-up）。禁用态刻意不用 `.enabled(false)`：ArkUI 会给禁用
-          // 组件整体叠一层约 0.4 的透明度，真机实测把浅灰底和灰箭头一起混白，对比度
-          // 只剩 1.91:1（远低于 WCAG AA 4.5:1），且纯黑混白上限也只有 2.6:1，所以
-          // 改 token 色号无效。改为保持可点、在 onClick 里判空实现同样的禁用语义。
-          Button('↑', { type: ButtonType.Circle })
-            .width(44)
-            .height(44)
-            .backgroundColor(this.sendEnabled() ? this.c().brand : this.c().sendDisabledBg)
-            .fontColor(this.sendEnabled() ? this.c().onBrand : this.c().sendDisabledFg)
-            .fontSize(20)
-            .fontWeight(this.sendEnabled() ? FontWeight.Bold : FontWeight.Medium)
-            .accessibilityText(this.sendEnabled() ? '发送' : '发送（未就绪）')
-            .onClick(() => { if (this.sendEnabled()) { this.send(); } })
-        }
       }
-      .width('100%')
-      .margin({ top: 2 })
-      .padding({ left: 2, right: 2, bottom: 2 })
+      ComposerActions({
+        hasImage: this.hasImage(),
+        streaming: this.streaming(),
+        sendEnabled: this.sendEnabled(),
+        permissionLabel: this.permissionLabel(),
+        wide: this.atLeastMd(),
+        onPickImage: (): void => this.pickImage(),
+        onProject: (): void => this.openProjectPanel(),
+        onPermission: (): void => {
+          this.permSheetOpen = true;
+        },
+        onSend: (): void => this.send(),
+        onStop: (): void => this.stop(),
+      })
       }
       .width('100%')
       .padding({ left: 10, right: 10, top: 6, bottom: 8 })

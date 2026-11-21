@@ -31,14 +31,14 @@ test('connect 无 token → NO_TOKEN，不发 open', async () => {
   assert.equal(socket.openCountOf(), 0);
 });
 
-test('connect 组帧：wsUrl、Bearer 头、子协议 dsh-mobile-v1', async () => {
+test('connect 组帧：wsUrl、Bearer 头、子协议含 dshrb-v1 协商位', async () => {
   const socket: FakeSocket = new FakeSocket();
   const timers: FakeTimers = new FakeTimers();
   const c: GatewayClient = makeClient(socket, timers);
   const p: Promise<void> = c.connect();
   assert.equal(socket.lastUrl, 'ws://192.168.1.10:8765/ws/mobile');
   assert.equal(socket.lastHeaders.get('Authorization'), 'Bearer tok-1');
-  assert.equal(socket.lastProtocol, 'dsh-mobile-v1');
+  assert.equal(socket.lastProtocol, 'dsh-mobile-v1,dshrb-v1');
   socket.serverOpen();
   socket.serverHello();
   await p;

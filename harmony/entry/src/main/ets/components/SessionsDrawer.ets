@@ -16,6 +16,7 @@ import { ArrayDataSource } from './ArrayDataSource';
 import {
   BP_SM, BP_QUERY_MD, BP_QUERY_LG, breakpointOf, atLeastMd,
 } from '../core/Breakpoints';
+import { DrawerSearch } from './DrawerSearch';
 
 @Component
 export struct SessionsDrawer {
@@ -37,6 +38,8 @@ export struct SessionsDrawer {
    * 点分组标题展开/收起。@State 保证点一下立刻重渲染。
    */
   @State earlierOpen: boolean = false;
+  /** 搜索词（标题本地过滤；正文搜索在 DrawerSearch 子组件里）。 */
+  @State @Watch('applyFilter') query: string = '';
   /** 分组快照（@State 数组：ForEach 只能观察被 build 读到的 @State）。 */
   @State groupsView: SessionGroup[] = [];
   /**
@@ -85,8 +88,7 @@ export struct SessionsDrawer {
       }
     }
     this.marksView = next;
-    this.groupsView = groupSessionsByTime(this.sessionsView, Date.now());
-    this.syncDataSource();
+    this.applyFilter();
   }
 
   /** 某会话的挂起标记（'question' / 'approval' / ''）。 */
@@ -98,6 +100,35 @@ export struct SessionsDrawer {
       }
     }
     return '';
+  }
+
+  /** 标题本地过滤（大小写不敏感）；空词返回全量。 */
+  private filteredSessions(): DshSession[] {
+    const q: string = this.query.trim().toLowerCase();
+    if (q === '') {
+      return this.sessionsView;
+    }
+    const out: DshSession[] = [];
+    for (let i = 0; i < this.sessionsView.length; i++) {
+      if (this.sessionsView[i].displayTitle.toLowerCase().indexOf(q) >= 0) {
+        out.push(this.sessionsView[i]);
+      }
+    }
+    return out;
+  }
+
+  private applyFilter(): void {
+    this.groupsView = groupSessionsByTime(this.filteredSessions(), Date.now());
+    this.syncDataSource();
+  }
+
+  private sessionById(id: string): DshSession | null {
+    for (let i = 0; i < this.sessionsView.length; i++) {
+      if (this.sessionsView[i].id === id) {
+        return this.sessionsView[i];
+      }
+    }
+    return null;
   }
 
   aboutToAppear(): void {
@@ -246,6 +277,18 @@ export struct SessionsDrawer {
       .padding({ left: 16, right: 16, top: 18, bottom: 12 })
 
       Divider().color(this.c().borderL1).strokeWidth(1)
+
+      DrawerSearch({
+        store: this.store,
+        query: $query,
+        version: this.version,
+        onOpenId: (id: string): void => {
+          const target: DshSession | null = this.sessionById(id);
+          if (target !== null) {
+            this.open(target);
+          }
+        }
+      })
 
       List() {
         LazyForEach(this.ds, (g: SessionGroup) => {

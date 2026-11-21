@@ -37,7 +37,10 @@ export struct StreamingBlock {
   build() {
     Column() {
       if (this.reasoning !== '') {
-        ThinkBlock({ text: this.reasoning, streaming: true, showPreview: this.showPreview })
+        ThinkBlock({
+          text: this.reasoning, streaming: true, showPreview: this.showPreview,
+          answerStarted: this.text !== ''
+        })
       }
       // 正文可能为空（还在思考阶段）：给一个占位行高，避免气泡从 0 高度跳变。
       if (this.text !== '') {

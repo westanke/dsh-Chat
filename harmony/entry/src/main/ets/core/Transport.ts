@@ -15,6 +15,9 @@
  * - HttpResponse.headers 的键必须是小写（平台层负责），header() 大小写不敏感查询才成立。
  */
 
+/** WS 子协议清单：同时声明 dshrb-v1，服务端据此启用通用内核调用面（握手仍回 dsh-mobile-v1）。 */
+export const MOBILE_SUBPROTOCOLS: string = 'dsh-mobile-v1,dshrb-v1';
+
 /** 连接超时（GatewayClient 的 WS ready 等待，Android 口径 10s）。 */
 export const WS_CONNECT_TIMEOUT_MS: number = 10000;
 /** hello 帧等待超时（Android 口径 8s）。 */

@@ -425,6 +425,32 @@ ioCard/轮尾行/思考行全部复用既有语义色（mdCodeBlockBg/borderL1/b
 生成中→busy「生成中」；正常→ok（显示主机名）。颜色只是辅助，状态一律带文字。
 
 
+### 4.12.1 鸿蒙落点（2026-11-21 移植）
+
+鸿蒙没有 Flutter 的 `CustomMultiChildLayout`，落点改为「Column + 绝对定位渐隐带」：
+`Column[TopBar, MessageList(layoutWeight 1), Composer]`，Stack 末尾叠一条
+`chatVeilFeather + chatListOverlap` 高的 `LinearGradient`（`bgBase` α0 → 实心，
+`hitTestBehavior: None`），列表尾部再加与 `chatListOverlap + chatVeilFeather` 等高的留白。
+行距不走 `List.space`（统一值做不到「换轮 24 / 同轮 8 / 过程 0 / 卡片 12」），
+改为每个 `ListItem` 按 `chatRowGapBefore` 自己加 `padding.top`。
+
+`ui/theme.ets` 的 `DsSpacing` 对应常量：
+
+| token | 值 | 说明 |
+|---|---|---|
+| `chatListOverlap` | 6 | 列表底边压进 composer |
+| `chatVeilFeather` | 14 | 渐隐羽化高 |
+| `chatListBottomPad` | 20 | = overlap + feather |
+| `chatListTopPad` | 8 | 列表顶部留白 |
+| `chatComposerBottomPad` | 8 | composer 底部最小安全区 |
+| `chatGapNewTurn` | 24 | 新轮首行 |
+| `chatGapSameTurn` | 8 | 同轮消息 |
+| `chatGapProcess` | 0 | 过程组贴同轮消息 |
+| `chatGapCard` | 12 | 改动卡 / 生成卡 |
+| `chatGapFootnote` | 4 | 脚注 / 轮尾行 |
+| `chatStatusDot` / `chatStatusGap` / `chatStatusRow` | 6 / 6 / 20 | 顶栏状态行（安卓 gap 5 → R003 就近 6） |
+| `changeCardRadius` / `changeCardIcon` / `changeCardThumb` | 16 / 16 / 40 | 两张卡与 diff 页（§4.17） |
+
 ## 4.13 会话页思考行 · dsh-go 形态（2026-11-20 task-7）
 
 思考行的**结构**移植自 dsh-go（`app/lib/ui/chat/widgets/thinking_pill.dart` +

@@ -208,6 +208,16 @@ export class DsColors {
     return this.dark ? DsPalette.c300 : '#D93F3F';
   }
 
+  /// 顶栏状态点：已连接（浅 #337250 / 深 #8BCCA6）。§4.12。
+  get chatStatusOk(): string {
+    return this.dark ? '#8BCCA6' : '#337250';
+  }
+
+  /// 顶栏状态点：等待审批 / 等待回答（浅 #936123 / 深 #E6BD7C）。§4.12。
+  get chatStatusWarn(): string {
+    return this.dark ? '#E6BD7C' : '#936123';
+  }
+
   get drawerSearchFill(): string {
     return this.dark ? DsPalette.c800 : '#F5F5F5';
   }
@@ -363,5 +373,45 @@ export class DsSpacing {
   static readonly settingsCardPadV: number = 6;
   static readonly settingsChipGap: number = 6;
   static readonly thinkHMargin: number = 12;
+  /** 思考行：环 18 + 内点 6；lead 列 24 + 列间距 8；窗口正文缩进 32。 */
+  static readonly thinkOrbSize: number = 18;
+  static readonly thinkDotSize: number = 6;
+  static readonly thinkLeadGap: number = 8;
+  static readonly thinkBodyIndent: number = 32;
   static readonly hitlPanelMaxFraction: number = 0.5;
+
+  // ---- §4.12 dsh-go 外壳（鸿蒙落点，值见 docs/design-tokens.md §4.12）----
+  /// 列表底边压进 composer 的量（渐隐带从这里往上羽化）。
+  static readonly chatListOverlap: number = 6;
+  /// 列表底部渐隐羽化高。
+  static readonly chatVeilFeather: number = 14;
+  /// 列表尾部留白 = overlap + feather（末条不被 composer 压住）。
+  static readonly chatListBottomPad: number = 20;
+  /// 列表顶部留白。
+  static readonly chatListTopPad: number = 8;
+  /// composer 底部安全区最小留白。
+  static readonly chatComposerBottomPad: number = 8;
+  /// 行距：新轮首行。
+  static readonly chatGapNewTurn: number = 24;
+  /// 行距：同一轮内的消息。
+  static readonly chatGapSameTurn: number = 8;
+  /// 行距：过程组紧贴同轮消息（0 合法）。
+  static readonly chatGapProcess: number = 0;
+  /// 行距：改动卡 / 生成文件卡前。
+  static readonly chatGapCard: number = 12;
+  /// 行距：脚注（轮尾行 / 截断提示）前。
+  static readonly chatGapFootnote: number = 4;
+  /// 顶栏状态行：圆点直径 / 圆点与文字间距 / 状态行高。
+  /// 安卓 gap=5，鸿蒙 R003 无 5 档，就近落 6（差 1vp，见 §4.12）。
+  static readonly chatStatusDot: number = 6;
+  static readonly chatStatusGap: number = 6;
+  static readonly chatStatusRow: number = 20;
+  /// 卡容器圆角 / 图标 / 缩略图 / 缩略图圆角。
+  static readonly changeCardRadius: number = 16;
+  static readonly changeCardIcon: number = 16;
+  static readonly changeCardThumb: number = 40;
+  static readonly changeCardThumbRadius: number = 8;
+  /// 改动卡最多展示文件行；生成卡默认展示行。
+  static readonly changeCardMaxFiles: number = 3;
+  static readonly artifactCardMaxFiles: number = 4;
 }

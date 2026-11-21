@@ -11,6 +11,8 @@
 
 import { GatewayEntry, GatewayRoot } from './Files';
 import { GatewayApi } from './GatewayApi';
+import { DshSession } from './Models';
+import { AtMentionDraft } from './Content';
 
 /** 面板条目（UI 直接消费；kind 保留 file/directory 供图标与下钻判断）。 */
 export class AtEntry {
@@ -84,4 +86,78 @@ export function loadMergedAtEntries(api: GatewayApi, roots: GatewayRoot[],
     }
     return mergeAtEntries(lists, labels, query, inSubDirectory(dir));
   });
+}
+
+
+// ---------- @ 历史会话（安卓 composer_at_sessions.dart 口径） ----------
+
+/** 面板里的「对话」条目。 */
+export class AtSessionHit {
+  id: string = '';
+  title: string = '';
+
+  constructor(id: string, title: string) {
+    this.id = id;
+    this.title = title;
+  }
+}
+
+/**
+ * 标题子串匹配（不区分大小写），排除当前会话、空标题，最多 max 条。
+ * 设计口径：@ 面板先列「对话」再列文件；文件名过滤用前缀，会话用子串。
+ */
+export function sessionMatches(sessions: DshSession[], currentId: string | null,
+                               query: string, max: number = 6): AtSessionHit[] {
+  const out: AtSessionHit[] = [];
+  const q: string = query.trim().toLowerCase();
+  for (const s of sessions) {
+    if (out.length >= max) {
+      break;
+    }
+    if (currentId !== null && s.id === currentId) {
+      continue;
+    }
+    const title: string = (s.title ?? '').trim();
+    if (title === '') {
+      continue;
+    }
+    if (q.length > 0 && title.toLowerCase().indexOf(q) < 0) {
+      continue;
+    }
+    out.push(new AtSessionHit(s.id, title));
+  }
+  return out;
+}
+
+/**
+ * 把 `@部分` 换成 `@[标题](dsh-session:<id>) `；标题里的 `]` 换全角］
+ * （否则 Markdown 链接会提前闭合）。标题空时用 id 当文字。
+ */
+export function insertSessionMention(draft: string, at: AtMentionDraft,
+                                     id: string, title: string): string {
+  const label: string = (title.trim() === '' ? id : title.trim()).replace(/\]/g, '］');
+  const mention: string = '@[' + label + '](dsh-session:' + id + ') ';
+  return draft.substring(0, at.start) + mention + draft.substring(at.end);
+}
+
+/** `@src/li` → 目录部分 `src`（无 `/` 返回空串）。 */
+export function atQueryDir(query: string): string {
+  const i: number = query.lastIndexOf('/');
+  return i < 0 ? '' : query.substring(0, i);
+}
+
+/** `@src/li` → 叶子过滤词 `li`（无 `/` 返回整串）。 */
+export function atLeafQuery(query: string): string {
+  const i: number = query.lastIndexOf('/');
+  return i < 0 ? query : query.substring(i + 1);
+}
+
+/** 拼当前浏览目录与 @ 里的目录段（`src/` + `li` 两段都可能为空）。 */
+export function joinAtDir(baseDir: string, queryDir: string): string {
+  const base: string = baseDir.replace(/\/+$/, '');
+  const sub: string = queryDir.replace(/^\/+/, '').replace(/\/+$/, '');
+  if (sub === '') {
+    return base;
+  }
+  return base === '' ? sub : base + '/' + sub;
 }

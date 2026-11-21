@@ -16,6 +16,11 @@ import {
 
 /** GatewayClient 事件入口（ChatStore 构造时经 setEventListener 转进来）。 */
 export function onEventIn(store: ChatStore, event: GatewayEvent): void {
+  if (event.type === GatewayEventType.KERNEL_CATALOG) {
+    // 内核目录晚于 hello 到达：抬一次刷新版本，让抽屉把「搜索不可用」翻成可用。
+    store.changed();
+    return;
+  }
   if (event.type === GatewayEventType.DELTA) {
     const delta: MessageDelta | null = event.delta;
     if (delta === null || !store.isCurrent(delta.sessionId)) {
@@ -67,7 +72,7 @@ export function onEventIn(store: ChatStore, event: GatewayEvent): void {
       return;
     }
     store.streamTools.applyResult(result.callId, result.isError,
-                                  result.contentText, result.errorCode);
+                                  result.contentText, result.errorCode, result.meta);
     afterLiveRowsIn(store);
     return;
   }

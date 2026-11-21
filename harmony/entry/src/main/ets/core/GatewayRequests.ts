@@ -18,6 +18,8 @@ import {
   GatewayEvent, GatewayState, RequestException, requestExceptionFromFrame, eventFromFrame,
 } from './GatewayEvents';
 import { REQUEST_TIMEOUT_MS } from './Transport';
+import { KernelCallResult, parseKernelEndpoints } from './KernelCall';
+import { settleKernelCallOn } from './GatewayKernel';
 import type { GatewayClient, PendingRequest } from './GatewayClient';
 
 /** 发起一次请求并等待回显（error 帧或超时 reject 稳定错误码）。 */
@@ -107,6 +109,17 @@ export function onFrameOn(client: GatewayClient, text: string,
     return;
   }
   const kind: string = JsonAccess.strOr(frame, 'kind', '');
+  // dshrb-v1 两帧**不带 data 包裹**，必须在取 data 之前分派。
+  if (kind === 'kernel-endpoints') {
+    const endpoints = parseKernelEndpoints(frame);
+    client.kernel.catalog = endpoints;
+    emit(GatewayEvent.kernelCatalog(endpoints));
+    return;
+  }
+  if (kind === 'kernel-call-result') {
+    settleKernelCallOn(client, KernelCallResult.fromFrame(frame));
+    return;
+  }
   const data: JsonMap | null = JsonAccess.asMap(JsonAccess.raw(frame, 'data'));
   // 双兜底：requestId 可能在 data 里，也可能在顶层。
   let requestId: string = '';

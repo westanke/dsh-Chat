@@ -90,3 +90,29 @@ test('未知档位退化为紧凑档（不抛异常、不返回 NaN）', () => {
   assert.equal(drawerFraction('huge'), 0.8);
   assert.equal(atLeastMd(''), false);
 });
+
+// ---------- 宽窗三档（安卓 window_class.dart 口径） ----------
+import {
+  windowClassOf, windowSidebarWidth, pageInsetFor, reflowsOnDrawer,
+  WC_COMPACT, WC_MEDIUM, WC_EXPANDED,
+} from '../../entry/src/main/ets/core/Breakpoints.ts';
+
+test('windowClassOf：宽高联合判定、短窗强制 compact', () => {
+  assert.equal(windowClassOf(400, 800), WC_COMPACT);
+  assert.equal(windowClassOf(600, 800), WC_MEDIUM);
+  assert.equal(windowClassOf(839, 900), WC_MEDIUM);
+  assert.equal(windowClassOf(840, 900), WC_EXPANDED);
+  assert.equal(windowClassOf(1200, 479), WC_COMPACT);
+  assert.equal(windowClassOf(0, 0), WC_COMPACT);
+});
+
+test('windowSidebarWidth / pageInsetFor / reflowsOnDrawer', () => {
+  assert.equal(windowSidebarWidth(WC_COMPACT), 288);
+  assert.equal(windowSidebarWidth(WC_MEDIUM), 320);
+  assert.equal(windowSidebarWidth(WC_EXPANDED), 320);
+  assert.equal(pageInsetFor(400, WC_COMPACT), 288);
+  assert.equal(pageInsetFor(1200, WC_EXPANDED), 320);
+  assert.equal(pageInsetFor(200, WC_COMPACT), 200);
+  assert.equal(reflowsOnDrawer(WC_COMPACT), false);
+  assert.equal(reflowsOnDrawer(WC_MEDIUM), true);
+});

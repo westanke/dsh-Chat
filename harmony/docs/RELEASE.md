@@ -28,11 +28,16 @@ harmony/scripts/package.sh        # 双闸门：node 单测 + hvigorw assembleHa
 骨架阶段未拿到 p12/cer/p7b，命令模板先占位（照姊妹仓 RELEASE.md §④ 回填精确参数）：
 
 ```sh
-# 材料齐后回填（口令在 harmony/signing/README.txt，别写进入库文件）：
+# 2026-11-21 实测可用（口令在 harmony/signing/README.txt，别写进入库文件）。
+# 注意：参数名是 -keystoreFile（不是 -keystore），且必须给 -keyAlias/-keyPwd/-signAlg，
+# 否则报 `ERROR: 11011005 Param is not trusted`（这不是证书不受信，是参数名不被识别）。
 java -jar "$HARMONY_TOOLCHAIN/sdk/default/openharmony/toolchains/lib/hap-sign-tool.jar" \
-  sign-app -keystore harmony/signing/dsh-chat-harmony.p12 -keystorePwd '<口令>' \
-  -appCertFile harmony/signing/<调试证书>.cer -profileFile harmony/signing/<调试Profile>.p7b \
-  -inFile dist/entry-default-unsigned.hap -outFile dist/dsh-Chat-harmony-<ver>-debug.hap
+  sign-app -mode localSign -signAlg SHA256withECDSA -keyAlias dsh-chat-harmony \
+  -keystoreFile harmony/signing/dsh-chat-harmony.p12 -keystorePwd '<口令>' -keyPwd '<口令>' \
+  -appCertFile "harmony/signing/dsh-chat调试证书.cer" \
+  -profileFile "harmony/signing/dshchatDebug调试.p7b" \
+  -inFile harmony/entry/build/default/outputs/default/entry-default-unsigned.hap \
+  -outFile harmony/build/dist/dsh-Chat-harmony-<ver>-debug.hap
 ```
 
 要点（姊妹仓实测）：

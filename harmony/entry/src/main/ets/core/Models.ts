@@ -163,6 +163,8 @@ export class ToolResultEvent {
   readonly contentText: string;
   readonly errorName: string;
   readonly errorCode: string;
+  /** `data.meta`（桥原样透传；edit/write 的 diffs 等，见 ToolCallInfo.meta）。 */
+  readonly meta: JsonMap | null;
 
   constructor(d: JsonMap | null) {
     this.sessionId = JsonAccess.strOr(d, 'sessionId', '');
@@ -196,6 +198,7 @@ export class ToolResultEvent {
     const error: JsonMap | null = JsonAccess.asMap(JsonAccess.raw(d, 'error'));
     this.errorName = error === null ? '' : JsonAccess.strOr(error, 'name', '');
     this.errorCode = error === null ? '' : JsonAccess.strOr(error, 'code', '');
+    this.meta = JsonAccess.obj(d, 'meta');
   }
 
   static fromJson(value: Object | null): ToolResultEvent {

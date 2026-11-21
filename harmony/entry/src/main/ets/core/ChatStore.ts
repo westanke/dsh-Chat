@@ -46,7 +46,7 @@ const HISTORY_MAX_MESSAGES: number = 200;
 const TOOL_REFRESH_DEBOUNCE_MS: number = 800;
 
 export class ChatStore {
-  private gateway: GatewayClient;
+  readonly gateway: GatewayClient;
   /** 网关 API（面板组件直连：models/命令/权限/REST roots/文档）。 */
   api: GatewayApi;
   private timers: TimerBridge;
@@ -247,13 +247,13 @@ export class ChatStore {
   }
 
   sendWithImage(text: string, image: PromptPart, mode: string = 'queue'): Promise<void> {
-    return this.send(text, image);
+    return this.send(text, [image], mode);
   }
 
-  send(text: string, imagePart?: PromptPart, mode: string = 'queue'): Promise<void> {
+  /** 一条消息最多带 6 张图（Composer 侧已限）；纯图无文字也允许发。 */
+  send(text: string, imageParts: PromptPart[] = [], mode: string = 'queue'): Promise<void> {
     const trimmed: string = text.trim();
-    // 纯图无文字也允许发（图片是完整消息内容）；两者都空才忽略。
-    if (trimmed === '' && imagePart === undefined) {
+    if (trimmed === '' && imageParts.length === 0) {
       return Promise.resolve();
     }
     this.lastError = null;
@@ -277,7 +277,10 @@ export class ChatStore {
     const self: ChatStore = this;
     return prepareSessionFor(this).then((): Promise<string> => {
       const sidArg: string | null = self.sessionId;
-      const parts: JsonMap[] = imagePart === undefined ? [] : [imagePart.toMap()];
+      const parts: JsonMap[] = [];
+      for (const part of imageParts) {
+        parts.push(part.toMap());
+      }
       return self.api.sendText(sidArg, trimmed, mode, parts);
     }).then((sid: string): void => {
       if (self.sessionId === null && sid !== '') {

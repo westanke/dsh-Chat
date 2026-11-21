@@ -72,3 +72,50 @@ test('inSubDirectory：空串与纯空白都是根层', () => {
   assert.equal(inSubDirectory('   '), false);
   assert.equal(inSubDirectory('workspace'), true);
 });
+
+// ---------- @ 历史会话 / 路径拆分（安卓 composer_at_sessions.dart 口径） ----------
+
+import { AtSessionHit, sessionMatches, insertSessionMention, atQueryDir, atLeafQuery, joinAtDir } from '../../entry/src/main/ets/core/AtMention.ts';
+import { DshSession } from '../../entry/src/main/ets/core/Models.ts';
+
+function session(id: string, title: string | null): DshSession {
+  return new DshSession({ id: id, title: title === null ? '' : title });
+}
+
+test('sessionMatches：子串匹配、排除当前会话、空标题、最多 6 条', () => {
+  const sessions: DshSession[] = [
+    session('s1', '重构输入条'),
+    session('cur', '重构输入条（当前）'),
+    session('s2', null),
+    session('s3', '行情看板'),
+    session('s4', '重构登录页'),
+    session('s5', '重构 A'),
+    session('s6', '重构 B'),
+    session('s7', '重构 C'),
+    session('s8', '重构 D'),
+  ];
+  const hits: AtSessionHit[] = sessionMatches(sessions, 'cur', '重构');
+  assert.equal(hits.length, 6);
+  assert.deepEqual(hits.map((h: AtSessionHit): string => h.id), ['s1', 's4', 's5', 's6', 's7', 's8']);
+  // 大小写不敏感（标题里的 ASCII）
+  const latin: DshSession[] = [session('x', 'Fix Login Bug')];
+  assert.equal(sessionMatches(latin, null, 'login').length, 1);
+});
+
+test('insertSessionMention：插入 Markdown 链接、] 换全角、空标题用 id', () => {
+  const draft: string = '看看 @重';
+  const at = { query: '重', start: 3, end: 5 };
+  const out: string = insertSessionMention(draft, at, 's1', '重[构]');
+  assert.equal(out, '看看 @[重[构］](dsh-session:s1) ');
+  assert.equal(insertSessionMention('@', { query: '', start: 0, end: 1 }, 's2', ''), '@[s2](dsh-session:s2) ');
+});
+
+test('atQueryDir / atLeafQuery / joinAtDir：@src/li 下钻不丢目录', () => {
+  assert.equal(atQueryDir('src/li'), 'src');
+  assert.equal(atLeafQuery('src/li'), 'li');
+  assert.equal(atQueryDir('li'), '');
+  assert.equal(atLeafQuery('li'), 'li');
+  assert.equal(joinAtDir('', 'src'), 'src');
+  assert.equal(joinAtDir('app', 'src/'), 'app/src');
+  assert.equal(joinAtDir('app/', ''), 'app');
+});

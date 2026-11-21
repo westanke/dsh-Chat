@@ -5,7 +5,7 @@
  */
 
 import { SlashCommand } from '../core/Content';
-import { AtEntry } from '../core/AtMention';
+import { AtEntry, AtSessionHit } from '../core/AtMention';
 import { PermissionOption } from '../core/Permissions';
 import { DsColors, DsTypography, DsSpacing } from '../ui/theme';
 
@@ -79,7 +79,10 @@ export struct AtFilePanel {
   @Prop loading: boolean = false;
   @Prop failed: boolean = false;
   @Prop dirPath: string = '';
+  /** @ 面板「对话」分组的命中（子串匹配，最多 6 条）。 */
+  @Prop sessions: AtSessionHit[] = [];
   onPick: (e: AtEntry) => void = (): void => {};
+  onPickSession: (h: AtSessionHit) => void = (): void => {};
   onRetry: () => void = (): void => {};
   @StorageProp('dshDark') dark: boolean = false;
 
@@ -90,6 +93,40 @@ export struct AtFilePanel {
   build() {
     Scroll() {
       Column() {
+        // 对话分组在上（安卓 composer_at_sessions.dart 口径）。
+        if (this.sessions.length > 0) {
+          Text('对话')
+            .fontSize(12)
+            .fontColor(this.c().labelTertiary)
+            .width('100%')
+            .padding({ left: 12, right: 12, top: 8, bottom: 4 })
+          Repeat<AtSessionHit>(this.sessions)
+            .each((item: RepeatItem<AtSessionHit>) => {
+              Row({ space: 8 }) {
+                Text('💬')
+                  .fontSize(14)
+                Text(item.item.title)
+                  .fontSize(14)
+                  .fontWeight(FontWeight.Medium)
+                  .fontColor(this.c().labelPrimary)
+                  .maxLines(1)
+                  .textOverflow({ overflow: TextOverflow.Ellipsis })
+                  .layoutWeight(1)
+              }
+              .width('100%')
+              .padding({ left: 12, right: 12, top: 10, bottom: 10 })
+              .accessibilityText('对话：' + item.item.title)
+              .onClick(() => {
+                this.onPickSession(item.item);
+              })
+            })
+            .key((item: AtSessionHit) => item.id)
+          if (this.entries.length > 0 || this.loading) {
+            Divider()
+              .color(this.c().borderL1)
+              .margin({ left: 12, right: 12 })
+          }
+        }
         if (this.loading) {
           Text('正在加载目录…')
             .fontSize(12).fontColor(this.c().labelTertiary)
@@ -102,7 +139,7 @@ export struct AtFilePanel {
             .onClick(() => {
               this.onRetry();
             })
-        } else if (this.entries.length === 0) {
+        } else if (this.entries.length === 0 && this.sessions.length === 0) {
           Text('没有匹配的文件')
             .fontSize(12).fontColor(this.c().labelTertiary)
             .width('100%').padding(12)
@@ -133,7 +170,7 @@ export struct AtFilePanel {
       }
       .width('100%')
     }
-    .height(Math.min(320, Math.max(44, this.entries.length * 40)))
+    .height(Math.min(320, Math.max(44, (this.entries.length + this.sessions.length) * 40 + 24)))
     .scrollBar(BarState.Off)
     .width('100%')
     .backgroundColor(this.c().inputFill)

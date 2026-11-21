@@ -10,12 +10,14 @@ import { ToolCallInfo, formatDuration, bashCommandOf, prettyArguments } from '..
 import { DsColors, DsTypography, DsSpacing } from '../ui/theme';
 import { MdView } from './md/MdView';
 import { ImageTile } from './ImageTile';
+import { UserBubble } from './UserBubble';
 import { MessageActions } from './MessageActions';
-import { DsImageRef, imageRefsOf, handoffRefOf } from '../core/ImageRef';
+import { DsImageRef, handoffRefOf } from '../core/ImageRef';
 import { MdDocViewer } from '../pages/MdDocViewer';
 import { ThinkBlock } from './ThinkBlock';
 import { ProcessGroup } from './ProcessGroup';
 import { TurnProcessRow } from './TurnProcessRow';
+import { TurnCards } from './TurnCards';
 import { StreamingBlock } from './StreamingBlock';
 import { CommandCard, DeliverableCard, ErrorBar } from './MessageCards';
 import { ToolBlock } from './ToolBlock';
@@ -78,6 +80,8 @@ export struct MessageList {
   private ds: ArrayDataSource<ChatMessage> = new ArrayDataSource<ChatMessage>([]);
   /** 当前首个可见项下标（onScrollIndex 维护），翻页后据此把视口锚回原内容。 */
   private firstIdx: number = 0;
+  /** 视口在底部（贴底跟随的粘性开关；用户上滑即撤销）。 */
+  @State atBottom: boolean = true;
   /** 翻页瞬间的锚点快照：首个可见下标 + 当时的消息条数。 */
   private anchorIdx: number = -1;
   private anchorLen: number = 0;
@@ -119,7 +123,8 @@ export struct MessageList {
   }
   @Builder
   renderList() {
-    List({ scroller: this.scroller, space: 14 }) {
+    Stack({ alignContent: Alignment.Bottom }) {
+      List({ scroller: this.scroller, space: 0 }) {
       // 历史翻页入口（安卓 chat_message_list.dart:196-215 同口径）：
       // 上滑触发不可靠，官方做法是显式「加载更早消息」按钮。
       if (this.hasMore) {
@@ -159,16 +164,17 @@ export struct MessageList {
           .padding({ top: 6, bottom: 6 })
         }
       }
-      LazyForEach(this.ds, (m: ChatMessage) => {
+      LazyForEach(this.ds, (m: ChatMessage, i: number) => {
         ListItem() {
           this.itemOf(m)
         }
+        // 逐行变距（§4.12）：新轮首行 24 / 过程组 0 / 同轮消息 8。
+        .padding({ top: i === 0 ? 0 : (m.isUser ? DsSpacing.chatGapNewTurn
+          : (m.isProcess ? DsSpacing.chatGapProcess : DsSpacing.chatGapSameTurn)) })
       }, (m: ChatMessage) => this.keyOf(m))
       // 流式块（对照安卓 _StreamingItem）：思考中先出「思考」块，正文增量走 MdView。
       // 必须排在已提交消息之后、截断提示之前，跟着内容长。
-      // 注意：send() 那一刻 store.streaming 就已是 true（core/ChatStore.ts:250-251），
-      // 本块因此会在**首个增量到达前**被建成空实例 —— 其子组件的入参必须全是 @Prop，
-      // 否则后续增量灌不进去（2026-11-17 真机「流式思考不显示」的真因）。
+      // send() 时 store.streaming 已 true —— 子组件入参必须全 @Prop，否则增量灌不进去。
       if (this.streamingVisible()) {
         ListItem() {
           StreamingBlock({
@@ -176,6 +182,7 @@ export struct MessageList {
             showPreview: policyOf(parseWorkStepsDetail(this.detailProp)).settledReasoningPreview
           })
         }
+        .padding({ top: DsSpacing.chatGapSameTurn })
       }
       if (this.maxTokensNotice) {
         ListItem() {
@@ -187,24 +194,69 @@ export struct MessageList {
         }
       }
     }
+      .width('100%')
+      .height('100%')
+      .constraintSize({ maxWidth: this.columnWidth > 0 ? readableColumnWidth(this.columnWidth) : '100%' })
+      .padding({ left: DsSpacing.screenPad, right: DsSpacing.contentPadRight,
+        top: DsSpacing.chatListTopPad, bottom: DsSpacing.chatListBottomPad })
+      .scrollBar(BarState.Off)
+      .onScrollIndex((first: number): void => {
+        this.firstIdx = first;
+      })
+      .onScroll(() => {
+        this.syncAtBottom();
+      })
+      .onAppear(() => {
+        this.jumpToBottom(false);
+      })
+      // 底部渐隐带（§4.12）：列表留白 20，正文从这里淡出而不是硬切。
+      Column()
+        .width('100%')
+        .height(DsSpacing.chatListBottomPad)
+        .linearGradient({
+          angle: 180,
+          colors: [[this.veilStart(), 0], [this.c().bgBase, 1]],
+        })
+        .hitTestBehavior(HitTestMode.None)
+      if (!this.atBottom && this.msgs.length > 0) {
+        Button('↓')
+          .width(48)
+          .height(48)
+          .fontSize(20)
+          .fontColor(this.c().onBrand)
+          .backgroundColor(this.c().brand)
+          .borderRadius(24)
+          .shadow({ radius: 12, color: this.c().shadow })
+          .margin({ right: 16, bottom: DsSpacing.chatListBottomPad + 8 })
+          .accessibilityText('回到最新消息')
+          .onClick((): void => {
+            this.jumpToBottom(true);
+          })
+      }
+    }
     .width('100%')
-    .constraintSize({ maxWidth: this.columnWidth > 0 ? readableColumnWidth(this.columnWidth) : '100%' })
     .layoutWeight(1)
-    .padding({ left: DsSpacing.screenPad, right: DsSpacing.contentPadRight,
-      top: 12, bottom: DsSpacing.msgPad })
-    .scrollBar(BarState.Off)
-    .onScrollIndex((first: number): void => {
-      this.firstIdx = first;
-    })
-    .onAppear(() => {
-      this.jumpToBottom(false);
-    })
     .bindContentCover(this.docOpen, this.docViewer(), {
       modalTransition: ModalTransition.DEFAULT,
       onDisappear: (): void => {
         this.docOpen = false;
       }
     })
+  }
+
+  /** 渐隐带起始色 = bgBase 的同色透明（#00RRGGBB）；异常值退回全透明。 */
+  private veilStart(): string {
+    const base: string = this.c().bgBase;
+    return base.length === 7 ? '#00' + base.substring(1) : '#00000000';
+  }
+
+  /** 视口是否贴底：ArkUI 的 isAtEnd 已含「差一像素也算」的语义。 */
+  private syncAtBottom(): void {
+    try {
+      this.atBottom = this.scroller.isAtEnd();
+    } catch (e) {
+      this.atBottom = true;
+    }
   }
   @Builder
   docViewer() {
@@ -256,9 +308,12 @@ export struct MessageList {
       }, 60);
       return;
     }
-    // 新消息/流式增量到达后贴底（等一帧让 List 先按新数据布局）。
+    // 新消息/流式增量到达后贴底 —— 仅当用户本来就在底部（向上翻历史时不能被拽走）。
     setTimeout((): void => {
-      this.jumpToBottom(false);
+      this.syncAtBottom();
+      if (this.atBottom) {
+        this.jumpToBottom(false);
+      }
     }, 30);
   }
   /** 点「加载更早消息」：翻页 + 失败只提示不打断（store 侧写 lastError）。 */
@@ -290,7 +345,7 @@ export struct MessageList {
   @Builder
   itemOf(m: ChatMessage) {
     if (m.isUser) {
-      this.userBubble(m);
+      UserBubble({ store: this.store, text: m.text, rawText: this.rawTextOf(m), images: m.images });
     } else if (m.isError) {
       ErrorBar({ text: m.text });
     } else if (m.role === 'command') {
@@ -318,6 +373,7 @@ export struct MessageList {
         this.assistantBlock(m);
         // 轮尾行（官方 TurnProcessNodeView）：闭合轮给「已完成，用时 N/处理失败」，可点开整轮过程组。
         TurnProcessRow({ store: this.store, msg: m, version: this.version })
+        TurnCards({ store: this.store, msg: m, version: this.version })
       }
       .width('100%')
       .alignItems(HorizontalAlign.Start)
@@ -349,13 +405,7 @@ export struct MessageList {
     return false;
   };
 
-  /**
-   * LazyForEach 的 key。key 里**不能**带 index：历史翻页会把旧消息插到数组前部，
-   * index 全体后移，带 index 的 key 全变 → ArkUI 判定整列重建 → 滚动位置重置
-   * （真机现象：点「加载更早消息」后直接跳回最新消息）。用 seq + 文本长度这类
-   * 内容稳定值。独立成方法还有个副作用：内联模板串会被静态审计误判成
-   * 「LazyForEach 缺少 keyGenerator」。
-   */
+  /** LazyForEach key：禁带 index（翻页会全量重建并重置滚动位置），只用稳定内容值。 */
   private keyOf(m: ChatMessage): string {
     return m.role + '-' + m.seq.toString() + '-' + m.text.length.toString();
   }
@@ -382,55 +432,6 @@ export struct MessageList {
     } catch (e) {
       // UIContext 未就绪（极少见）：保持 Index 写进来的档位不变。
     }
-  }
-  /** 用户消息：右对齐气泡（浅色走 DsPalette.userBubble，深色同理，见 ui/theme.ets）。
-   * 图片两种来源：content 里 type=image 的引用（images）与纯文本模型的交接占位
-   * （文本里的 `[Image: source: …]`，安卓 chat_message_items.dart:176 同口径，
-   * 用户与助手气泡都挂）。
-   *
-   * 布局必须是 Column（图上文下、右对齐），不能是 Row：Row 里图片固定宽与
-   * Text 的 maxWidth 会争宽，两者各自都要 86.4% 屏宽 → 文字被挤到屏外
-   * （真机 2026-11-17 反馈）。安卓 chat_message_items.dart 也是 Column +
-   * CrossAxisAlignment.end。 */
-  @Builder
-  userBubble(m: ChatMessage) {
-    Column({ space: 8 }) {
-      this.userImages(m)
-      if (this.userHandoff(m) !== null) {
-        ImageTile({ store: this.store, ref: this.userHandoff(m) as DsImageRef })
-          .constraintSize({ maxWidth: this.bubbleMaxWidth() })
-      }
-      Text(m.text === '' ? ' ' : m.text)
-        .fontSize(16)
-        .fontColor(this.c().labelPrimary)
-        // 安卓用户气泡是 `DsTypography.base.copyWith(height: 24 / 16)`
-        // （app/lib/ui/chat_message_items.dart:227-229），即 16/24 —— 不是 base 的
-        // 16/28（那是助手正文）。此处取 24 对齐安卓，原 22 偏挤。
-        .lineHeight(24)
-        .constraintSize({ maxWidth: this.bubbleMaxWidth() })
-        .padding({ left: 14, right: 14, top: 10, bottom: 10 })
-        .backgroundColor(this.c().userBubble)
-        .borderRadius(DsSpacing.bubbleRadius)
-    }
-    .width('100%')
-    .alignItems(HorizontalAlign.End)
-  }
-  /** 用户消息图片块（发送即带引用）。 */
-  @Builder
-  userImages(m: ChatMessage) {
-    if (m.images.length > 0) {
-      Column() {
-        ForEach(imageRefsOf(m.images), (r: DsImageRef) => {
-          ImageTile({ store: this.store, ref: r })
-            .margin({ top: 4, bottom: 4 })
-        }, (r: DsImageRef) => r.cacheKey)
-      }
-      .constraintSize({ maxWidth: this.bubbleMaxWidth() })
-    }
-  }
-  /** 用户气泡里的交接图引用（没有回 null；气泡布局用）。 */
-  private userHandoff(m: ChatMessage): DsImageRef | null {
-    return handoffRefOf(this.rawTextOf(m));
   }
   /** 取交接图用的原文：清洗过的消息把原文留在 rawText 里。 */
   private rawTextOf(m: ChatMessage): string {

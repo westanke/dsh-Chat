@@ -15,6 +15,7 @@
  */
 
 import { ToolCallInfo } from './ToolCall';
+import { JsonMap } from './JsonAccess';
 import { MessageDelta } from './Models';
 
 /** 显式行状态常量（ToolCallInfo.status；'' 表示按 resultText/failed 派生）。 */
@@ -103,7 +104,8 @@ export function rankOf(call: ToolCallInfo): number {
 
 function toolRow(key: string, name: string, rawArguments: string | null,
                  status: string): ToolCallInfo {
-  const row: ToolCallInfo = new ToolCallInfo(key, name, [], null, false, null, null, rawArguments);
+  const row: ToolCallInfo = new ToolCallInfo(key, name, [], null, false, null, null,
+    rawArguments, null);
   row.status = status;
   return row;
 }
@@ -254,7 +256,7 @@ export class StreamToolState {
 
   /** chat.tool.result → done / failed / stopped / cancelled。 */
   applyResult(callId: string, isError: boolean, contentText: string,
-              errorCode: string): void {
+              errorCode: string, meta: JsonMap | null): void {
     if (callId === '') {
       return;
     }
@@ -266,12 +268,16 @@ export class StreamToolState {
       const fresh: ToolCallInfo = toolRow(callId, '工具调用', null, status);
       fresh.resultText = contentText !== '' ? contentText : null;
       fresh.failed = failed;
+      fresh.meta = meta;
       this.rows.push(fresh);
       return;
     }
     row.resultText = contentText !== '' ? contentText : null;
     row.status = status;
     row.failed = failed;
+    if (meta !== null) {
+      row.meta = meta;
+    }
   }
 }
 
@@ -288,6 +294,9 @@ export function mergeLiveRow(target: ToolCallInfo, live: ToolCallInfo): boolean 
   }
   if (live.resultText !== null) {
     target.resultText = live.resultText;
+  }
+  if (live.meta !== null) {
+    target.meta = live.meta;
   }
   target.failed = live.failed;
   target.status = live.status;

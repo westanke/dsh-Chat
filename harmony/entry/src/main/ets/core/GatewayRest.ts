@@ -254,6 +254,23 @@ export class GatewayRest {
     });
   }
 
+  /** 全文原始字节（图片缩略图用；readFileBytes 按文本解码会毁二进制）。 */
+  readFileData(rootId: string, wirePath: string): Promise<Uint8Array> {
+    const path: string = '/api/v1/roots/' + GatewayRest.encodePath(rootId) +
+      '/content?path=' + GatewayRest.encodePath(wirePath);
+    if (this.http === null) {
+      return Promise.reject(new RequestException('NO_TRANSPORT', 'HTTP 传输未注入'));
+    }
+    const req: HttpRequest = new HttpRequest('GET', this.client.getBaseUrl() + path,
+      this.restHeaders(), null, HTTP_TIMEOUT_MS);
+    return this.http.request(req).then((resp: HttpResponse): Uint8Array => {
+      if (resp.status !== 200) {
+        throw new RequestException('HTTP_' + resp.status.toString(), '文件读取失败');
+      }
+      return resp.bodyBytes === null ? new Uint8Array(0) : resp.bodyBytes;
+    });
+  }
+
   /**
    * 取图片交接产物。**sessionId 必带**：bridge `attachmentsAndImage()` 对
    * `/api/v1/image-handoff` 校验 `if (!name || !sessionId) throw ApiError(400,

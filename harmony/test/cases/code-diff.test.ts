@@ -105,3 +105,45 @@ test('codeDiffsOfLastTurn：只取最后一轮', () => {
   assert.equal(diffs[0].path, 'new.ts');
   assert.equal(codeDiffsOfLastTurn([]).length, 0);
 });
+
+// ---------- diffLinesOf（LCS；安卓 code_diff.dart 口径） ----------
+
+import { diffLinesOf, DiffLine, DIFF_LINE_ADD, DIFF_LINE_CTX, DIFF_LINE_DEL } from '../../entry/src/main/ets/core/CodeDiff.ts';
+
+function kinds(lines: DiffLine[]): string[] {
+  const out: string[] = [];
+  for (const l of lines) {
+    out.push(l.type + ':' + l.text);
+  }
+  return out;
+}
+
+test('diffLinesOf：中间改一行 = ctx/del/add/ctx', () => {
+  assert.deepEqual(kinds(diffLinesOf('a\nb\nc', 'a\nB\nc')),
+    [DIFF_LINE_CTX + ':a', DIFF_LINE_DEL + ':b', DIFF_LINE_ADD + ':B', DIFF_LINE_CTX + ':c']);
+});
+
+test('diffLinesOf：末尾换行不产空行，空原文全 add', () => {
+  assert.deepEqual(kinds(diffLinesOf('', 'x\ny')), [DIFF_LINE_ADD + ':x', DIFF_LINE_ADD + ':y']);
+  assert.deepEqual(kinds(diffLinesOf('a\n', 'a\nb\n')),
+    [DIFF_LINE_CTX + ':a', DIFF_LINE_ADD + ':b']);
+});
+
+test('diffLinesOf：纯删除与纯新增', () => {
+  assert.deepEqual(kinds(diffLinesOf('a\nb', 'a')), [DIFF_LINE_CTX + ':a', DIFF_LINE_DEL + ':b']);
+  assert.deepEqual(kinds(diffLinesOf('a', 'a\nb')), [DIFF_LINE_CTX + ':a', DIFF_LINE_ADD + ':b']);
+});
+
+test('diffLinesOf：行数超阈值退回裁剪版仍只标改动行', () => {
+  const oldLines: string[] = [];
+  const newLines: string[] = [];
+  for (let i = 0; i < 700; i++) {
+    oldLines.push('l' + i);
+    newLines.push(i === 350 ? 'changed' : 'l' + i);
+  }
+  const lines: DiffLine[] = diffLinesOf(oldLines.join('\n'), newLines.join('\n'));
+  const dels: number = lines.filter((l: DiffLine): boolean => l.type === DIFF_LINE_DEL).length;
+  const adds: number = lines.filter((l: DiffLine): boolean => l.type === DIFF_LINE_ADD).length;
+  assert.equal(dels, 1);
+  assert.equal(adds, 1);
+});

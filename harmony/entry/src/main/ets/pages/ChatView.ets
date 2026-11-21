@@ -8,13 +8,16 @@
 
 import { ChatStore } from '../core/ChatStore';
 import {
-  BP_SM, drawerWidth, drawerFraction, floatingColumnWidth
+  BP_SM, drawerWidth, drawerFraction, floatingColumnWidth,
+  windowClassOf, reflowsOnDrawer, pageInsetFor, windowSidebarWidth
 } from '../core/Breakpoints';
 import { GatewayState } from '../core/GatewayEvents';
 import { DshSession } from '../core/Models';
 import { DsColors, DsTypography, DsSpacing } from '../ui/theme';
 import { MessageList } from '../components/MessageList';
 import { Composer } from '../components/Composer';
+import { TodoDock } from '../components/TodoDock';
+import { ChatTopBar } from '../components/ChatTopBar';
 import { HitlPanel } from '../components/HitlPanel';
 import { PendingQuestion, PendingApproval, QuestionAnswerItem } from '../core/Questions';
 import { SessionsDrawer } from '../components/SessionsDrawer';
@@ -56,6 +59,9 @@ export struct ChatView {
   /** store.pendingLocation 的快照（ArkUI 只观察 build 里读到的 @State）。 */
   @State pendingLocView: SessionLocation | null = null;
   @State menuOpen: boolean = false;
+  /** 窗口尺寸（vp）：决定 compact/medium/expanded 三档与抽屉是否改为缩窄页面。 */
+  @State winW: number = 0;
+  @State winH: number = 0;
   @State statsSheet: boolean = false;
   @State trajectorySheet: boolean = false;
   @State teamSheet: boolean = false;
@@ -76,6 +82,25 @@ export struct ChatView {
   private drawerShift(): string {
     const fraction: number = drawerFraction(this.bp);
     return (fraction * 100).toFixed(0) + '%';
+  }
+
+  /** 宽窗抽屉：缩窄页面（安卓 Padding(left: pageInsetFor) 口径）。 */
+  private reflow(): boolean {
+    return this.winW > 0 && reflowsOnDrawer(windowClassOf(this.winW, this.winH));
+  }
+
+  private pageInset(): number {
+    if (!this.reflow() || !this.drawerOpen) {
+      return 0;
+    }
+    return pageInsetFor(this.winW, windowClassOf(this.winW, this.winH));
+  }
+
+  private drawerPanelWidth(): number {
+    if (this.reflow()) {
+      return windowSidebarWidth(windowClassOf(this.winW, this.winH));
+    }
+    return drawerWidth(this.bp);
   }
 
   private c(): DsColors {
@@ -126,7 +151,8 @@ export struct ChatView {
       }
       .width('100%')
       .height('100%')
-      .translate({ x: this.drawerOpen ? this.drawerShift() : '0%' })
+      .padding({ left: this.pageInset() })
+      .translate({ x: this.reflow() ? 0 : (this.drawerOpen ? this.drawerShift() : 0) })
       // 动效取官方档位 200ms（R017 档位 100/150/200/300/350）。
       .animation({ duration: 200, curve: Curve.EaseOut })
       if (this.drawerOpen) {
@@ -141,7 +167,7 @@ export struct ChatView {
           })
         SessionsDrawer({
           store: this.store,
-          panelWidth: drawerWidth(this.bp),
+          panelWidth: this.drawerPanelWidth(),
           onClose: (): void => {
             this.drawerOpen = false;
           }, onOpenSettings: (): void => {
@@ -199,6 +225,7 @@ export struct ChatView {
           store: this.store, version: this.version
         })
       }
+      TodoDock({ store: this.store, version: this.version })
       Composer({
         store: this.store, version: this.version
       })
@@ -211,6 +238,11 @@ export struct ChatView {
       const raw = newV.width;
       let w = 0;
       if (typeof raw === 'number') { w = raw; } else if (typeof raw === 'string') { w = parseFloat(raw); }
+      const rawH = newV.height;
+      let h = 0;
+      if (typeof rawH === 'number') { h = rawH; } else if (typeof rawH === 'string') { h = parseFloat(rawH); }
+      if (w > 0) { this.winW = w; }
+      if (h > 0) { this.winH = h; }
       if (w > 0 && Math.abs(w - this.columnWidth) >= 1) { AppStorage.setOrCreate('dshColumnWidthVp', w); }
     })
     .bindSheet(this.sheetOpen(), this.sheetContent(), {
@@ -370,59 +402,29 @@ export struct ChatView {
     return st !== null && st.connectionState === GatewayState.READY;
   }
 
-  /** 顶栏 44dp：菜单 / 标题 / 连接点 / 新建对话。 */
+  /** 顶栏两行（dsh-go 结构），实现见 components/ChatTopBar.ets。 */
   @Builder
   topBar() {
-    Row({ space: 8 }) {
-      Text('☰')
-        .fontSize(22)
-        .fontColor(this.c().labelPrimary)
-        .width(40)
-        .height(DsSpacing.topBarHeight)
-        .textAlign(TextAlign.Center)
-        .accessibilityText('打开会话列表')
-        .onClick(() => {
-          this.drawerOpen = true;
-        })
-      Text(this.title())
-        .fontSize(16)
-        .fontWeight(FontWeight.Bold)
-        .fontColor(this.c().labelPrimary)
-        .maxLines(1)
-        .textOverflow({ overflow: TextOverflow.Ellipsis })
-        .layoutWeight(1)
-      Circle({ width: 8, height: 8 })
-        .fill(this.ready() ? this.c().brand : this.c().labelTertiary)
-      Text('＋')
-        .fontSize(22)
-        .fontColor(this.c().labelPrimary)
-        .width(40)
-        .height(DsSpacing.topBarHeight)
-        .textAlign(TextAlign.Center)
-        .accessibilityText('新建对话')
-        .onClick(() => {
-          const st: ChatStore | null = this.store;
-          if (st !== null) {
-            st.newChat();
-          }
-        })
-      Text('⋮')
-        .fontSize(20)
-        .fontColor(this.c().labelPrimary)
-        .width(40)
-        .height(DsSpacing.topBarHeight)
-        .textAlign(TextAlign.Center)
-        .accessibilityText('更多操作')
-        .onClick(() => {
-          this.menuOpen = true;
-        })
-    }
-    .width('100%')
-    .height(DsSpacing.topBarHeight)
-    // 顶栏跟输入条同一列：比正文列两侧各窄 FLOAT_INSET；手机没有富余 = 屏宽。
-    .constraintSize({ maxWidth: this.columnWidth > 0 ? floatingColumnWidth(this.columnWidth) : '100%' })
-    .padding({ left: DsSpacing.screenPad - 14, right: DsSpacing.screenPad - 14 })
-    .backgroundColor(this.c().bgBase)
+    ChatTopBar({
+      title: this.title(),
+      state: this.store === null ? GatewayState.IDLE : this.store.connectionState,
+      streaming: this.store !== null && this.store.streaming,
+      waitingApproval: this.approvalsView.length > 0,
+      waitingAnswer: this.questionsView.length > 0,
+      hostLabel: this.store === null ? '' : this.store.connectionLabel,
+      onOpenDrawer: (): void => {
+        this.drawerOpen = true;
+      },
+      onNewChat: (): void => {
+        const st: ChatStore | null = this.store;
+        if (st !== null) {
+          st.newChat();
+        }
+      },
+      onMenu: (): void => {
+        this.menuOpen = true;
+      }
+    })
   }
 
   private title(): string {

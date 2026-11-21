@@ -156,3 +156,117 @@ export function codeDiffsOfLastTurn(messages: ChatMessage[]): FileDiff[] {
   }
   return codeDiffsOfTurn(turns[turns.length - 1]);
 }
+
+/**
+ * 按行切分；结尾换行产生的末尾空元素丢弃（与常见 diff 工具一致）。
+ * 空串 → 空数组：写空文件不该凭空多一条空 del 行（安卓同口径）。
+ */
+function splitDiffLines(text: string): string[] {
+  if (text === '') {
+    return [];
+  }
+  const lines: string[] = text.split('\n');
+  if (lines.length > 0 && lines[lines.length - 1] === '' && text.endsWith('\n')) {
+    lines.pop();
+  }
+  return lines;
+}
+
+/** 公共前后缀标 ctx，中间段 -old / +new（大文件 / LCS 爆表时的退路）。 */
+function diffEditLines(oldLines: string[], newLines: string[]): DiffLine[] {
+  let prefix: number = 0;
+  while (prefix < oldLines.length && prefix < newLines.length
+    && oldLines[prefix] === newLines[prefix]) {
+    prefix += 1;
+  }
+  let suffix: number = 0;
+  while (suffix < oldLines.length - prefix && suffix < newLines.length - prefix
+    && oldLines[oldLines.length - 1 - suffix] === newLines[newLines.length - 1 - suffix]) {
+    suffix += 1;
+  }
+  const lines: DiffLine[] = [];
+  for (let i = 0; i < prefix; i++) {
+    lines.push(new DiffLine(DIFF_LINE_CTX, oldLines[i]));
+  }
+  for (let i = prefix; i < oldLines.length - suffix; i++) {
+    lines.push(new DiffLine(DIFF_LINE_DEL, oldLines[i]));
+  }
+  for (let i = prefix; i < newLines.length - suffix; i++) {
+    lines.push(new DiffLine(DIFF_LINE_ADD, newLines[i]));
+  }
+  for (let i = oldLines.length - suffix; i < oldLines.length; i++) {
+    lines.push(new DiffLine(DIFF_LINE_CTX, oldLines[i]));
+  }
+  return lines;
+}
+
+/**
+ * 行级 LCS 差异：中间的公共行也算 ctx（改一行不会把后半段整段算成 -/+）。
+ *
+ * 先裁掉公共前后缀再建表，常见「改几行」的编辑表很小；表超过 40 万格
+ * （约 632×632）就退回前后缀裁剪，避免大文件吃掉内存。
+ */
+export function diffLinesOf(oldText: string, newText: string): DiffLine[] {
+  const a: string[] = splitDiffLines(oldText);
+  const b: string[] = splitDiffLines(newText);
+  if (a.length * b.length > 400000) {
+    return diffEditLines(a, b);
+  }
+  let prefix: number = 0;
+  while (prefix < a.length && prefix < b.length && a[prefix] === b[prefix]) {
+    prefix += 1;
+  }
+  let suffix: number = 0;
+  while (suffix < a.length - prefix && suffix < b.length - prefix
+    && a[a.length - 1 - suffix] === b[b.length - 1 - suffix]) {
+    suffix += 1;
+  }
+  const am: string[] = a.slice(prefix, a.length - suffix);
+  const bm: string[] = b.slice(prefix, b.length - suffix);
+  const table: number[][] = [];
+  for (let i = 0; i <= am.length; i++) {
+    const row: number[] = [];
+    for (let j = 0; j <= bm.length; j++) {
+      row.push(0);
+    }
+    table.push(row);
+  }
+  for (let i = am.length - 1; i >= 0; i--) {
+    for (let j = bm.length - 1; j >= 0; j--) {
+      table[i][j] = am[i] === bm[j]
+        ? table[i + 1][j + 1] + 1
+        : Math.max(table[i + 1][j], table[i][j + 1]);
+    }
+  }
+  const lines: DiffLine[] = [];
+  for (let k = 0; k < prefix; k++) {
+    lines.push(new DiffLine(DIFF_LINE_CTX, a[k]));
+  }
+  let i: number = 0;
+  let j: number = 0;
+  while (i < am.length && j < bm.length) {
+    if (am[i] === bm[j]) {
+      lines.push(new DiffLine(DIFF_LINE_CTX, am[i]));
+      i += 1;
+      j += 1;
+    } else if (table[i + 1][j] >= table[i][j + 1]) {
+      lines.push(new DiffLine(DIFF_LINE_DEL, am[i]));
+      i += 1;
+    } else {
+      lines.push(new DiffLine(DIFF_LINE_ADD, bm[j]));
+      j += 1;
+    }
+  }
+  while (i < am.length) {
+    lines.push(new DiffLine(DIFF_LINE_DEL, am[i]));
+    i += 1;
+  }
+  while (j < bm.length) {
+    lines.push(new DiffLine(DIFF_LINE_ADD, bm[j]));
+    j += 1;
+  }
+  for (let k = a.length - suffix; k < a.length; k++) {
+    lines.push(new DiffLine(DIFF_LINE_CTX, a[k]));
+  }
+  return lines;
+}

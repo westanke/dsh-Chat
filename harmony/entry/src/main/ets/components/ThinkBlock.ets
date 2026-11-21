@@ -11,6 +11,7 @@
 import { DsColors, DsTypography, DsSpacing } from '../ui/theme';
 import { MdView } from './md/MdView';
 import { reasoningHidden, reasoningSummaryOf, reasoningText } from '../core/ReasoningText';
+import { ThinkingRowState, thinkingLiveLines, thinkingRowStateOf } from '../core/ThinkingState';
 
 @Component
 export struct ThinkBlock {
@@ -26,6 +27,8 @@ export struct ThinkBlock {
   @Prop @Watch('onStreamingChange') streaming: boolean = false;
   /** 收起预览开关（MessageList 按 policyOf(档位).settledReasoningPreview 传入）。 */
   @Prop showPreview: boolean = true;
+  /** 正文已开始输出（活跃态收成摘要的开关；StreamingBlock 传 text !== ''）。 */
+  @Prop answerStarted: boolean = false;
   @StorageProp('dshDark') dark: boolean = false;
   @State expanded: boolean = false;
 
@@ -56,61 +59,125 @@ export struct ThinkBlock {
     return reasoningHidden(this.text);
   }
 
+  private state(): ThinkingRowState {
+    return thinkingRowStateOf(this.text, this.streaming, this.answerStarted);
+  }
+
+  private liveLines(): string[] {
+    return thinkingLiveLines(this.text);
+  }
+
   build() {
     Column() {
       if (!this.hidden()) {
-        Row({ space: 4 }) {
-          Text('🧭')
-            .fontSize(14)
-            .fontColor(this.c().labelSecondary)
-            .accessibilityGroup(true)
-          Text('思考')
-            .fontSize(DsTypography.small.size)
-            .fontWeight(FontWeight.Normal)
-            .fontColor(this.c().labelSecondary)
-          // 官方 .lcKema_separator：2×2px 圆点（border-radius 1px）。R023 不收字号 2、
-          // R003 不收圆角 1 —— 圆点改由空容器绘制（无文字就不涉字号），圆角落最小合法档 2。
-          Column()
-            .width(2)
-            .height(2)
-            .borderRadius(2)
-            .backgroundColor(this.c().labelCaption)
-            .margin({ left: 4, right: 8 })
-            .accessibilityGroup(true)
-          if (!this.expanded && this.summary() !== '' && (this.streaming || this.showPreview)) {
-            Text(this.summary())
-              .fontSize(DsTypography.caption.size)
-              .fontColor(this.streaming ? this.c().labelSecondary : this.c().labelTertiary)
-              .maxLines(1)
-              .textOverflow({ overflow: TextOverflow.Ellipsis })
-              .layoutWeight(1)
-          } else {
-            Blank().layoutWeight(1)
-          }
-          Text(this.expanded ? '⌃' : '⌄')
-            .fontSize(14)
-            .fontColor(this.c().labelSecondary)
-            .accessibilityGroup(true)
+        if (this.state().active) {
+          this.activeRow()
+        } else {
+          this.summaryRow()
         }
-        .padding({ top: 4, bottom: 4 })
-        .accessibilityText(this.expanded ? '收起思考' : '展开思考')
-        .onClick((): void => {
-          this.expanded = !this.expanded;
-        })
         if (this.expanded) {
           Column() {
-            // 剥壳：<signature>…</signature> 包裹只留正文（对齐安卓 reasoningTextOf）。
-            // 直接传原文会把标签当 Markdown 渲染出来；未闭合时 reasoningText 返空串，
-            // 但此时 hidden() 已整块不渲染，不会出现空展开区。
             MdView({ text: reasoningText(this.text), small: true })
           }
           .width('100%')
-          .padding({ left: DsSpacing.thinkHMargin })
+          .padding({ left: DsSpacing.thinkBodyIndent })
         }
       }
     }
     .width('100%')
     .alignItems(HorizontalAlign.Start)
     .padding({ bottom: DsSpacing.thinkHMargin })
+  }
+
+  /** 活跃态：呼吸环 18 + 「思考中」+ 三行实时窗口（dsh-go ReasoningRow 口径）。 */
+  @Builder
+  activeRow() {
+    Column({ space: 2 }) {
+      Row({ space: DsSpacing.thinkLeadGap }) {
+        Stack() {
+          Circle({ width: DsSpacing.thinkOrbSize, height: DsSpacing.thinkOrbSize })
+            .fill(Color.Transparent)
+            .stroke(this.c().brand)
+            .strokeWidth(1.5)
+            .opacity(0.45)
+          Circle({ width: DsSpacing.thinkDotSize, height: DsSpacing.thinkDotSize })
+            .fill(this.c().brand)
+        }
+        .width(DsSpacing.thinkOrbSize)
+        .height(DsSpacing.thinkOrbSize)
+        Text('思考中')
+          .fontSize(DsTypography.small.size)
+          .fontColor(this.c().labelSecondary)
+        Blank()
+        Text(this.expanded ? '⌃' : '⌄')
+          .fontSize(14)
+          .fontColor(this.c().labelSecondary)
+          .accessibilityGroup(true)
+      }
+      .width('100%')
+      .padding({ top: 4, bottom: 2 })
+      .accessibilityText(this.expanded ? '收起思考过程' : '展开思考过程')
+      .onClick((): void => {
+        this.expanded = !this.expanded;
+      })
+      if (!this.expanded) {
+        Column({ space: 2 }) {
+          ForEach(this.liveLines(), (line: string, i: number) => {
+            Text(line)
+              .fontSize(DsTypography.caption.size)
+              .fontColor(this.c().labelTertiary)
+              .maxLines(1)
+              .textOverflow({ overflow: TextOverflow.Ellipsis })
+              .width('100%')
+          }, (line: string, i: number) => i.toString() + '-' + line.length.toString())
+        }
+        .width('100%')
+        .padding({ left: DsSpacing.thinkBodyIndent })
+      }
+    }
+    .width('100%')
+    .alignItems(HorizontalAlign.Start)
+  }
+
+  /** 结束/正文已开始：一行摘要 + chevron。 */
+  @Builder
+  summaryRow() {
+    Row({ space: 4 }) {
+      Text('🧭')
+        .fontSize(14)
+        .fontColor(this.c().labelSecondary)
+        .accessibilityGroup(true)
+      Text('思考')
+        .fontSize(DsTypography.small.size)
+        .fontWeight(FontWeight.Normal)
+        .fontColor(this.c().labelSecondary)
+      Column()
+        .width(2)
+        .height(2)
+        .borderRadius(2)
+        .backgroundColor(this.c().labelCaption)
+        .margin({ left: 4, right: 8 })
+        .accessibilityGroup(true)
+      if (!this.expanded && this.summary() !== '' && (this.streaming || this.showPreview)) {
+        Text(this.summary())
+          .fontSize(DsTypography.caption.size)
+          .fontColor(this.streaming ? this.c().labelSecondary : this.c().labelTertiary)
+          .maxLines(1)
+          .textOverflow({ overflow: TextOverflow.Ellipsis })
+          .layoutWeight(1)
+      } else {
+        Blank().layoutWeight(1)
+      }
+      Text(this.expanded ? '⌃' : '⌄')
+        .fontSize(14)
+        .fontColor(this.c().labelSecondary)
+        .accessibilityGroup(true)
+    }
+    .width('100%')
+    .padding({ top: 4, bottom: 4 })
+    .accessibilityText(this.expanded ? '收起思考' : '展开思考')
+    .onClick((): void => {
+      this.expanded = !this.expanded;
+    })
   }
 }

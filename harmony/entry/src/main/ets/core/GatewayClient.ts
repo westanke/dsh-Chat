@@ -15,9 +15,8 @@
  *   （bridge 口径：用能力位判特性、不要比版本号；能力位每次连接现算）；
  * - WS close code 4001 = 令牌/设备被吊销：**停止重连链**转 AUTH_FAILED，
  *   并上报 LINK_CLOSED 事件（否则用户只会看到无限重连，不知道要重新配对）。
- * 与 Android 的已知偏差（见 harmony/docs/PORT-MAP.md）：Android 初连失败不自动重连
- * （onDone 不触发）；鸿蒙平台层 open 失败走 onDown，初连失败也会进自动重连
- * ——与姊妹仓 EventsChannel 行为一致（真机验证过），不视为缺陷。
+ * 已知偏差（详见 harmony/docs/PORT-MAP.md）：鸿蒙初连失败也会进自动重连
+ * （平台层 open 失败走 onDown；姊妹仓 EventsChannel 同行为）。
  */
 
 import { JsonAccess, JsonMap } from './JsonAccess';
@@ -27,10 +26,11 @@ import { WireBuilder } from './Wire';
 import { MessageDelta, MessageCommitted } from './Models';
 
 import { GatewayEvent, GatewayState, RequestException, requestExceptionFromFrame, eventFromFrame } from './GatewayEvents';
+import { KernelPlane } from './KernelPlane';
 import {
   EventSocketHandle, TimerBridge, WebSocketCallbacks, WebSocketTransport,
   HEARTBEAT_INTERVAL_MS, MAX_BACKOFF_INDEX, MAX_BACKOFF_SECONDS,
-  WS_HELLO_TIMEOUT_MS,
+  WS_HELLO_TIMEOUT_MS, MOBILE_SUBPROTOCOLS,
 } from './Transport';
 
 /** 挂起中的请求（requestId → 结算器 + 超时句柄；姊妹仓 MobileChannel 同款 interface）。 */
@@ -99,6 +99,8 @@ export class GatewayClient {
    * 空 = 老桥或尚未握手；判特性用它，别比版本号（bridge AGENTS 明令）。
    */
   private capabilities: string[] = [];
+  /** dshrb-v1 内核调用面（目录 + 在飞登记表；逻辑见 core/GatewayKernel.ts）。 */
+  readonly kernel: KernelPlane = new KernelPlane();
   /** hello 回的本连接实际端口（隧道专用端口时为隧道数据端口）。0=未携带。 */
   private listenerPort: number = 0;
   /** hello 是否已结算（初始 true：未连接时 settleHello 是 no-op）。 */
@@ -209,7 +211,8 @@ export class GatewayClient {
           self.onDown(myAttempt, reason, code === undefined ? 0 : code);
         },
       };
-      this.handle = this.deps.ws.open(this.wsUrl(), headers, callbacks, 'dsh-mobile-v1', 10000);
+    // 握手回给客户端的仍是 dsh-mobile-v1（bridge API.md §866-890）。
+    this.handle = this.deps.ws.open(this.wsUrl(), headers, callbacks, MOBILE_SUBPROTOCOLS, 10000);
     });
   }
 
@@ -278,6 +281,8 @@ export class GatewayClient {
       + ' port=' + this.listenerPort.toString());
     this.backoffIndex = 0;
     this.reconnecting = false;
+    // 目录随连接重建：重连后旧目录可能过期（bridge 只在新连接上重推）。
+    this.kernel.catalog = [];
     this.applyState(GatewayState.READY);
     this.cancelHelloTimer();
     this.scheduleHeartbeat();
@@ -400,6 +405,7 @@ export class GatewayClient {
       pr.reject(new RequestException('NOT_CONNECTED', '连接已断开'));
     });
     this.pending.clear();
+    this.kernel.registry.failAll('NOT_CONNECTED');
     if (this.handle !== null) {
       this.handle.close();
       this.handle = null;

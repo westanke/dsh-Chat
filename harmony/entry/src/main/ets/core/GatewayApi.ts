@@ -115,6 +115,11 @@ export class GatewayApi {
     return this.rest.readFileBytes(rootId, wirePath);
   }
 
+  /** 原始字节（图片缩略图；文本路径请用 readFileBytes）。 */
+  readFileData(rootId: string, wirePath: string): Promise<Uint8Array> {
+    return this.rest.readFileData(rootId, wirePath);
+  }
+
   /** 取图片交接产物（sessionId 必带，否则 400 BODY_INVALID）。 */
   fetchImageHandoff(name: string, sessionId: string): Promise<Uint8Array> {
     return this.rest.fetchImageHandoff(name, sessionId);

@@ -9,6 +9,7 @@
 import { JsonAccess, JsonMap } from './JsonAccess';
 import { MessageDelta, MessageCommitted, ToolCallEvent, ToolResultEvent } from './Models';
 import { PendingQuestion, PendingApproval } from './Questions';
+import { KernelEndpoint } from './KernelCall';
 
 /** 长连接状态机（Android GatewayState 同款五态）。 */
 export enum GatewayState {
@@ -41,6 +42,8 @@ export class GatewayEventType {
   static readonly TURN_END: string = 'turnEnd';
   /** 连接被服务端语义化关闭（4001 吊销 / 1009 帧超限），UI 提示用。 */
   static readonly LINK_CLOSED: string = 'linkClosed';
+  /** kernel-endpoints：dshrb-v1 内核目录（整帧替换；UI 据此刷新搜索入口）。 */
+  static readonly KERNEL_CATALOG: string = 'kernelCatalog';
 }
 
 /**
@@ -70,6 +73,8 @@ export class GatewayEvent {
   linkCode: number = 0;
   /** linkClosed 的 close reason 原文。 */
   linkReason: string = '';
+  /** kernelCatalog 的内核端点目录（每次 hello 清空、整帧替换）。 */
+  kernelEndpoints: KernelEndpoint[] = [];
 
   static delta(d: MessageDelta): GatewayEvent {
     const e: GatewayEvent = new GatewayEvent();
@@ -157,6 +162,13 @@ export class GatewayEvent {
     e.type = GatewayEventType.TURN_END;
     e.sessionId = sessionId;
     e.turnReasonKind = reasonKind;
+    return e;
+  }
+
+  static kernelCatalog(endpoints: KernelEndpoint[]): GatewayEvent {
+    const e: GatewayEvent = new GatewayEvent();
+    e.type = GatewayEventType.KERNEL_CATALOG;
+    e.kernelEndpoints = endpoints;
     return e;
   }
 

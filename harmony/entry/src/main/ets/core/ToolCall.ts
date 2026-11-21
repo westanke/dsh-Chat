@@ -26,6 +26,15 @@ export class ToolCallInfo {
   /** arguments 原串（JSON 字符串），详情展开用。 */
   rawArguments: string | null = null;
   /**
+   * `tool/result` 的 `data.meta`（桥原样透传，形状由工具自己定，安卓同口径）：
+   * - edit / write：`{path, operation?, diffs:[{path, oldText, newText}]}`
+   * - read：`{path, offset, lines:[{number,text}], totalLines}`
+   * - bash：`{cwd}`；read_image：`{path}`。
+   *
+   * 本轮改动卡（TurnChanges）优先读 `diffs` 里的真实新旧全文，拿不到才退回 arguments。
+   */
+  meta: JsonMap | null = null;
+  /**
    * 显式状态（空串=按字段派生）：'preparing'（参数流式生成中，bridge
    * chat.message.delta kind='tool-call'）；'stopped'（error.code='interrupted'，
    * 用户中断）；'cancelled'（error.code='ASK_CANCELLED'，询问已取消）。
@@ -36,7 +45,7 @@ export class ToolCallInfo {
   constructor(callId: string, name: string, phrases: string[],
               summary: string | null, failed: boolean,
               durationMs: number | null, resultText: string | null,
-              rawArguments: string | null) {
+              rawArguments: string | null, meta: JsonMap | null = null) {
     this.callId = callId;
     this.name = name;
     this.phrases = phrases;
@@ -45,6 +54,7 @@ export class ToolCallInfo {
     this.durationMs = durationMs;
     this.resultText = resultText;
     this.rawArguments = rawArguments;
+    this.meta = meta;
   }
 
   /** 折叠行用的主短语（run_code 取第一个，其余就是唯一那个）。 */
@@ -187,11 +197,13 @@ export class RawToolCall {
   /** tool/result 的正文，到达时补上。 */
   resultText: string | null = null;
   failed: boolean = false;
+  /** tool/result 的 `data.meta`（见 ToolCallInfo.meta），到达时补上。 */
+  meta: JsonMap | null = null;
 
   toInfo(): ToolCallInfo {
     return new ToolCallInfo(this.callId, this.name,
       toolPhrases(this.name, this.arguments), toolSummary(this.arguments),
-      this.failed, null, this.resultText, this.arguments);
+      this.failed, null, this.resultText, this.arguments, this.meta);
   }
 }
 

@@ -200,10 +200,11 @@
 | `ets/pages/ConnectView.ets` | 连接页三级路径：历史主机直连（失败记失效记录可删）/ DSH1 文本导入 / 手动地址+配对码（pairViaRest）；删除当前主机顺带清凭据 |
 | `ets/pages/SettingsView.ets` | 设置页七分区：连接只读（状态/设备/scopes/HTTP 警告）/外观（跟随系统/浅色/深色）/通用（SettingsGeneralSection：工作步骤展示四档/收起时机/折叠回复/代码工作视图开关）/发送（queue|steer）/关于（版本+检查更新跳 Gitee）/断开连接（清凭据回连接页） |
 | `ets/pages/MdDocViewer.ets` | .md 全屏查看页：resolvePath/readFileBytes → MdView；标题+大小 caption/失败重试 |
+| `ets/pages/ChangeDiffPage.ets` | 本轮改动查看页（对照安卓 chat_diff_page.dart）：顶栏返回/「本轮改动」/N 文件 +A −R/复制全部、横向文件 chip、每 hunk「第 N 次修改」+ 红绿行、TYPE_SYSTEM 安全区 topInset、返回走 onBack 回调（getRouter().back() 会退应用） |
 | `ets/pages/ChatView.ets` | 对话页：顶栏（⋮ 溢出菜单五项 + 代码工作视图入口（仅 dshCodeWorkView='1'）/标题/连接点/新建）+ HitlPanel 提问审批卡 + 消息列表 + 输入条 + 会话抽屉 + 六面板 bindSheet（统计/轨迹/团队/任务/模型/代码工作视图）+ 设置页入口；每次 changed 把 workSteps 展开集合版本写 AppStorage('dshExpandedVersion')（ProcessGroup @Watch 回读，LazyForEach 同 key 不重建的替代链路） |
 | `ets/components/MessageList.ets` | 消息列表：用户气泡（Column 图上文下、右对齐、86.4% 宽 + 收图 ImageTile；原 Row 布局会与正文争宽把文字挤出屏外，2026-11-17 修）/ 助手 MdView 富渲染 + 消息操作条 MessageActions；命令卡/文件卡/错误条已迁 MessageCards；列表尾插 StreamingBlock（流式正文与思考），其后是 max-tokens 截断提示；assistant 项后插轮尾行 TurnProcessRow（turnTailOf 非 null 时，2026-11-17 task-6）；渲染前过 core/WorkSteps.visibleMessagesOf（dshFoldedReplies='final' 时完成轮只留最后一条正文助手消息，dshDark 同款 @StorageProp 链路）；过程组按展示档分派——verbose（core/ToolDetails.STEP_GROUPING_NONE）平铺逐条 ToolBlock（answerable 回调传挂起询问查询），其余档 ProcessGroup；ThinkBlock 传 settledReasoningPreview=policyOf(dshWorkStepsDetail)；**列表头 `truncated` 提示行「会话过长，更早的部分未显示」（2026-11-19）** |
 | `ets/components/Composer.ets` | 输入条：发送键三态（send/stop/disabled）+ 命令补全/@ 文件补全（ComposerPanels）+ 图片 chip（PhotoPick 魔数校验 8MiB）+ 📁 选择项目中的内容（合成空 @ 草稿复用 AtFilePanel，原位插入 '@文件名 '）+ 权限 chip（PermissionSheet bindSheet）+ 免责声明 |
-| `ets/components/SessionsDrawer.ets` | 会话抽屉（阶段 2）：主机标识 + 新对话钮 + 工作区分组列表（未分组垫底）+ 当前会话高亮；搜索/删除阶段 4 |
+| `ets/components/SessionsDrawer.ets` | 会话抽屉：主机标识 + 新对话钮 + 搜索框（标题本地过滤 + DrawerSearch 正文命中）+ 工作区分组列表（未分组垫底）+ 当前会话高亮 + 待回答/待审批标记；删除阶段 4 |
 | `ets/components/md/MdView.ets` | Markdown 主组件：块级循环（h/p/quote/code/table/ul/ol/hr/latex）+ 行内混排（Span 样式/链接外跳/内嵌 MdLatexView）；任务项 ☑/☐，引用左竖条 |
 | `ets/components/md/MdCodeBlock.ets` | 代码块：banner 语言名+复制（pasteboard）+ 1px 分隔线 + 横滚 + SimpleHighlight 四类着色 |
 | `ets/components/md/MdTable.ets` | 表格：banner「表格」+复制（\t 连接）+ 表头 w500 + cellAlign l/c/r + cellMinWidth 100 |
@@ -283,10 +284,29 @@
 | `ets/core/AppUpdate.ts` | 检查更新（华为应用市场口径）：UpdateCheckResult 结果对象 + updateErrorMessage SDK 错误码（1009400001~7/401）中文映射 + NOT_SUPPORTED_MESSAGE；平台调用在 SettingsView（updateManager.checkAppUpdate / showUpdateDialog） |
 | `ets/core/AtMention.ts` | @ 文件引用面板纯逻辑（从 Composer 抽出）：AtEntry 条目模型 + mergeAtEntries 多根合并（label/ 前缀、query 名字前缀过滤不区分大小写、逐根容错 okRoots 计数）+ inSubDirectory 全失败判定 + loadMergedAtEntries（逐根拉取合并，@ 补全与「选择项目中的内容」共用）；Composer 只做拉取与状态搬运 |
 | `ets/core/SessionLocation.ts` | 新建会话工作目录纯逻辑（对照安卓 session_location_sheet.dart）：SessionLocation(rootId,cwd,label)+key 契约串、locationLabel（''=根目录）、recentLocations（历史会话 (rootId,cwd) 去重保序、跳过无根会话）、locationSubtitle（优先 cwdAbsolute 退回 rootId）、parentPath 逐级上退、locationChipLabel 空态 chip 文案 |
+| `ets/core/ChatHeaderStatus.ts` | 顶栏第二行状态纯逻辑（对照安卓 chat_header_status.dart）：`ChatHeaderStatus{tone,label}` + `chatHeaderStatus(state,streaming,waitingApproval,waitingAnswer,hostLabel)`；优先级 IDLE 未连接 > CONNECTING 连接中 > CLOSED/AUTH_FAILED 已断开 > 等待审批 > 等待回答 > 生成中 > 主机名（空则「已连接」） |
+| `ets/core/TurnChanges.ts` | 本轮改动/生成文件纯逻辑（对照安卓 turn_changes.dart）：EditHunk/FileChange/TurnChanges + turnChangesOf（只收 isProcess&&!failed 的 edit/write，meta.diffs 优先、退回工具参数，同文件合并留 hunk 序号）+ ArtifactFile/artifactKindOf/artifactKindLabel + turnArtifactsOf（write 非 update + 正文 markdown 引用，cwd 拼相对路径去重）+ markdownRefs/resolveRef/decodeArgs |
+| `ets/core/ThinkingState.ts` | 思考行新形态纯逻辑（对照安卓 chat_thinking.dart）：ThinkingRowState{active,summary,ticker,hidden} + thinkingRowStateOf(streaming 且正文未开始才活跃) + thinkingTickerText（剥 signature/折叠空行/尾部 2000 字）+ thinkingLiveLines（最后 3 个非空行）；TICKER_ROWS=3、TICKER_TAIL=2000 |
+| `ets/core/TurnCards.ts` | 两张卡的挂载判据：TurnCards{changes,artifacts} + turnCardsOf(messages,index,isTurnRunning)——只挂闭合轮最后一条 assistant（后向扫到 user 前仍有 assistant 即 null），两卡都空返回 null |
+| `ets/core/TodoDock.ts` | 任务条纯逻辑（对照安卓 todo_dock.dart）：TodoDockSummary.of(todos,running) 预算 total/done/current/fraction/headline（全部完成/正在：X/下一步：Y）+ todoGlyph 状态字形；空 todo 返回 null（不占位） |
+| `ets/core/KernelCall.ts` | dshrb-v1 内核调用面模型：KernelEndpoint.fromJson/accepts + parseKernelEndpoints（顶层 endpoints，容错坏条目）+ KernelCallResult.fromFrame/object/frames/message + KernelPending + KernelCallRegistry（add 同 id 拒/take 只结算一次/failAll）；KERNEL_CALL_TIMEOUT_MS=35000、KERNEL_SESSION_SEARCH='session/search' |
+| `ets/core/KernelPlane.ts` | 连接级内核状态（拆出以守住 GatewayClient 500 行）：KernelPlane{catalog,registry,seq}；hello 清目录、重连 failAll |
+| `ets/core/GatewayKernel.ts` | 内核面收发纯函数（收 GatewayClient，同 GatewayRequests 范式）：kernelEndpointOf/kernelSearchSupportedOn/settleKernelCallOn/kernelCallOn（自铸 callId）/kernelCallWithIdOn（幂等重试）/kernelCancelOn/searchSessionsOn（端点缺失 NOT_SUPPORTED） |
+| `ets/core/SessionSearch.ts` | 会话正文搜索纯逻辑：SessionSearchHit + tidySnippet（空白折叠 trim）+ parseSessionSearchHits（读 value.items[].sessionId/snippet，坏形状跳过，limit）+ sessionSearchHasMore + sessionSearchArgs（wires 含 request→{request:{query}}、含 query→{query}、否则首个 wire） |
 | `ets/components/SessionLocationSheet.ets` | 工作目录选择面板：默认「手机会话」项 + 最近使用列表 + 授权根逐级浏览（空根自动跳到下一个有子目录的根、多根可点标题切换、面包屑「用此目录」）；选中写 store.pendingLocation，首条消息走 session-create{rootId,cwd} |
 | `ets/components/SettingsGeneralSection.ets` | 设置页「通用」四行（从 SettingsView 切出，控行数，官方 Web 文案逐字对齐）：工作步骤展示四 chip（concise/standard/detailed/verbose）+ 收起时机（completion/next-input）+ 折叠回复（all/final，verbose 档隐藏该行）+ 显示代码工作视图开关；偏好键带点官方 token，AppStorage 无点驼峰（dshWorkStepsDetail 等），写 PrefsStore |
 | `ets/components/SettingsDisconnectSection.ets` | 设置页「断开连接」分区（从 SettingsView 切出控行数）：红描边按钮 + 系统 AlertDialog 二次确认（自绘遮罩在 Scroll 内定位不可靠，真机点按无反应）→ onDisconnect 回连接页；不持状态、不碰 store |
 | `ets/components/CodeWorkSheet.ets` | 代码工作视图 sheet（官方 developerTools）：三段 chip 切换 —— ①运行轨迹（官方描述 + TrajectorySheet showHeader=false 内嵌）②本轮代码差异（core/CodeDiff 本地提取最后一轮 edit/write，+/- 行着色 theme.diffAdd*/diffDel*，卡底 bgLayer1）③Agent 预设（GET /chat/agent-presets 列表 + 当前项打勾；非 blank 会话整列表置灰「首条消息后锁定」，点选走 PUT，409 AGENT_PRESET_LOCKED 行内提示「已锁定，仅空白会话可切换」） |
+| `ets/components/ChatTopBar.ets` | 会话页两行顶栏（对照安卓 chat_top_bar.dart）：44 操作行（☰/标题 16 Medium 单行/＋/⋮）+ 20 状态行（左缩进 56、6px 圆点 + caption）；statusColor 映射 chatStatusOk/Warn/danger/brand/labelTertiary；限宽 floatingColumnWidth |
+| `ets/components/ChangeCard.ets` | 本轮改动卡（对照安卓 chat_change_card.dart）：@Prop files+onOpen(index)；标题「改动了 N 个文件」、最多 3 行（文件名/弱化目录/+N −N）、脚注「查看改动」/「还有 N 个文件」；bgLayer1+圆角 16+borderL2 |
+| `ets/components/ArtifactCard.ets` | 本轮生成文件卡（对照安卓 chat_artifact_card.dart）：40×40 类型字形占位（真实缩略图待补）、默认 4 行可展开「全部 N 个文件」、行尾 ⋯ 菜单（复制路径/分享）、行点击复制路径 |
+| `ets/components/TurnCards.ets` | 两张卡的接线壳：@Prop @Watch version 重算 core/TurnCards，挂 ChangeCard/ArtifactCard，自带 bindContentCover 打开 ChangeDiffPage |
+| `ets/components/TodoDock.ets` | 任务条（对照安卓 todo_dock.dart）：composer 上方左右 12 上 16；40 高行 + 2px 进度 + 展开 maxHeight 168 内滚；空 todo 不占位 |
+| `ets/components/UserBubble.ets` | 用户气泡（从 MessageList 抽出击 500 行上限）：右对齐、外层左 32、最大宽 86.4%、16/24 正文、padding 16/12；收图 ImageTile |
+| `ets/components/ComposerActions.ets` | 输入条右侧动作区（从 Composer 切出控行数）：＋ 选图/📁 选择项目内容/权限 chip/发送或停止；禁用态仍可点但 onClick 判 sendEnabled（避免 .enabled(false) 的 0.4 透明度压对比度） |
+| `ets/components/ImageChips.ets` | 多图待发 chip 横排：文件名超 16 字截断、✕ 20×20 热区逐张删 |
+| `ets/components/PermissionChip.ets` | 会话权限 chip：🛡+中文档位+⌄，maxWidth 200，accessibilityText「会话权限：…」 |
+| `ets/components/DrawerSearch.ets` | 抽屉正文搜索（对照安卓 session_search.dart）：@Link query + @Prop @Watch version；300ms 防抖调 dshrb-v1 `session/search`，parseSessionSearchHits(limit 20)，三种空态；目录晚到自动补发；不支持时静默降级为标题过滤 |
 | `ets/core/ChatLabels.ts` | 展示文案纯函数：sessionTitleOf/deviceLabelOf/connectionLabelOf/stateLabelOf（安卓 chat_labels 口径） |
 | `ets/core/HitlStore.ts` | HITL 挂起表：pendingQuestions/approvals Map + session 过滤 + onEvent 四分支（返回是否变化）+ answer/cancel/decide（api 参数，成功即本地摘卡） |
 | `ets/core/ImageRef.ts` | 收图引用：DsImageRef（attachmentId/handoffName 二选一 + cacheKey）+ imageRefsOf/handoffRefOf（交接占位正则复用 Content） |
