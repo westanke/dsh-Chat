@@ -137,6 +137,15 @@ void main() {
       await state.newChat();
       expect(state.pendingLocation, isNull);
     });
+
+    test('newChat() 清掉上一会话的生成中标记与流式缓冲', () async {
+      final state = ChatState(RecordingGateway());
+      state.streaming = true;
+      state.streamText = '写了一半';
+      await state.newChat();
+      expect(state.streaming, isFalse);
+      expect(state.streamText, isEmpty);
+    });
   });
 
   group('sheet：候选去重 / 默认项 / 浏览选定', () {

@@ -200,9 +200,7 @@ class ChatState extends ChangeNotifier with GroupExpandState {
     rawEvents = [];
     projections = null;
     historyHasMore = false;
-    loadingOlder = false;
-    historyPageJustLoaded = false;
-    historyTruncated = false;
+    loadingOlder = historyPageJustLoaded = historyTruncated = false;
     queue = const [];
     // 流式缓冲一并清（2026-11-15 反馈）：A 会话执行中切到 B，残留的
     // streamReasoning/streamText 会以流式正文挂在 B 页
@@ -234,6 +232,7 @@ class ChatState extends ChangeNotifier with GroupExpandState {
 
   Future<void> newChat() async {
     sessionId = null;
+    streaming = false; // 生成中标记属于上一会话，不清会带成新会话的空「生成中」
     messages = [];
     queue = const [];
     rawEvents = [];
