@@ -31,12 +31,30 @@ export struct ThinkBlock {
   @Prop answerStarted: boolean = false;
   @StorageProp('dshDark') dark: boolean = false;
   @State expanded: boolean = false;
+  /** 活跃态呼吸环相位（1200ms 往返，§4.12 statusPulse 同源）。 */
+  @State orbPulse: boolean = false;
 
   /** 流式结束 → 自动收起。只处理 true→false 这一个方向，用户手动展开后不再被强制折叠。 */
   onStreamingChange(): void {
-    if (!this.streaming && this.expanded) {
-      this.expanded = false;
+    if (!this.streaming) {
+      if (this.expanded) {
+        this.expanded = false;
+      }
+      this.orbPulse = false;
+      return;
     }
+    this.startPulse();
+  }
+
+  private startPulse(): void {
+    if (this.orbPulse) {
+      return;
+    }
+    this.getUIContext().animateTo(
+      { duration: 1200, curve: Curve.EaseInOut, iterations: -1, playMode: PlayMode.Alternate },
+      (): void => {
+        this.orbPulse = true;
+      });
   }
 
   private c(): DsColors {
@@ -47,6 +65,9 @@ export struct ThinkBlock {
     // 初值按 streaming 定（历史消息折叠、流式展开）；后续 streaming 变化不再改，
     // 由用户点击接管 —— 否则每帧增量都会把用户刚折叠的块重新展开。
     this.expanded = this.streaming;
+    if (this.state().active) {
+      this.startPulse();
+    }
   }
 
   /** 折叠摘要（官方 summaryText 口径；preview 门在 build 里判）。 */
@@ -105,6 +126,7 @@ export struct ThinkBlock {
         }
         .width(DsSpacing.thinkOrbSize)
         .height(DsSpacing.thinkOrbSize)
+        .opacity(this.orbPulse ? 1 : 0.4)
         Text('思考中')
           .fontSize(DsTypography.small.size)
           .fontColor(this.c().labelSecondary)
