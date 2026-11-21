@@ -59,43 +59,107 @@ class _CommandPanel extends StatelessWidget {
                     DsSpacing.settingsCardRadius,
                   ),
                 ),
-                child: Row(
-                  children: [
-                    Icon(
-                      Icons.terminal,
-                      size: DsSpacing.chipIconSize + 2,
-                      color: colors.chipSelectedFg,
-                    ),
-                    const SizedBox(width: DsSpacing.chipIconGap + 4),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            '/${matches[i].name}',
-                            style: DsTypography.baseStrong.copyWith(
-                              color: colors.labelPrimary,
-                            ),
-                          ),
-                          if (matches[i].description.isNotEmpty)
-                            Text(
-                              matches[i].description,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: DsTypography.caption.copyWith(
-                                color: colors.labelTertiary,
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
+                child: _commandRow(matches[i]),
               ),
             ),
         ],
       ),
     );
+  }
+
+  /// 一条命令行：图标 + 「中文名 /name 参数占位」+ 第二行描述。
+  ///
+  /// 中文名来自 bridge/slash_commands.dart（first-party 按 definitionId 映射，
+  /// 客户端功能自带），与 dsh-go 的 slash_palette 同形——裸名保持等宽，用户
+  /// 敲 `/` 时看到的仍是可发送的 ASCII 命令。
+  Widget _commandRow(SlashCommand cmd) {
+    final label = cmd.displayLabel;
+    final named = label != cmd.name;
+    return Row(
+      children: [
+        Icon(
+          _commandIcon(cmd),
+          size: DsSpacing.chipIconSize + 2,
+          color: colors.chipSelectedFg,
+        ),
+        const SizedBox(width: DsSpacing.chipIconGap + 4),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text.rich(
+                TextSpan(
+                  children: [
+                    if (named)
+                      TextSpan(
+                        text: '$label  ',
+                        style: DsTypography.baseStrong.copyWith(
+                          color: colors.labelPrimary,
+                        ),
+                      ),
+                    TextSpan(
+                      text: '/${cmd.name}',
+                      style: DsTypography.baseStrong.copyWith(
+                        color: named
+                            ? colors.labelSecondary
+                            : colors.labelPrimary,
+                        fontFamily: DsTypography.codeFamily,
+                      ),
+                    ),
+                    if (cmd.inputHint != null)
+                      TextSpan(
+                        text: ' ${cmd.inputHint}',
+                        style: DsTypography.caption.copyWith(
+                          color: colors.labelTertiary,
+                        ),
+                      ),
+                  ],
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              if (cmd.description.isNotEmpty)
+                Text(
+                  cmd.description,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: DsTypography.caption.copyWith(
+                    color: colors.labelTertiary,
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// 命令行图标：客户端功能与 first-party 各有图腾，其余（插件命令、技能）
+/// 用通用终端/星标，避免满屏一样的方块。
+IconData _commandIcon(SlashCommand cmd) {
+  if (cmd.kind == SlashCommandKind.skill) return Icons.auto_awesome;
+  switch (cmd.name) {
+    case 'new':
+      return Icons.chat_bubble_outline;
+    case 'model':
+      return Icons.tune;
+    case 'export':
+      return Icons.download;
+    case 'features':
+      return Icons.apps;
+    case 'compact':
+      return Icons.compress;
+    case 'permission':
+      return Icons.lock_outline;
+    case 'plan':
+      return Icons.checklist;
+    case 'goal':
+      return Icons.flag_outlined;
+    case 'feedback':
+      return Icons.feedback_outlined;
+    default:
+      return Icons.terminal;
   }
 }
 

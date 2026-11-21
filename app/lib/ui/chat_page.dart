@@ -24,6 +24,7 @@ import 'goal_dock.dart';
 import 'queue_dock.dart';
 import 'chat_top_bar.dart';
 import 'composer.dart';
+import 'model_sheet.dart';
 import 'question_card.dart';
 import 'session_location_sheet.dart';
 import 'sessions_drawer.dart';
@@ -342,6 +343,8 @@ class _ChatPageState extends State<ChatPage>
               sessions: st.sessions,
               // 单题提问挂着时，输入条文字直接作为答案（hint 同步切换）。
               answering: st.singleOpenQuestion != null,
+              // 斜杠面板的客户端功能（/new /model /export /features）。
+              onAppCommand: _runAppCommand,
             ),
           ],
         ),
@@ -357,6 +360,37 @@ class _ChatPageState extends State<ChatPage>
     waitingAnswer: st.hitl.sessionQuestions(st.sessionId).isNotEmpty,
     hostLabel: st.deviceLabel,
   );
+
+  /// 斜杠面板里的客户端功能命令（bridge/slash_commands.dart 的 appSlashCommands）。
+  ///
+  /// 这些名字桥不认识（服务端只有内核命令），所以必须在本地落到已有界面上：
+  /// new→清空会话、model→模型面板、export→复制 Markdown、features→设置页。
+  Future<void> _runAppCommand(String name) async {
+    switch (name) {
+      case 'new':
+        await st.newChat();
+      case 'model':
+        final sid = st.sessionId;
+        if (sid == null) return;
+        final changed = await showModelSheet(
+          context,
+          colors: widget.colors,
+          gateway: st.gateway,
+          sessionId: sid,
+        );
+        if (changed) await st.reloadHistory();
+      case 'export':
+        final body = sessionMarkdown(st);
+        if (body.trim().isEmpty) return;
+        await Clipboard.setData(ClipboardData(text: body));
+        if (!mounted) return;
+        ScaffoldMessenger.maybeOf(context)
+          ?..hideCurrentSnackBar()
+          ..showSnackBar(const SnackBar(content: Text('已复制 Markdown')));
+      case 'features':
+        widget.onOpenSettings();
+    }
+  }
 }
 
 // ---------- 空态问候 ----------

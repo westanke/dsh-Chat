@@ -69,6 +69,7 @@
 | 改动卡 / 生成文件卡 / 查看改动页（turn_changes/chat_change_card/chat_artifact_card/chat_diff_page） | components/{TurnCards,ChangeCard,ArtifactCard}.ets + pages/ChangeDiffPage.ets + core/TurnChanges.ts（meta.diffs 优先、LCS diff、hunk 序号） | 6 | ✅ 2026-11-21（缩略图已接真实字节，失败退回类型字形） |
 | 输入条多图 / @ 历史会话 / 任务条 / 权限 chip（5582a7e） | components/{ImageChips,PermissionChip,ComposerActions,TodoDock}.ets + core/{TodoDock,AtMention}.ts + Composer/ChatStore 多图发送 | 6 | ✅ 2026-11-21 |
 | dshrb-v1 通用内核调用面 + 抽屉正文搜索（a762ce9） | core/{KernelCall,KernelPlane,GatewayKernel,SessionSearch}.ts + GatewayRequests 帧分派 + components/DrawerSearch.ets（子协议逗号清单、目录即真相、300ms 防抖、三种空态；**握手失败/超时自动退单协议**，内核面与正文搜索随之降级但连接不受影响） | 6 | ✅ 2026-11-21（真机协商通过；本部署索引禁用，只有命中态未验） |
+| 斜杠面板全对齐 dsh-go（中文 face + 客户端四命令 + 技能行） | core/{SlashCommands,SlashPalette,SessionExport}.ts + components/{ComposerPanels,ChatAppCommands}.ets + Composer.ets（palette 状态）+ ChatView.ets（onAppCommand 接线）；first-party 按 `definitionId` 中文化、隐藏宿主 export、`/new /model /export /features` 本地执行、技能走内核 `skills/list`（桥需放行）、三列渲染 + 四档过滤 + 中文名解析 | 6 | ✅ 2026-11-21（单测 22 条；安卓端已真机验证 13 条，鸿蒙端待装机验证） |
 
 ## 2. 决策记录（用户 2026-11-15 拍板）
 

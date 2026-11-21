@@ -221,12 +221,22 @@ export class PromptPart {
 
 // ---- 斜杠命令（真机反馈 2026-11-04 第 3 项）----
 
-/** bridge `commands` 帧应答 data.commands 单条。 */
+/** 斜杠命令的来源（对齐 dsh-go 的 SlashCommandKind 与安卓 SlashCommandKind）：
+ *  host = 桥 `commands` 帧下发的宿主命令；app = 客户端自己的功能（/new /model
+ *  /export /features，绝不上送服务端，服务端会 404）；skill = 本会话技能
+ *  （内核 `skills/list`，经 kernel-call）。 */
+export enum SlashCommandKind {
+  Host = 'host',
+  App = 'app',
+  Skill = 'skill',
+}
+
+/** bridge `commands` 帧应答 data.commands 单条（也承载客户端/技能侧构造的条目）。 */
 export class SlashCommand {
   /** 裸名，如 'model'（去前导 /）。 */
   readonly name: string;
   readonly description: string;
-  /** 需要参数时的提示（对应帧字段 `input`）。 */
+  /** 需要参数时的提示（对应帧字段 `input`，桥 v2.11.0 起是 `{hint,attachments}` 对象）。 */
   readonly inputHint: string | null;
 
   /** 内核命令定义 id（桥 v2.11.0 commands 帧新增）。 */
@@ -235,23 +245,83 @@ export class SlashCommand {
   /** 是否内置命令（桥 v2.11.0 commands 帧新增）。 */
   readonly builtin: boolean;
 
+  /** 中文名：first-party 按 definitionId 认领（/目标 /压缩 …），
+   *  未认领的插件命令与技能为 null（显示裸名）。 */
+  readonly label: string | null;
+
+  /** 条目来源。 */
+  readonly kind: SlashCommandKind;
+
+  /** 技能的「什么时候用」（内核 SkillEntry.whenToUse）。 */
+  readonly whenToUse: string | null;
+
   constructor(j: JsonMap | null) {
     this.name = JsonAccess.strOr(j, 'name', '').replace(/^\//, '');
     this.description = JsonAccess.strOr(j, 'description', '');
-    this.inputHint = JsonAccess.str(j, 'input');
+    // 桥 v2.11.0 发 `input:{hint,attachments}`，老桥/无参数命令发字符串或什么都不发：
+    // 安卓同 bug（只认 string 导致 hint 恒 null），这里两种形状都收。
+    const inputObj: JsonMap | null = JsonAccess.asMap(JsonAccess.raw(j, 'input'));
+    const hintObj: string | null = JsonAccess.str(inputObj, 'hint');
+    const hintStr: string | null = JsonAccess.str(j, 'input');
+    this.inputHint = hintObj !== null ? hintObj : hintStr;
     this.definitionId = JsonAccess.str(j, 'definitionId');
     this.builtin = JsonAccess.boolOr(j, 'builtin', false);
+    this.label = JsonAccess.str(j, 'label');
+    this.kind = kindOfRaw(JsonAccess.str(j, 'kind'));
+    this.whenToUse = JsonAccess.str(j, 'whenToUse');
   }
 
   static fromJson(value: Object | null): SlashCommand {
     return new SlashCommand(JsonAccess.asMap(value));
   }
 
-  /** 输入框里从 `/abc` 过滤本命令：前缀匹配。 */
+  /** 客户端功能 / 技能侧构造（不走命令帧；kind 显式给）。 */
+  static make(name: string, label: string | null, description: string,
+              inputHint: string | null, kind: SlashCommandKind,
+              whenToUse: string | null = null): SlashCommand {
+    const m: JsonMap = {};
+    m['name'] = name;
+    m['description'] = description;
+    if (label !== null && label.length > 0) {
+      m['label'] = label;
+    }
+    if (inputHint !== null) {
+      m['input'] = inputHint;
+    }
+    m['kind'] = kind === SlashCommandKind.App ? 'app'
+      : (kind === SlashCommandKind.Skill ? 'skill' : 'host');
+    if (whenToUse !== null && whenToUse.length > 0) {
+      m['whenToUse'] = whenToUse;
+    }
+    return new SlashCommand(m);
+  }
+
+  /** 面板上显示的标题：有中文名用中文名，否则裸名。 */
+  displayLabel(): string {
+    return this.label !== null && this.label.length > 0 ? this.label : this.name;
+  }
+
+  /** 是否要吃参数（决定选中后是否补一个空格等用户输入）。 */
+  takesInput(): boolean {
+    return this.inputHint !== null;
+  }
+
+  /** 输入框里从 `/abc` 过滤本命令：前缀匹配（旧路径；新面板走 SlashCommands.ts）。 */
   matchesQuery(q: string): boolean {
     return q.length === 0 ||
       this.name.toLowerCase().indexOf(q.toLowerCase()) === 0;
   }
+}
+
+/** 帧里 `kind` 字段 → 枚举（不认识按 host）。 */
+function kindOfRaw(raw: string | null): SlashCommandKind {
+  if (raw === 'app') {
+    return SlashCommandKind.App;
+  }
+  if (raw === 'skill') {
+    return SlashCommandKind.Skill;
+  }
+  return SlashCommandKind.Host;
 }
 
 /** 内置命令的 en/zh 别名（桥 v2.11.0 commands 帧 `builtinTokens`，帧级）。

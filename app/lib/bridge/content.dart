@@ -125,6 +125,20 @@ class PromptPart {
   };
 }
 
+/// 斜杠命令面板的条目来源（对齐 dsh-go 的 SlashCommandKind）。
+/// 面板把三类按固定顺序合成一张表：客户端自带功能 → 内核命令 → 会话技能。
+enum SlashCommandKind {
+  /// 桥 `commands` 帧透传的内核命令（compact/plan/goal/…）。
+  host,
+
+  /// 客户端自己实现的功能（new/model/export/features）——服务端不认识，
+  /// 必须走本地动作，不能当命令发送。
+  app,
+
+  /// 当前会话可见的技能（内核 `skills/list`）。
+  skill,
+}
+
 /// 斜杠命令（真机反馈 2026-11-04 第 3 项）。
 /// bridge `commands` 帧应答 data.commands：`{name, description, input?}`；
 /// 桥 v2.11.0 起条目另带可选 `definitionId` / `builtin`（issue #1 适配，
@@ -139,6 +153,9 @@ class SlashCommand {
     this.inputHint,
     this.definitionId,
     this.builtin = false,
+    this.label,
+    this.kind = SlashCommandKind.host,
+    this.whenToUse,
   });
 
   final String name; // 裸名，如 'model'
@@ -151,15 +168,44 @@ class SlashCommand {
   /// 是否内置命令（桥 v2.11.0 commands 帧新增）。
   final bool builtin;
 
-  factory SlashCommand.from(Map<String, dynamic> j) => SlashCommand(
-    name: ((j['name'] ?? '') as String).replaceAll(RegExp(r'^/'), ''),
-    description: (j['description'] ?? '') as String,
-    inputHint: j['input'] is String ? j['input'] as String : null,
-    definitionId: j['definitionId'] is String
-        ? j['definitionId'] as String
-        : null,
-    builtin: j['builtin'] == true,
-  );
+  /// 面板标题的中文名（first-party 命令与客户端功能；技能为 null）。
+  /// 口径与 dsh-go 的 `SlashCommand.label` 一致——内核描述是英文，面板
+  /// 按 definitionId 换成官方 Web 的中文字典（bridge/slash_commands.dart）。
+  final String? label;
+
+  /// 条目来源（决定点选后「插入文本」还是「本地执行」）。
+  final SlashCommandKind kind;
+
+  /// 技能的额外适用场景说明（`skills/list` 的 whenToUse，可空）。
+  final String? whenToUse;
+
+  /// 面板主标题：有中文名用中文名，否则回退裸名。
+  String get displayLabel => (label != null && label!.isNotEmpty) ? label! : name;
+
+  /// 需要参数（面板给 hint 占位；点选后只插入不发送）。
+  bool get takesInput => inputHint != null;
+
+  factory SlashCommand.from(Map<String, dynamic> j) {
+    // 桥 v2.11.0 起 input 是对象 `{hint, attachments}`（见 ws-protocol.ts
+    // CommandDescriptorView）；更早的桥/no-hint 命令直接给字符串或 null。
+    // 修复：此前只认 String，Map 形状的 hint 恒丢（面板从不显示参数提示）。
+    final input = j['input'];
+    final String? hint;
+    if (input is Map) {
+      hint = input['hint'] is String ? input['hint'] as String : null;
+    } else {
+      hint = input is String ? input : null;
+    }
+    return SlashCommand(
+      name: ((j['name'] ?? '') as String).replaceAll(RegExp(r'^/'), ''),
+      description: (j['description'] ?? '') as String,
+      inputHint: hint,
+      definitionId: j['definitionId'] is String
+          ? j['definitionId'] as String
+          : null,
+      builtin: j['builtin'] == true,
+    );
+  }
 
   /// 输入框里从 `/abc` 过滤本命令：前缀匹配。
   bool matchesQuery(String q) =>

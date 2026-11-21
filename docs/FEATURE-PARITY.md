@@ -51,7 +51,7 @@
 | 待办条 | 「3/7 · 正在：…」原地展开（`dock/todo_bar.dart`） | ✅ 同口径（`todo_dock.dart`） | ✅ |
 | 活动胶囊 | 鲸尾 + 此刻状态 + 用时（`activity_strip.dart`） | 无 | ❌ |
 | 底部卡片叠 | 待办/目标/活动/插件折成一副牌（`dock_stack.dart`） | 待办与目标上下两张，不折 | ◐ |
-| 斜杠面板 | 应用级 + 宿主 + 技能（`slash_palette.dart`） | ✅ 命令匹配 + ↑↓（`composer_panels.dart`） | ✅ |
+| 斜杠面板 | 应用级 + 宿主 + 技能（`slash_palette.dart`，dsh-go `commands_state.dart` 同口径） | **✅ 2026-11-21 全对齐**：①中文——first-party 按 `definitionId` 换上官方 zh 字典的 label/描述/参数占位（此前只透传内核英文）；②四条客户端功能命令 new/model/export/features（本地执行，`/features` 落设置页）；③会话技能行（内核 `skills/list`，经 `dshrb-v1` kernel-call，需桥 `KERNEL_ALLOWLIST` 放行——桥 v2.14.x 起）；④面板 `中文名 /name 参数` 三列 + 按 name/label 四档过滤 + 中文名精确解析；数据面 `bridge/slash_commands.dart`、渲染 `composer_panels.dart` | ✅（真机已验：V2080A 上 13 条——4 客户端 + 4 宿主中文化（compact 当前会话未提供、export 按 dsh-go 口径隐藏）+ 5 技能行；`/features` 开设置页、`/export` 复制 Markdown 均实测生效）|
 | @ 提及 | 文件/文件夹/子代理/会话（`mention_picker.dart`） | ✅ 文件/目录/会话（`composer_panels.dart:105`） | ◐ 无子代理 |
 | 引用追问 | 引文片拼 Markdown 引用块（`quote_chip.dart`） | 无 | ❌ |
 | 附件面板 | 相册/拍照/文件/生成 + 权限/计划（`plus_panel.dart`） | ✅ 相册多图（最多 6） | ◐ 无拍照/文件选择 |

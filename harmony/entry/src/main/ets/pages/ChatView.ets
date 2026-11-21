@@ -18,6 +18,7 @@ import { MessageList } from '../components/MessageList';
 import { Composer } from '../components/Composer';
 import { TodoDock } from '../components/TodoDock';
 import { ChatTopBar } from '../components/ChatTopBar';
+import { EmptyGreeting } from '../components/EmptyGreeting';
 import { HitlPanel } from '../components/HitlPanel';
 import { PendingQuestion, PendingApproval, QuestionAnswerItem } from '../core/Questions';
 import { SessionsDrawer } from '../components/SessionsDrawer';
@@ -30,6 +31,8 @@ import { SubagentRow } from '../core/Projections';
 import { SubagentHistoryPage } from './SubagentHistoryPage';
 import { ChatOverflowMenu } from '../components/ChatOverflowMenu';
 import { CodeWorkSheet } from '../components/CodeWorkSheet';
+import { AppCommandHooks, onAppCommandOf } from '../components/ChatAppCommands';
+import { SheetFlags, sheetOpenOf, sheetTitleOf } from '../core/OverlaySheets';
 
 @Component
 export struct ChatView {
@@ -293,7 +296,8 @@ export struct ChatView {
       }
       TodoDock({ store: this.store, version: this.version })
       Composer({
-        store: this.store, version: this.version
+        store: this.store, version: this.version,
+        onAppCommand: (name: string): void => this.onAppCommand(name),
       })
     }
     .width('100%')
@@ -325,34 +329,40 @@ export struct ChatView {
     })
   }
 
+  /** 七个浮层的开关打成一个包，判定与标题口径都在 core/OverlaySheets.ts（可单测）。 */
+  private sheetFlags(): SheetFlags {
+    return {
+      stats: this.statsSheet, trajectory: this.trajectorySheet, team: this.teamSheet,
+      todo: this.todoSheet, model: this.modelSheet, loc: this.locSheet,
+      codeWork: this.codeWorkSheet,
+    };
+  }
+
   private sheetOpen(): boolean {
-    return this.statsSheet || this.trajectorySheet || this.teamSheet || this.todoSheet
-      || this.modelSheet || this.locSheet || this.codeWorkSheet;
+    return sheetOpenOf(this.sheetFlags());
   }
 
   private sheetTitle(): string {
-    if (this.statsSheet) {
-      return '会话统计';
-    }
-    if (this.trajectorySheet) {
-      return '运行轨迹';
-    }
-    if (this.teamSheet) {
-      return '智能团队';
-    }
-    if (this.todoSheet) {
-      return '任务';
-    }
-    if (this.modelSheet) {
-      return '调整模型';
-    }
-    if (this.locSheet) {
-      return '会话工作目录';
-    }
-    if (this.codeWorkSheet) {
-      return '代码工作视图';
-    }
-    return '';
+    return sheetTitleOf(this.sheetFlags());
+  }
+
+  /** 斜杠面板的四条客户端功能命令（落点见 components/ChatAppCommands.ets）。 */
+  private onAppCommand(name: string): void {
+    const hooks: AppCommandHooks = {
+      openModel: (): void => {
+        const st: ChatStore | null = this.store;
+        if (st !== null && st.sessionId !== null && st.sessionId.length > 0) {
+          this.modelSheet = true;
+        }
+      },
+      openSettings: (): void => {
+        if (this.onOpenSettings !== null) {
+          this.onOpenSettings();
+        }
+      },
+      titleOf: (): string => this.titleView.length > 0 ? this.titleView : '未命名会话',
+    };
+    onAppCommandOf({ store: this.store, hooks: hooks }, name);
   }
 
   private sheetHeight(): SheetSize {
@@ -433,7 +443,7 @@ export struct ChatView {
   @Builder
   topBar() {
     ChatTopBar({
-      title: this.title(),
+      title: this.titleView,
       state: this.store === null ? GatewayState.IDLE : this.store.connectionState,
       streaming: this.store !== null && this.store.streaming,
       waitingApproval: this.approvalsView.length > 0,
@@ -454,58 +464,18 @@ export struct ChatView {
     })
   }
 
-  private title(): string {
-    return this.titleView;
-  }
-
-  /** 空态问候（品牌标 + 问候语；工作目录 chip 阶段 4）。 */
+  /** 空态问候（品牌标 + 问候语 + 工作目录 chip），实现见 components/EmptyGreeting.ets。 */
   @Builder
   greeting() {
-    Column({ space: 12 }) {
-      Image($r('app.media.brand_mark'))
-        .width(DsSpacing.brandMarkWidth)
-        .height(DsSpacing.brandMarkHeight)
-        .fillColor(this.c().brandMark)
-        .objectFit(ImageFit.Contain)
-        .margin({ bottom: DsSpacing.brandMarkGap - 12 })
-        .accessibilityText('DSH 标记')
-      Text('嗨！今天想聊些什么？')
-        .fontSize(18)
-        .fontWeight(FontWeight.Bold)
-        .fontColor(this.c().labelPrimary)
-      Text(this.greetingHost())
-        .fontSize(12)
-        .fontColor(this.c().labelTertiary)
-      // 工作目录选择（对照安卓空态「工作目录」chip）：默认手机会话，
-      // 发首条消息前可换成授权根下的指定目录；建好后随会话定死。
-      Row({ space: 6 }) {
-        Text(this.pendingLocView === null ? '📱' : '📁')
-          .fontSize(12)
-        Text(locationChipLabel(this.pendingLocView))
-          .fontSize(12)
-          .fontColor(this.c().labelPrimary)
-          .maxLines(1)
-          .textOverflow({ overflow: TextOverflow.Ellipsis })
-        Text('⌄')
-          .fontSize(12)
-          .fontColor(this.c().labelTertiary)
-      }
-      .padding({ left: 14, right: 14, top: 8, bottom: 8 })
-      .borderRadius(18)
-      .backgroundColor(this.c().bgLayer1)
-      .border({ width: 1, color: this.c().inputBorder })
-      .constraintSize({ maxWidth: 300 })
-      .margin({ top: 4 })
-      .accessibilityText('工作目录：' + locationChipLabel(this.pendingLocView))
-      .onClick(() => {
+    EmptyGreeting({
+      colors: this.c(),
+      host: this.greetingHost(),
+      pendingLoc: this.pendingLocView,
+      onPickLoc: (): void => {
         this.syncPendingLoc();
         this.locSheet = true;
-      })
-    }
-    .width('100%')
-    .layoutWeight(1)
-    .justifyContent(FlexAlign.Center)
-    .alignItems(HorizontalAlign.Center)
+      }
+    })
   }
 
   /** store.pendingLocation → @State 快照（普通成员变更不触发重渲染）。 */

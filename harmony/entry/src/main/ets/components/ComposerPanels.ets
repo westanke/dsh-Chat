@@ -4,7 +4,7 @@
  * maxHeight 320 可滚，高亮行 chipSelectedBg，单行省略 description。
  */
 
-import { SlashCommand } from '../core/Content';
+import { SlashCommand, SlashCommandKind } from '../core/Content';
 import { AtEntry, AtSessionHit } from '../core/AtMention';
 import { PermissionOption } from '../core/Permissions';
 import { DsColors, DsTypography, DsSpacing } from '../ui/theme';
@@ -27,31 +27,48 @@ export struct CommandPanel {
       Column() {
         Repeat<SlashCommand>(this.commands)
           .each((item: RepeatItem<SlashCommand>) => {
-            Row({ space: 8 }) {
-              Text('›')
-                .fontSize(16)
-                .fontColor(this.c().chipSelectedFg)
-              Text('/' + item.item.name)
-                .fontSize(14)
-                .fontWeight(FontWeight.Medium)
-                .fontColor(this.c().labelPrimary)
-                .maxLines(1)
+            Column() {
+              Row({ space: 6 }) {
+                Text(commandGlyph(item.item))
+                  .fontSize(14)
+                  .fontColor(this.c().labelSecondary)
+                if (item.item.displayLabel() !== item.item.name) {
+                  Text(item.item.displayLabel())
+                    .fontSize(14)
+                    .fontWeight(FontWeight.Medium)
+                    .fontColor(this.c().labelPrimary)
+                    .maxLines(1)
+                }
+                Text('/' + item.item.name)
+                  .fontSize(14)
+                  .fontWeight(FontWeight.Medium)
+                  .fontColor(item.item.displayLabel() !== item.item.name
+                    ? this.c().labelSecondary : this.c().labelPrimary)
+                  .maxLines(1)
+                if (item.item.inputHint !== null) {
+                  Text(item.item.inputHint as string)
+                    .fontSize(12)
+                    .fontColor(this.c().labelTertiary)
+                    .maxLines(1)
+                }
+                Blank().layoutWeight(1)
+              }
+              .width('100%')
               if (item.item.description.length > 0) {
                 Text(item.item.description)
                   .fontSize(12)
                   .fontColor(this.c().labelTertiary)
                   .maxLines(1)
                   .textOverflow({ overflow: TextOverflow.Ellipsis })
-                  .layoutWeight(1)
-              } else {
-                Blank().layoutWeight(1)
+                  .width('100%')
+                  .margin({ top: 2 })
               }
             }
             .width('100%')
-            .padding({ left: 12, right: 12, top: 10, bottom: 10 })
+            .alignItems(HorizontalAlign.Start)
+            .padding({ left: 12, right: 12, top: 8, bottom: 8 })
             .backgroundColor(item.index === 0 ? this.c().chipSelectedBg : Color.Transparent)
-            .accessibilityText('/' + item.item.name +
-              (item.item.description.length > 0 ? '：' + item.item.description : ''))
+            .accessibilityText(commandA11y(item.item))
             .onClick(() => {
               this.onPick(item.item);
             })
@@ -60,7 +77,7 @@ export struct CommandPanel {
       }
       .width('100%')
     }
-    .height(Math.min(320, Math.max(44, this.commands.length * 40)))
+    .height(Math.min(320, Math.max(56, this.commands.length * 56)))
     .scrollBar(BarState.Off)
     .width('100%')
     .backgroundColor(this.c().inputFill)
@@ -68,6 +85,55 @@ export struct CommandPanel {
     .border({ width: 1, color: this.c().borderL2 })
     .margin({ bottom: 6 })
   }
+}
+
+/** 命令行的前置符号：对齐安卓 `_commandIcon` 的语义分组（鸿蒙不引 Material 图标集）。 */
+function commandGlyph(cmd: SlashCommand): string {
+  const n: string = cmd.name;
+  if (cmd.kind === SlashCommandKind.Skill) {
+    return '✦';
+  }
+  if (n === 'new') {
+    return '＋';
+  }
+  if (n === 'model') {
+    return '◎';
+  }
+  if (n === 'export') {
+    return '⇩';
+  }
+  if (n === 'features') {
+    return '⊞';
+  }
+  if (n === 'compact') {
+    return '…';
+  }
+  if (n === 'permission') {
+    return '⚿';
+  }
+  if (n === 'plan') {
+    return '☑';
+  }
+  if (n === 'goal') {
+    return '⚑';
+  }
+  if (n === 'feedback') {
+    return '✎';
+  }
+  return '›';
+}
+
+/** 读屏口径：中文名 + 裸名 + 参数占位 + 描述。 */
+function commandA11y(cmd: SlashCommand): string {
+  let out: string = cmd.displayLabel() !== cmd.name
+    ? cmd.displayLabel() + ' ' + cmd.name : cmd.name;
+  if (cmd.inputHint !== null) {
+    out += ' 参数 ' + (cmd.inputHint as string);
+  }
+  if (cmd.description.length > 0) {
+    out += '：' + cmd.description;
+  }
+  return out;
 }
 
 /** @ 文件面板（空态三态：加载中 / 失败点按重试 / 没有匹配）。 */

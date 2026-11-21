@@ -13,6 +13,7 @@ import '../bridge/image_media_type.dart';
 import '../bridge/models.dart';
 import '../bridge/permissions.dart';
 import '../bridge/platform.dart';
+import '../bridge/slash_commands.dart';
 import '../design/tokens.dart';
 import 'window_class.dart';
 
@@ -21,6 +22,7 @@ part 'composer_panels.dart';
 part 'composer_at_sessions.dart';
 part 'composer_bar.dart';
 part 'composer_permission.dart';
+part 'composer_slash.dart';
 
 /// 待发送图片：选图后暂存，随下一条消息一起发（2026-11-21 起支持多张）。
 typedef _PendingImage = ({
@@ -48,6 +50,7 @@ class Composer extends StatefulWidget {
     this.currentPermission,
     this.sessions = const [],
     this.answering = false,
+    this.onAppCommand,
   });
 
   final DsColors colors;
@@ -78,6 +81,10 @@ class Composer extends StatefulWidget {
 
   /// 挂着一条「单题」待答提问：输入条文字直接当它的答案（hint 随之切换）。
   final bool answering;
+
+  /// 客户端自带命令（new/model/export/features）点选后的本地动作。
+  /// 这些名字服务端不认识，走 [onCommand] 会被桥 404，所以单独回调。
+  final ValueChanged<String>? onAppCommand;
 
   @override
   State<Composer> createState() => _ComposerState();
@@ -167,59 +174,13 @@ class _ComposerState extends State<Composer> {
   }
 
   // ---- 斜杠命令补全（真机反馈 2026-11-04 第 3 项）----
+  // 取数/过滤/点选/发送解析都在 composer_slash.dart 的 _ComposerSlash 扩展里
+  //（拆文件守住单文件 ≤500 行纪律）；这里只留它们要用的状态字段。
 
-  /// 会话可用命令（进入命令草稿态时拉一次并缓存；切会话由 _commandsSid 失效）。
-  SlashCommandList? _commands; // 整个清单收敛体（builtinTokens 随行，中文过滤用）
-  String? _commandsSid;
-
-  /// 当前命令草稿（`/` 开头才有）：（命令名片段, 已敲参数）。
-  ({String nameFragment, String args})? get _slashDraft {
-    if (!widget.enabled || widget.sessionId == null) return null;
-    return parseSlashDraft(_controller.text);
-  }
-
-  /// 命令面板数据：草稿态 + 命令清单就绪时给出前缀过滤结果（全量）。
-  List<SlashCommand> get _slashMatches {
-    final draft = _slashDraft;
-    final cmds = _commands;
-    if (draft == null || cmds == null) return const [];
-    // matching()：前缀过滤后全量返回（v1.0.11 曾 take(6) 截断：命令按字母序
-    // 返回，t/z 开头的命令在 `/` 空草稿时被截掉、`/t` 过滤后才出现——m04949）。
-    // 面板本身可滚动（maxHeight 320），高亮计数随长度自适应；内置命令的
-    // zh 别名（目标/计划/…）也参与过滤——桥 v2.11.0 builtinTokens，issue #1。
-    return cmds.matching(draft.nameFragment);
-  }
-
-  Future<void> _ensureCommands() async {
-    final gw = widget.gateway;
-    final sid = widget.sessionId;
-    if (gw == null || sid == null) return;
-    if (_commands != null && _commandsSid == sid) return;
-    if (_commandsLoading) return;
-    _commandsLoading = true;
-    try {
-      final raw = await gw.listCommands(sid);
-      final list = SlashCommandList.from(raw);
-      if (mounted) setState(() => _commands = list);
-    } on RequestException {
-      // 命令清单拉不到就不给面板（发送路径仍可整行 execute，服务端会报错）。
-      // 失败不落缓存（_commandsSid 不置），下次 onChanged 还会重试——m04149。
-      if (mounted) setState(() => _commands = SlashCommandList.empty);
-    } finally {
-      _commandsLoading = false;
-    }
-  }
-
-  /// 点选命令：输入框替换为 `/name ` 并聚焦，让用户接着敲参数。
-  void _applyCommand(SlashCommand cmd) {
-    final draft = _slashDraft;
-    final args = draft?.args ?? '';
-    _controller.text = args.isEmpty ? '/${cmd.name} ' : '/${cmd.name} $args';
-    _controller.selection = TextSelection.collapsed(
-      offset: _controller.text.length,
-    );
-    setState(() {});
-  }
+  /// 面板全量清单（客户端功能 + 宿主命令 + 会话技能，见 bridge/slash_commands.dart）。
+  /// null = 还没拉过；切会话由 _paletteSid 失效重拉。
+  List<SlashCommand>? _palette;
+  String? _paletteSid;
 
   // ---- @ 文件补全（第六轮反馈 m03878）----
 
@@ -332,21 +293,6 @@ class _ComposerState extends State<Composer> {
       selection: TextSelection.collapsed(offset: offset),
     );
     setState(() {});
-  }
-
-  /// 发送时若整行是 `/xxx ...`（且没挂图片）→ 走命令执行而非聊天发送。
-  bool _trySendCommand() {
-    final sid = widget.sessionId;
-    if (sid == null || _pendingImages.isNotEmpty) return false;
-    final text = _controller.text.trim();
-    if (!text.startsWith('/')) return false;
-    final draft = parseSlashDraft(text);
-    if (draft == null) return false;
-    widget.onCommand(text);
-    setState(() {
-      _controller.clear();
-    });
-    return true;
   }
 
   /// 发送键三态（对照 companion ComposerSendPolicy.resolve）。

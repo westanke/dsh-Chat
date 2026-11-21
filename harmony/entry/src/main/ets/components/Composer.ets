@@ -5,8 +5,11 @@
  */
 import { ChatStore } from '../core/ChatStore';
 import { GatewayState } from '../core/GatewayEvents';
-import { parseSlashDraft, parseAtMentionDraft, AtMentionDraft, SlashCommandList, SlashCommand,
-  PromptPart } from '../core/Content';
+import { parseSlashDraft, parseAtMentionDraft, AtMentionDraft, SlashCommand,
+  SlashCommandList, PromptPart } from '../core/Content';
+import { filterPaletteCommands, resolvePaletteCommand,
+  isAppCommand } from '../core/SlashCommands';
+import { loadPaletteCommands } from '../core/SlashPalette';
 import { GatewayRoot } from '../core/Files';
 import { JsonMap } from '../core/JsonAccess';
 import { PermissionSheet } from './PermissionSheet';
@@ -44,8 +47,10 @@ export struct Composer {
   @State cursor: number = 0;
   @State panel: PanelMode = 'none';
   /** 斜杠命令缓存（切会话失效，同安卓 _commands/_commandsSid）。 */
-  @State commands: SlashCommandList = SlashCommandList.empty();
+  @State palette: SlashCommand[] = [];
   @State commandsSid: string = '';
+  /** 客户端功能命令（/new /model /export /features）的执行回调，由 ChatView 接。 */
+  onAppCommand: (name: string) => void = (): void => {};
   /** 待发送图片（一条最多 6 张，安卓同口径）。 */
   @State pendingImages: PickedImage[] = [];
   @State imageError: string = '';
@@ -145,7 +150,7 @@ export struct Composer {
     // 命令清单按会话懒加载（切会话失效）；缺此调用会永远没有补全候选。
     this.ensureCommands();
     const slash = parseSlashDraft(this.draft);
-    if (slash !== null && this.commands.commands.length > 0) {
+    if (slash !== null && this.palette.length > 0) {
       this.panel = 'cmd';
       this.atDraft = null;
       return;
@@ -165,19 +170,23 @@ export struct Composer {
     this.atSessions = [];
   }
 
-  /** 命令清单缓存（切会话失效；失败不落缓存，onChanged 自动重试）。 */
+  /** 命令面板清单（切会话失效；失败不落缓存，onChanged 自动重试）。
+   *  三层来源与安卓 composer.dart 同口径：宿主 `commands` 帧 + 会话技能
+   *  （内核 `skills/list`）+ 客户端四条功能命令；取数与合并下沉 core/SlashPalette.ts。 */
   private ensureCommands(): void {
     const st: ChatStore | null = this.store;
     const sid: string = this.sid();
     if (st === null || sid.length === 0 || this.commandsSid === sid) {
       return;
     }
-    st.api.listCommands(sid).then((data: JsonMap): void => {
-      this.commands = SlashCommandList.fromJson(data);
+    loadPaletteCommands(st.api, st.gateway, sid).then((list: SlashCommand[]): void => {
+      this.palette = list;
       this.commandsSid = sid;
       this.updatePanel();
     }).catch((): void => {
-      // 失败不落缓存：下次输入自动重试（安卓口径）。
+      // 取数失败也要给客户端功能命令（离线可用的最小面板），且不落缓存。
+      this.palette = [];
+      this.updatePanel();
     });
   }
 
@@ -237,8 +246,16 @@ export struct Composer {
   }
 
   private applyCommand(cmd: SlashCommand): void {
-    this.draft = '/' + cmd.name + ' ';
     this.panel = 'none';
+    if (isAppCommand(cmd)) {
+      // 客户端功能命令：本地执行，绝不进输入框、绝不发服务端（服务端会 404）。
+      this.draft = '';
+      this.cursor = 0;
+      this.onAppCommand(cmd.name);
+      return;
+    }
+    this.draft = '/' + cmd.name + ' ';
+    this.cursor = this.draft.length;
   }
 
   private applyAtEntry(e: AtEntry): void {
@@ -299,7 +316,16 @@ export struct Composer {
       return;
     }
     if (slash !== null) {
-      st.runCommand(text);
+      // 面板里可能选的是中文名（/目标），执行前换成内核认的裸名（/goal）。
+      const resolved: SlashCommand | null = resolvePaletteCommand(this.palette, slash.nameFragment);
+      if (resolved !== null && isAppCommand(resolved)) {
+        this.onAppCommand(resolved.name);
+        return;
+      }
+      const line: string = resolved === null
+        ? text
+        : ('/' + resolved.name + (slash.args.length > 0 ? ' ' + slash.args : ''));
+      st.runCommand(line);
       return;
     }
     st.send(text, undefined, busyMode);
@@ -358,7 +384,7 @@ export struct Composer {
       }
       if (this.panel === 'cmd') {
         CommandPanel({
-          commands: this.commands.matching(parseSlashDraft(this.draft)?.nameFragment ?? ''),
+          commands: filterPaletteCommands(this.palette, parseSlashDraft(this.draft)?.nameFragment ?? ''),
           onPick: (cmd: SlashCommand): void => this.applyCommand(cmd),
         })
       } else if (this.panel === 'at') {
