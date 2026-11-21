@@ -983,6 +983,9 @@ R014（嵌套 10-11 层，info 级）。
 - 系统返回键对齐安卓：`Index.onBackPress()` —— 设置页回会话页；抽屉/溢出菜单开着先收起
   （ChatView 经 AppStorage `dshDrawerOpen`/`dshOverlayOpen`/`dshDrawerCloseTick` 联动）；
   其余 2s 内二次返回才退出，首次 Toast「再按一次退出 DSH」。
+- 列表行距抽 `core/ChatRowGap.ts`（连续用户 8 / 换轮 24 / 相邻过程 0 / 文件卡 12），
+  流式块紧跟过程组 0、截断提示 4；新行入场淡入 150ms（安卓 RowFadeIn 160 对齐官方档）；
+  用户气泡双击复制整条消息（Toast「已复制整条消息」）。
 - 连接标识对齐安卓 `deviceLabel`：顶栏状态行与抽屉头部显示设备名（抽屉补绿/红连接点 +
   host:port 副行）；溢出菜单开面板前先收起菜单；查看改动页顶栏「复制」改为复制当前文件路径
   （安卓 chat_diff_page 同口径）。
