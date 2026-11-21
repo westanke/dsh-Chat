@@ -9,6 +9,7 @@ import 'device.dart';
 import 'gateway.dart';
 import 'goal.dart';
 import 'models.dart';
+import 'queue.dart';
 
 extension GatewayApi on GatewayClient {
   /// 授权根下的工作区清单（workspaces 帧，ws-basic.ts:73-76）。
@@ -60,6 +61,38 @@ extension GatewayApi on GatewayClient {
       throw RequestException('BAD_REPLY', 'fork 应答缺 sessionId');
     }
     return forked;
+  }
+
+  /// 会话待发送队列（`session-queues` 帧，bridge 22a5223 / IKX2AE）：
+  /// 应答 data={sessionId, queue}；queue 缺失/形状不对回空表。
+  Future<List<QueueEntry>> fetchQueue(String sessionId) async {
+    final r = await request('session-queues', {'sessionId': sessionId});
+    return QueueEntry.listFrom(r['queue']);
+  }
+
+  /// 队列写（`queue-update` 帧）：action=remove|steer|edit（edit 必须带 text）。
+  /// 应答 data={sessionId, accepted, queue}；accepted=false 抛 RequestException，
+  /// queue=null（写成功但重读失败）时返回 null，调用方需重发 [fetchQueue]。
+  Future<List<QueueEntry>?> updateQueue(
+    String sessionId,
+    String inboxId,
+    String action, {
+    String? text,
+  }) async {
+    final r = await request('queue-update', {
+      'sessionId': sessionId,
+      'inboxId': inboxId,
+      'action': action,
+      'text': ?text,
+    });
+    if (r['accepted'] == false) {
+      throw RequestException(
+        'QUEUE_REJECTED',
+        (r['reason'] ?? '队列操作未被接受') as String,
+      );
+    }
+    final queue = r['queue'];
+    return queue == null ? null : QueueEntry.listFrom(queue);
   }
 
   /// 提前建会话（真机反馈 2026-11-04 第 7 项）：带 [workspaceId] 走
@@ -193,6 +226,15 @@ extension GatewayApi on GatewayClient {
   Future<GoalProjection?> fetchGoal(String sessionId) async {
     final r = await request('goal', {'sessionId': sessionId});
     return GoalProjection.fromJson(r['goal']);
+  }
+
+  /// 目标的 activation（`goals-get` 帧，bridge 22a5223 / IKX2AE）：
+  /// 投影里的 goal 故意不含它（宿主进程内状态），只有这一帧拿得到。
+  /// 返回 'armed' / 'disarmed'；老桥/无目标回 null（面板不显示该行）。
+  Future<String?> fetchGoalActivation(String sessionId) async {
+    final r = await request('goals-get', {'sessionId': sessionId});
+    final activation = r['activation'];
+    return activation is String && activation.isNotEmpty ? activation : null;
   }
 
   /// 改目标文字 / 轮次上限（`goal-edit` 帧）：compare-and-set 必须带

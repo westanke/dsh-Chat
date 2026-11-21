@@ -28,6 +28,7 @@ import 'gateway_kernel.dart';
 import 'gateway_liveness.dart';
 import 'gateway_pending.dart';
 import 'questions.dart';
+import 'queue.dart';
 export 'gateway_api.dart';
 export 'gateway_events.dart';
 export 'gateway_http.dart';
@@ -397,6 +398,12 @@ class GatewayClient {
           ModelsUpdatedEvent(
             payload['provider'] is String ? payload['provider'] as String : null,
           ),
+        );
+      case 'queue-item-updated':
+        // 队列快照推送（bridge 22a5223）：整份 queue，客户端直接替换。
+        final qsid = (payload['sessionId'] ?? '') as String;
+        _eventCtrl.add(
+          QueueUpdatedEvent(qsid, QueueEntry.listFrom(payload['queue'])),
         );
       default:
         break; // 其余事件忽略（goal/task 等低频帧暂不消费）

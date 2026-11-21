@@ -110,7 +110,12 @@ Future<void> runGoalActions(
     constraints: modalSheetConstraints(context),
     backgroundColor: colors.bgLayer1,
     isScrollControlled: true,
-    builder: (_) => _GoalSheet(goal: goal, colors: colors),
+    builder: (_) => _GoalSheet(
+      goal: goal,
+      colors: colors,
+      sessionId: id,
+      gateway: state.gateway,
+    ),
   );
   if (action == null || !context.mounted) return;
 
@@ -175,15 +180,50 @@ String goalErrorText(RequestException e) => switch (e.code) {
   _ => e.message,
 };
 
-/// 目标操作面板：完整目标文字 + 状态行 + 编辑/暂停/继续/清除。
-class _GoalSheet extends StatelessWidget {
-  const _GoalSheet({required this.goal, required this.colors});
+/// 目标操作面板：完整目标文字 + 状态行（+ activation）+ 编辑/暂停/继续/清除。
+class _GoalSheet extends StatefulWidget {
+  const _GoalSheet({
+    required this.goal,
+    required this.colors,
+    required this.sessionId,
+    required this.gateway,
+  });
 
   final GoalProjection goal;
   final DsColors colors;
+  final String sessionId;
+  final GatewayClient gateway;
+
+  @override
+  State<_GoalSheet> createState() => _GoalSheetState();
+}
+
+class _GoalSheetState extends State<_GoalSheet> {
+  /// 'armed' / 'disarmed'；null = 老桥没这帧/还没拉回来（不显示该行）。
+  String? _activation;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadActivation();
+  }
+
+  Future<void> _loadActivation() async {
+    if (!widget.gateway.hasCapability('mobile-goal-activation-v1')) return;
+    try {
+      final activation = await widget.gateway.fetchGoalActivation(
+        widget.sessionId,
+      );
+      if (mounted) setState(() => _activation = activation);
+    } on RequestException {
+      // 拉不到就不显示 activation 行，不影响暂停/恢复/清除。
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    final goal = widget.goal;
+    final colors = widget.colors;
     final c = colors;
     final blocked = goal.goal.phase == GoalPhase.blocked;
     final canPause = goalCanPause(goal);
@@ -243,6 +283,13 @@ class _GoalSheet extends StatelessWidget {
                       ),
                     ],
                   ),
+                  if (_activation != null) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      _activation == 'armed' ? '自动续跑：已启用' : '自动续跑：未启用',
+                      style: DsTypography.caption.copyWith(color: c.labelTertiary),
+                    ),
+                  ],
                   if (goal.goal.blockedReason case final reason?) ...[
                     const SizedBox(height: 4),
                     Text(

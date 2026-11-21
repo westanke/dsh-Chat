@@ -21,6 +21,7 @@ import 'chat_shell.dart';
 import 'chat_state.dart';
 import 'context_usage_bar.dart';
 import 'goal_dock.dart';
+import 'queue_dock.dart';
 import 'chat_top_bar.dart';
 import 'composer.dart';
 import 'question_card.dart';
@@ -298,6 +299,13 @@ class _ChatPageState extends State<ChatPage>
         composer: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            // 排队管理（mobile-queue-v1）：有排队项才占位。
+            if (st.queue.isNotEmpty)
+              QueueDockBar(
+                entries: st.queue,
+                colors: c,
+                onManage: () => runQueueActions(context, st, c),
+              ),
             // 上下文用量（dsh-go 输入条右侧的环）：窗口未知/老桥不显示。
             ContextUsageBar(
               gateway: st.gateway,
@@ -332,6 +340,8 @@ class _ChatPageState extends State<ChatPage>
               currentPermission: st.currentPermission,
               // @ 面板「对话」分组用抽屉同一份会话列表（工单 3）。
               sessions: st.sessions,
+              // 单题提问挂着时，输入条文字直接作为答案（hint 同步切换）。
+              answering: st.singleOpenQuestion != null,
             ),
           ],
         ),

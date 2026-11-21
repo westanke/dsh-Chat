@@ -9,9 +9,12 @@ import 'package:flutter/foundation.dart';
 import '../bridge/dlog.dart';
 import '../bridge/gateway.dart';
 import '../bridge/models.dart';
+import '../bridge/queue.dart';
 import '../design/app_settings.dart';
 import 'hitl_state.dart';
+import 'chat_command_actions.dart';
 import 'chat_history_actions.dart';
+import 'chat_queue_actions.dart';
 import 'chat_expand_state.dart';
 import 'chat_hitl_actions.dart';
 import 'mobile_workspace.dart';
@@ -69,6 +72,16 @@ class ChatState extends ChangeNotifier with GroupExpandState {
   /// HITL 挂起表（question_card.dart 渲染；事件转发见 chat_state_events.dart）。
   HitlState get hitlState => hitl;
 
+  /// 唯一一条单题提问：输入条文字直接当答案（一个请求 + 一题；有审批不抢答）。
+  PendingQuestion? get singleOpenQuestion {
+    final list = hitl.sessionQuestions(sessionId);
+    if (list.length != 1) return null;
+    final request = list.single;
+    if (request.questions.length != 1) return null;
+    if (hitl.sessionApprovals(sessionId).isNotEmpty) return null;
+    return request;
+  }
+
   /// 当前设备名（抽屉底部账号栏显示，官方是手机号；bridge 侧是设备档案）。
   String get deviceLabel {
     final d = _gateway.device;
@@ -93,6 +106,11 @@ class ChatState extends ChangeNotifier with GroupExpandState {
   String? _pendingSessionId;
   List<DshSession> sessions = [];
   List<ChatMessage> messages = [];
+
+  /// 待发送队列（mobile-queue-v1；老桥恒空；身份用 inboxId）。
+  List<QueueEntry> queue = const [];
+
+  bool get queueSupported => _gateway.hasCapability(queueCapability);
 
   /// 新建会话的待定工作目录（2026-11-15 反馈）：null = 默认「手机会话」
   /// 工作区；非空时 send() 首条消息走 session-create{rootId,cwd}，
@@ -185,6 +203,7 @@ class ChatState extends ChangeNotifier with GroupExpandState {
     loadingOlder = false;
     historyPageJustLoaded = false;
     historyTruncated = false;
+    queue = const [];
     // 流式缓冲一并清（2026-11-15 反馈）：A 会话执行中切到 B，残留的
     // streamReasoning/streamText 会以流式正文挂在 B 页
     // 尾部——「深度思考未按照对应会话显示」正是这个残留；若 B 也在执行，
@@ -201,6 +220,7 @@ class ChatState extends ChangeNotifier with GroupExpandState {
     // 失败静默（打断换会话的代价大于漏一张兜底卡）。
     unawaited(_refreshPendingQuestions(s.id));
     await reloadHistory();
+    unawaited(loadChatQueue(this));
   }
 
   /// REST 拉会话挂起提问并合流进 hitl 表（见 GatewayApi.fetchQuestions）。
@@ -215,6 +235,7 @@ class ChatState extends ChangeNotifier with GroupExpandState {
   Future<void> newChat() async {
     sessionId = null;
     messages = [];
+    queue = const [];
     rawEvents = [];
     projections = null;
     historyHasMore = false;
@@ -241,6 +262,14 @@ class ChatState extends ChangeNotifier with GroupExpandState {
     final trimmed = text.trim();
     // 纯图无文字也允许发（图片是完整消息内容）；两者都空才忽略。
     if (trimmed.isEmpty && (imageParts == null || imageParts.isEmpty)) return;
+    // 单题提问挂着且无图片：这段文字就是答案，不再发成新一轮提问。
+    final pendingQuestion = imageParts == null || imageParts.isEmpty
+        ? singleOpenQuestion
+        : null;
+    if (pendingQuestion != null && trimmed.isNotEmpty) {
+      await _answerSingleQuestion(pendingQuestion, trimmed);
+      return;
+    }
     // 不再因 streaming 直接拒绝：运行中再发由「繁忙发送模式」决定语义
     // （对照 companion ComposerSendPolicy：queue 排队 / steer 插话）。
     lastError = null;
@@ -310,6 +339,22 @@ class ChatState extends ChangeNotifier with GroupExpandState {
     }
   }
 
+  /// 把输入条文字作为自定义答案提交（question-answer 帧；成功即本地摘卡）。
+  Future<void> _answerSingleQuestion(
+    PendingQuestion question,
+    String text,
+  ) async {
+    lastError = null;
+    try {
+      await hitl.answerQuestion(_gateway, question, [
+        QuestionAnswerItem(id: question.questions.single.id, custom: text),
+      ]);
+    } on RequestException catch (e) {
+      lastError = '提交回答失败：${e.message}';
+    }
+    notifyListeners();
+  }
+
   /// 停止当前回合（对照 companion ChatHeader 的「停止运行」）：
   /// 发 session-cancel 帧，立即收起流式显示，再重拉历史拿落库的最终状态。
   Future<void> cancelTurn() async {
@@ -328,64 +373,13 @@ class ChatState extends ChangeNotifier with GroupExpandState {
     }
   }
 
-  /// 执行斜杠命令（真机反馈 2026-11-04 第 3 项）：`/xxx args` 整行走
-  /// command-execute 帧，不出现在用户气泡里（bridge 端命令不入 chat 历史）。
-  /// 第六轮反馈 m03878：执行回执以本地「命令卡」消息注入会话流——
-  /// 成功显示命令行 + 结果摘要（kind），失败显示错误文本；重拉历史后
-  /// 本地卡保留（seq=-1 不参与去重/排序），直到下次 reloadHistory 重建。
-  Future<void> runCommand(String line) async {
-    final id = sessionId;
-    if (id == null || id.isEmpty) return;
-    lastError = null;
-    final card = ChatMessage(
-      role: 'command',
-      text: line,
-      startedAt: DateTime.now().millisecondsSinceEpoch,
-    );
-    messages = [...messages, card];
-    notifyListeners();
-    try {
-      final r = await _gateway.executeCommand(sessionId: id, line: line);
-      final result = r['result'];
-      final kind = result is Map ? (result['kind'] ?? '') as String : '';
-      if (kind == 'error') {
-        final text = result is Map && result['text'] is String
-            ? result['text'] as String
-            : '命令执行失败';
-        card.text = '$line\n✗ $text';
-        lastError = text;
-        notifyListeners();
-        return;
-      }
-      final detail = result is Map && result['text'] is String
-          ? (result['text'] as String).trim()
-          : '';
-      card.text = detail.isEmpty
-          ? '$line\n✓ 已执行'
-          : '$line\n✓ $detail';
-      // 成功的命令大多自带落盘事件（如 /model 走 session 事件）；保险起见
-      // 重拉一次历史，把命令效果落到 UI。
-      await reloadHistory();
-      notifyListeners();
-    } on RequestException catch (e) {
-      card.text = '$line\n✗ ${e.message}';
-      lastError = '命令执行失败：${e.message}';
-      notifyListeners();
-    }
-  }
+  /// 执行斜杠命令（实现见 chat_command_actions.dart）。
+  Future<void> runCommand(String line) => runChatCommand(this, line);
 
-  /// 「重新生成」：重发指定助手消息之前（含）最后一条有正文的用户消息。
-  /// 协议没有 regenerate 帧、本版本也未接 fork，因此采用「重新提问」语义
-  /// （对照 companion ChatRetry.kt：排除只有图片/空正文的用户消息）。
-  Future<void> regenerateAt(int index) async {
-    if (streaming) return;
-    final last = lastUserTextBefore(messages, index);
-    if (last == null) return;
-    await send(last);
-  }
+  /// 「重新生成」：重发上一条用户正文（实现见 chat_command_actions.dart）。
+  Future<void> regenerateAt(int index) => regenerateChatAt(this, index);
 
-  /// 失败重试：重发历史里最后一条有正文的用户消息。
-  Future<void> retryLast() => regenerateAt(messages.length - 1);
+  Future<void> retryLast() => retryChatLast(this);
 
   /// 工具调用实时缓冲（桥 fdb85da 工具帧 → preparing/running/结果三态；
   /// committed 后由 reloadHistory 的持久化过程组覆盖，_clearStream 清空）。

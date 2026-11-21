@@ -9,6 +9,7 @@ library;
 
 import 'models.dart';
 import 'questions.dart';
+import 'queue.dart';
 
 /// 连接状态。
 enum GatewayState { idle, connecting, ready, closed, authFailed }
@@ -122,6 +123,15 @@ class ToolCallEvent extends GatewayEvent {
 class ToolResultEvent extends GatewayEvent {
   ToolResultEvent(this.result);
   final ToolCallOutcome result;
+}
+
+/// 队列快照推送（`queue-item-updated`，bridge 22a5223 / IKX2AE）：
+/// 整份快照（不是增量），只推已订阅会话。
+class QueueUpdatedEvent extends GatewayEvent {
+  QueueUpdatedEvent(this.sessionId, this.queue);
+
+  final String sessionId;
+  final List<QueueEntry> queue;
 }
 
 /// WS 请求 / REST 通道共用的错误（code 是稳定的错误名，如 HTTP_404/TIMEOUT）。

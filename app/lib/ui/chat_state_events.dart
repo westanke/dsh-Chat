@@ -128,6 +128,11 @@ void _onGatewayEvent(ChatState state, GatewayEvent event) {
         state.lastError = '请求内容超过 1 MiB，连接已重置';
       }
       state._notify();
+    case QueueUpdatedEvent(:final sessionId, :final queue):
+      // 队列整份快照（bridge 22a5223）：直接替换；推送可能被反压丢弃，
+      // 丢了靠下次读帧/轮末快照补（IKX2AE 客户端约束 1）。
+      if (!state._isCurrent(sessionId)) return;
+      applyChatQueue(state, queue);
     case ModelsUpdatedEvent():
       // 模型目录推送（桥 v2.11.0，issue #1）：模型面板打开时必重拉
       // models 帧，这里无需处理；显式 case 保 switch 穷尽并留扩展点。

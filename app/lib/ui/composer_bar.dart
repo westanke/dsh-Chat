@@ -82,6 +82,7 @@ class _ComposerBar extends StatelessWidget {
     required this.canSend,
     required this.onSend,
     required this.onStop,
+    required this.answering,
   });
 
   final DsColors colors;
@@ -106,6 +107,9 @@ class _ComposerBar extends StatelessWidget {
 
   final _SendKeyState sendState;
   final bool canSend;
+
+  /// 挂着单题提问：hint 说明这段文字会作为答案提交。
+  final bool answering;
   final VoidCallback onSend;
   final VoidCallback? onStop;
 
@@ -149,7 +153,11 @@ class _ComposerBar extends StatelessWidget {
                 style: DsTypography.base.copyWith(color: c.labelPrimary),
                 cursorColor: c.brand,
                 decoration: InputDecoration(
-                  hintText: enabled ? '发消息或按住说话' : '未连接到 bridge',
+                  hintText: !enabled
+                      ? '未连接到 bridge'
+                      : answering
+                      ? '直接回答上面的提问…'
+                      : '发消息或按住说话',
                   hintStyle: DsTypography.inputPlaceholder.copyWith(
                     color: c.inputHintText,
                   ),

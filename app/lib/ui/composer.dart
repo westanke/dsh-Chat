@@ -47,6 +47,7 @@ class Composer extends StatefulWidget {
     this.gateway,
     this.currentPermission,
     this.sessions = const [],
+    this.answering = false,
   });
 
   final DsColors colors;
@@ -74,6 +75,9 @@ class Composer extends StatefulWidget {
 
   /// 历史会话（@ 面板「对话」分组的数据源：抽屉同一份 List）。
   final List<DshSession> sessions;
+
+  /// 挂着一条「单题」待答提问：输入条文字直接当它的答案（hint 随之切换）。
+  final bool answering;
 
   @override
   State<Composer> createState() => _ComposerState();
@@ -473,6 +477,7 @@ class _ComposerState extends State<Composer> {
             canSend: widget.enabled && (_hasText || _hasImage),
             onSend: _send,
             onStop: widget.onCancel,
+            answering: widget.answering,
           ),
           const SizedBox(height: DsSpacing.composerHintGap),
           // 免责声明：流式思考中不显示（思考块已在消息流里滚动展示）。
