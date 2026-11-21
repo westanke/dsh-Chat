@@ -17,6 +17,8 @@ export struct DrawerSearch {
   store: ChatStore | null = null;
   /** 与父组件共享的搜索词（父层用它做标题过滤）。 */
   @Link query: string;
+  /** 关键词变化回调（父层据此做标题本地过滤；@Watch 在 @Link 上的时序不稳）。 */
+  onQuery: ((q: string) => void) | null = null;
   /** 父层刷新版本：目录晚到/连接变化时重算能力位。 */
   @Prop @Watch('syncVersion') version: number = 0;
   onOpenId: ((id: string) => void) | null = null;
@@ -77,6 +79,9 @@ export struct DrawerSearch {
 
   private setQuery(value: string): void {
     this.query = value;
+    if (this.onQuery !== null) {
+      this.onQuery(value);
+    }
     if (this.searchTimer >= 0) {
       clearTimeout(this.searchTimer);
       this.searchTimer = -1;

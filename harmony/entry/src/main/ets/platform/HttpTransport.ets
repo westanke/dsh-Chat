@@ -47,6 +47,10 @@ export class HttpTransportImpl implements HttpTransport {
         header: headerOut,
         connectTimeout: req.timeoutMs,
         readTimeout: req.timeoutMs,
+        // 必须显式要字节：默认 STRING 会把图片二进制当 UTF-8 解码（丢字节、
+        // bodyBytes 为 null），图片交接/缩略图全部「加载失败」。JSON 也走
+        // 同一路径，下面的解码逻辑两种都兼容。
+        expectDataType: http.HttpDataType.ARRAY_BUFFER,
       };
       if (req.body !== null && req.body.length > 0) {
         options.extraData = req.body;

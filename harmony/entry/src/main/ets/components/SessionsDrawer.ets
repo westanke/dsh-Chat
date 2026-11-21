@@ -221,7 +221,12 @@ export struct SessionsDrawer {
    * 「LazyForEach 缺少 keyGenerator」。
    */
   private keyOf(g: SessionGroup): string {
-    return g.key + (this.earlierOpen ? '|open' : '|closed');
+    // key 里带过滤词与行签名：LazyForEach 复用节点时 key 不变就不会重建
+    // groupItem（带参 @Builder 不随查询刷新），标题过滤会看起来「没生效」。
+    const n: number = g.rows.length;
+    const head: string = n > 0 ? g.rows[0].session.id : '';
+    return g.key + (this.earlierOpen ? '|open' : '|closed') + '|' + this.query.trim().toLowerCase()
+      + '|' + n.toString() + '|' + head;
   }
 
   /** 某个时间分组实际要渲染的行（「更早」收起时返回空）。 */
@@ -290,6 +295,10 @@ export struct SessionsDrawer {
         store: this.store,
         query: $query,
         version: this.version,
+        onQuery: (q: string): void => {
+          this.query = q;
+          this.applyFilter();
+        },
         onOpenId: (id: string): void => {
           const target: DshSession | null = this.sessionById(id);
           if (target !== null) {
