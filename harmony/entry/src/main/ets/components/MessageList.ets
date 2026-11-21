@@ -4,6 +4,7 @@
  */
 
 import { ChatStore } from '../core/ChatStore';
+import { chatRowGapBefore, RowGapValues } from '../core/ChatRowGap';
 import { ChatMessage } from '../core/HistoryPage';
 import { ToolCallInfo, formatDuration, bashCommandOf, prettyArguments } from '../core/ToolCall';
 import { DsColors, DsTypography, DsSpacing } from '../ui/theme';
@@ -175,7 +176,7 @@ export struct MessageList {
             showPreview: policyOf(parseWorkStepsDetail(this.detailProp)).settledReasoningPreview
           })
         }
-        .padding({ top: DsSpacing.chatGapSameTurn })
+        .padding({ top: this.streamGap() })
       }
       if (this.maxTokensNotice) {
         ListItem() {
@@ -185,6 +186,7 @@ export struct MessageList {
             .padding({ left: 12, right: 12, top: 8, bottom: 8 })
             .backgroundColor(this.c().settingsWarnBg).borderRadius(8)
         }
+        .padding({ top: DsSpacing.chatGapFootnote })
       }
     }
       .width('100%')
@@ -246,6 +248,17 @@ export struct MessageList {
     })
   }
 
+  /** 流式块上距：紧跟过程组不留空，否则同一轮 8（安卓 StreamingTextRow 口径）。 */
+  private streamGap(): number {
+    const n: number = this.msgs.length;
+    if (n === 0) {
+      return 0;
+    }
+    const last: ChatMessage = this.msgs[n - 1];
+    const proc: boolean = last.isProcess || last.role === 'command';
+    return proc ? DsSpacing.chatGapProcess : DsSpacing.chatGapSameTurn;
+  }
+
   /** 渐隐带起始色（底色全透明，token 收口在 theme）。 */
   private veilStart(): string {
     return this.c().veilStart;
@@ -265,22 +278,13 @@ export struct MessageList {
    * 换轮 24、连续用户 8、相邻过程 0、文件卡 12、其余 8。
    */
   private gapTopOf(m: ChatMessage, i: number): number {
-    if (i === 0 || i >= this.msgs.length) {
-      return 0;
-    }
-    const prev: ChatMessage = this.msgs[i - 1];
-    if (m.isUser) {
-      return prev.isUser ? DsSpacing.chatGapSameTurn : DsSpacing.chatGapNewTurn;
-    }
-    const mProc: boolean = m.isProcess || m.role === 'command';
-    const pProc: boolean = prev.isProcess || prev.role === 'command';
-    if (mProc && pProc) {
-      return DsSpacing.chatGapProcess;
-    }
-    if (m.role === 'files') {
-      return DsSpacing.chatGapCard;
-    }
-    return DsSpacing.chatGapSameTurn;
+    const gaps: RowGapValues = new RowGapValues();
+    gaps.newTurn = DsSpacing.chatGapNewTurn;
+    gaps.sameTurn = DsSpacing.chatGapSameTurn;
+    gaps.process = DsSpacing.chatGapProcess;
+    gaps.card = DsSpacing.chatGapCard;
+    const prev: ChatMessage | null = i > 0 && i < this.msgs.length ? this.msgs[i - 1] : null;
+    return chatRowGapBefore(m, prev, gaps);
   }
 
   /** 视口是否贴底：ArkUI 的 isAtEnd 已含「差一像素也算」的语义。 */
