@@ -1004,3 +1004,18 @@ R014（嵌套 10-11 层，info 级）。
   （安卓 chat_diff_page 同口径）。
 - 门禁：`npm --prefix harmony/test test` 412 pass；`hvigorw assembleHap` BUILD SUCCESSFUL；
   `bash scripts/ci/docs-check.sh` 通过。设备仍离线（`hdc list targets` 空），未做本轮真机复验。
+
+## 2026-11-21 · 第 7 轮静态收尾（图片链路）
+
+- `platform/HttpTransport.ets`：`http.HttpRequestOptions` 显式 `expectDataType:
+  http.HttpDataType.ARRAY_BUFFER`。此前默认 `STRING` 会把图片二进制按 UTF-8 解码，
+  `bodyBytes` 恒为 null，交接图/缩略图在真机一律「加载失败」，而宿主直连同一 URL 是 200。
+  JSON 端点仍在调用侧用 `util.TextDecoder` 还原文本，两条路径共用一个 transport。
+- `ChatStore.fetchImageBytes(ref, sid = '')`：会话 id 由调用方传入（`ImageTile` 传
+  `this.sid`），不再依赖 `store.sessionId` 的赋值时序；`ImageTile` 在 `sid` 就绪时经
+  `@Watch('onSession')` 自动重拉。`ChatStore` 仍为 500 行。
+- 排障：`ImageTile` 失败时 `Dlog.warn('image load failed sid=… name=… err=…')`；
+  `GatewayRest.fetchImageHandoff` 的错误信息带 HTTP 状态与响应体前 120 字。
+- 行入场淡入（150ms，`DsMotion.rowFade`）与行距纯函数已在上一轮落地，本轮无改动。
+- 仍未真机复验（USB 断开）：图片实际渲染 + `ImageViewer` 全屏、团队 sheet→子代理历史页、
+  多图选择、横屏宽窗三档、改动卡切换 chip、返回键手感。
