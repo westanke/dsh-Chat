@@ -972,6 +972,19 @@ R014（嵌套 10-11 层，info 级）。
 - 该修复已通过构建（BUILD SUCCESSFUL）、412 单测与 docs-check；装机复验时鸿蒙设备再次断连
   （`hdc list targets` 为空），**修复的真机复验待设备恢复**。
 
+## 2026-11-21 · 真机复验（第 6 轮）
+
+- 抽屉标题过滤：`@Link` 写入时父层 @Watch 时序不稳 + LazyForEach 同 key 复用旧
+  `groupItem`（带参 @Builder 不重建）→ 输入关键词列表不过滤。修法：`DrawerSearch`
+  增加 `onQuery` 回调直接触发父层 `applyFilter()`；`keyOf(g)` 拼上过滤词与行签名
+  （行数 + 首行 sessionId），强制 LazyForEach 重建分组。真机复测：只显示匹配会话。
+- 图片消息「加载失败」：`@ohos.net.http` 默认 `expectDataType: STRING`，图片二进制被当
+  UTF-8 解码、`bodyBytes` 为 null。`platform/HttpTransport.ets` 显式设
+  `expectDataType: http.HttpDataType.ARRAY_BUFFER`，JSON/图片两条路径都在调用侧解码。
+- 真机确认：设备名（鸿蒙验收）+ 绿点、抽屉分组、正文搜索禁用的人话提示、工具行/思考行、
+  改动卡与 diff 页、统计/任务/模型 sheet、FAB 与流式贴底、双击复制。
+- 未复验完（USB 中途断开）：图片加载与全屏查看器、团队→子代理页、多图、宽窗、切换 chip。
+
 ## 2026-11-21 · 静态规则与返回键收尾
 
 - `harmony_check review` 全组件清零：新 token（cardActionSize/drawerSearchHeight/cardFootGap/
