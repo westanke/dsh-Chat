@@ -68,17 +68,17 @@ export struct DeliverableCard {
 
   build() {
     Column({ space: 6 }) {
-      ForEach(this.files, (f: DeliverableFile) => {
+      Repeat<DeliverableFile>(this.files).each((item: RepeatItem<DeliverableFile>) => {
         Row({ space: 8 }) {
-          Text(this.isMarkdown(f.path) ? '📄' : '📎')
+          Text(this.isMarkdown(item.item.path) ? '📄' : '📎')
             .fontSize(DsTypography.base.size)
           Column({ space: 2 }) {
-            Text(f.name.length > 0 ? f.name : f.path)
+            Text(item.item.name.length > 0 ? item.item.name : item.item.path)
               .fontSize(DsTypography.small.size).lineHeight(DsTypography.small.lineHeight)
               .fontColor(this.c().labelPrimary).maxLines(1)
               .textOverflow({ overflow: TextOverflow.Ellipsis }).width('100%')
-            if (f.description !== null) {
-              Text(f.description as string)
+            if (item.item.description !== null) {
+              Text(item.item.description as string)
                 .fontSize(DsTypography.caption.size).lineHeight(DsTypography.caption.lineHeight)
                 .fontColor(this.c().labelTertiary).maxLines(1)
                 .textOverflow({ overflow: TextOverflow.Ellipsis }).width('100%')
@@ -89,13 +89,14 @@ export struct DeliverableCard {
         }
         .width('100%').padding({ left: 12, right: 12, top: 8, bottom: 8 })
         .borderRadius(10).backgroundColor(this.c().bgLayer1)
-        .accessibilityText(f.name + '，文件：' + f.path)
+        .accessibilityText(item.item.name + '，文件：' + item.item.path)
         .onClick(() => {
-          if (this.isMarkdown(f.path) && this.onOpenDoc !== null) {
-            (this.onOpenDoc as (path: string, title: string) => void)(f.path, f.name.length > 0 ? f.name : f.path);
+          if (this.isMarkdown(item.item.path) && this.onOpenDoc !== null) {
+            (this.onOpenDoc as (path: string, title: string) => void)(
+              item.item.path, item.item.name.length > 0 ? item.item.name : item.item.path);
           }
         })
-      }, (f: DeliverableFile) => f.path)
+      }).key((f: DeliverableFile) => f.path)
     }
     .width('100%')
   }

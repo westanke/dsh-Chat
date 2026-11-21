@@ -99,19 +99,19 @@ export struct ToolBlockDetail {
 
   @Builder
   diffLines(d: FileDiff) {
-    ForEach(this.diffWindow(d), (l: DiffLineRow, idx: number) => {
+    Repeat<DiffLineRow>(this.diffWindow(d)).each((item: RepeatItem<DiffLineRow>) => {
       Row() {
-        Text(l.prefix)
+        Text(item.item.prefix)
           .fontSize(DsTypography.codeBlock.size)
           .lineHeight(DsTypography.codeBlock.lineHeight)
           .fontFamily('monospace')
-          .fontColor(this.diffFg(l))
-          .width(14)
-        Text(l.text)
+          .fontColor(this.diffFg(item.item))
+          .width(DsSpacing.diffPrefixWidth)
+        Text(item.item.text)
           .fontSize(DsTypography.codeBlock.size)
           .lineHeight(DsTypography.codeBlock.lineHeight)
           .fontFamily('monospace')
-          .fontColor(this.diffFg(l))
+          .fontColor(this.diffFg(item.item))
           .maxLines(1)
           .textOverflow({ overflow: TextOverflow.Ellipsis })
           .layoutWeight(1)
@@ -119,10 +119,10 @@ export struct ToolBlockDetail {
       .width('100%')
       // 纵向交给 lineHeight（22）撑出行距；原来 top/bottom 各 1 不在 R003 间距集（只有 0,2,4…），
       // 内联 1vp 也看不出差异，直接去掉。
-      .padding({ left: 4, right: 4 })
+      .padding({ left: DsSpacing.chatGapFootnote, right: DsSpacing.chatGapFootnote })
       .borderRadius(2)
-      .backgroundColor(this.diffBg(l))
-    }, (l: DiffLineRow, idx: number) => l.prefix + l.text + '-' + idx.toString())
+      .backgroundColor(this.diffBg(item.item))
+    }).key((l: DiffLineRow) => l.prefix + l.text.length.toString())
     if (!this.diffExpanded && d.lines.length > DETAIL_DIFF_MAX_LINES) {
       Text(expandRestLabelOf(d.lines.length - DETAIL_DIFF_MAX_LINES))
         .fontSize(DsTypography.caption.size)
@@ -181,14 +181,14 @@ export struct ToolBlockDetail {
     if (this.call.resultText === null) {
       this.ioDetail()
     } else {
-      ForEach(this.readWindow(), (line: string, idx: number) => {
-        Text(line === '' ? ' ' : line)
+      Repeat<string>(this.readWindow()).each((item: RepeatItem<string>) => {
+        Text(item.item === '' ? ' ' : item.item)
           .fontSize(DsTypography.codeBlock.size)
           .lineHeight(DsTypography.codeBlock.lineHeight)
           .fontFamily('monospace')
           .fontColor(this.c().labelSecondary)
           .width('100%')
-      }, (line: string, idx: number) => idx.toString() + '-' + line)
+      }).key((line: string) => line.length.toString() + '|' + line)
       if (!this.readExpanded && this.readTotal() > DETAIL_READ_WINDOW) {
         Text(expandRestLabelOf(this.readTotal() - DETAIL_READ_WINDOW))
           .fontSize(DsTypography.caption.size)
@@ -255,22 +255,22 @@ export struct ToolBlockDetail {
   @Builder
   askDetail() {
     if (askQuestionsOf(this.call).length > 0) {
-      ForEach(askQuestionsOf(this.call), (q: UserQuestion) => {
-        this.askCard(q, this.askEntries())
-      }, (q: UserQuestion) => q.id)
+      Repeat<UserQuestion>(askQuestionsOf(this.call)).each((item: RepeatItem<UserQuestion>) => {
+        this.askCard(item.item, this.askEntries())
+      }).key((q: UserQuestion) => q.id)
     } else {
       Text(askSummaryOf(this.call, this.answerable(this.call.callId)))
         .fontSize(DsTypography.caption.size)
         .lineHeight(DsTypography.caption.lineHeight)
         .fontColor(this.c().labelTertiary)
         .width('100%')
-      ForEach(askQuestionsOf(this.call), (q: UserQuestion) => {
-        Text(q.question)
+      Repeat<UserQuestion>(askQuestionsOf(this.call)).each((item: RepeatItem<UserQuestion>) => {
+        Text(item.item.question)
           .fontSize(DsTypography.small.size)
           .lineHeight(DsTypography.small.lineHeight)
           .fontColor(this.c().labelSecondary)
           .width('100%')
-      }, (q: UserQuestion) => q.id)
+      }).key((q: UserQuestion) => q.id)
     }
   }
 
@@ -282,13 +282,13 @@ export struct ToolBlockDetail {
         .lineHeight(DsTypography.small.lineHeight)
         .fontColor(this.c().brand)
         .width('100%')
-      ForEach(this.answersOf(q, entries), (a: string) => {
-        Text(a)
+      Repeat<string>(this.answersOf(q, entries)).each((item: RepeatItem<string>) => {
+        Text(item.item)
           .fontSize(DsTypography.small.size)
           .lineHeight(DsTypography.small.lineHeight)
           .fontColor(this.c().labelPrimary)
           .width('100%')
-      }, (a: string) => a)
+      }).key((a: string) => a)
       if (this.answersOf(q, entries).length === 0) {
         Text(ASK_NOT_ANSWERED)
           .fontSize(DsTypography.small.size)

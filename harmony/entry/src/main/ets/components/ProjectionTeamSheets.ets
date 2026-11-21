@@ -201,10 +201,10 @@ export struct TeamSheet {
       Text('›')
         .fontSize(DsTypography.small.size)
         .fontColor(this.c().labelTertiary)
-        .margin({ left: 4 })
+        .margin({ left: DsSpacing.chatGapFootnote })
     }
     .width('100%')
-    .height(40)
+    .height(DsSpacing.todoRowHeight)
     .padding({ top: DsSpacing.liGap, bottom: DsSpacing.liGap })
     .accessibilityText('查看子会话 ' + s.id)
     .onClick((): void => {

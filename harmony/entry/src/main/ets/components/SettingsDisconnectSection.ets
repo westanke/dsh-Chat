@@ -58,9 +58,9 @@ export struct SettingsDisconnectSection {
         .backgroundColor(Color.Transparent)
         .borderWidth(1)
         .borderColor(this.c().danger)
-        .borderRadius(25)
+        .borderRadius(DsSpacing.buttonRadius)
         .width('100%')
-        .height(50)
+        .height(DsSpacing.buttonHeight)
         .accessibilityText('断开连接')
         .onClick((): void => {
           this.askConfirm();

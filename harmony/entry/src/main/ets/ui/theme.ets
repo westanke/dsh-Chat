@@ -379,6 +379,9 @@ export class DsSpacing {
   static readonly liGap: number = 6; // li:not(:first-child) margin-top
   static readonly chipIconGap: number = 4;
   static readonly chipRadius: number = 16;
+  /** 大按钮（断开连接等）：48 高、24 圆角（药丸）。 */
+  static readonly buttonHeight: number = 48;
+  static readonly buttonRadius: number = 24;
   static readonly chipGap: number = 18;
   static readonly composerButtonSize: number = 24;
   // 设置页根外边距（安卓 settingsPadH=20 / settingsPadV=28；
@@ -423,6 +426,8 @@ export class DsSpacing {
   static readonly menuWidth: number = 190;
   /** 过程行折叠箭头宽。 */
   static readonly processChevronSize: number = 14;
+  /** diff 行前缀（+/-）列宽。 */
+  static readonly diffPrefixWidth: number = 14;
   /** 文件 chip 高度（横向滚动条内）。 */
   static readonly chipHeight: number = 36;
   /** 图片 chip 移除钮热区（≥40vp 触控）。 */

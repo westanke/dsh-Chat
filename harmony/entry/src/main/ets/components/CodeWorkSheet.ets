@@ -206,7 +206,7 @@ export struct CodeWorkSheet {
     Text(label)
       .fontSize(DsTypography.caption.size)
       .fontColor(this.segment === value ? this.c().chipSelectedFg : this.c().labelSecondary)
-      .height(40)
+      .height(DsSpacing.todoRowHeight)
       .padding({ left: 12, right: 12 })
       .borderRadius(DsSpacing.chipRadius)
       .backgroundColor(this.segment === value ? this.c().chipSelectedBg : this.c().inputFill)
@@ -232,9 +232,9 @@ export struct CodeWorkSheet {
             .width('100%')
             .padding({ top: DsSpacing.blockGap, bottom: DsSpacing.blockGap })
         }
-        ForEach(this.diffs, (d: FileDiff) => {
-          this.diffCard(d)
-        }, (d: FileDiff) => d.path + '-' + d.kind + '-' + d.lines.length.toString())
+        Repeat<FileDiff>(this.diffs).each((item: RepeatItem<FileDiff>) => {
+          this.diffCard(item.item)
+        }).key((d: FileDiff) => d.path + '-' + d.kind + '-' + d.lines.length.toString())
       }
       .width('100%')
       .padding({ left: DsSpacing.screenPad, right: DsSpacing.screenPad,
@@ -269,25 +269,25 @@ export struct CodeWorkSheet {
       .padding({ left: 10, right: 10, top: 8, bottom: 8 })
       if (d.lines.length > 0) {
         Column() {
-          ForEach(d.lines, (l: DiffLine) => {
+          Repeat<DiffLine>(d.lines).each((item: RepeatItem<DiffLine>) => {
             Row({ space: 4 }) {
-              Text(l.type === DIFF_LINE_ADD ? '+' : (l.type === DIFF_LINE_DEL ? '-' : ' '))
+              Text(item.item.type === DIFF_LINE_ADD ? '+' : (item.item.type === DIFF_LINE_DEL ? '-' : ' '))
                 .fontSize(DsTypography.codeBlockLabel.size)
                 .fontFamily('monospace')
-                .fontColor(this.lineFg(l))
-                .width(14)
-              Text(l.text === '' ? ' ' : l.text)
+                .fontColor(this.lineFg(item.item))
+                .width(DsSpacing.diffPrefixWidth)
+              Text(item.item.text === '' ? ' ' : item.item.text)
                 .fontSize(DsTypography.codeBlockLabel.size)
                 .fontFamily('monospace')
-                .fontColor(this.lineFg(l))
+                .fontColor(this.lineFg(item.item))
                 .maxLines(1)
                 .textOverflow({ overflow: TextOverflow.Ellipsis })
                 .layoutWeight(1)
             }
             .width('100%')
-            .padding({ left: 6, right: 6, top: 1, bottom: 1 })
-            .backgroundColor(this.lineBg(l))
-          }, (l: DiffLine) => l.type + '-' + l.text)
+            .padding({ left: DsSpacing.settingsChipGap, right: DsSpacing.settingsChipGap })
+            .backgroundColor(this.lineBg(item.item))
+          }).key((l: DiffLine) => l.type + '-' + l.text)
         }
         .width('100%')
         .padding({ left: 4, right: 4, top: 2, bottom: 2 })
@@ -341,9 +341,9 @@ export struct CodeWorkSheet {
             .width('100%')
             .padding({ top: DsSpacing.blockGap, bottom: DsSpacing.blockGap })
         }
-        ForEach(this.presets, (p: AgentPreset) => {
-          this.presetRow(p)
-        }, (p: AgentPreset) => p.id + '-' + (this.currentPreset === p.id ? '1' : '0'))
+        Repeat<AgentPreset>(this.presets).each((item: RepeatItem<AgentPreset>) => {
+          this.presetRow(item.item)
+        }).key((p: AgentPreset) => p.id + '-' + (this.currentPreset === p.id ? '1' : '0'))
       }
       .width('100%')
       .padding({ left: DsSpacing.screenPad, right: DsSpacing.screenPad,
@@ -367,7 +367,7 @@ export struct CodeWorkSheet {
             Text('默认')
               .fontSize(DsTypography.caption.size)
               .fontColor(this.c().chipSelectedFg)
-              .padding({ left: 6, right: 6, top: 1, bottom: 1 })
+              .padding({ left: DsSpacing.settingsChipGap, right: DsSpacing.settingsChipGap })
               .borderRadius(DsSpacing.chipRadius)
               .backgroundColor(this.c().chipSelectedBg)
           }
