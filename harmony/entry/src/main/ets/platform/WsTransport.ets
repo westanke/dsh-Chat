@@ -16,112 +16,168 @@ const SUBPROTOCOL_FALLBACK: string = 'dsh-mobile-v1';
 export class WsTransport implements WebSocketTransport {
   open(url: string, headers: Map<string, string>, callbacks: WebSocketCallbacks,
     protocol: string, connectTimeoutMs: number): EventSocketHandle {
-    const socket = webSocket.createWebSocket();
-    const subprotocol: string = protocol.length > 0 ? protocol : SUBPROTOCOL_FALLBACK;
-
-    // @ohos 的 header 是 Record；core 口径键是小写。
     const headersLower: Record<string, string> = {};
     headers.forEach((value: string, key: string): void => {
       headersLower[key.toLowerCase()] = value;
     });
-
-    // core 接口同步返回句柄；连接过程通过 callbacks 上报（onDown 恰好一次）。
-    // 一次掉线在 @ohos webSocket 上常常连发 error + close 两个回调；
-    // 不去重会让状态机同一次掉线排两次退避（真机实证：1s 档被 2s 档顶掉）。
-    let settled: boolean = false;
+    const preferred: string = protocol.length > 0 ? protocol : SUBPROTOCOL_FALLBACK;
+    let current: webSocket.WebSocket | null = null;
     let downSent: boolean = false;
-    const settleOnce = (): void => {
-      if (!settled) {
-        settled = true;
-        clearTimeout(timeoutId);
-      }
-    };
-    /** onDown 去重：真正的「第一次上报掉线」返回 true，其余返回 false。 */
-    const claimDown = (): boolean => {
-      settleOnce();
+    let fellBack: boolean = false;
+
+    const reportDown = (why: string, code: number = 0): void => {
       if (downSent) {
-        return false;
+        return;
       }
       downSent = true;
-      return true;
+      callbacks.onDown(why, code);
     };
-    const timeoutId: number = setTimeout((): void => {
-      if (!settled) {
+
+    /**
+     * 建一次连接。`multi` = 本次用的是逗号串清单（`dsh-mobile-v1,dshrb-v1`）。
+     *
+     * @ohos 的 `protocol` 选项文档只写「子协议字符串」，没承诺接受逗号清单；
+     * 若平台按 WebSocket 规范校验 token，带逗号会**直接连接失败**（`ws` 库就
+     * throw `An invalid or duplicated subprotocol`）。所以失败时自动退回单协议
+     * ——内核面/正文搜索随之降级（`kernelSearchSupportedOn` 为 false），但连接
+     * 与老功能不受影响。真机日志会留一条 `[ws] fallback single protocol`。
+     */
+    const start = (proto: string, multi: boolean): void => {
+      const socket = webSocket.createWebSocket();
+      current = socket;
+      let settled: boolean = false;
+      let attemptDown: boolean = false;
+      const settle = (): void => {
         settled = true;
-        Dlog.warn('[ws] connect timeout');
-        if (!downSent) {
-          downSent = true;
-          callbacks.onDown('timeout');
+        clearTimeout(timer);
+      };
+      const timer: number = setTimeout((): void => {
+        if (settled) {
+          return;
         }
-      }
-    }, connectTimeoutMs);
-
-    socket.on('open', (err: BusinessError | undefined): void => {
-      if (err) {
-        return;
-      }
-      settleOnce();
-      Dlog.warn('[ws] open ' + url);
-      callbacks.onOpen();
-    });
-
-    socket.on('message', (err: BusinessError | undefined,
-      value: string | ArrayBuffer): void => {
-      if (err) {
-        return;
-      }
-      if (typeof value === 'string') {
-        callbacks.onMessage(value);
-      }
-      // ArrayBuffer 非 JSON 文本帧（协议 v3 全是文本），忽略。
-    });
-
-    socket.on('close', (err: BusinessError | undefined,
-      value: webSocket.CloseResult): void => {
-      // close code 透传给 core：4001 = 令牌/设备被吊销（重连无意义）、
-      // 1009 = 单帧超 1 MiB。拿不到就当 0（core 按普通掉线处理）。
-      let code: number = 0;
-      let why: string = 'close';
-      if (value !== undefined && value !== null) {
-        code = value.code;
-        if (value.reason !== undefined && value.reason !== '') {
-          why = value.reason;
+        if (multi && !fellBack) {
+          fellBack = true;
+          Dlog.warn('[ws] fallback single protocol (timeout)');
+          try {
+            socket.close().catch((): void => {});
+          } catch (e) {
+            // 未建成的 socket close 可能抛，忽略。
+          }
+          start(SUBPROTOCOL_FALLBACK, false);
+          return;
         }
-      }
-      Dlog.warn('[ws] close code=' + code.toString() + ' ' + why
-        + (err ? ' err=' + err.message : ''));
-      if (claimDown()) {
-        callbacks.onDown(why, code);
-      }
-    });
+        settle();
+        reportDown('timeout');
+      }, connectTimeoutMs);
+      const fail = (why: string, code: number = 0): void => {
+        if (settled) {
+          return;
+        }
+        if (multi && !fellBack) {
+          fellBack = true;
+          Dlog.warn('[ws] fallback single protocol (' + why + ')');
+          settled = true;
+          clearTimeout(timer);
+          try {
+            socket.close().catch((): void => {});
+          } catch (e) {
+            // 同上。
+          }
+          start(SUBPROTOCOL_FALLBACK, false);
+          return;
+        }
+        if (attemptDown) {
+          return;
+        }
+        attemptDown = true;
+        settle();
+        reportDown(why, code);
+      };
 
-    socket.on('error', (err: BusinessError): void => {
-      Dlog.warn('[ws] error ' + err.message);
-      if (claimDown()) {
-        callbacks.onDown('error');
-      }
-    });
+      socket.on('open', (err: BusinessError | undefined): void => {
+        if (err) {
+          fail('error:' + err.message);
+          return;
+        }
+        if (settled) {
+          return;
+        }
+        settle();
+        Dlog.warn('[ws] open ' + url);
+        callbacks.onOpen();
+      });
 
-    const connectOptions: webSocket.WebSocketRequestOptions = {
-      header: headersLower,
-      protocol: subprotocol,
+      socket.on('message', (err: BusinessError | undefined,
+        value: string | ArrayBuffer): void => {
+        if (err) {
+          return;
+        }
+        if (typeof value === 'string') {
+          callbacks.onMessage(value);
+        }
+      });
+
+      socket.on('close', (err: BusinessError | undefined,
+        value: webSocket.CloseResult): void => {
+        let code: number = 0;
+        let why: string = 'close';
+        if (value !== undefined && value !== null) {
+          code = value.code;
+          if (value.reason !== undefined && value.reason !== '') {
+            why = value.reason;
+          }
+        }
+        Dlog.warn('[ws] close code=' + code.toString() + ' ' + why
+          + (err ? ' err=' + err.message : ''));
+        // 握手前就关（能力面被拒/协议不符）：先试单协议降级。
+        if (!settled && multi && !fellBack) {
+          fellBack = true;
+          Dlog.warn('[ws] fallback single protocol (close ' + code.toString() + ')');
+          settled = true;
+          clearTimeout(timer);
+          start(SUBPROTOCOL_FALLBACK, false);
+          return;
+        }
+        fail(why, code);
+      });
+
+      socket.on('error', (err: BusinessError): void => {
+        Dlog.warn('[ws] error ' + err.message);
+        fail('error');
+      });
+
+      const connectOptions: webSocket.WebSocketRequestOptions = {
+        header: headersLower,
+        protocol: proto,
+      };
+      try {
+        socket.connect(url, connectOptions, (err: BusinessError | undefined): void => {
+          if (err) {
+            Dlog.warn('[ws] connect callback err=' + err.message);
+            fail('error:' + err.message);
+          }
+        });
+      } catch (e) {
+        fail('error:connect throw');
+      }
     };
-    socket.connect(url, connectOptions, (err: BusinessError | undefined): void => {
-      if (err) {
-        Dlog.warn('[ws] connect callback err=' + err.message);
-        if (claimDown()) {
-          callbacks.onDown('error:' + err.message);
-        }
-      }
-    });
 
+    start(preferred, preferred.indexOf(',') >= 0);
     const handle: EventSocketHandle = {
       send: (text: string): void => {
+        const socket: webSocket.WebSocket | null = current;
+        if (socket === null) {
+          return;
+        }
         socket.send(text).catch((e: BusinessError): void => {
           Dlog.warn('ws send failed: ' + e.message);
         });
       },
       close: (): void => {
+        const socket: webSocket.WebSocket | null = current;
+        if (socket === null) {
+          return;
+        }
         try {
           socket.close().catch((e: BusinessError): void => {
             // 关闭失败忽略（幂等）。

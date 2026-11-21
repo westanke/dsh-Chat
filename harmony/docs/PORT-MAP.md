@@ -68,7 +68,7 @@
 | 宽窗布局（window_class.dart：compact/medium/expanded + 抽屉缩窄） | core/Breakpoints.ts windowClassOf/windowSidebarWidth/pageInsetFor/reflowsOnDrawer + ChatView pageInset（紧凑推走、宽窗 Padding 缩窄；三档共用抽屉） | 6 | ✅ 2026-11-21（真机横屏待验） |
 | 改动卡 / 生成文件卡 / 查看改动页（turn_changes/chat_change_card/chat_artifact_card/chat_diff_page） | components/{TurnCards,ChangeCard,ArtifactCard}.ets + pages/ChangeDiffPage.ets + core/TurnChanges.ts（meta.diffs 优先、LCS diff、hunk 序号） | 6 | ◐ 2026-11-21（缩略图仍是类型字形占位） |
 | 输入条多图 / @ 历史会话 / 任务条 / 权限 chip（5582a7e） | components/{ImageChips,PermissionChip,ComposerActions,TodoDock}.ets + core/{TodoDock,AtMention}.ts + Composer/ChatStore 多图发送 | 6 | ✅ 2026-11-21 |
-| dshrb-v1 通用内核调用面 + 抽屉正文搜索（a762ce9） | core/{KernelCall,KernelPlane,GatewayKernel,SessionSearch}.ts + GatewayRequests 帧分派 + components/DrawerSearch.ets（子协议逗号清单、目录即真相、300ms 防抖、三种空态） | 6 | ◐ 2026-11-21（真机子协议协商待验；失败自动降级） |
+| dshrb-v1 通用内核调用面 + 抽屉正文搜索（a762ce9） | core/{KernelCall,KernelPlane,GatewayKernel,SessionSearch}.ts + GatewayRequests 帧分派 + components/DrawerSearch.ets（子协议逗号清单、目录即真相、300ms 防抖、三种空态；**握手失败/超时自动退单协议**，内核面与正文搜索随之降级但连接不受影响） | 6 | ◐ 2026-11-21（真机协商待验） |
 
 ## 2. 决策记录（用户 2026-11-15 拍板）
 

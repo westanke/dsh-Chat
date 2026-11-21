@@ -899,3 +899,5 @@ R014（嵌套 10-11 层，info 级）。
 - 思考行活跃态无横向扫光动画（静态圆环 + 三行窗口；动效 token 已登记）。
 - 列表贴底用 `scroller.isAtEnd()`，无安卓的 48vp 容差与 140ms 解冻；FAB 入场无 140ms 淡入。
 - 内核搜索空态文案未区分「索引未开」与「真没有」；Android 侧同样只做宽容解析。
+- `@ohos.net.webSocket` 的 `protocol` 选项是否接受逗号串尚未在真机验证；`WsTransport` 已加
+  失败/超时自动退单协议（`[ws] fallback single protocol`），最坏情况只是内核面/正文搜索不可用。
