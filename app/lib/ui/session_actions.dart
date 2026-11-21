@@ -40,6 +40,18 @@ Future<void> openSessionMenu(
             onTap: () => Navigator.of(sheet).pop('rename'),
           ),
           ListTile(
+            leading: Icon(Icons.call_split, color: c.labelPrimary),
+            title: Text(
+              '分叉到新会话',
+              style: DsTypography.base.copyWith(color: c.labelPrimary),
+            ),
+            subtitle: Text(
+              '带上当前对话，分叉后各自继续',
+              style: DsTypography.caption.copyWith(color: c.labelTertiary),
+            ),
+            onTap: () => Navigator.of(sheet).pop('fork'),
+          ),
+          ListTile(
             leading: Icon(Icons.archive_outlined, color: c.danger),
             title: Text('归档会话', style: DsTypography.base.copyWith(color: c.danger)),
             subtitle: Text(
@@ -66,6 +78,22 @@ Future<void> openSessionMenu(
       await state.loadSessions();
     } on RequestException catch (e) {
       if (context.mounted) _toast(context, '重命名失败：${e.message}');
+    }
+    return;
+  }
+
+  if (action == 'fork') {
+    try {
+      final forked = await state.gateway.forkSession(session.id);
+      await state.loadSessions();
+      final created = state.sessions.where((s) => s.id == forked).firstOrNull;
+      if (created != null) {
+        await state.openSession(created);
+      } else if (context.mounted) {
+        _toast(context, '已分叉，但新会话还没出现在清单里');
+      }
+    } on RequestException catch (e) {
+      if (context.mounted) _toast(context, '分叉失败：${e.message}');
     }
     return;
   }

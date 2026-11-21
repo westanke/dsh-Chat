@@ -50,6 +50,18 @@ extension GatewayApi on GatewayClient {
     }
   }
 
+  /// 分叉会话（`fork` 帧，bridge ws-sessions.ts handleFork）：
+  /// client `{sessionId, atSeq?}` → server `fork{sessionId}`（新会话 id）。
+  /// 不带 [atSeq] 时由内核按当前末尾分叉；返回新会话 id，调用方负责重拉清单。
+  Future<String> forkSession(String sessionId, {int? atSeq}) async {
+    final r = await request('fork', {'sessionId': sessionId, 'atSeq': ?atSeq});
+    final forked = r['sessionId'];
+    if (forked is! String || forked.isEmpty) {
+      throw RequestException('BAD_REPLY', 'fork 应答缺 sessionId');
+    }
+    return forked;
+  }
+
   /// 提前建会话（真机反馈 2026-11-04 第 7 项）：带 [workspaceId] 走
   /// createSessionInWorkspace（复用空白会话，reuseBlank 默认 true），
   /// 新会话自动归入该工作区分组（抽屉组名 = workspace title）。

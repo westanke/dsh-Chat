@@ -10,27 +10,24 @@ import 'package:flutter/services.dart';
 import '../bridge/gateway.dart';
 import '../bridge/goal.dart';
 import '../bridge/projections.dart';
-import '../design/app_settings.dart';
 import '../design/tokens.dart';
 import 'brand_mark.dart';
 import 'chat_header_status.dart';
 import 'chat_image.dart';
 import 'chat_list.dart';
 import 'chat_message_items.dart';
+import 'chat_overflow_menu.dart';
 import 'chat_shell.dart';
 import 'chat_state.dart';
+import 'context_usage_bar.dart';
 import 'goal_dock.dart';
 import 'chat_top_bar.dart';
 import 'composer.dart';
-import 'model_sheet.dart';
-import 'projection_sheets.dart';
 import 'question_card.dart';
 import 'session_location_sheet.dart';
 import 'sessions_drawer.dart';
-import 'stats_sheet.dart';
 import 'todo_dock.dart';
 import 'window_class.dart';
-import 'work_view_sheet.dart';
 
 /// 屏内右滑是否足以呼出会话抽屉：位移够远，或已越过最小行程且甩得够快。
 /// 纯函数便于单测（阈值在 design_tokens_layout.dart）。
@@ -275,7 +272,7 @@ class _ChatPageState extends State<ChatPage>
           status: _headerStatus,
           onMenu: _openDrawer,
           onNewChat: () => st.newChat(),
-          trailing: _OverflowMenu(colors: c, state: st),
+          trailing: ChatOverflowMenu(colors: c, state: st),
         ),
         body: Column(
           children: [
@@ -301,6 +298,13 @@ class _ChatPageState extends State<ChatPage>
         composer: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            // 上下文用量（dsh-go 输入条右侧的环）：窗口未知/老桥不显示。
+            ContextUsageBar(
+              gateway: st.gateway,
+              sessionId: st.sessionId,
+              streaming: st.streaming,
+              colors: c,
+            ),
             // 目标条（dsh-go GoalBar 移植）：有未完成的目标时常驻。
             if (goal != null && goal.goal.phase != GoalPhase.complete)
               GoalDockBar(
@@ -343,78 +347,6 @@ class _ChatPageState extends State<ChatPage>
     waitingAnswer: st.hitl.sessionQuestions(st.sessionId).isNotEmpty,
     hostLabel: st.deviceLabel,
   );
-}
-
-// ---------- 顶栏溢出菜单（本地投影面板入口） ----------
-
-class _OverflowMenu extends StatelessWidget {
-  const _OverflowMenu({required this.colors, required this.state});
-
-  final DsColors colors;
-  final ChatState state;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = colors;
-    return PopupMenuButton<String>(
-      tooltip: '更多',
-      icon: Icon(Icons.more_vert, size: 22, color: c.labelPrimary),
-      color: c.settingsSurface,
-      onSelected: (value) async {
-        switch (value) {
-          case 'stats':
-            showChatStatsSheet(context, state, c);
-          case 'trajectory':
-            showTrajectorySheet(context, state, c);
-          case 'workview':
-            showWorkViewSheet(context, state, c);
-          case 'team':
-            showTeamSheet(context, state, c);
-          case 'todo':
-            showTodoSheet(context, state, c);
-          case 'model':
-            final sid = state.sessionId;
-            if (sid == null || sid.isEmpty) {
-              ScaffoldMessenger.of(context)
-                  .showSnackBar(const SnackBar(content: Text('请先打开一个会话再调整模型')));
-              return;
-            }
-            final changed = await showModelSheet(
-              context,
-              colors: c,
-              gateway: state.gateway,
-              sessionId: sid,
-            );
-            if (changed) await state.reloadHistory();
-        }
-      },
-      itemBuilder: (context) => <PopupMenuEntry<String>>[
-        _menuItem('stats', Icons.bar_chart, '会话统计'),
-        _menuItem('trajectory', Icons.timeline, '运行轨迹'),
-        // D 项：设置「显示代码工作视图」开启后才出现（官方通用设置）。
-        if (appSettings.codeWorkView)
-          _menuItem('workview', Icons.difference_outlined, '代码工作视图'),
-        _menuItem('team', Icons.groups_outlined, '智能团队'),
-        _menuItem('todo', Icons.checklist_outlined, '任务'),
-        _menuItem('model', Icons.tune, '调整模型'),
-      ],
-    );
-  }
-
-  PopupMenuItem<String> _menuItem(String value, IconData icon, String label) =>
-      PopupMenuItem<String>(
-        value: value,
-        child: Row(
-          children: [
-            Icon(icon, size: 18, color: colors.labelSecondary),
-            const SizedBox(width: DsSpacing.chipIconGap),
-            Text(
-              label,
-              style: DsTypography.small.copyWith(color: colors.labelPrimary),
-            ),
-          ],
-        ),
-      );
 }
 
 // ---------- 空态问候 ----------

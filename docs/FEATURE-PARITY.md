@@ -38,14 +38,14 @@
 | 后台任务卡/列表 | `tool-jobs` 消息卡 + jobs 页（`background_task_notice.dart`、`jobs_page.dart`） | 只有工具行文字 | ❌ |
 | dsh-ui 交互块 | 图表/表单/选择块 + 回复 chip（`ui/chat/dsh_ui/`） | 无 | ❌ |
 | 消息菜单 | 复制/选中/引用/分享/朗读/重答/分叉/编辑（`message_menu.dart`） | 复制/点赞/朗读/分享/重新生成（`message_actions.dart`） | ◐ 无分叉/编辑 |
-| 分叉 / 编辑重发 | 一律开新会话（`session/fork`）；残留队列清掉 | 无 fork；「重新生成」= 重发最后一条（污染当前会话） | ❌ |
+| 分叉 / 编辑重发 | 一律开新会话（`session/fork`）；残留队列清掉 | 会话长按「分叉到新会话」已接 `fork` 帧并自动打开；「重新生成」仍是重发最后一条 | ◐ 编辑重发缺 |
 | 分享面板 | 范围 + 隐私项 → 链接/图片/文件/文本（`share_panel.dart`） | 单条消息系统分享 | ◐ |
 | 对话回放 | `.dshgo` 只读回放（`replay_page.dart`） | 无 | ❌ |
 | 玻璃输入条 | 1–6 行、Enter 发送 / Esc 打断（`ui/chat/composer.dart`） | ✅ 1–5 行、发送/停止三态（`composer_bar.dart`） | ✅ 无 Esc（移动端） |
 | 运行中发送语义 | 默认**插话**，长按选「插话/停止后排队/排队」（`chat_state.dart:1313`） | 设置里二选一排队/插话，默认排队（`settings_sections.dart:274`） | ◐ |
 | 排队气泡 + 动作 | 七种状态标签；`inboxId` 到手后可编辑/立即发送/改插话/撤回（`chat_list.dart:1130`、`session/updateQueue`） | **只有「排队中」标签**（本轮新增）；不可撤回/改插话 | ◐ 队列读写需桥补帧 |
 | 停止本轮 | `session/cancel`；停后把 inbox 末条放回唤醒（`chat_state.dart:1700`） | ✅ `session-cancel` + 清流式 | ◐ 无「放回唤醒」 |
-| 上下文环 + 用量 | 22dp 环 + 用量/余额 sheet（`usage_sheet.dart`） | `context-usage` 已封装**未使用**；统计在 ⋯ 菜单 | ❌ |
+| 上下文环 + 用量 | 22dp 环 + 用量/余额 sheet（`usage_sheet.dart`） | 输入条上方 `ContextUsageBar`：18dp 环 + 「上下文 42% · 61k / 1M」，点开列占用/预估/窗口；80% 警示；老桥或窗口缺失不占位 | ✅ |
 | 目标条 | ⚑ 目标 + 首行 + 暂停/受阻状态（`dock/goal_bar.dart`） | **✅ 本轮实现**（`ui/goal_dock.dart`） | ✅ |
 | 目标编辑/暂停/恢复/清除 | sheet + CAS + 单飞 + 墓碑（`dock/goal_sheet.dart`、`goal_dock_state.dart`） | **✅ 编辑/暂停/恢复/清除（CAS ref，失败译人话）**；无 activation 维度/墓碑 | ◐ |
 | 待办条 | 「3/7 · 正在：…」原地展开（`dock/todo_bar.dart`） | ✅ 同口径（`todo_dock.dart`） | ✅ |
@@ -69,13 +69,13 @@
 
 | 优先级 | 事项 | 说明 | 成本 |
 |---|---|---|---|
-| P0 | 会话 fork | 重命名/归档已接（`session-rename`/`session-archive`）；fork 帧（`fork`）桥已代理，接消息菜单「分叉」即可 | 小 |
-| P0 | 队列真管理（撤回/改插话/立即发送） | 需要桥补 `session/queues`/`queue-update` 帧（`session/updateQueue` 内核已有，桥 STATUS ⑧ 未做） | 桥 12–30h + App 中 |
-| P1 | 后台任务面板 | `job/list` watch + `job/kill`，替换现在的工具行文字 | 中 |
-| P1 | 上下文用量环 | `context-usage` 已封装，接一个环 + sheet 即可 | 小 |
+| P0 | 队列真管理（撤回/改插话/立即发送） | 等桥 issue IKX1ZM（`session-queues`/`queue-update`/`queue-item-updated` + `mobile-queue-v1`）；App 侧排队提示已上 | 桥 12–30h |
+| P1 | 后台任务面板 | 桥无 `job/list`/`job/kill` 帧（asyncapi 客户端 enum 无 job 系列），需另开 issue | 桥 |
+| P1 | 会话 fork | ✅ 会话长按「分叉到新会话」（`fork` 帧，自动打开新会话） | 已完成 |
+| P1 | 上下文用量环 | ✅ 输入条上方 `ContextUsageBar`（环 + 用量 sheet） | 已完成 |
 | P1 | 自动允许胶囊 | 批量放行挂起审批，需确认协议是否支持 | 小 |
 | P2 | 输入条直接回答提问 | 单问 + 纯文本发送即答案 | 小 |
-| P2 | 会话导出（md/json） | history + 原生 share | 小 |
+| P2 | 会话导出（md/json） | ✅ 顶栏 ⋯「复制/分享对话（Markdown）」 | 已完成 |
 | P2 | 语音输入 | 依赖原生 ASR 通道，工作量最大 | 大 |
 | P3 | 文件夹/置顶/未读 | 抽屉信息架构升级 | 中 |
 | P3 | 分叉/编辑重发 | 与「会话不可变」模型绑定，需先接 fork | 中 |
