@@ -150,7 +150,7 @@ export class GatewayRest {
         throw new RequestException('HTTP_' + resp.status.toString(), '附件获取失败');
       }
       if (resp.bodyBytes === null) {
-        throw new RequestException('NO_BODY', '响应缺字节体');
+        throw new RequestException('NO_BODY', '响应缺字节体 HTTP ' + resp.status.toString());
       }
       return resp.bodyBytes;
     });
@@ -287,7 +287,8 @@ export class GatewayRest {
       this.restHeaders(), null, HTTP_TIMEOUT_MS);
     return this.http.request(req).then((resp: HttpResponse): Uint8Array => {
       if (resp.status !== 200) {
-        throw new RequestException('HTTP_' + resp.status.toString(), '图片交接获取失败');
+        throw new RequestException('HTTP_' + resp.status.toString(),
+          '图片交接获取失败 HTTP ' + resp.status.toString() + ' ' + resp.body.substring(0, 120));
       }
       if (resp.bodyBytes === null) {
         throw new RequestException('NO_BODY', '响应缺字节体');
