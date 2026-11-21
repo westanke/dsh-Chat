@@ -7,6 +7,7 @@ library;
 
 import 'device.dart';
 import 'gateway.dart';
+import 'goal.dart';
 import 'models.dart';
 
 extension GatewayApi on GatewayClient {
@@ -152,6 +153,55 @@ extension GatewayApi on GatewayClient {
   /// 上下文占用投影（WS `context-usage` 帧）：同上，少一个 `sessionStats`。
   Future<Map<String, dynamic>> contextUsage(String sessionId) =>
       request('context-usage', {'sessionId': sessionId});
+
+  /// 会话目标投影（WS `goal` 帧，bridge ws-goals.ts:44-76）：读内核
+  /// `session/projections` 的 `goal`，键缺失回 null（不是缺字段）。
+  /// 老桥（< 2.12）没有这一帧会回 UNKNOWN_TYPE，调用方按「无目标」处理。
+  Future<GoalProjection?> fetchGoal(String sessionId) async {
+    final r = await request('goal', {'sessionId': sessionId});
+    return GoalProjection.fromJson(r['goal']);
+  }
+
+  /// 改目标文字 / 轮次上限（`goal-edit` 帧）：compare-and-set 必须带
+  /// 刚读到的 [ref]，过期会回 GOAL_STALE_REVISION。应答只回新 ref，
+  /// 目标正文要重新读投影。
+  Future<GoalRef?> editGoal(
+    String sessionId,
+    GoalRef ref, {
+    String? objective,
+    int? maxGoalRounds,
+  }) async {
+    final r = await request('goal-edit', {
+      'sessionId': sessionId,
+      'ref': ref.toJson(),
+      'objective': ?objective,
+      'maxGoalRounds': ?maxGoalRounds,
+    });
+    return GoalRef.fromJson(r['ref']);
+  }
+
+  /// 暂停目标（`goal-pause` 帧）：同 CAS 口径。
+  Future<GoalRef?> pauseGoal(String sessionId, GoalRef ref) async {
+    final r = await request('goal-pause', {
+      'sessionId': sessionId,
+      'ref': ref.toJson(),
+    });
+    return GoalRef.fromJson(r['ref']);
+  }
+
+  /// 恢复目标（`goal-resume` 帧）：同 CAS 口径。
+  Future<GoalRef?> resumeGoal(String sessionId, GoalRef ref) async {
+    final r = await request('goal-resume', {
+      'sessionId': sessionId,
+      'ref': ref.toJson(),
+    });
+    return GoalRef.fromJson(r['ref']);
+  }
+
+  /// 清除目标（`goal-clear` 帧）：成功后投影会给 null。
+  Future<void> clearGoal(String sessionId, GoalRef ref) async {
+    await request('goal-clear', {'sessionId': sessionId, 'ref': ref.toJson()});
+  }
 
   /// 会话历史（history 帧，支持 beforeSeq 翻页——真机反馈第 5 项）。
   /// projections 只在首屏应答带（翻页不带，API.md:165,766）。

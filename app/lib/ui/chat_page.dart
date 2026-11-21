@@ -8,6 +8,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 
 import '../bridge/gateway.dart';
+import '../bridge/goal.dart';
 import '../bridge/projections.dart';
 import '../design/app_settings.dart';
 import '../design/tokens.dart';
@@ -18,6 +19,7 @@ import 'chat_list.dart';
 import 'chat_message_items.dart';
 import 'chat_shell.dart';
 import 'chat_state.dart';
+import 'goal_dock.dart';
 import 'chat_top_bar.dart';
 import 'composer.dart';
 import 'model_sheet.dart';
@@ -258,6 +260,8 @@ class _ChatPageState extends State<ChatPage>
       todoItems(st.projections),
       running: st.streaming,
     );
+    // 目标条（dsh-go GoalBar 移植）：进行中/暂停/受阻的目标常驻输入条上方。
+    final goal = goalOf(st.projections);
     return Scaffold(
       key: _scaffoldKey,
       backgroundColor: c.bgBase,
@@ -297,6 +301,13 @@ class _ChatPageState extends State<ChatPage>
         composer: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            // 目标条（dsh-go GoalBar 移植）：有未完成的目标时常驻。
+            if (goal != null && goal.goal.phase != GoalPhase.complete)
+              GoalDockBar(
+                goal: goal,
+                colors: c,
+                onTap: () => runGoalActions(context, st, c),
+              ),
             // 输入条上方的任务条（dsh-go TodoDock 移植）：没有清单时不占位。
             if (todoDock != null)
               TodoDockBar(

@@ -34,6 +34,13 @@ class MessageItem extends StatelessWidget {
   final int index;
   final ChatState state;
 
+  /// 这条用户消息还在内核排队（本机乐观消息 + 忙碌发送模式=排队）。
+  bool get queued =>
+      message.isUser &&
+      message.seq < 0 &&
+      state.streaming &&
+      appSettings.busySendMode == BusySendMode.queue;
+
   /// 下载器（chat_page build 时注入，见 imageFetcher）。
   static ImageFetcher? imageFetcher;
 
@@ -230,6 +237,19 @@ class MessageItem extends StatelessWidget {
                         ref: ref,
                         colors: colors,
                         fetcher: imageFetcher!,
+                      ),
+                    ),
+                  // 排队中的消息：内核等本轮结束才落 user/message，界面先把
+                  // 状态说清楚（运行中 + 排队模式 + 尚未落库的用户消息；对照
+                  // dsh-go PendingPrompt.queued 的排队气泡）。
+                  if (queued)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 4),
+                      child: Text(
+                        '排队中 · 本轮结束后发送',
+                        style: DsTypography.caption.copyWith(
+                          color: colors.userBubbleText.withValues(alpha: 0.6),
+                        ),
                       ),
                     ),
                   if (message.text.isNotEmpty)
