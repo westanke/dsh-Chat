@@ -18,6 +18,8 @@ import { BusinessError } from '@kit.BasicServicesKit';
 export struct ImageTile {
   store: ChatStore | null = null;
   ref: DsImageRef | null = null;
+  /** 当前会话 id：交接图必须带 sessionId，冷启动时它可能还没就绪，等到了再重拉。 */
+  @Prop @Watch('onSession') sid: string = '';
   @StorageProp('dshDark') dark: boolean = false;
   /** 窗口宽度断点（R007 一多）：固定尺寸按档放大。 */
   @StorageProp('dshBreakpoint') bp: string = BP_SM;
@@ -54,12 +56,24 @@ export struct ImageTile {
     this.reload();
   }
 
+  onSession(): void {
+    if (this.sid !== '' && this.pixels === null) {
+      this.reload();
+    }
+  }
+
   reload(): void {
     const st: ChatStore | null = this.store;
     const ref: DsImageRef | null = this.ref;
     if (st === null || ref === null) {
       this.loading = false;
       this.error = '图片引用缺失';
+      return;
+    }
+    // 交接图缺 sessionId 会被桥判 400：冷启动时先等 store.sessionId 就绪（onSession 会重拉）。
+    if (ref.handoffName.length > 0 && this.sid === '') {
+      this.loading = true;
+      this.error = '';
       return;
     }
     this.loading = true;

@@ -175,6 +175,7 @@ export struct ChatView {
         SessionsDrawer({
           store: this.store,
           panelWidth: this.drawerPanelWidth(),
+          version: this.version,
           onClose: (): void => {
             this.drawerOpen = false;
           }, onOpenSettings: (): void => {

@@ -458,7 +458,11 @@ export struct MessageList {
         MdView({ text: m.text })
       }
       if (handoffRefOf(this.rawTextOf(m)) !== null) {
-        ImageTile({ store: this.store, ref: handoffRefOf(this.rawTextOf(m)) as DsImageRef })
+        ImageTile({
+          store: this.store,
+          ref: handoffRefOf(this.rawTextOf(m)) as DsImageRef,
+          sid: this.store === null ? '' : (this.store.sessionId ?? '')
+        })
           .margin({ top: 6 })
       }
       if (!m.streaming && m.text !== '') {

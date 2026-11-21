@@ -956,3 +956,18 @@ R014（嵌套 10-11 层，info 级）。
 - `@ohos protocol` 逗号串**已真机验证通过**（上条历史缺口关闭）。
 - 搜索不可用文案已做归类：错误里含 `session search is disabled` / `session-query index` 时改为「正文搜索未启用（宿主未配置会话索引），只能按标题搜索」，其余仍透出服务端错误。
 - 宽窗三档/横屏、团队→子代理历史页、多图选图、生成卡真实缩略图尚未在真机逐项点验。
+
+### 2026-11-21 09:53 · 冷启动与交接图两处真机缺陷
+
+- **抽屉冷启动空白**：`ChatView` 创建 `SessionsDrawer` 时漏传 `version`，而抽屉靠
+  `@Prop @Watch('syncVersion') version` 抄快照；冷启动时 `store.sessions` 为空，
+  `aboutToAppear` 里的异步 `loadSessions()` 完成后抽屉不重渲染 → 抽屉永远空白。
+  已补 `version: this.version`，重装后冷启动抽屉能出「今天」分组与 REST 新建的会话。
+- **交接图首次加载失败**：纯文本模型的图片以 `[Image: source: …/<64hex>.<ext>]` 交接，
+  `ImageTile` 挂载时立即取图，但冷启动/切换会话瞬间 `store.sessionId` 仍为空，桥对
+  `image-handoff` 强制要求 `name + sessionId` → 首次请求必 400（界面显示「图片加载失败」，
+  点按重试后成功）。修法：`ImageTile` 加 `@Prop @Watch('onSession') sid`，交接图在 sid 为空时
+  只显示加载态不取图，sid 就绪后自动重拉；`UserBubble` / `MessageList` 三处调用点都传
+  `store.sessionId ?? ''`。服务端端点本身验证正常（`GET /api/v1/image-handoff?...` → 200、93130 字节）。
+- 该修复已通过构建（BUILD SUCCESSFUL）、412 单测与 docs-check；装机复验时鸿蒙设备再次断连
+  （`hdc list targets` 为空），**修复的真机复验待设备恢复**。

@@ -27,6 +27,10 @@ export struct UserBubble {
     return '86.4%';
   }
 
+  private sidOf(): string {
+    return this.store === null ? '' : (this.store.sessionId ?? '');
+  }
+
   private rawOf(): string {
     return this.rawText !== '' ? this.rawText : this.text;
   }
@@ -36,14 +40,14 @@ export struct UserBubble {
       if (this.images.length > 0) {
         Column() {
           ForEach(imageRefsOf(this.images), (r: DsImageRef) => {
-            ImageTile({ store: this.store, ref: r })
+            ImageTile({ store: this.store, ref: r, sid: this.sidOf() })
               .margin({ top: 4, bottom: 4 })
           }, (r: DsImageRef) => r.cacheKey)
         }
         .constraintSize({ maxWidth: this.bubbleMaxWidth() })
       }
       if (handoffRefOf(this.rawOf()) !== null) {
-        ImageTile({ store: this.store, ref: handoffRefOf(this.rawOf()) as DsImageRef })
+        ImageTile({ store: this.store, ref: handoffRefOf(this.rawOf()) as DsImageRef, sid: this.sidOf() })
           .constraintSize({ maxWidth: this.bubbleMaxWidth() })
       }
       Text(this.text === '' ? ' ' : this.text)
