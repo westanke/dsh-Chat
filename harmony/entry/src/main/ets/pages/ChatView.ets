@@ -431,11 +431,13 @@ export struct ChatView {
   /** 空态问候（品牌标 + 问候语；工作目录 chip 阶段 4）。 */
   @Builder
   greeting() {
-    Column({ space: 14 }) {
-      Text('DSH')
-        .fontSize(38)
-        .fontWeight(FontWeight.Bold)
-        .fontColor(this.c().brand)
+    Column({ space: 12 }) {
+      Image($r('app.media.brand_mark'))
+        .width(DsSpacing.brandMarkWidth)
+        .height(DsSpacing.brandMarkHeight)
+        .fillColor(this.c().brandMark)
+        .margin({ bottom: DsSpacing.brandMarkGap - 12 })
+        .accessibilityText('DSH 标记')
       Text('嗨！今天想聊些什么？')
         .fontSize(18)
         .fontWeight(FontWeight.Bold)

@@ -50,7 +50,7 @@
 | ui/chat_page.dart + chat_message_items/list | pages/ChatView.ets + components/MessageList.ets（气泡/流式/错误条 + **MdView 富渲染接入**） | 2/3 | ✅ 2026-11-16 |
 | ui/composer.dart + composer_bar/panels/widgets | components/Composer.ets（发送键三态/命令补全/@ 引用/图片 chip/权限 chip=PermissionSheet.ets）+ ComposerPanels.ets | 4 | ✅ 2026-11-16 |
 | ui/sessions_drawer.dart + session_groups.dart | components/SessionsDrawer.ets（分组列表/新建/高亮/设置入口 + DrawerSearch 正文搜索） | 2 | ✅ 2026-11-21（搜索接 dshrb-v1；删除仍延后） |
-| ui/brand_mark.dart（品牌标） | ChatView 空态文字占位（自绘 path 延后阶段 5） | 2 | ◐ 2026-11-16 |
+| ui/brand_mark.dart（品牌标） | `resources/base/media/brand_mark.svg`（按安卓比例自绘鲸形，torso/belly/eye 复合 evenodd 镂空，`fillColor` 跟随品牌色）+ `DsSpacing.brandMarkWidth/Height/Gap` | 2 | ✅ 2026-11-21 |
 | ui/md_view 系（Markdown 全家福） | components/md/MdView.ets（块级循环+行内混排 Span）+ core/{MdParser,MdInline}.ts（node 22 用例） | 3 | ✅ 2026-11-16 |
 | **公式渲染（行内/块级）** | core/LatexLite.ts + components/md/MdLatex.ets（自研子集，首版就上不降级——用户拍板） | 3 | ✅ 2026-11-16 |
 | ui/md_code_block.dart | components/md/MdCodeBlock.ets + core/SimpleHighlight.ts（Atom One Light 配色；高亮仅 str/num/comment/kw 四类简化） | 3 | ✅ 2026-11-16 |
@@ -66,9 +66,9 @@
 | settings_page.dart（六分区设置页） | pages/SettingsView.ets（连接只读/外观三档/发送模式/关于+检查更新/断开连接） | 4 | ✅ 2026-11-16（字号缩放/诊断日志开关延后阶段 5） |
 | dsh-go 会话页结构（chat_page/chat_shell/chat_rows/chat_row_gap/chat_thinking/chat_top_bar） | pages/ChatView.ets + components/{ChatTopBar,MessageList,UserBubble,ThinkBlock}.ets + core/{ChatHeaderStatus,TurnCards,TurnChanges,ThinkingState}.ts（两行顶栏/逐行变距/思考行新形态/底部渐隐/回底 FAB/用户气泡 32 左边距） | 6 | ✅ 2026-11-21 |
 | 宽窗布局（window_class.dart：compact/medium/expanded + 抽屉缩窄） | core/Breakpoints.ts windowClassOf/windowSidebarWidth/pageInsetFor/reflowsOnDrawer + ChatView pageInset（紧凑推走、宽窗 Padding 缩窄；三档共用抽屉） | 6 | ✅ 2026-11-21（真机横屏待验） |
-| 改动卡 / 生成文件卡 / 查看改动页（turn_changes/chat_change_card/chat_artifact_card/chat_diff_page） | components/{TurnCards,ChangeCard,ArtifactCard}.ets + pages/ChangeDiffPage.ets + core/TurnChanges.ts（meta.diffs 优先、LCS diff、hunk 序号） | 6 | ◐ 2026-11-21（缩略图仍是类型字形占位） |
+| 改动卡 / 生成文件卡 / 查看改动页（turn_changes/chat_change_card/chat_artifact_card/chat_diff_page） | components/{TurnCards,ChangeCard,ArtifactCard}.ets + pages/ChangeDiffPage.ets + core/TurnChanges.ts（meta.diffs 优先、LCS diff、hunk 序号） | 6 | ✅ 2026-11-21（缩略图已接真实字节，失败退回类型字形） |
 | 输入条多图 / @ 历史会话 / 任务条 / 权限 chip（5582a7e） | components/{ImageChips,PermissionChip,ComposerActions,TodoDock}.ets + core/{TodoDock,AtMention}.ts + Composer/ChatStore 多图发送 | 6 | ✅ 2026-11-21 |
-| dshrb-v1 通用内核调用面 + 抽屉正文搜索（a762ce9） | core/{KernelCall,KernelPlane,GatewayKernel,SessionSearch}.ts + GatewayRequests 帧分派 + components/DrawerSearch.ets（子协议逗号清单、目录即真相、300ms 防抖、三种空态；**握手失败/超时自动退单协议**，内核面与正文搜索随之降级但连接不受影响） | 6 | ◐ 2026-11-21（真机协商待验） |
+| dshrb-v1 通用内核调用面 + 抽屉正文搜索（a762ce9） | core/{KernelCall,KernelPlane,GatewayKernel,SessionSearch}.ts + GatewayRequests 帧分派 + components/DrawerSearch.ets（子协议逗号清单、目录即真相、300ms 防抖、三种空态；**握手失败/超时自动退单协议**，内核面与正文搜索随之降级但连接不受影响） | 6 | ✅ 2026-11-21（真机协商通过；本部署索引禁用，只有命中态未验） |
 
 ## 2. 决策记录（用户 2026-11-15 拍板）
 

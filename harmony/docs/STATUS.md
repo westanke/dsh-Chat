@@ -947,6 +947,8 @@ R014（嵌套 10-11 层，info 级）。
 - `bash scripts/ci/docs-check.sh` ✅（ImageViewer/SubagentHistoryPage/ChatOverflowMenu 已登记）。
 - `hvigorw assembleHap --no-daemon` BUILD SUCCESSFUL；签名 HAP 已重签并装机。
 
+- **空态品牌标**：`BrandMark` 由文字 `DSH` 换成自绘 SVG 鲸形（`resources/base/media/brand_mark.svg`，evenodd 镂空腹部/眼白，`fillColor` 跟随主题），尺寸/间距走 `DsSpacing.brandMark*`（40×30 + 22vp）。
+
 ### 已知缺口（更新）
 
 - `@ohos protocol` 逗号串**已真机验证通过**（上条历史缺口关闭）。

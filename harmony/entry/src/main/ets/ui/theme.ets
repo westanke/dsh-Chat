@@ -325,6 +325,10 @@ export class DsSpacing {
   static readonly contentPadRight: number = 16;
   static readonly msgPad: number = 30;
   static readonly blockGap: number = 16;
+  // 空态品牌标（对照安卓 DsSpacing.brandMarkWidth/Height/Gap；官方实测 38.7×29.3dp）。
+  static readonly brandMarkWidth: number = 40;
+  static readonly brandMarkHeight: number = 30;
+  static readonly brandMarkGap: number = 22;
   static readonly bubbleRadius: number = 16;
   static readonly topBarHeight: number = 44;
   static readonly actionIconSize: number = 16;
