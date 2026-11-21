@@ -971,3 +971,17 @@ R014（嵌套 10-11 层，info 级）。
   `store.sessionId ?? ''`。服务端端点本身验证正常（`GET /api/v1/image-handoff?...` → 200、93130 字节）。
 - 该修复已通过构建（BUILD SUCCESSFUL）、412 单测与 docs-check；装机复验时鸿蒙设备再次断连
   （`hdc list targets` 为空），**修复的真机复验待设备恢复**。
+
+## 2026-11-21 · 静态规则与返回键收尾
+
+- `harmony_check review` 全组件清零：新 token（cardActionSize/drawerSearchHeight/cardFootGap/
+  navButtonWidth/sendButtonSize/todoRowHeight/todoProgressHeight/menuWidth/chipHeight/
+  chipRemoveSize/processRowHeight/processChevronSize/diffPrefixWidth/buttonHeight/buttonRadius、
+  DsColors.imageViewerAction/veilStart、DsMotion.pulse）；`ForEach`→`Repeat`（ChangeCard/
+  ArtifactCard/TodoDock/UserBubble/MessageCards/ToolBlockDetail/CodeWorkSheet/ChangeDiffPage）；
+  带参 `@Builder` 改为无参读 `this`（ChangeDiffPage.fileBody、MessageList.messageRow）。
+- 系统返回键对齐安卓：`Index.onBackPress()` —— 设置页回会话页；抽屉开着先收抽屉
+  （ChatView 经 AppStorage `dshDrawerOpen`/`dshDrawerCloseTick` 联动）；其余 2s 内二次返回才退出，
+  首次 Toast「再按一次退出 DSH」。
+- 门禁：`npm --prefix harmony/test test` 412 pass；`hvigorw assembleHap` BUILD SUCCESSFUL；
+  `bash scripts/ci/docs-check.sh` 通过。设备仍离线（`hdc list targets` 空），未做本轮真机复验。
