@@ -411,7 +411,8 @@ export struct SessionsDrawer {
     .borderRadius(10)
     .backgroundColor(this.current() === s.id
       ? this.c().chipSelectedBg : Color.Transparent)
-    .accessibilityText('待审批')
+    .accessibilityText(this.markOf(s.id) === 'question' ? (s.displayTitle + '，待回答')
+      : (this.markOf(s.id) === 'approval' ? (s.displayTitle + '，待审批') : s.displayTitle))
     .onClick(() => {
       this.open(s);
     })
