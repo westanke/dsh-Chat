@@ -7,7 +7,7 @@
 import { ChatMessage } from '../core/HistoryPage';
 import { TurnTailInfo, turnTailOf, turnTailLabel, turnTailLead, durationPartsOf, DurationPart } from '../core/TurnTail';
 import { ChatStore } from '../core/ChatStore';
-import { DsColors, DsTypography } from '../ui/theme';
+import { DsColors, DsTypography, DsSpacing } from '../ui/theme';
 
 @Component
 export struct TurnProcessRow {
@@ -91,33 +91,33 @@ export struct TurnProcessRow {
           .maxLines(1)
           .flexShrink(0)
         if (this.showParts()) {
-          ForEach(this.parts(), (p: DurationPart) => {
-            if (p.numeric) {
-              Text(p.text)
+          Repeat<DurationPart>(this.parts()).each((item: RepeatItem<DurationPart>) => {
+            if (item.item.numeric) {
+              Text(item.item.text)
                 .fontSize(DsTypography.small.size)
                 .fontFamily('monospace')
                 .fontColor(this.labelColor())
                 .flexShrink(0)
             } else {
-              Text(p.text)
+              Text(item.item.text)
                 .fontSize(DsTypography.small.size)
                 .fontColor(this.labelColor())
                 .flexShrink(0)
             }
-          }, (p: DurationPart, idx: number) => idx.toString() + '-' + p.text)
+          }).key((p: DurationPart, idx: number) => idx.toString() + '-' + p.text)
         }
         Blank().layoutWeight(1)
         if (this.canCollapse()) {
           Text(this.open ? '⌃' : '⌄')
             .fontSize(DsTypography.small.size)
             .fontColor(this.labelColor())
-            .width(14)
+            .width(DsSpacing.processChevronSize)
             .textAlign(TextAlign.Center)
             .margin({ left: 4 })
         }
       }
       .width('100%')
-      .height(33)
+      .height(DsSpacing.processRowHeight)
       .padding({ top: 2, bottom: 8 })
       .borderWidth({ bottom: 0.5 })
       .borderColor(this.c().inputBorder)

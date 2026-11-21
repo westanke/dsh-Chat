@@ -165,12 +165,7 @@ export struct MessageList {
         }
       }
       LazyForEach(this.ds, (m: ChatMessage, i: number) => {
-        ListItem() {
-          this.itemOf(m)
-        }
-        // 逐行变距（§4.12）：新轮首行 24 / 过程组 0 / 同轮消息 8。
-        .padding({ top: i === 0 ? 0 : (m.isUser ? DsSpacing.chatGapNewTurn
-          : (m.isProcess ? DsSpacing.chatGapProcess : DsSpacing.chatGapSameTurn)) })
+        this.messageRow(m, i)
       }, (m: ChatMessage) => this.keyOf(m))
       // 流式块：思考/正文增量，排在已提交消息之后；子组件入参必须 @Prop。
       if (this.streamingVisible()) {
@@ -251,10 +246,29 @@ export struct MessageList {
     })
   }
 
-  /** 渐隐带起始色 = bgBase 的同色透明（#00RRGGBB）；异常值退回全透明。 */
+  /** 渐隐带起始色（底色全透明，token 收口在 theme）。 */
   private veilStart(): string {
-    const base: string = this.c().bgBase;
-    return base.length === 7 ? '#00' + base.substring(1) : '#00000000';
+    return this.c().veilStart;
+  }
+
+  @Builder
+  messageRow(m: ChatMessage, i: number) {
+    ListItem() {
+      this.itemOf(m)
+    }
+    // 逐行变距（§4.12）：新轮首行 24 / 过程组 0 / 同轮消息 8。
+    .padding({ top: this.gapTopOf(m, i) })
+  }
+
+  /** 逐行变距（§4.12）。 */
+  private gapTopOf(m: ChatMessage, i: number): number {
+    if (i === 0) {
+      return 0;
+    }
+    if (m.isUser) {
+      return DsSpacing.chatGapNewTurn;
+    }
+    return m.isProcess ? DsSpacing.chatGapProcess : DsSpacing.chatGapSameTurn;
   }
 
   /** 视口是否贴底：ArkUI 的 isAtEnd 已含「差一像素也算」的语义。 */

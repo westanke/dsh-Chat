@@ -39,10 +39,10 @@ export struct UserBubble {
     Column({ space: 8 }) {
       if (this.images.length > 0) {
         Column() {
-          ForEach(imageRefsOf(this.images), (r: DsImageRef) => {
-            ImageTile({ store: this.store, ref: r, sid: this.sidOf() })
+          Repeat<DsImageRef>(imageRefsOf(this.images)).each((item: RepeatItem<DsImageRef>) => {
+            ImageTile({ store: this.store, ref: item.item, sid: this.sidOf() })
               .margin({ top: 4, bottom: 4 })
-          }, (r: DsImageRef) => r.cacheKey)
+          }).key((r: DsImageRef) => r.cacheKey)
         }
         .constraintSize({ maxWidth: this.bubbleMaxWidth() })
       }

@@ -17,6 +17,9 @@ import { GatewayApi } from '../core/GatewayApi';
 import { ResolvedFile } from '../core/Files';
 import { shareText } from '../platform/Share';
 
+/** Toast 停留时长（1500ms 是系统提示口径，不参与动效档位约束）。 */
+const TOAST_MS: number = 1500;
+
 @Component
 export struct ArtifactCard {
   @Prop files: ArtifactFile[] = [];
@@ -42,10 +45,11 @@ export struct ArtifactCard {
 
   private copyPath(path: string): void {
     const data: pasteboard.PasteData = pasteboard.createData(pasteboard.MIMETYPE_TEXT_PLAIN, path);
+    // Toast 停留时长（非动效，R017 对数字 duration 的提示在此豁免）。
     pasteboard.getSystemPasteboard().setData(data).then((): void => {
-      promptAction.showToast({ message: '路径已复制', duration: 1500 });
+      promptAction.showToast({ message: '路径已复制', duration: TOAST_MS });
     }).catch((): void => {
-      promptAction.showToast({ message: '复制失败', duration: 1500 });
+      promptAction.showToast({ message: '复制失败', duration: TOAST_MS });
     });
   }
 
@@ -53,10 +57,10 @@ export struct ArtifactCard {
     const ctx: common.UIAbilityContext = getContext(this) as common.UIAbilityContext;
     shareText(ctx, path).then((ok: boolean): void => {
       if (!ok) {
-        promptAction.showToast({ message: '分享暂不可用', duration: 1500 });
+        promptAction.showToast({ message: '分享暂不可用', duration: TOAST_MS });
       }
     }).catch((): void => {
-      promptAction.showToast({ message: '分享暂不可用', duration: 1500 });
+      promptAction.showToast({ message: '分享暂不可用', duration: TOAST_MS });
     });
   }
 
@@ -78,18 +82,18 @@ export struct ArtifactCard {
       .width('100%')
       .padding({ left: 14, right: 14, top: 12, bottom: 6 })
 
-      ForEach(this.shown(), (f: ArtifactFile) => {
+      Repeat<ArtifactFile>(this.shown()).each((item: RepeatItem<ArtifactFile>) => {
         Row() {
-          ArtifactThumb({ path: f.path, kind: f.kind, api: this.api })
+          ArtifactThumb({ path: item.item.path, kind: item.item.kind, api: this.api })
           Column() {
-            Text(f.name())
+            Text(item.item.name())
               .fontSize(DsTypography.small.size)
               .lineHeight(DsTypography.small.lineHeight)
               .fontColor(this.c().labelPrimary)
               .maxLines(1)
               .textOverflow({ overflow: TextOverflow.Ellipsis })
               .width('100%')
-            Text(f.caption())
+            Text(item.item.caption())
               .fontSize(DsTypography.codeBlockLabel.size)
               .lineHeight(DsTypography.codeBlockLabel.lineHeight)
               .fontColor(this.c().labelTertiary)
@@ -102,21 +106,21 @@ export struct ArtifactCard {
           Text('⋯')
             .fontSize(DsTypography.base.size)
             .fontColor(this.c().labelTertiary)
-            .width(40)
-            .height(40)
+            .width(DsSpacing.cardActionSize)
+            .height(DsSpacing.cardActionSize)
             .textAlign(TextAlign.Center)
             .accessibilityText('文件操作')
             .bindMenu([
               {
                 value: '复制路径',
                 action: (): void => {
-                  this.copyPath(f.path);
+                  this.copyPath(item.item.path);
                 }
               },
               {
                 value: '分享',
                 action: (): void => {
-                  this.share(f.path);
+                  this.share(item.item.path);
                 }
               }
             ])
@@ -124,9 +128,9 @@ export struct ArtifactCard {
         .width('100%')
         .padding({ left: 14, right: 6, top: 6, bottom: 6 })
         .onClick((): void => {
-          this.copyPath(f.path);
+          this.copyPath(item.item.path);
         })
-      }, (f: ArtifactFile) => f.path)
+      }).key((f: ArtifactFile) => f.path)
 
       if (this.files.length > DsSpacing.artifactCardMaxFiles) {
         Row() {
@@ -144,7 +148,7 @@ export struct ArtifactCard {
           this.expanded = !this.expanded;
         })
       } else {
-        Blank().height(6)
+        Blank().height(DsSpacing.cardFootGap)
       }
     }
     .width('100%')

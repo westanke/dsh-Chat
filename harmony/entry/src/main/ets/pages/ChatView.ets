@@ -437,6 +437,7 @@ export struct ChatView {
         .width(DsSpacing.brandMarkWidth)
         .height(DsSpacing.brandMarkHeight)
         .fillColor(this.c().brandMark)
+        .objectFit(ImageFit.Contain)
         .margin({ bottom: DsSpacing.brandMarkGap - 12 })
         .accessibilityText('DSH 标记')
       Text('嗨！今天想聊些什么？')

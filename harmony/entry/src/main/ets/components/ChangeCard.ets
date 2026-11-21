@@ -85,18 +85,18 @@ export struct ChangeCard {
       .alignItems(VerticalAlign.Top)
       .padding({ left: 14, right: 14, top: 12, bottom: 6 })
 
-      ForEach(this.shown(), (f: FileChange, i: number) => {
+      Repeat<FileChange>(this.shown()).each((item: RepeatItem<FileChange>) => {
         Row() {
           Column() {
-            Text(f.name())
+            Text(item.item.name())
               .fontSize(DsTypography.small.size)
               .lineHeight(DsTypography.small.lineHeight)
               .fontColor(this.c().labelPrimary)
               .maxLines(1)
               .textOverflow({ overflow: TextOverflow.Ellipsis })
               .width('100%')
-            if (f.directory() !== '') {
-              Text(f.directory())
+            if (item.item.directory() !== '') {
+              Text(item.item.directory())
                 .fontSize(DsTypography.codeBlockLabel.size)
                 .lineHeight(DsTypography.codeBlockLabel.lineHeight)
                 .fontColor(this.c().labelTertiary)
@@ -107,10 +107,10 @@ export struct ChangeCard {
           }
           .alignItems(HorizontalAlign.Start)
           .layoutWeight(1)
-          Text('+' + f.added.toString())
+          Text('+' + item.item.added.toString())
             .fontSize(DsTypography.small.size)
             .fontColor(this.c().diffAddFg)
-          Text('−' + f.removed.toString())
+          Text('−' + item.item.removed.toString())
             .fontSize(DsTypography.small.size)
             .fontColor(this.c().diffDelFg)
             .margin({ left: 6 })
@@ -118,9 +118,9 @@ export struct ChangeCard {
         .width('100%')
         .padding({ left: 14, right: 14, top: 6, bottom: 6 })
         .onClick((): void => {
-          this.openAt(i);
+          this.openAt(this.files.indexOf(item.item));
         })
-      }, (f: FileChange, i: number) => f.path + '|' + i.toString())
+      }).key((f: FileChange) => f.path)
 
       Divider().color(this.c().borderL1).strokeWidth(1).margin({ top: 4 })
 

@@ -56,13 +56,13 @@ export struct TodoDock {
           Text(this.expanded ? '⌃' : '⌄')
             .fontSize(DsTypography.small.size)
             .fontColor(this.c().labelTertiary)
-            .width(40)
-            .height(40)
+            .width(DsSpacing.todoRowHeight)
+            .height(DsSpacing.todoRowHeight)
             .textAlign(TextAlign.Center)
             .accessibilityText(this.expanded ? '收起任务' : '展开任务')
         }
         .width('100%')
-        .height(40)
+        .height(DsSpacing.todoRowHeight)
         .padding({ left: 12, right: 4 })
         .onClick((): void => {
           this.expanded = !this.expanded;
@@ -74,32 +74,32 @@ export struct TodoDock {
           type: ProgressType.Linear
         })
           .width('100%')
-          .height(2)
+          .height(DsSpacing.todoProgressHeight)
           .color(this.c().brand)
           .backgroundColor(this.c().borderL1)
 
         if (this.expanded) {
           Scroll() {
             Column() {
-              ForEach(this.todos, (t: TodoItem, i: number) => {
+              Repeat<TodoItem>(this.todos).each((item: RepeatItem<TodoItem>) => {
                 Row() {
-                  Text(todoGlyph(t.status))
+                  Text(todoGlyph(item.item.status))
                     .fontSize(16)
-                    .fontColor(t.status === 'completed' ? this.c().diffAddFg
-                      : (t.status === 'in_progress' ? this.c().brand : this.c().labelTertiary))
-                    .width(40)
-                    .height(40)
+                    .fontColor(item.item.status === 'completed' ? this.c().diffAddFg
+                      : (item.item.status === 'in_progress' ? this.c().brand : this.c().labelTertiary))
+                    .width(DsSpacing.todoRowHeight)
+                    .height(DsSpacing.todoRowHeight)
                     .textAlign(TextAlign.Center)
-                  Text(t.content)
+                  Text(item.item.content)
                     .fontSize(DsTypography.small.size)
                     .lineHeight(DsTypography.small.lineHeight)
-                    .fontWeight(t.status === 'in_progress' ? FontWeight.Medium : FontWeight.Normal)
-                    .fontColor(t.status === 'completed' ? this.c().labelTertiary : this.c().labelPrimary)
+                    .fontWeight(item.item.status === 'in_progress' ? FontWeight.Medium : FontWeight.Normal)
+                    .fontColor(item.item.status === 'completed' ? this.c().labelTertiary : this.c().labelPrimary)
                     .layoutWeight(1)
                 }
                 .width('100%')
-                .height(40)
-              }, (t: TodoItem, i: number) => i.toString() + '|' + t.content)
+                .height(DsSpacing.todoRowHeight)
+              }).key((t: TodoItem) => t.status + '|' + t.content)
             }
             .width('100%')
             .alignItems(HorizontalAlign.Start)

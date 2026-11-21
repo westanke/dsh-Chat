@@ -22,12 +22,12 @@ export struct ImageChips {
   build() {
     Scroll() {
       Row({ space: 6 }) {
-        ForEach(this.names, (name: string, i: number) => {
+        Repeat<string>(this.names).each((item: RepeatItem<string>) => {
           Row({ space: 4 }) {
             Text('🖼')
               .fontSize(12)
               .fontColor(this.c().chipSelectedFg)
-            Text(this.shortName(name))
+            Text(this.shortName(item.item))
               .fontSize(12)
               .fontColor(this.c().chipSelectedFg)
               .maxLines(1)
@@ -36,13 +36,13 @@ export struct ImageChips {
             Text('✕')
               .fontSize(12)
               .fontColor(this.c().labelTertiary)
-              .width(20)
-              .height(20)
+              .width(DsSpacing.chipRemoveSize)
+              .height(DsSpacing.chipRemoveSize)
               .textAlign(TextAlign.Center)
-              .accessibilityText('移除第 ' + (i + 1) + ' 张图片')
+              .accessibilityText('移除第 ' + (item.index + 1).toString() + ' 张图片')
               .onClick((): void => {
                 if (this.onRemove !== null) {
-                  this.onRemove(i);
+                  this.onRemove(item.index);
                 }
               })
           }
@@ -50,7 +50,7 @@ export struct ImageChips {
           .constraintSize({ maxWidth: 128 })
           .borderRadius(DsSpacing.chipRadius)
           .backgroundColor(this.c().chipSelectedBg)
-        }, (name: string, i: number) => i + '-' + name)
+        }).key((name: string, index: number) => index.toString() + '|' + name)
       }
     }
     .scrollable(ScrollDirection.Horizontal)

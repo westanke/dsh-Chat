@@ -118,11 +118,11 @@ export struct Composer {
     return st === null ? '' : (st.sessionId ?? '');
   }
 
-  private hasImage(): boolean {
+  private hasPending(): boolean {
     return this.pendingImages.length > 0;
   }
 
-  private imageNames(): string[] {
+  private pendingNames(): string[] {
     const out: string[] = [];
     for (const img of this.pendingImages) {
       out.push(img.name);
@@ -312,7 +312,7 @@ export struct Composer {
     }
   }
 
-  private pickImage(): void {
+  private pickGallery(): void {
     const ctx: common.UIAbilityContext = getContext(this) as common.UIAbilityContext;
     pickImageFromGallery(ctx).then((img: PickedImage | null): void => {
       if (img === null) {
@@ -403,7 +403,7 @@ export struct Composer {
         .enabled(this.connected())
       if (this.pendingImages.length > 0) {
         ImageChips({
-          names: this.imageNames(),
+          names: this.pendingNames(),
           onRemove: (index: number): void => {
             const next: PickedImage[] = [];
             for (let i = 0; i < this.pendingImages.length; i++) {
@@ -416,12 +416,12 @@ export struct Composer {
         })
       }
       ComposerActions({
-        hasImage: this.hasImage(),
+        hasPending: this.hasPending(),
         streaming: this.streaming(),
         sendEnabled: this.sendEnabled(),
         permissionLabel: this.permissionLabel(),
         wide: this.atLeastMd(),
-        onPickImage: (): void => this.pickImage(),
+        onPickImage: (): void => this.pickGallery(),
         onProject: (): void => this.openProjectPanel(),
         onPermission: (): void => {
           this.permSheetOpen = true;
@@ -454,7 +454,7 @@ export struct Composer {
   }
 
   private sendEnabled(): boolean {
-    return (this.draft.trim() !== '' || this.hasImage()) && this.connected();
+    return (this.draft.trim() !== '' || this.hasPending()) && this.connected();
   }
 
   private permissionLabel(): string {

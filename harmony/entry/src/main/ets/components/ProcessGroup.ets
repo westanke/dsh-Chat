@@ -216,9 +216,9 @@ export struct ProcessGroup {
           Text(this.expanded ? '⌃' : '⌄')
             .fontSize(DsTypography.small.size)
             .fontColor(this.headColor())
-            .width(14)
+            .width(DsSpacing.processChevronSize)
             .textAlign(TextAlign.Center)
-            .margin({ left: 4, right: 6 })
+            .margin({ left: DsSpacing.chatGapFootnote, right: DsSpacing.settingsChipGap })
         } else {
           Blank().width(DsSpacing.processIconGap)
         }
@@ -246,7 +246,7 @@ export struct ProcessGroup {
         }
         .width('100%')
         .alignItems(HorizontalAlign.Start)
-        .padding({ top: 4, bottom: 4 })
+        .padding({ top: DsSpacing.chatGapFootnote, bottom: DsSpacing.chatGapFootnote })
       }
     }
     .width('100%')

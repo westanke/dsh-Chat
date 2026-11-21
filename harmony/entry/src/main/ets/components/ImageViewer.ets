@@ -6,7 +6,9 @@
  */
 
 import { image } from '@kit.ImageKit';
-import { window } from '@kit.ArkUI';
+import { mediaquery, window } from '@kit.ArkUI';
+import { DsColors, DsSpacing } from '../ui/theme';
+import { BP_SM, BP_QUERY_MD, BP_QUERY_LG, breakpointOf, atLeastMd } from '../core/Breakpoints';
 
 @Component
 export struct ImageViewer {
@@ -16,9 +18,35 @@ export struct ImageViewer {
   @State offsetX: number = 0;
   @State offsetY: number = 0;
   @State topInset: number = 0;
+  @StorageProp('dshBreakpoint') bp: string = BP_SM;
+  @StorageProp('dshDark') dark: boolean = false;
   private baseZoom: number = 1;
 
+  /** 窗口断点自读（R007 一多）：关闭钮热区在宽屏放大一档。 */
+  private refreshBreakpoint(): void {
+    try {
+      const md: mediaquery.MediaQueryListener = this.getUIContext().getMediaQuery().matchMediaSync(BP_QUERY_MD);
+      const lg: mediaquery.MediaQueryListener = this.getUIContext().getMediaQuery().matchMediaSync(BP_QUERY_LG);
+      const next: string = breakpointOf(md.matches, lg.matches);
+      if (next !== this.bp) {
+        this.bp = next;
+        AppStorage.setOrCreate('dshBreakpoint', next);
+      }
+    } catch (e) {
+      // 拿不到 mediaquery 时按手机档渲染。
+    }
+  }
+
+  private closeSize(): number {
+    return atLeastMd(this.bp) ? 48 : 44;
+  }
+
+  private c(): DsColors {
+    return new DsColors(this.dark);
+  }
+
   aboutToAppear(): void {
+    this.refreshBreakpoint();
     // bindContentCover 不含安全区：自己补状态栏高度，关闭钮才不被挡住。
     try {
       window.getLastWindow(this.getUIContext().getHostContext()).then((win: window.Window): void => {
@@ -99,9 +127,9 @@ export struct ImageViewer {
         Blank()
         Text('✕')
           .fontSize(22)
-          .fontColor('#CCFFFFFF')
-          .width(44)
-          .height(44)
+          .fontColor(this.c().imageViewerAction)
+          .width(this.closeSize())
+          .height(this.closeSize())
           .textAlign(TextAlign.Center)
           .accessibilityText('关闭大图')
           .onClick((): void => {

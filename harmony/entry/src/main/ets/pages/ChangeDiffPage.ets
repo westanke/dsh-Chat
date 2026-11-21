@@ -14,6 +14,9 @@ import { FileChange, EditHunk } from '../core/TurnChanges';
 import { DIFF_LINE_ADD, DIFF_LINE_DEL, DiffLine } from '../core/CodeDiff';
 import { DsColors, DsSpacing, DsTypography } from '../ui/theme';
 
+/** Toast 停留时长（系统提示口径，非动效档位）。 */
+const TOAST_MS: number = 1500;
+
 @Component
 export struct ChangeDiffPage {
   sessionId: string = '';
@@ -56,6 +59,10 @@ export struct ChangeDiffPage {
     return sum;
   }
 
+  private diffFileIndexOf(f: FileChange): number {
+    return this.files.indexOf(f);
+  }
+
   private current(): FileChange | null {
     if (this.files.length === 0) {
       return null;
@@ -67,9 +74,9 @@ export struct ChangeDiffPage {
   private copyText(text: string, toast: string): void {
     const data: pasteboard.PasteData = pasteboard.createData(pasteboard.MIMETYPE_TEXT_PLAIN, text);
     pasteboard.getSystemPasteboard().setData(data).then((): void => {
-      promptAction.showToast({ message: toast, duration: 1500 });
+      promptAction.showToast({ message: toast, duration: TOAST_MS });
     }).catch((): void => {
-      promptAction.showToast({ message: '复制失败', duration: 1500 });
+      promptAction.showToast({ message: '复制失败', duration: TOAST_MS });
     });
   }
 
@@ -118,32 +125,51 @@ export struct ChangeDiffPage {
       : (line.type === DIFF_LINE_DEL ? this.c().diffDelBg : this.c().mdCodeBlockBg))
   }
 
+  private curPath(): string {
+    const f: FileChange | null = this.current();
+    return f === null ? '' : f.path;
+  }
+
+  private curStat(): string {
+    const f: FileChange | null = this.current();
+    if (f === null) {
+      return '';
+    }
+    return '+' + f.added.toString() + '  −' + f.removed.toString()
+      + '  修改 ' + f.edits().toString() + ' 次';
+  }
+
+  private curHunks(): EditHunk[] {
+    const f: FileChange | null = this.current();
+    return f === null ? [] : f.hunks;
+  }
+
   @Builder
-  fileBody(f: FileChange) {
+  fileBody() {
     Column() {
-      Text(f.path)
+      Text(this.curPath())
         .fontSize(DsTypography.codeBlockLabel.size)
         .lineHeight(DsTypography.codeBlockLabel.lineHeight)
         .fontFamily(DsTypography.codeFamily)
         .fontColor(this.c().labelSecondary)
         .width('100%')
         .wordBreak(WordBreak.BREAK_ALL)
-      Text('+' + f.added.toString() + '  −' + f.removed.toString()
-        + '  修改 ' + f.edits().toString() + ' 次')
+      Text(this.curStat())
         .fontSize(DsTypography.small.size)
         .lineHeight(DsTypography.small.lineHeight)
         .fontColor(this.c().labelTertiary)
         .margin({ top: 6 })
-      ForEach(f.hunks, (h: EditHunk) => {
-        Text('第 ' + h.index.toString() + ' 次修改')
+      Repeat<EditHunk>(this.curHunks()).each((hunk: RepeatItem<EditHunk>) => {
+        Text('第 ' + hunk.item.index.toString() + ' 次修改')
           .fontSize(DsTypography.smallStrong.size)
           .fontWeight(DsTypography.smallStrong.weight)
           .fontColor(this.c().labelSecondary)
           .margin({ top: 12, bottom: 6 })
         Column() {
-          ForEach(h.lines, (line: DiffLine, li: number) => {
-            this.diffLine(line)
-          }, (line: DiffLine, li: number) => li.toString() + '|' + line.type + '|' + line.text.length.toString())
+          Repeat<DiffLine>(hunk.item.lines).each((line: RepeatItem<DiffLine>) => {
+            this.diffLine(line.item)
+          }).key((line: DiffLine, index: number) => index.toString() + '|' + line.type + '|'
+            + line.text.length.toString())
         }
         .width('100%')
         .backgroundColor(this.c().mdCodeBlockBg)
@@ -152,7 +178,7 @@ export struct ChangeDiffPage {
         .borderColor(this.c().borderL1)
         .clip(true)
         .margin({ bottom: 16 })
-      }, (h: EditHunk) => h.index.toString())
+      }).key((h: EditHunk) => h.index.toString())
     }
     .width('100%')
     .alignItems(HorizontalAlign.Start)
@@ -165,8 +191,8 @@ export struct ChangeDiffPage {
         Text('‹')
           .fontSize(28)
           .fontColor(this.c().labelPrimary)
-          .width(40)
-          .height(40)
+          .width(DsSpacing.cardActionSize)
+          .height(DsSpacing.cardActionSize)
           .textAlign(TextAlign.Center)
           .accessibilityText('返回')
           .onClick((): void => {
@@ -192,8 +218,8 @@ export struct ChangeDiffPage {
         Text('复制')
           .fontSize(DsTypography.small.size)
           .fontColor(this.c().brand)
-          .width(40)
-          .height(40)
+          .width(DsSpacing.cardActionSize)
+          .height(DsSpacing.cardActionSize)
           .textAlign(TextAlign.Center)
           .accessibilityText('复制本轮改动')
           .onClick((): void => {
@@ -205,30 +231,34 @@ export struct ChangeDiffPage {
 
       Scroll() {
         Row({ space: 8 }) {
-          ForEach(this.files, (f: FileChange, i: number) => {
+          Repeat<FileChange>(this.files).each((item: RepeatItem<FileChange>) => {
             Row({ space: 6 }) {
-              Text(f.name())
+              Text(item.item.name())
                 .fontSize(DsTypography.small.size)
-                .fontColor(i === this.selected ? this.c().brand : this.c().labelPrimary)
+                .fontColor(this.files.indexOf(item.item) === this.selected ? this.c().brand
+                  : this.c().labelPrimary)
                 .maxLines(1)
                 .constraintSize({ maxWidth: 160 })
-              Text('+' + f.added.toString())
+              Text('+' + item.item.added.toString())
                 .fontSize(DsTypography.codeBlockLabel.size)
                 .fontColor(this.c().diffAddFg)
-              Text('−' + f.removed.toString())
+              Text('−' + item.item.removed.toString())
                 .fontSize(DsTypography.codeBlockLabel.size)
                 .fontColor(this.c().diffDelFg)
             }
             .padding({ left: 12, right: 12, top: 6, bottom: 6 })
-            .height(36)
-            .backgroundColor(i === this.selected ? this.c().chipSelectedBg : this.c().bgLayer1)
+            .height(DsSpacing.chipHeight)
+            .accessibilityText('查看 ' + item.item.path)
+            .backgroundColor(this.diffFileIndexOf(item.item) === this.selected
+              ? this.c().chipSelectedBg : this.c().bgLayer1)
             .borderRadius(18)
             .borderWidth(1)
-            .borderColor(i === this.selected ? this.c().brand : this.c().borderL2)
+            .borderColor(this.diffFileIndexOf(item.item) === this.selected
+              ? this.c().brand : this.c().borderL2)
             .onClick((): void => {
-              this.selected = i;
+              this.selected = this.diffFileIndexOf(item.item);
             })
-          }, (f: FileChange, i: number) => f.path + '|' + i.toString())
+          }).key((f: FileChange) => f.path)
         }
         .padding({ left: 16, right: 16 })
       }
@@ -240,7 +270,7 @@ export struct ChangeDiffPage {
       Scroll() {
         Column() {
           if (this.current() !== null) {
-            this.fileBody(this.current() as FileChange)
+            this.fileBody()
           }
         }
         .width('100%')

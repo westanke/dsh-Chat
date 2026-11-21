@@ -132,7 +132,7 @@ export struct DrawerSearch {
   build() {
     Column() {
       TextInput({ placeholder: '搜索对话内容...', text: this.query })
-        .height(40)
+        .height(DsSpacing.drawerSearchHeight)
         .fontSize(14)
         .fontColor(this.c().labelPrimary)
         .placeholderColor(this.c().labelTertiary)

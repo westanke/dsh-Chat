@@ -40,9 +40,9 @@ export struct ChatOverflowMenu {
         this.item('✅', '任务', this.onTodo)
         this.item('🎛️', '调整模型', this.onModel)
       }
-      .width(190)
-      .padding(6)
-      .borderRadius(14)
+      .width(DsSpacing.menuWidth)
+      .padding(DsSpacing.settingsChipGap)
+      .borderRadius(DsSpacing.settingsCardRadius)
       .backgroundColor(this.c().settingsSurface)
       .shadow({ radius: 18, color: this.c().shadow, offsetX: 0, offsetY: 4 })
       .margin({ right: DsSpacing.screenPad - 14, top: DsSpacing.topBarHeight })
@@ -65,9 +65,9 @@ export struct ChatOverflowMenu {
         .layoutWeight(1)
     }
     .width('100%')
-    .height(40)
+    .height(DsSpacing.todoRowHeight)
     .padding({ left: 12, right: 12 })
-    .borderRadius(10)
+    .borderRadius(DsSpacing.settingsChipGap + 4)
     .accessibilityText('打开' + label)
     .onClick((): void => {
       const close = this.onClose;

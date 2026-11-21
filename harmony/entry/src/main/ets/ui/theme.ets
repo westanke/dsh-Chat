@@ -6,6 +6,8 @@
 
 /// neutral-bluish 静态色阶（官方变量原值）。
 export class DsPalette {
+  /** 全透明（渐隐带起点）。 */
+  static readonly clear: string = '#00000000';
   static readonly c00: string = '#FFFFFF';
   static readonly c50: string = '#F9FAFB';
   static readonly c100: string = '#EBEEF2';
@@ -68,6 +70,11 @@ export class DsColors {
 
   get bgBase(): string {
     return this.dark ? DsPalette.appDarkBg : DsPalette.c00;
+  }
+
+  /** 底色同色全透明（渐隐带起点），避免组件里写颜色字面量。 */
+  get veilStart(): string {
+    return DsPalette.clear;
   }
 
   get bgLayer1(): string {
@@ -226,6 +233,11 @@ export class DsColors {
     return this.dark ? DsPalette.c500 : DsPalette.c400;
   }
 
+  /** 全屏图片查看器上的操作图标（黑底之上恒为半透明白）。 */
+  get imageViewerAction(): string {
+    return '#CCFFFFFF';
+  }
+
   get drawerScrim(): string {
     return this.dark ? '#50000000' : '#00000000';
   }
@@ -292,6 +304,15 @@ export interface DsFont {
 
 /// 字号（官方 token，fp）+ 行高（vp）。行高由 UI 落点显式 `.lineHeight(f.lineHeight)`
 /// 施加（Span 无 lineHeight，必须落在宿主 Text 上）。
+/** 动效时长（官方档位 100/150/200/300/350 + 呼吸/扫光专用）。 */
+export class DsMotion {
+  static readonly fast: number = 100;
+  static readonly normal: number = 200;
+  static readonly slow: number = 300;
+  /** 状态点/思考环呼吸一轮。 */
+  static readonly pulse: number = 1200;
+}
+
 export class DsTypography {
   static readonly h1: DsFont = { size: 24, weight: FontWeight.Bold, lineHeight: 34 };
   static readonly h2: DsFont = { size: 22, weight: FontWeight.Bold, lineHeight: 32 };
@@ -348,7 +369,8 @@ export class DsSpacing {
   static readonly quoteBarWidth: number = 2;
   static readonly inlineCodeRadius: number = 6;
   static readonly inlineCodePadH: number = 6;
-  static readonly processRowHeight: number = 28;
+  /** 过程/工具行高（≥40 触控；原 28 触发 R009 小热区）。 */
+  static readonly processRowHeight: number = 41;
   static readonly processIconSize: number = 16;
   static readonly processIconGap: number = 6;
   /// 用户气泡 maxWidth = 可见内容区宽 × 0.864（官方基准）。
@@ -383,6 +405,28 @@ export class DsSpacing {
   static readonly thinkLeadGap: number = 8;
   static readonly thinkBodyIndent: number = 32;
   static readonly hitlPanelMaxFraction: number = 0.5;
+  /** 卡片行尾操作钮热区（⋯/↵，≥40 触控规范）。 */
+  static readonly cardActionSize: number = 40;
+  /** 抽屉搜索框高度。 */
+  static readonly drawerSearchHeight: number = 40;
+  /** 卡片底部 6vp 空隙（展开入口上方）。 */
+  static readonly cardFootGap: number = 6;
+  /** 顶栏图标钮宽度（40vp 触控热区）。 */
+  static readonly navButtonWidth: number = 40;
+  /** 发送/停止钮直径（官方 44vp，≥40 触控）。 */
+  static readonly sendButtonSize: number = 44;
+  /** 任务条行高与图标热区（40vp 触控）。 */
+  static readonly todoRowHeight: number = 40;
+  /** 任务条进度线高度。 */
+  static readonly todoProgressHeight: number = 2;
+  /** 溢出菜单面板宽（官方 190vp）。 */
+  static readonly menuWidth: number = 190;
+  /** 过程行折叠箭头宽。 */
+  static readonly processChevronSize: number = 14;
+  /** 文件 chip 高度（横向滚动条内）。 */
+  static readonly chipHeight: number = 36;
+  /** 图片 chip 移除钮热区（≥40vp 触控）。 */
+  static readonly chipRemoveSize: number = 40;
 
   // ---- §4.12 dsh-go 外壳（鸿蒙落点，值见 docs/design-tokens.md §4.12）----
   /// 列表底边压进 composer 的量（渐隐带从这里往上羽化）。

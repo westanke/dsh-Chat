@@ -10,7 +10,7 @@ import { PermissionChip } from './PermissionChip';
 
 @Component
 export struct ComposerActions {
-  @Prop hasImage: boolean = false;
+  @Prop hasPending: boolean = false;
   @Prop streaming: boolean = false;
   @Prop sendEnabled: boolean = false;
   @Prop permissionLabel: string = '权限';
@@ -30,11 +30,11 @@ export struct ComposerActions {
     Row({ space: 8 }) {
       Text('＋')
         .fontSize(20)
-        .fontColor(this.hasImage ? this.c().onBrand : this.c().labelPrimary)
+        .fontColor(this.hasPending ? this.c().onBrand : this.c().labelPrimary)
         .width(DsSpacing.composerButtonSize)
         .height(DsSpacing.composerButtonSize)
         .borderRadius(DsSpacing.composerButtonSize / 2)
-        .backgroundColor(this.hasImage ? this.c().brand : this.c().bgLayer1)
+        .backgroundColor(this.hasPending ? this.c().brand : this.c().bgLayer1)
         .border({ width: 1, color: this.c().borderL1 })
         .textAlign(TextAlign.Center)
         .accessibilityText('添加图片')
@@ -82,8 +82,8 @@ export struct ComposerActions {
           })
       } else {
         Button('↑', { type: ButtonType.Circle })
-          .width(44)
-          .height(44)
+          .width(DsSpacing.sendButtonSize)
+          .height(DsSpacing.sendButtonSize)
           .backgroundColor(this.sendEnabled ? this.c().brand : this.c().sendDisabledBg)
           .fontColor(this.sendEnabled ? this.c().onBrand : this.c().sendDisabledFg)
           .fontSize(20)

@@ -6,13 +6,14 @@
  * 轻量渲染：正文 / 过程短语 / 错误 / 文件卡，不复用 MessageActions 等交互回路。
  */
 
-import { window } from '@kit.ArkUI';
+import { mediaquery, window } from '@kit.ArkUI';
 
 import { ChatStore } from '../core/ChatStore';
 import { ChatMessage, DeliverableFile, HistoryPage } from '../core/HistoryPage';
 import { SubagentRow } from '../core/Projections';
 import { DsColors, DsTypography, DsSpacing } from '../ui/theme';
 import { MdView } from '../components/md/MdView';
+import { BP_SM, BP_QUERY_MD, BP_QUERY_LG, breakpointOf, atLeastMd } from '../core/Breakpoints';
 
 @Component
 export struct SubagentHistoryPage {
@@ -28,12 +29,29 @@ export struct SubagentHistoryPage {
   @State error: string = '';
   /** bindContentCover 全屏模态不避让状态栏，自己补（MdDocViewer 同款）。 */
   @State topInset: number = 0;
+  @StorageProp('dshBreakpoint') bp: string = BP_SM;
+
+  /** 窗口断点自读（R007 一多）：返回钮在宽屏放大一档。 */
+  private refreshBreakpoint(): void {
+    try {
+      const md: mediaquery.MediaQueryListener = this.getUIContext().getMediaQuery().matchMediaSync(BP_QUERY_MD);
+      const lg: mediaquery.MediaQueryListener = this.getUIContext().getMediaQuery().matchMediaSync(BP_QUERY_LG);
+      this.bp = breakpointOf(md.matches, lg.matches);
+    } catch (e) {
+      // 拿不到 mediaquery 时按手机档渲染。
+    }
+  }
+
+  private backSize(): number {
+    return atLeastMd(this.bp) ? 48 : 44;
+  }
 
   private c(): DsColors {
     return new DsColors(this.dark);
   }
 
   aboutToAppear(): void {
+    this.refreshBreakpoint();
     this.load();
     try {
       window.getLastWindow(getContext(this)).then((win: window.Window): void => {
@@ -121,8 +139,8 @@ export struct SubagentHistoryPage {
         Text('‹')
           .fontSize(DsTypography.h3.size)
           .fontColor(this.c().labelPrimary)
-          .width(40)
-          .height(40)
+          .width(this.backSize())
+          .height(this.backSize())
           .textAlign(TextAlign.Center)
           .accessibilityText('返回')
           .onClick((): void => {
@@ -147,7 +165,8 @@ export struct SubagentHistoryPage {
 
       if (this.loading) {
         Row() {
-          LoadingProgress().width(24).height(24).color(this.c().brand)
+          LoadingProgress().width(40).height(40).color(this.c().brand)
+            .accessibilityText('正在加载')
         }
         .width('100%')
         .layoutWeight(1)

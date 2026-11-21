@@ -48,9 +48,10 @@ export struct StreamingBlock {
       } else if (this.reasoning === '') {
         Row() {
           LoadingProgress()
-            .width(16)
-            .height(16)
+            .width(DsSpacing.thinkOrbSize)
+            .height(DsSpacing.thinkOrbSize)
             .color(this.c().labelTertiary)
+            .accessibilityText('正在生成')
           Text('正在思考…')
             .fontSize(DsTypography.small.size)
             .fontColor(this.c().labelTertiary)

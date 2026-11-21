@@ -8,7 +8,7 @@
 /// 展开内容走 MdView(small=true)，与安卓 DsMarkdownView(small:true) 同口径；
 /// 传给 MdView 的是 reasoningText(剥掉 <signature> 包裹) 而非原文 —— 安卓
 /// app/lib/ui/chat_message_blocks.dart:106 就是 reasoningTextOf(widget.text)。
-import { DsColors, DsTypography, DsSpacing } from '../ui/theme';
+import { DsColors, DsMotion, DsTypography, DsSpacing } from '../ui/theme';
 import { MdView } from './md/MdView';
 import { reasoningHidden, reasoningSummaryOf, reasoningText } from '../core/ReasoningText';
 import { ThinkingRowState, thinkingLiveLines, thinkingRowStateOf } from '../core/ThinkingState';
@@ -51,7 +51,7 @@ export struct ThinkBlock {
       return;
     }
     this.getUIContext().animateTo(
-      { duration: 1200, curve: Curve.EaseInOut, iterations: -1, playMode: PlayMode.Alternate },
+      { duration: DsMotion.pulse, curve: Curve.EaseInOut, iterations: -1, playMode: PlayMode.Alternate },
       (): void => {
         this.orbPulse = true;
       });
@@ -144,14 +144,14 @@ export struct ThinkBlock {
       })
       if (!this.expanded) {
         Column({ space: 2 }) {
-          ForEach(this.liveLines(), (line: string, i: number) => {
-            Text(line)
+          Repeat<string>(this.liveLines()).each((item: RepeatItem<string>) => {
+            Text(item.item)
               .fontSize(DsTypography.caption.size)
               .fontColor(this.c().labelTertiary)
               .maxLines(1)
               .textOverflow({ overflow: TextOverflow.Ellipsis })
               .width('100%')
-          }, (line: string, i: number) => i.toString() + '-' + line.length.toString())
+          }).key((line: string) => line.length.toString() + line.substring(0, 8))
         }
         .width('100%')
         .padding({ left: DsSpacing.thinkBodyIndent })
@@ -174,9 +174,9 @@ export struct ThinkBlock {
         .fontWeight(FontWeight.Normal)
         .fontColor(this.c().labelSecondary)
       Column()
-        .width(2)
-        .height(2)
-        .borderRadius(2)
+        .width(DsSpacing.thinkDotSize / 3)
+        .height(DsSpacing.thinkDotSize / 3)
+        .borderRadius(DsSpacing.thinkDotSize / 3)
         .backgroundColor(this.c().labelCaption)
         .margin({ left: 4, right: 8 })
         .accessibilityGroup(true)

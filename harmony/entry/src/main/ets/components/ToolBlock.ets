@@ -53,7 +53,8 @@ export struct ToolBlock {
           .margin({ left: DsSpacing.processIconGap })
         if (this.rowSummary() !== '') {
           Divider().vertical(true).strokeWidth(2).color(this.c().labelCaption)
-            .height(2).borderRadius(1).margin({ left: 8, right: 8 })
+            .height(DsSpacing.todoProgressHeight).borderRadius(2)
+            .margin({ left: DsSpacing.chatGapSameTurn, right: DsSpacing.chatGapSameTurn })
           Text(this.rowSummary())
             .fontSize(DsTypography.caption.size)
             .fontColor(this.summaryColor())
