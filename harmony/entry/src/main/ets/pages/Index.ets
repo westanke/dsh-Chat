@@ -110,7 +110,8 @@ struct Index {
       return false;
     }
     const drawerOpen: boolean = AppStorage.get<boolean>('dshDrawerOpen') === true;
-    if (drawerOpen) {
+    const overlayOpen: boolean = AppStorage.get<boolean>('dshOverlayOpen') === true;
+    if (drawerOpen || overlayOpen) {
       AppStorage.setOrCreate('dshDrawerCloseTick', Date.now());
       this.lastBackAt = 0;
       return true;

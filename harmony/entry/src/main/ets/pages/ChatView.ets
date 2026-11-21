@@ -150,6 +150,11 @@ export struct ChatView {
     st.loadSessions();
   }
 
+  private setMenu(open: boolean): void {
+    this.menuOpen = open;
+    AppStorage.setOrCreate('dshOverlayOpen', open);
+  }
+
   private setDrawer(open: boolean): void {
     this.drawerOpen = open;
     AppStorage.setOrCreate('dshDrawerOpen', open);
@@ -157,6 +162,10 @@ export struct ChatView {
 
   /** 返回键：抽屉开着时先关抽屉，不退出应用。 */
   onBackTick(): void {
+    if (this.menuOpen) {
+      this.setMenu(false);
+      return;
+    }
     if (this.drawerOpen) {
       this.setDrawer(false);
     }
@@ -208,17 +217,20 @@ export struct ChatView {
           .backgroundColor(this.c().drawerScrim)
           .accessibilityText('关闭菜单')
           .onClick(() => {
-            this.menuOpen = false;
+            this.setMenu(false);
           })
         ChatOverflowMenu({
           codeWorkView: this.codeWorkViewProp,
           onClose: (): void => {
-            this.menuOpen = false;
+            this.setMenu(false);
           }, onStats: (): void => {
+            this.setMenu(false);
             this.statsSheet = true;
           }, onTrajectory: (): void => {
+            this.setMenu(false);
             this.trajectorySheet = true;
           }, onCodeWork: (): void => {
+            this.setMenu(false);
             const st: ChatStore | null = this.store;
             if (st !== null) {
               st.loadAgentPresets().catch((): void => {
@@ -227,10 +239,13 @@ export struct ChatView {
             }
             this.codeWorkSheet = true;
           }, onTeam: (): void => {
+            this.setMenu(false);
             this.teamSheet = true;
           }, onTodo: (): void => {
+            this.setMenu(false);
             this.todoSheet = true;
           }, onModel: (): void => {
+            this.setMenu(false);
             this.modelSheet = true;
           }
         })
@@ -434,7 +449,7 @@ export struct ChatView {
         }
       },
       onMenu: (): void => {
-        this.menuOpen = true;
+        this.setMenu(true);
       }
     })
   }
