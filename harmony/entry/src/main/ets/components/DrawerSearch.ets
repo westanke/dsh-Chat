@@ -27,6 +27,14 @@ export struct DrawerSearch {
   @State searchSupported: boolean = false;
   private searchTimer: number = -1;
 
+  /** 把宿主长错误翻成人话：索引禁用是部署配置，不是「没搜到」。 */
+  private reasonOf(raw: string): string {
+    if (raw.indexOf('session search is disabled') >= 0 || raw.indexOf('session-query index') >= 0) {
+      return '正文搜索未启用（宿主未配置会话索引），只能按标题搜索';
+    }
+    return raw;
+  }
+
   private c(): DsColors {
     return new DsColors(this.dark);
   }
@@ -110,14 +118,14 @@ export struct DrawerSearch {
       self.searching = false;
       if (!result.ok) {
         self.bodyHits = [];
-        self.searchError = '搜索不可用：' + result.message();
+        self.searchError = '搜索不可用：' + self.reasonOf(result.message());
         return;
       }
       self.bodyHits = parseSessionSearchHits(result.value, 20);
     }).catch((err: Error): void => {
       self.searching = false;
       self.bodyHits = [];
-      self.searchError = '搜索不可用：' + err.message;
+      self.searchError = '搜索不可用：' + self.reasonOf(err.message);
     });
   }
 
