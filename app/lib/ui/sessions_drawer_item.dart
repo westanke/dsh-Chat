@@ -18,6 +18,7 @@ class SessionsDrawerItem extends StatelessWidget {
     this.subtitle,
     required this.colors,
     this.onTap,
+    this.onLongPress,
   });
 
   final DshSession session;
@@ -33,6 +34,9 @@ class SessionsDrawerItem extends StatelessWidget {
   /// null = 这一行不可点（会话已不在列表里）。
   final VoidCallback? onTap;
 
+  /// 长按开会话操作菜单（重命名 / 归档）。null = 不提供菜单。
+  final VoidCallback? onLongPress;
+
   @override
   Widget build(BuildContext context) {
     final title = Text(
@@ -46,6 +50,7 @@ class SessionsDrawerItem extends StatelessWidget {
     );
     return InkWell(
       onTap: onTap,
+      onLongPress: onLongPress,
       child: Padding(
         padding: const EdgeInsets.symmetric(
           horizontal: DsSpacing.drawerItemPadH,

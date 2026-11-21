@@ -15,7 +15,7 @@
 | ＋ 新建对话 | 顶栏 ＋，首次发送才建会话 | ✅ 同口径（`chat_state.dart:215`） | ✅ |
 | 定时任务入口 | 标题胶囊时钟 + 小 sheet（`header_schedule.dart`） | 无 | ❌ |
 | 会话抽屉分组 | 文件夹分组 + 运行点 + 待确认/未读（`ui/shell/sessions_drawer.dart`） | 今天/昨天/更早 + 待回答/待审批角标 | ◐ 无文件夹/置顶/未读 |
-| 会话长按菜单 | 置顶/重命名/移动/分享/多选/归档/删除（`sessions_drawer.dart:535`） | 无长按菜单 | ❌ |
+| 会话长按菜单 | 置顶/重命名/移动/分享/多选/归档/删除（`sessions_drawer.dart:535`） | **✅ 重命名 + 归档（2026-11-21）**；无置顶/移动/分享/多选 | ◐ |
 | 会话正文搜索 | 标题本地匹配 + 服务端正文命中（`session_search_page.dart`） | ✅ kernel-call `session/search`，老桥降级 | ✅ |
 | 空态建议卡 | 一组建议 prompt 卡（`empty_state.dart`） | 只有问候 + 目录 chip（`chat_page.dart:411`） | ❌ |
 | 新对话选项 | 文件夹/预设/权限预先挂起（`new_chat_options.dart`） | 只有工作目录（`session_location_sheet.dart`） | ◐ |
@@ -69,7 +69,7 @@
 
 | 优先级 | 事项 | 说明 | 成本 |
 |---|---|---|---|
-| P0 | 会话重命名 / 删除 / fork | 移动端最常用却全缺；fork 需要内核 `session/fork`（桥已代理则直接接） | 中 |
+| P0 | 会话 fork | 重命名/归档已接（`session-rename`/`session-archive`）；fork 帧（`fork`）桥已代理，接消息菜单「分叉」即可 | 小 |
 | P0 | 队列真管理（撤回/改插话/立即发送） | 需要桥补 `session/queues`/`queue-update` 帧（`session/updateQueue` 内核已有，桥 STATUS ⑧ 未做） | 桥 12–30h + App 中 |
 | P1 | 后台任务面板 | `job/list` watch + `job/kill`，替换现在的工具行文字 | 中 |
 | P1 | 上下文用量环 | `context-usage` 已封装，接一个环 + sheet 即可 | 小 |

@@ -29,6 +29,27 @@ extension GatewayApi on GatewayClient {
         .toList();
   }
 
+  /// 会话改名（`session-rename` 帧，ws-sessions.ts handleSessionRename）：
+  /// 应答 kind=session-renamed{sessionId,title}。标题由调用方修剪/限长。
+  Future<void> renameSession(String sessionId, String title) async {
+    final r = await request('session-rename', {
+      'sessionId': sessionId,
+      'title': title,
+    });
+    if (r['title'] != title) {
+      throw RequestException('BAD_REPLY', 'session-rename 应答标题不一致');
+    }
+  }
+
+  /// 归档会话（`session-archive` 帧，ws-sessions.ts handleSessionArchive）：
+  /// 只是从默认视图隐藏、日志保留（桌面端「删除」同口径）。应答 session-archived。
+  Future<void> archiveSession(String sessionId) async {
+    final r = await request('session-archive', {'sessionId': sessionId});
+    if (r['sessionId'] != sessionId) {
+      throw RequestException('BAD_REPLY', 'session-archive 应答缺 sessionId');
+    }
+  }
+
   /// 提前建会话（真机反馈 2026-11-04 第 7 项）：带 [workspaceId] 走
   /// createSessionInWorkspace（复用空白会话，reuseBlank 默认 true），
   /// 新会话自动归入该工作区分组（抽屉组名 = workspace title）。

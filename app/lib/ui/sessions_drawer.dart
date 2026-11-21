@@ -7,6 +7,7 @@ import 'package:material_ui/material_ui.dart';
 import '../bridge/gateway.dart';
 import '../design/tokens.dart';
 import 'chat_state.dart';
+import 'session_actions.dart';
 import 'session_groups.dart';
 import 'session_search.dart';
 import 'session_search_section.dart';
@@ -238,6 +239,7 @@ class SessionsDrawerState extends State<SessionsDrawer> {
               widget.onClose();
               state.openSession(r.session);
             },
+            onLongPress: () => openSessionMenu(context, state, r.session, c),
           ),
         ],
     ];
