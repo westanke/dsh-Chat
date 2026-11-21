@@ -8,7 +8,7 @@
 
 import { ChatStore } from '../core/ChatStore';
 import {
-  BP_SM, drawerWidth, drawerFraction, floatingColumnWidth,
+  BP_SM, drawerWidth, drawerFraction, floatingColumnWidth, readableColumnWidth,
   windowClassOf, reflowsOnDrawer, pageInsetFor, windowSidebarWidth
 } from '../core/Breakpoints';
 import { GatewayState } from '../core/GatewayEvents';
@@ -365,6 +365,7 @@ export struct ChatView {
   /** bindSheet 内容（按当前 sheet 分派；骨架已内联在各组件）。 */
   @Builder
   sheetContent() {
+    Column() {
     if (this.statsSheet) {
       StatsSheet({ store: this.store, version: this.version })
     } else if (this.trajectorySheet) {
@@ -390,6 +391,9 @@ export struct ChatView {
     } else if (this.codeWorkSheet) {
       CodeWorkSheet({ store: this.store })
     }
+    }
+    .width('100%')
+    .constraintSize({ maxWidth: this.winW >= 600 ? readableColumnWidth(this.winW) : '100%' })
   }
 
   private isEmpty(): boolean {

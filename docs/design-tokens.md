@@ -629,9 +629,10 @@ floatingColumnWidth(可用宽)   = 列有富余 ? 列 − 2×14 : 可用宽     
 - 落到哪：`MessageList`（正文列）、`ChatView.topBar()` 与 `Composer`（浮层列）、`HitlPanel`
   （与正文同轴，`maxHeight:'50%'` 保持）、`SettingsView`（二级页）。都是
   `.constraintSize({ maxWidth })`，父 Column 默认居中。
-- 与安卓的差异：①鸿蒙抽屉仍是整页 `translate` 推挤（不改页面宽），所以列宽按整窗宽算；
-  ②`bindSheet` 没有传宽（系统默认，未接安卓的 `modalSheetConstraints` 等价物）；
-  ③手机档列宽 = 屏宽，外观与改动前逐字相同。
+- 与安卓的差异：①紧凑档抽屉仍是整页 `translate` 推挤（medium/expanded 已改 `padding.left`
+  缩窄页面，列宽按缩窄后的可用宽算，与安卓 `pageInsetFor` 同口径）；
+  ②`bindSheet` 内容已套 `constraintSize({maxWidth: readableColumnWidth(窗宽)})`（窄窗 100%），
+  等价于安卓 `modalSheetConstraints`；③手机档列宽 = 屏宽，外观与改动前逐字相同。
 - 单测：`harmony/test/cases/breakpoints.test.ts`（360→360、720→720、861→774.9、1181→1062.9、
   1600→1440、2000 继续长、0/负数→0、单调不减且 ≤ 可用宽；floating 738→692、1181→1034.9）。
 
