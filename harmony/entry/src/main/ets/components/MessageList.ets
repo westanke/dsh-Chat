@@ -7,7 +7,7 @@ import { ChatStore } from '../core/ChatStore';
 import { chatRowGapBefore, RowGapValues } from '../core/ChatRowGap';
 import { ChatMessage } from '../core/HistoryPage';
 import { ToolCallInfo, formatDuration, bashCommandOf, prettyArguments } from '../core/ToolCall';
-import { DsColors, DsTypography, DsSpacing } from '../ui/theme';
+import { DsColors, DsTypography, DsSpacing, DsMotion } from '../ui/theme';
 import { MdView } from './md/MdView';
 import { ImageTile } from './ImageTile';
 import { UserBubble } from './UserBubble';
@@ -271,6 +271,11 @@ export struct MessageList {
     }
     // 逐行变距（§4.12）：新轮首行 24 / 过程组 0 / 同轮消息 8。
     .padding({ top: this.gapTopOf(m, i) })
+    // 新行淡入（安卓 RowFadeIn 160ms；官方档取 150，列表复用节点不重播）。
+    .transition(TransitionEffect.OPACITY.animation({
+      duration: DsMotion.rowFade,
+      curve: Curve.EaseOut
+    }))
   }
 
   /**

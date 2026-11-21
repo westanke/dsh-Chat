@@ -311,6 +311,8 @@ export class DsMotion {
   static readonly slow: number = 300;
   /** 状态点/思考环呼吸一轮。 */
   static readonly pulse: number = 1200;
+  /** 新行入场淡入（安卓 rowFadeIn 160ms，取官方档 150）。 */
+  static readonly rowFade: number = 150;
 }
 
 export class DsTypography {
