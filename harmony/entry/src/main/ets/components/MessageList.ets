@@ -1,7 +1,6 @@
 /**
- * 消息列表 —— 对照安卓 chat_message_items.dart / chat_message_list.dart 的阶段 2/3
- * 基础版：用户气泡 / 助手平铺 + Markdown 富渲染（MdView）/ 过程组短语行 / 错误条 /
- * 流式块。布局 token：docs/design-tokens.md（msgPad 30 / bubbleRadius 16 / user 气泡最大宽 86.4%）。
+ * 消息列表 —— 对照安卓 chat_message_items.dart / chat_message_list.dart：
+ * 用户气泡 / 助手 Markdown / 过程组 / 错误条 / 流式块 / 行距与贴底（§4.12）。
  */
 
 import { ChatStore } from '../core/ChatStore';
@@ -458,11 +457,8 @@ export struct MessageList {
         MdView({ text: m.text })
       }
       if (handoffRefOf(this.rawTextOf(m)) !== null) {
-        ImageTile({
-          store: this.store,
-          ref: handoffRefOf(this.rawTextOf(m)) as DsImageRef,
-          sid: this.store === null ? '' : (this.store.sessionId ?? '')
-        })
+        ImageTile({ store: this.store, ref: handoffRefOf(this.rawTextOf(m)) as DsImageRef,
+          sid: this.store === null ? '' : (this.store.sessionId ?? '') })
           .margin({ top: 6 })
       }
       if (!m.streaming && m.text !== '') {
