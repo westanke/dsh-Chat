@@ -307,8 +307,8 @@ export class ChatStore {
   private imageFetcher: ImageFetcher = new ImageFetcher();
 
   /** 取图片字节（缓存命中不请求；见 ImageFetcher）。 */
-  fetchImageBytes(ref: DsImageRef): Promise<Uint8Array> {
-    return this.imageFetcher.fetch(this.api, this.sessionId, ref);
+  fetchImageBytes(ref: DsImageRef, sid: string = ''): Promise<Uint8Array> {
+    return this.imageFetcher.fetch(this.api, sid !== '' ? sid : this.sessionId, ref);
   }
 
   /** 执行斜杠命令（实现见 ChatActions.runCommandIn）。 */

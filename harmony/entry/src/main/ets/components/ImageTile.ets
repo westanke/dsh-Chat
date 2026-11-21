@@ -78,7 +78,7 @@ export struct ImageTile {
     }
     this.loading = true;
     this.error = '';
-    st.fetchImageBytes(ref).then((bytes: Uint8Array): void => {
+    st.fetchImageBytes(ref, this.sid).then((bytes: Uint8Array): void => {
       // createImageSource(buf: ArrayBuffer) —— 传 Uint8Array 会因类型不符返回
       // undefined（真机表现：Cannot read property createPixelMap of undefined），
       // 必须先取底层 buffer。
