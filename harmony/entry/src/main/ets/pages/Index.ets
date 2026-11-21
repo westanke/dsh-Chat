@@ -12,7 +12,7 @@ import { WsTransport } from '../platform/WsTransport';
 import { ArkTimers, timeZoneId, PrefsStore } from '../platform/PlatformBridge';
 import { Dlog } from '../platform/Dlog';
 import { DsColors, DsTypography, DsSpacing } from '../ui/theme';
-import { mediaquery } from '@kit.ArkUI';
+import { mediaquery, promptAction } from '@kit.ArkUI';
 import { ConnectView } from './ConnectView';
 import { ChatView } from './ChatView';
 import { SettingsView } from './SettingsView';
@@ -42,6 +42,8 @@ struct Index {
   private bpLg: mediaquery.MediaQueryListener | null = null;
   /// 系统深浅色（mediaquery 最近一次结果），手动切档时以它为基准。
   private sysDark: boolean = false;
+  /// 最近一次返回键时间（2s 内二次返回才退出，安卓同口径）。
+  private lastBackAt: number = 0;
 
   /** ChatStore 单例：同一条连接上换页不重建（状态保留）。 */
   private chatStore(): ChatStore {
@@ -90,6 +92,37 @@ struct Index {
   /// 设置页切换界面风格 → 立刻重算生效（只写 AppStorage 不会自动触发）。
   onThemeModeChange(): void {
     this.applyTheme(this.sysDark);
+  }
+
+  /**
+   * 系统返回键：
+   * - 设置页 → 回会话页；
+   * - 会话页抽屉开着 → 只收抽屉（不退出）；
+   * - 会话页其他 → 2s 内二次返回才退出，首次提示「再按一次退出 DSH」；
+   * - 连接页/启动页 → 交给系统（退出）。
+   */
+  onBackPress(): boolean {
+    if (this.route === 'settings') {
+      this.route = 'chat';
+      return true;
+    }
+    if (this.route !== 'chat') {
+      return false;
+    }
+    const drawerOpen: boolean = AppStorage.get<boolean>('dshDrawerOpen') === true;
+    if (drawerOpen) {
+      AppStorage.setOrCreate('dshDrawerCloseTick', Date.now());
+      this.lastBackAt = 0;
+      return true;
+    }
+    const now: number = Date.now();
+    if (now - this.lastBackAt < 2000) {
+      return false;
+    }
+    this.lastBackAt = now;
+    // 2s 是系统 Toast 停留时长，不参与动效档位约束（R017 info 误报）。
+    promptAction.showToast({ message: '再按一次退出 DSH', duration: 2000 });
+    return true;
   }
 
   aboutToDisappear(): void {

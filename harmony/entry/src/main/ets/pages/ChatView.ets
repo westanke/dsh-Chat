@@ -52,6 +52,8 @@ export struct ChatView {
   @State questionsView: PendingQuestion[] = [];
   @State approvalsView: PendingApproval[] = [];
   @State drawerOpen: boolean = false;
+  /** 系统返回键：Index 写入 tick，抽屉开着就先收起（安卓同口径）。 */
+  @StorageProp('dshDrawerCloseTick') @Watch('onBackTick') backTick: number = 0;
   /**
    * 会话页实测可用宽（vp）：onAreaChange 量到后写 AppStorage，正文列 / 顶栏 / 输入条 /
    * HITL 各自 @StorageProp 读它算列宽（readableColumnWidth）。0 = 还没量到，约束退 100%。
@@ -148,6 +150,18 @@ export struct ChatView {
     st.loadSessions();
   }
 
+  private setDrawer(open: boolean): void {
+    this.drawerOpen = open;
+    AppStorage.setOrCreate('dshDrawerOpen', open);
+  }
+
+  /** 返回键：抽屉开着时先关抽屉，不退出应用。 */
+  onBackTick(): void {
+    if (this.drawerOpen) {
+      this.setDrawer(false);
+    }
+  }
+
   build() {
     Stack() {
       // 推挤式抽屉（官方口径，docs/design-tokens.md §4.2）：抽屉打开时聊天页整体
@@ -170,14 +184,14 @@ export struct ChatView {
           .backgroundColor(this.c().drawerScrim)
           .accessibilityText('关闭菜单')
           .onClick(() => {
-            this.drawerOpen = false;
+            this.setDrawer(false);
           })
         SessionsDrawer({
           store: this.store,
           panelWidth: this.drawerPanelWidth(),
           version: this.version,
           onClose: (): void => {
-            this.drawerOpen = false;
+            this.setDrawer(false);
           }, onOpenSettings: (): void => {
             if (this.onOpenSettings !== null) {
               this.onOpenSettings();
@@ -411,7 +425,7 @@ export struct ChatView {
       waitingAnswer: this.questionsView.length > 0,
       hostLabel: this.store === null ? '' : this.store.connectionLabel,
       onOpenDrawer: (): void => {
-        this.drawerOpen = true;
+        this.setDrawer(true);
       },
       onNewChat: (): void => {
         const st: ChatStore | null = this.store;
