@@ -10,6 +10,7 @@ part of 'composer.dart';
 /// 斜杠命令面板：[content] 只会是候选态或参数提示态（不显示态由调用方跳过）。
 class _CommandPanel extends StatelessWidget {
   const _CommandPanel({
+    super.key,
     required this.colors,
     required this.content,
     required this.onPick,
@@ -28,58 +29,64 @@ class _CommandPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: DsSpacing.chipIconGap),
-      child: Container(
-        constraints: const BoxConstraints(
-          maxHeight: DsSpacing.paletteMaxHeight,
-        ),
-        decoration: BoxDecoration(
-          color: colors.inputFill,
-          borderRadius: BorderRadius.circular(DsSpacing.paletteRadius),
-          boxShadow: [
-            BoxShadow(
-              color: colors.shadow,
-              blurRadius: 12,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        clipBehavior: Clip.antiAlias,
-        child: switch (content) {
-          PaletteHint(:final command) => Padding(
-            padding: const EdgeInsets.symmetric(
-              vertical: DsSpacing.paletteRowInset,
-            ),
-            child: _hintRow(command),
+    // 容器语义（dsh-go `Semantics(container, label: activitySlashCommands)`）：
+    // 读屏把整块当「指令」区域，行内各自是按钮。
+    return Semantics(
+      container: true,
+      label: '指令',
+      child: Padding(
+        padding: const EdgeInsets.only(bottom: DsSpacing.chipIconGap),
+        child: Container(
+          constraints: const BoxConstraints(
+            maxHeight: DsSpacing.paletteMaxHeight,
           ),
-          PaletteMatches(
-            :final matches,
-            :final typed,
-            :final hasSuffix,
-            :final query,
-          ) =>
-            matches.isEmpty
-                ? _emptyRow(query)
-                : SingleChildScrollView(
-                    padding: const EdgeInsets.symmetric(
-                      vertical: DsSpacing.paletteRowInset,
+          decoration: BoxDecoration(
+            color: colors.inputFill,
+            borderRadius: BorderRadius.circular(DsSpacing.paletteRadius),
+            boxShadow: [
+              BoxShadow(
+                color: colors.shadow,
+                blurRadius: 12,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: switch (content) {
+            PaletteHint(:final command) => Padding(
+              padding: const EdgeInsets.symmetric(
+                vertical: DsSpacing.paletteRowInset,
+              ),
+              child: _hintRow(command),
+            ),
+            PaletteMatches(
+              :final matches,
+              :final typed,
+              :final hasSuffix,
+              :final query,
+            ) =>
+              matches.isEmpty
+                  ? _emptyRow(query)
+                  : SingleChildScrollView(
+                      padding: const EdgeInsets.symmetric(
+                        vertical: DsSpacing.paletteRowInset,
+                      ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          for (var i = 0; i < matches.length; i++)
+                            _matchRow(
+                              matches[i],
+                              index: i,
+                              typed: typed,
+                              hasSuffix: hasSuffix,
+                            ),
+                        ],
+                      ),
                     ),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        for (var i = 0; i < matches.length; i++)
-                          _matchRow(
-                            matches[i],
-                            index: i,
-                            typed: typed,
-                            hasSuffix: hasSuffix,
-                          ),
-                      ],
-                    ),
-                  ),
-          PaletteNone() => const SizedBox.shrink(),
-        },
+            PaletteNone() => const SizedBox.shrink(),
+          },
+        ),
       ),
     );
   }

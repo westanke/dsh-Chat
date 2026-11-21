@@ -65,6 +65,11 @@ export struct CommandPanel {
     .constraintSize({ maxHeight: 308 })
     .shadow({ radius: 12, color: this.c().shadow, offsetY: 2 })
     .margin({ bottom: 6 })
+    // 容器语义（dsh-go `Semantics(container, label: 指令)`）：整块当一个「指令」区域。
+    .accessibilityGroup(true)
+    .accessibilityText('指令')
+    // 出现时淡入（dsh-go AnimatedSwitcher + FadeTransition 同观感）。
+    .transition(TransitionEffect.OPACITY.animation({ duration: 150, curve: Curve.EaseOut }))
   }
 
   @Builder

@@ -421,13 +421,33 @@ class ComposerState extends State<Composer> {
                       child: AnimatedSize(
                         duration: const Duration(milliseconds: 150),
                         alignment: Alignment.bottomCenter,
-                        child: _CommandPanel(
-                          colors: c,
-                          content: slashContent,
-                          highlighted: _panelHighlight,
-                          onPick: _applyCommand,
-                          onHighlightChanged: (i) =>
-                              setState(() => _panelHighlight = i),
+                        // 候选 ⇄ 参数提示切换时淡入并轻微上浮（dsh-go
+                        // AnimatedSwitcher + ScaleTransition(0.96→1) 同观感）。
+                        child: AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 150),
+                          switchInCurve: Curves.easeOut,
+                          transitionBuilder: (child, anim) => FadeTransition(
+                            opacity: anim,
+                            child: ScaleTransition(
+                              scale: Tween<double>(
+                                begin: 0.96,
+                                end: 1,
+                              ).animate(anim),
+                              alignment: Alignment.bottomCenter,
+                              child: child,
+                            ),
+                          ),
+                          child: _CommandPanel(
+                            colors: c,
+                            key: ValueKey<String>(
+                              slashContent.runtimeType.toString(),
+                            ),
+                            content: slashContent,
+                            highlighted: _panelHighlight,
+                            onPick: _applyCommand,
+                            onHighlightChanged: (i) =>
+                                setState(() => _panelHighlight = i),
+                          ),
                         ),
                       ),
                     ),
