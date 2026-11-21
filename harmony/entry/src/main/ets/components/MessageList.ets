@@ -260,15 +260,27 @@ export struct MessageList {
     .padding({ top: this.gapTopOf(m, i) })
   }
 
-  /** 逐行变距（§4.12）。 */
+  /**
+   * 逐行变距（§4.12 / 安卓 chat_row_gap.dart）：
+   * 换轮 24、连续用户 8、相邻过程 0、文件卡 12、其余 8。
+   */
   private gapTopOf(m: ChatMessage, i: number): number {
-    if (i === 0) {
+    if (i === 0 || i >= this.msgs.length) {
       return 0;
     }
+    const prev: ChatMessage = this.msgs[i - 1];
     if (m.isUser) {
-      return DsSpacing.chatGapNewTurn;
+      return prev.isUser ? DsSpacing.chatGapSameTurn : DsSpacing.chatGapNewTurn;
     }
-    return m.isProcess ? DsSpacing.chatGapProcess : DsSpacing.chatGapSameTurn;
+    const mProc: boolean = m.isProcess || m.role === 'command';
+    const pProc: boolean = prev.isProcess || prev.role === 'command';
+    if (mProc && pProc) {
+      return DsSpacing.chatGapProcess;
+    }
+    if (m.role === 'files') {
+      return DsSpacing.chatGapCard;
+    }
+    return DsSpacing.chatGapSameTurn;
   }
 
   /** 视口是否贴底：ArkUI 的 isAtEnd 已含「差一像素也算」的语义。 */

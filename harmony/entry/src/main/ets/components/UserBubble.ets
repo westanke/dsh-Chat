@@ -9,6 +9,8 @@ import { DsImageRef, imageRefsOf, handoffRefOf } from '../core/ImageRef';
 import { ContentImageRef } from '../core/Content';
 import { DsColors, DsSpacing } from '../ui/theme';
 import { ImageTile } from './ImageTile';
+import { pasteboard } from '@kit.BasicServicesKit';
+import { promptAction } from '@kit.ArkUI';
 
 @Component
 export struct UserBubble {
@@ -33,6 +35,24 @@ export struct UserBubble {
 
   private rawOf(): string {
     return this.rawText !== '' ? this.rawText : this.text;
+  }
+
+  /// 双击复制整条消息（安卓 chat_message_items 同口径，Toast「已复制整条消息」）。
+  private copyAll(): void {
+    if (this.text === '') {
+      return;
+    }
+    try {
+      const data: pasteboard.PasteData = pasteboard.createData(
+        pasteboard.MIMETYPE_TEXT_PLAIN, this.text);
+      pasteboard.getSystemPasteboard().setData(data).then((): void => {
+        promptAction.showToast({ message: '已复制整条消息' });
+      }).catch((): void => {
+        promptAction.showToast({ message: '复制失败' });
+      });
+    } catch (e) {
+      promptAction.showToast({ message: '复制失败' });
+    }
   }
 
   build() {
@@ -62,5 +82,12 @@ export struct UserBubble {
     .width('100%')
     .padding({ left: 32 })
     .alignItems(HorizontalAlign.End)
+    .gesture(
+      GestureGroup(GestureMode.Exclusive,
+        TapGesture({ count: 2 }).onAction((): void => {
+          this.copyAll();
+        })
+      )
+    )
   }
 }
