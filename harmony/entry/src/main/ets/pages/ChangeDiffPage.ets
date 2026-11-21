@@ -1,7 +1,7 @@
 /**
  * 查看改动页（安卓 app/lib/ui/chat_diff_page.dart 口径）。
  *
- * 从改动卡打开：顶栏（返回 / 本轮改动 / 合计 / 复制全部）+ 横向文件 chips +
+ * 从改动卡打开：顶栏（返回 / 本轮改动 / 合计 / 复制当前路径）+ 横向文件 chips +
  * 选中文件的每个 hunk（「第 N 次修改」+ 红绿行）。全屏模态由 TurnCards 的
  * bindContentCover 承载，返回走回调（本工程不能用 getRouter().back()，会退应用）。
  */
@@ -80,24 +80,13 @@ export struct ChangeDiffPage {
     });
   }
 
-  /** 复制选中文件（默认）或整轮全部改动（顶栏按钮）。 */
-  private copyAll(): void {
-    let body: string = '';
-    for (let i = 0; i < this.files.length; i++) {
-      const f: FileChange = this.files[i];
-      body += f.path + '\n';
-      for (let h = 0; h < f.hunks.length; h++) {
-        body += '第 ' + f.hunks[h].index.toString() + ' 次修改\n';
-        const lines: DiffLine[] = f.hunks[h].lines;
-        for (let l = 0; l < lines.length; l++) {
-          const prefix: string = lines[l].type === DIFF_LINE_ADD ? '+ '
-            : (lines[l].type === DIFF_LINE_DEL ? '- ' : '  ');
-          body += prefix + lines[l].text + '\n';
-        }
-      }
-      body += '\n';
+  /** 顶栏「复制」：复制当前选中文件的绝对路径（安卓 chat_diff_page 同口径）。 */
+  private copyCurrentPath(): void {
+    const f: FileChange | null = this.current();
+    if (f === null) {
+      return;
     }
-    this.copyText(body, '已复制本轮改动');
+    this.copyText(f.path, '已复制路径');
   }
 
   @Builder
@@ -118,11 +107,6 @@ export struct ChangeDiffPage {
         .layoutWeight(1)
         .wordBreak(WordBreak.BREAK_ALL)
     }
-    .width('100%')
-    .alignItems(VerticalAlign.Top)
-    .padding({ left: 10, right: 10, top: 2, bottom: 2 })
-    .backgroundColor(line.type === DIFF_LINE_ADD ? this.c().diffAddBg
-      : (line.type === DIFF_LINE_DEL ? this.c().diffDelBg : this.c().mdCodeBlockBg))
   }
 
   private curPath(): string {
@@ -221,9 +205,9 @@ export struct ChangeDiffPage {
           .width(DsSpacing.cardActionSize)
           .height(DsSpacing.cardActionSize)
           .textAlign(TextAlign.Center)
-          .accessibilityText('复制本轮改动')
+          .accessibilityText('复制文件路径')
           .onClick((): void => {
-            this.copyAll();
+            this.copyCurrentPath();
           })
       }
       .width('100%')
