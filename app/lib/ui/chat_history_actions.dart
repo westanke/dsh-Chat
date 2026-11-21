@@ -30,13 +30,22 @@ int? oldestSeqOf(ChatState state) {
   List<ChatMessage> previous,
   List<ChatMessage> fresh,
 ) {
+  // 本地已上屏、服务端还没回显的用户消息（seq<0，排队/插话都算）不能因为一次
+  // 刷新丢掉：否则「排队中」气泡刚出现就被流式期间的重拉冲掉（真机 2026-11-21）。
+  // 服务端回显同文本后就不再保留本地副本，避免同一句出现两次。
+  final pending = previous
+      .where((m) => m.role == 'user' && m.seq < 0)
+      .where((p) => !fresh.any((m) => m.role == 'user' && m.text == p.text))
+      .toList();
   final firstSeq = fresh.where((m) => m.seq >= 0).isEmpty
       ? null
       : fresh.firstWhere((m) => m.seq >= 0).seq;
-  if (firstSeq == null) return (messages: fresh, keptOlder: false);
+  if (firstSeq == null) return (messages: [...fresh, ...pending], keptOlder: false);
   final older = previous.where((m) => m.seq >= 0 && m.seq < firstSeq).toList();
-  if (older.isEmpty) return (messages: fresh, keptOlder: false);
-  return (messages: [...older, ...fresh], keptOlder: true);
+  if (older.isEmpty) {
+    return (messages: [...fresh, ...pending], keptOlder: false);
+  }
+  return (messages: [...older, ...fresh, ...pending], keptOlder: true);
 }
 
 /// 原始事件同口径合并（轨迹面板依赖它，旧页事件不能丢）。

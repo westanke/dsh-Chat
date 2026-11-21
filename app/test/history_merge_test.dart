@@ -40,6 +40,20 @@ void main() {
     expect(merged.messages.where((m) => m.role == 'command'), isEmpty);
   });
 
+  test('运行中排队的本地用户消息（seq=-1）刷新后不被抹掉', () {
+    final queued = ChatMessage(role: 'user', text: '排队这句', seq: -1);
+    final previous = [msg(1, '一'), msg(2, '二'), queued];
+    final merged = mergeRefreshedHistory(previous, [msg(2, '二'), msg(3, '三')]);
+    expect(merged.messages.map((m) => m.text), ['一', '二', '三', '排队这句']);
+    // 服务端回显同一句后，本地副本让位给服务端那条，避免出现两次
+    final echoed = mergeRefreshedHistory(previous, [
+      msg(2, '二'),
+      ChatMessage(role: 'user', text: '排队这句', seq: 4),
+    ]);
+    expect(echoed.messages.where((m) => m.text == '排队这句').length, 1);
+    expect(echoed.messages.last.seq, 4);
+  });
+
   test('rawEvents 同口径合并：保留新页首条 seq 之前的事件', () {
     final previous = [
       {'seq': 1, 'type': 'a'},
