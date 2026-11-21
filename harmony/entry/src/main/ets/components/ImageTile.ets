@@ -8,6 +8,7 @@
 import { ChatStore } from '../core/ChatStore';
 import { DsImageRef } from '../core/ImageRef';
 import { DsColors, DsTypography, DsSpacing } from '../ui/theme';
+import { ImageViewer } from './ImageViewer';
 import { mediaquery } from '@kit.ArkUI';
 import { BP_SM, BP_QUERY_MD, BP_QUERY_LG, breakpointOf, atLeastMd } from '../core/Breakpoints';
 import { image } from '@kit.ImageKit';
@@ -132,17 +133,22 @@ export struct ImageTile {
           }
         })
       }
-      if (this.pixels !== null && this.coverOpen) {
-        Image(this.pixels)
-          .objectFit(ImageFit.Contain)
-          .width('100%')
-          .height('100%')
-          .backgroundColor(Color.Black)
-          .accessibilityText('关闭大图')
-          .onClick(() => {
-            this.coverOpen = false;
-          })
-      }
     }
+    .bindContentCover(this.coverOpen, this.viewer(), {
+      modalTransition: ModalTransition.DEFAULT,
+      onDisappear: (): void => {
+        this.coverOpen = false;
+      }
+    })
+  }
+
+  @Builder
+  viewer() {
+    ImageViewer({
+      pixels: this.pixels,
+      onClose: (): void => {
+        this.coverOpen = false;
+      }
+    })
   }
 }

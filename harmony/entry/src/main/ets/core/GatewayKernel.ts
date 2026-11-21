@@ -29,6 +29,8 @@ export function kernelSearchSupportedOn(client: GatewayClient): boolean {
 /** 收到 kernel-call-result：按 callId 结算；已取消/已超时的直接丢弃（幂等回放也靠它）。 */
 export function settleKernelCallOn(client: GatewayClient, result: KernelCallResult): void {
   const p: KernelPending | null = client.kernel.registry.take(result.callId);
+  client.traceMsg('[gw] kernel result callId=' + result.callId + ' ok=' + result.ok.toString()
+    + (result.errorCode === '' ? '' : ' code=' + result.errorCode));
   if (p === null) {
     return;
   }
@@ -67,6 +69,7 @@ export function kernelCallWithIdOn(client: GatewayClient, callId: string, endpoi
       return;
     }
     const frame: JsonMap = { type: 'kernel-call', callId: callId, endpoint: endpoint, args: args };
+    client.traceMsg('[gw] kernel call ' + endpoint + ' id=' + callId);
     try {
       client.handle.send(JSON.stringify(frame));
     } catch (e) {

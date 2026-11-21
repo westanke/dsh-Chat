@@ -12,6 +12,8 @@ import { DsColors, DsTypography, DsSpacing } from '../ui/theme';
 @Component
 export struct TeamSheet {
   store: ChatStore | null = null;
+  /** 点「子会话」行 → 父层打开只读历史页（安卓 SubagentHistoryPage 口径）。 */
+  onOpenSubagent: ((s: SubagentRow) => void) | null = null;
   @StorageProp('dshDark') dark: boolean = false;
 
   private c(): DsColors {
@@ -137,7 +139,7 @@ export struct TeamSheet {
         .padding({ top: DsSpacing.blockGap })
       Repeat<SubagentRow>((this.team() as AgentTeamProjection).subagents)
         .each((entry: RepeatItem<SubagentRow>) => {
-          this.pairRow(this.subLeft(entry.item), this.subRight(entry.item))
+          this.subagentRow(entry.item)
         })
         .key((entry: SubagentRow) => entry.id)
       Blank().height(DsSpacing.blockGap)
@@ -182,6 +184,35 @@ export struct TeamSheet {
       .width('100%')
     }
     .width('100%')
+  }
+
+  /** 子会话行：可点进只读历史页（安卓 projection_sheets.dart 同入口）。 */
+  @Builder
+  subagentRow(s: SubagentRow) {
+    Row() {
+      Text(this.subLeft(s))
+        .fontSize(DsTypography.small.size)
+        .fontColor(this.c().labelSecondary)
+        .layoutWeight(1)
+      Text(this.subRight(s))
+        .fontSize(DsTypography.smallStrong.size)
+        .fontWeight(FontWeight.Medium)
+        .fontColor(this.c().labelPrimary)
+      Text('›')
+        .fontSize(DsTypography.small.size)
+        .fontColor(this.c().labelTertiary)
+        .margin({ left: 4 })
+    }
+    .width('100%')
+    .height(40)
+    .padding({ top: DsSpacing.liGap, bottom: DsSpacing.liGap })
+    .accessibilityText('查看子会话 ' + s.id)
+    .onClick((): void => {
+      const cb = this.onOpenSubagent;
+      if (cb !== null) {
+        cb(s);
+      }
+    })
   }
 
   @Builder

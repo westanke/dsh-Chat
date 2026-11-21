@@ -113,6 +113,7 @@ export function onFrameOn(client: GatewayClient, text: string,
   if (kind === 'kernel-endpoints') {
     const endpoints = parseKernelEndpoints(frame);
     client.kernel.catalog = endpoints;
+    client.traceMsg('[gw] kernel endpoints=' + endpoints.length.toString());
     emit(GatewayEvent.kernelCatalog(endpoints));
     return;
   }

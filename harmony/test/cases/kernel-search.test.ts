@@ -27,6 +27,26 @@ test('parseKernelEndpoints：顶层 endpoints、忽略无端点名/非字符串 
   assert.equal(parseKernelEndpoints(null).length, 0);
 });
 
+test('parseKernelEndpoints：桥真实形状 data.endpoints（2026-11-21 真机修正）', () => {
+  const frame: JsonMap = {
+    kind: 'kernel-endpoints',
+    data: { endpoints: [{ endpoint: 'session/search', scope: 'chat.read', wires: ['request'] }] },
+  };
+  const list: KernelEndpoint[] = parseKernelEndpoints(frame);
+  assert.equal(list.length, 1);
+  assert.equal(list[0].endpoint, KERNEL_SESSION_SEARCH);
+});
+
+test('KernelCallResult：桥真实形状 data 包裹', () => {
+  const r: KernelCallResult = KernelCallResult.fromFrame({
+    kind: 'kernel-call-result',
+    data: { callId: 'c9', ok: true, value: { items: [], hasMore: false } },
+  });
+  assert.equal(r.callId, 'c9');
+  assert.equal(r.ok, true);
+  assert.equal(sessionSearchHasMore(r.value), false);
+});
+
 test('KernelCallResult：成功/失败/空值', () => {
   const ok: KernelCallResult = KernelCallResult.fromFrame({
     kind: 'kernel-call-result', callId: 'c1', ok: true,

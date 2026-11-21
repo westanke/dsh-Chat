@@ -126,7 +126,7 @@ export class GatewayClient {
     this.stateListener = listener;
   }
 
-  private traceMsg(message: string): void {
+  traceMsg(message: string): void {
     if (this.deps.trace !== undefined) {
       this.deps.trace(message);
     }

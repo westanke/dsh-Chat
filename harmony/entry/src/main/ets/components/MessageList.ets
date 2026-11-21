@@ -82,6 +82,8 @@ export struct MessageList {
   private firstIdx: number = 0;
   /** 视口在底部（贴底跟随的粘性开关；用户上滑即撤销）。 */
   @State atBottom: boolean = true;
+  /** 粘性贴底意图：上滑置 false，回底/FAB 恢复；不能每帧用 isAtEnd()。 */
+  private follow: boolean = true;
   /** 翻页瞬间的锚点快照：首个可见下标 + 当时的消息条数。 */
   private anchorIdx: number = -1;
   private anchorLen: number = 0;
@@ -123,10 +125,9 @@ export struct MessageList {
   }
   @Builder
   renderList() {
-    Stack({ alignContent: Alignment.Bottom }) {
+    Stack({ alignContent: Alignment.BottomEnd }) {
       List({ scroller: this.scroller, space: 0 }) {
-      // 历史翻页入口（安卓 chat_message_list.dart:196-215 同口径）：
-      // 上滑触发不可靠，官方做法是显式「加载更早消息」按钮。
+      // 历史翻页入口：官方口径是显式按钮（上滑触发不可靠）。
       if (this.hasMore) {
         ListItem() {
           Row({ space: 6 }) {
@@ -172,9 +173,7 @@ export struct MessageList {
         .padding({ top: i === 0 ? 0 : (m.isUser ? DsSpacing.chatGapNewTurn
           : (m.isProcess ? DsSpacing.chatGapProcess : DsSpacing.chatGapSameTurn)) })
       }, (m: ChatMessage) => this.keyOf(m))
-      // 流式块（对照安卓 _StreamingItem）：思考中先出「思考」块，正文增量走 MdView。
-      // 必须排在已提交消息之后、截断提示之前，跟着内容长。
-      // send() 时 store.streaming 已 true —— 子组件入参必须全 @Prop，否则增量灌不进去。
+      // 流式块：思考/正文增量，排在已提交消息之后；子组件入参必须 @Prop。
       if (this.streamingVisible()) {
         ListItem() {
           StreamingBlock({
@@ -203,13 +202,21 @@ export struct MessageList {
       .onScrollIndex((first: number): void => {
         this.firstIdx = first;
       })
-      .onScroll(() => {
+      .onScroll((delta: number, state: ScrollState) => {
         this.syncAtBottom();
+        if (this.atBottom) {
+          this.follow = true;
+        } else if (state === ScrollState.Scroll && delta < 0) {
+          this.follow = false;
+        }
+      })
+      .onReachEnd(() => {
+        this.follow = true;
+        this.atBottom = true;
       })
       .onAppear(() => {
         this.jumpToBottom(false);
       })
-      // 底部渐隐带（§4.12）：列表留白 20，正文从这里淡出而不是硬切。
       Column()
         .width('100%')
         .height(DsSpacing.chatListBottomPad)
@@ -230,6 +237,7 @@ export struct MessageList {
           .margin({ right: 16, bottom: DsSpacing.chatListBottomPad + 8 })
           .accessibilityText('回到最新消息')
           .onClick((): void => {
+            this.follow = true;
             this.jumpToBottom(true);
           })
       }
@@ -267,11 +275,10 @@ export struct MessageList {
       },
     })
   }
-  /** version 变化 → 重抄 store 派生数据（@Prop @Watch 回调）+ 跟随贴底。 */
+  /** version 变化：重抄派生数据并跟随贴底。 */
   syncVersion(): void {
     const st: ChatStore | null = this.store;
-    // 折叠回复（通用设置③）：final 档完成轮只留最后一条正文助手消息；
-    // all 档原样。运行中轮（streaming 或本轮未 committed）始终全可见。
+    // 折叠回复：final 档只看每轮最后一条正文；运行中轮始终全可见。
     const raw: ChatMessage[] = st === null ? [] : st.messages;
     this.msgs = st === null ? [] : visibleMessagesOf(raw, parseFoldedReplies(this.foldedRepliesProp), st.streaming);
     this.ds.reset(this.msgs);
@@ -283,18 +290,14 @@ export struct MessageList {
     this.loadingOlder = st !== null && st.loadingOlder;
     const justLoaded: boolean = st !== null && st.consumeHistoryPageJustLoaded();
     if (!justLoaded && (this.loadingOlder || this.anchorIdx >= 0)) {
-      // 翻页期间一律不贴底：点按钮那一帧会先 changed() 一次（loadingOlder=true），
-      // 页面数据到达后 .finally 还会再 changed() 一次，这两次都走不到这里的话
-      // 会在 30ms 后把视口拉到最新消息 —— 真机现象就是「点加载更早消息跳到最新」。
+      // 翻页期间不贴底（loadingOlder 阶段会连发两次 changed）。
       return;
     }
     if (justLoaded) {
-      // 翻页 prepend：用户意图是往上读旧内容，既不能跳底、也不该被顶到最早一条。
-      // ArkUI 没有 Flutter「prepend 保持 pixels」的语义，只能自己补偿：
-      // 记下点击瞬间的首个可见下标，翻页后把同一条消息重新滚回同一位置。
+      // 翻页 prepend：记下首可见下标，加载后把同一条消息滚回原位（不跳底）。
       const added: number = this.anchorIdx >= 0 ? this.msgs.length - this.anchorLen : 0;
       const target: number = this.anchorIdx >= 0 ? this.anchorIdx + added : added;
-      // 推迟到布局完成之后（0ms 时 List 还没按新数据排完，scrollToIndex 会被夹到首尾）。
+      // 推迟到布局完成（0ms 时索引会被夹到首尾）。
       setTimeout((): void => {
         this.anchorIdx = -1;
         if (target <= 0) {
@@ -308,12 +311,12 @@ export struct MessageList {
       }, 60);
       return;
     }
-    // 新消息/流式增量到达后贴底 —— 仅当用户本来就在底部（向上翻历史时不能被拽走）。
+    // 新消息/流式增量：按粘性意图贴底，翻历史时不被拽走。
     setTimeout((): void => {
-      this.syncAtBottom();
-      if (this.atBottom) {
+      if (this.follow) {
         this.jumpToBottom(false);
       }
+      this.syncAtBottom();
     }, 30);
   }
   /** 点「加载更早消息」：翻页 + 失败只提示不打断（store 侧写 lastError）。 */
@@ -327,8 +330,7 @@ export struct MessageList {
     this.anchorLen = this.msgs.length;
     st.loadOlder().catch((): void => {
       this.anchorIdx = -1;
-      // store 已把 RequestException 转成 lastError 并 changed()，这里吞掉避免
-      // 未处理的 Promise 拒绝刷屏。
+      // store 已转成 lastError 并 changed()，这里吞掉避免未处理拒绝。
     });
   }
 
@@ -367,8 +369,7 @@ export struct MessageList {
         ProcessGroup({ group: m, store: this.store });
       }
     } else {
-      // 正文 + 轮尾行必须同在一个容器里：ListItem 有多个直接子组件时 ArkUI 按
-      // Stack 叠放，轮尾行会压在正文上（真机 2026-11-17 现象）。
+      // 正文 + 轮尾行必须同容器：ListItem 多子组件时会被 Stack 叠放。
       Column() {
         this.assistantBlock(m);
         // 轮尾行（官方 TurnProcessNodeView）：闭合轮给「已完成，用时 N/处理失败」，可点开整轮过程组。

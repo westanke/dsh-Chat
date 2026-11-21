@@ -26,6 +26,9 @@ import { SessionLocation, locationChipLabel } from '../core/SessionLocation';
 import { ModelSheet } from '../components/ModelSheet';
 import { StatsSheet, TrajectorySheet } from '../components/ProjectionSheets';
 import { TeamSheet, TodoSheet } from '../components/ProjectionTeamSheets';
+import { SubagentRow } from '../core/Projections';
+import { SubagentHistoryPage } from './SubagentHistoryPage';
+import { ChatOverflowMenu } from '../components/ChatOverflowMenu';
 import { CodeWorkSheet } from '../components/CodeWorkSheet';
 
 @Component
@@ -65,6 +68,10 @@ export struct ChatView {
   @State statsSheet: boolean = false;
   @State trajectorySheet: boolean = false;
   @State teamSheet: boolean = false;
+  /** 子会话只读历史（团队面板点行进入；安卓 SubagentHistoryPage 口径）。 */
+  @State subagentOpen: boolean = false;
+  @State subagentView: SubagentRow = new SubagentRow();
+  @State subagentLead: string = '';
   @State todoSheet: boolean = false;
   @State modelSheet: boolean = false;
   /** 代码工作视图（通用设置④开启后出现在溢出菜单）。 */
@@ -188,13 +195,42 @@ export struct ChatView {
           .onClick(() => {
             this.menuOpen = false;
           })
-        this.overflowMenu()
+        ChatOverflowMenu({
+          codeWorkView: this.codeWorkViewProp,
+          onClose: (): void => {
+            this.menuOpen = false;
+          }, onStats: (): void => {
+            this.statsSheet = true;
+          }, onTrajectory: (): void => {
+            this.trajectorySheet = true;
+          }, onCodeWork: (): void => {
+            const st: ChatStore | null = this.store;
+            if (st !== null) {
+              st.loadAgentPresets().catch((): void => {
+                // 预设列表拉取失败不拦入口：sheet 内空态兜底。
+              });
+            }
+            this.codeWorkSheet = true;
+          }, onTeam: (): void => {
+            this.teamSheet = true;
+          }, onTodo: (): void => {
+            this.todoSheet = true;
+          }, onModel: (): void => {
+            this.modelSheet = true;
+          }
+        })
       }
     }
     .width('100%')
     .height('100%')
     .backgroundColor(this.c().bgBase)
     .alignContent(Alignment.Start)
+    .bindContentCover(this.subagentOpen, this.subagentCover(), {
+      modalTransition: ModalTransition.DEFAULT,
+      onDisappear: (): void => {
+        this.subagentOpen = false;
+      }
+    })
   }
 
   @Builder
@@ -296,69 +332,17 @@ export struct ChatView {
     return SheetSize.LARGE;
   }
 
-  /** 溢出菜单（全屏遮层点任意处关闭；对照安卓 PopupMenu 五项）。 */
-  @Builder
-  overflowMenu() {
-    Column() {
-      Column({ space: 4 }) {
-        this.menuItem('📊', '会话统计', (): void => {
-          this.statsSheet = true;
-        })
-        this.menuItem('🧭', '运行轨迹', (): void => {
-          this.trajectorySheet = true;
-        })
-        if (this.codeWorkViewProp === '1') {
-          this.menuItem('🧩', '代码工作视图', (): void => {
-            const st: ChatStore | null = this.store;
-            if (st !== null) {
-              st.loadAgentPresets().catch((): void => {
-                // 预设列表拉取失败不拦入口：sheet 内空态兜底。
-              });
-            }
-            this.codeWorkSheet = true;
-          })
-        }
-        this.menuItem('🧠', '智能团队', (): void => {
-          this.teamSheet = true;
-        })
-        this.menuItem('✅', '任务', (): void => {
-          this.todoSheet = true;
-        })
-        this.menuItem('🎛️', '调整模型', (): void => {
-          this.modelSheet = true;
-        })
-      }
-      .width(190)
-      .padding(6)
-      .borderRadius(14)
-      .backgroundColor(this.c().settingsSurface)
-      .shadow({ radius: 18, color: this.c().shadow, offsetX: 0, offsetY: 4 })
-      .margin({ right: DsSpacing.screenPad - 14, top: DsSpacing.topBarHeight })
-    }
-    .width('100%')
-    .height('100%')
-    .alignItems(HorizontalAlign.End)
-    .justifyContent(FlexAlign.Start)
-  }
 
+  /** 子会话历史全屏页（只读，无输入条）。 */
   @Builder
-  menuItem(icon: string, label: string, onTap: () => void) {
-    Row({ space: DsSpacing.chipIconGap }) {
-      Text(icon)
-        .fontSize(16)
-      Text(label)
-        .fontSize(DsTypography.small.size)
-        .fontColor(this.c().labelPrimary)
-        .layoutWeight(1)
-    }
-    .width('100%')
-    .height(40)
-    .padding({ left: 12, right: 12 })
-    .borderRadius(10)
-    .accessibilityText('打开' + label)
-    .onClick(() => {
-      this.menuOpen = false;
-      onTap();
+  subagentCover() {
+    SubagentHistoryPage({
+      store: this.store,
+      leadSessionId: this.subagentLead,
+      subagent: this.subagentView,
+      onBack: (): void => {
+        this.subagentOpen = false;
+      }
     })
   }
 
@@ -371,7 +355,16 @@ export struct ChatView {
     } else if (this.trajectorySheet) {
       TrajectorySheet({ store: this.store })
     } else if (this.teamSheet) {
-      TeamSheet({ store: this.store })
+      TeamSheet({
+        store: this.store,
+        onOpenSubagent: (s: SubagentRow): void => {
+          const st: ChatStore | null = this.store;
+          this.subagentLead = st === null ? '' : (st.sessionId ?? '');
+          this.subagentView = s;
+          this.teamSheet = false;
+          this.subagentOpen = true;
+        }
+      })
     } else if (this.todoSheet) {
       TodoSheet({ store: this.store })
     } else if (this.modelSheet) {

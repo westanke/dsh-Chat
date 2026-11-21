@@ -200,6 +200,7 @@
 | `ets/pages/ConnectView.ets` | 连接页三级路径：历史主机直连（失败记失效记录可删）/ DSH1 文本导入 / 手动地址+配对码（pairViaRest）；删除当前主机顺带清凭据 |
 | `ets/pages/SettingsView.ets` | 设置页七分区：连接只读（状态/设备/scopes/HTTP 警告）/外观（跟随系统/浅色/深色）/通用（SettingsGeneralSection：工作步骤展示四档/收起时机/折叠回复/代码工作视图开关）/发送（queue|steer）/关于（版本+检查更新跳 Gitee）/断开连接（清凭据回连接页） |
 | `ets/pages/MdDocViewer.ets` | .md 全屏查看页：resolvePath/readFileBytes → MdView；标题+大小 caption/失败重试 |
+| `ets/pages/SubagentHistoryPage.ets` | 子代理历史页（对照安卓 subagent_history_page.dart）：REST subagentHistory 拉取 + 「加载更早消息」beforeSeq 翻页；轻量行（过程短语/错误/文件卡/用户气泡/助手 Markdown）；标题取 label，空则「子会话 <id 前 8 位>」；只读无输入条 |
 | `ets/pages/ChangeDiffPage.ets` | 本轮改动查看页（对照安卓 chat_diff_page.dart）：顶栏返回/「本轮改动」/N 文件 +A −R/复制全部、横向文件 chip、每 hunk「第 N 次修改」+ 红绿行、TYPE_SYSTEM 安全区 topInset、返回走 onBack 回调（getRouter().back() 会退应用） |
 | `ets/pages/ChatView.ets` | 对话页：顶栏（⋮ 溢出菜单五项 + 代码工作视图入口（仅 dshCodeWorkView='1'）/标题/连接点/新建）+ HitlPanel 提问审批卡 + 消息列表 + 输入条 + 会话抽屉 + 六面板 bindSheet（统计/轨迹/团队/任务/模型/代码工作视图）+ 设置页入口；每次 changed 把 workSteps 展开集合版本写 AppStorage('dshExpandedVersion')（ProcessGroup @Watch 回读，LazyForEach 同 key 不重建的替代链路） |
 | `ets/components/MessageList.ets` | 消息列表：用户气泡（Column 图上文下、右对齐、86.4% 宽 + 收图 ImageTile；原 Row 布局会与正文争宽把文字挤出屏外，2026-11-17 修）/ 助手 MdView 富渲染 + 消息操作条 MessageActions；命令卡/文件卡/错误条已迁 MessageCards；列表尾插 StreamingBlock（流式正文与思考），其后是 max-tokens 截断提示；assistant 项后插轮尾行 TurnProcessRow（turnTailOf 非 null 时，2026-11-17 task-6）；渲染前过 core/WorkSteps.visibleMessagesOf（dshFoldedReplies='final' 时完成轮只留最后一条正文助手消息，dshDark 同款 @StorageProp 链路）；过程组按展示档分派——verbose（core/ToolDetails.STEP_GROUPING_NONE）平铺逐条 ToolBlock（answerable 回调传挂起询问查询），其余档 ProcessGroup；ThinkBlock 传 settledReasoningPreview=policyOf(dshWorkStepsDetail)；**列表头 `truncated` 提示行「会话过长，更早的部分未显示」（2026-11-19）** |
@@ -300,6 +301,8 @@
 | `ets/components/ChatTopBar.ets` | 会话页两行顶栏（对照安卓 chat_top_bar.dart）：44 操作行（☰/标题 16 Medium 单行/＋/⋮）+ 20 状态行（左缩进 56、6px 圆点 + caption）；statusColor 映射 chatStatusOk/Warn/danger/brand/labelTertiary；限宽 floatingColumnWidth |
 | `ets/components/ChangeCard.ets` | 本轮改动卡（对照安卓 chat_change_card.dart）：@Prop files+onOpen(index)；标题「改动了 N 个文件」、最多 3 行（文件名/弱化目录/+N −N）、脚注「查看改动」/「还有 N 个文件」；bgLayer1+圆角 16+borderL2 |
 | `ets/components/ArtifactCard.ets` | 本轮生成文件卡（对照安卓 chat_artifact_card.dart）：40×40 类型字形占位（真实缩略图待补）、默认 4 行可展开「全部 N 个文件」、行尾 ⋯ 菜单（复制路径/分享）、行点击复制路径 |
+| `ets/components/ChatOverflowMenu.ets` | 溢出菜单（从 ChatView 拆出）：会话统计/运行轨迹/代码工作视图（dshCodeWorkView='1' 时）/智能团队/任务/调整模型，回调转发父层 |
+| `ets/components/ImageViewer.ets` | 全屏图片查看器（对照安卓 image_viewer.dart）：黑底 + 双指缩放（1–8x）/放大后拖移/双击 1x↔2.5x/单击原尺寸关闭/右上 ✕；TYPE_SYSTEM 安全区；复用 ImageTile 已解码的 PixelMap 零额外请求 |
 | `ets/components/TurnCards.ets` | 两张卡的接线壳：@Prop @Watch version 重算 core/TurnCards，挂 ChangeCard/ArtifactCard，自带 bindContentCover 打开 ChangeDiffPage |
 | `ets/components/TodoDock.ets` | 任务条（对照安卓 todo_dock.dart）：composer 上方左右 12 上 16；40 高行 + 2px 进度 + 展开 maxHeight 168 内滚；空 todo 不占位 |
 | `ets/components/UserBubble.ets` | 用户气泡（从 MessageList 抽出击 500 行上限）：右对齐、外层左 32、最大宽 86.4%、16/24 正文、padding 16/12；收图 ImageTile |

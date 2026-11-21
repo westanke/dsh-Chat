@@ -63,14 +63,19 @@ export class KernelEndpoint {
 }
 
 /**
- * 解析 `kernel-endpoints` 帧（注意端点数组在**顶层** `endpoints`，不在 `data` 里）。
+ * 解析 `kernel-endpoints` 帧。
+ *
+ * 桥实际发的是 `{kind:'kernel-endpoints', data:{endpoints:[...]}}`（ws-kernel-call.ts
+ * `announce()`，2026-11-21 真机日志 `kernel endpoints=0` 实证）；docs 里写的「顶层
+ * endpoints」是旧口径。这里先读 `data`，读不到再回退顶层，兼容两种形状。
  * 目录是唯一真相：客户端不许硬编码端点表，也不把它当授权表（scope 仍可能拒）。
  */
 export function parseKernelEndpoints(frame: JsonMap | null): KernelEndpoint[] {
   if (frame === null) {
     return [];
   }
-  const raw: JsonMap[] = JsonAccess.objArr(frame, 'endpoints');
+  const payload: JsonMap = JsonAccess.obj(frame, 'data') ?? frame;
+  const raw: JsonMap[] = JsonAccess.objArr(payload, 'endpoints');
   const out: KernelEndpoint[] = [];
   for (let i = 0; i < raw.length; i++) {
     const item: KernelEndpoint | null = KernelEndpoint.fromJson(raw[i]);
@@ -95,10 +100,12 @@ export class KernelCallResult {
     if (frame === null) {
       return out;
     }
-    out.callId = JsonAccess.strOr(frame, 'callId', '');
-    out.ok = JsonAccess.boolOr(frame, 'ok', false);
-    out.value = JsonAccess.raw(frame, 'value');
-    const error: JsonMap | null = JsonAccess.obj(frame, 'error');
+    // 桥形状：{kind, data:{callId, ok, value|error}}；兼容无 data 的旧读法。
+    const payload: JsonMap = JsonAccess.obj(frame, 'data') ?? frame;
+    out.callId = JsonAccess.strOr(payload, 'callId', '');
+    out.ok = JsonAccess.boolOr(payload, 'ok', false);
+    out.value = JsonAccess.raw(payload, 'value');
+    const error: JsonMap | null = JsonAccess.obj(payload, 'error');
     if (error !== null) {
       out.errorCode = JsonAccess.strOr(error, 'code', '');
       out.errorMessage = JsonAccess.strOr(error, 'message', '');

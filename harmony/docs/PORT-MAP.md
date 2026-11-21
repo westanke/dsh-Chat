@@ -475,3 +475,14 @@
   实测是 `undefined`（打印为字符串 'undefined'），底层原因拿不到，只能靠状态序列判断。
 
 **阶段 4 已记偏差（2026-11-16）**：①@s 文件补全多根下钻/删除确认照搬；②设置页「字号跟随系统」开关与 Slider 鸿蒙版延后阶段 5（fontScale 真机定）；③诊断日志开关不移植（Dlog.ets hilog 直写不落文件）；④子会话历史页（subagent_history_page）与 subagentHistory REST 已有，入口延后阶段 5；⑤会话目录选择（session_location_sheet）延后阶段 5；⑥表格下载/展开、推挤抽屉动画、自绘品牌标延后。
+
+### 2026-11-21 真机验收补记
+
+| 项 | 状态 | 说明 |
+|---|---|---|
+| dshrb 子协议协商 | ✅ 真机 | @ohos 接受 `dsh-mobile-v1,dshrb-v1` 逗号串，握手回单值；降级逻辑保留为兜底 |
+| kernel 帧形状 | ✅ 真机修正 | 桥实际带 `data` 包裹（`{kind:'kernel-endpoints',data:{endpoints}}`、`{kind:'kernel-call-result',data:{...}}`）；解析兼容两种 |
+| 抽屉正文搜索 | ◐ | 端到端走通（目录 22 条、kernel-call 收发、错误态上屏）；本部署索引禁用，命中态未验 |
+| 子代理历史页 | ◐ 代码 | `SubagentHistoryPage` + 团队 sheet 入口；未真机点验 |
+| 全屏图片查看 | ◐ 代码 | `ImageViewer`（缩放/拖移/双击/关闭）；待真机点验 |
+| 回底 FAB / 流式跟随 | ✅ 真机 | FAB 右下对齐；粘性 follow 修掉「流式永久停在旧位置」 |

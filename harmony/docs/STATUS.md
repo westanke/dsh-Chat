@@ -901,3 +901,54 @@ R014（嵌套 10-11 层，info 级）。
 - 内核搜索空态文案未区分「索引未开」与「真没有」；Android 侧同样只做宽容解析。
 - `@ohos.net.webSocket` 的 `protocol` 选项是否接受逗号串尚未在真机验证；`WsTransport` 已加
   失败/超时自动退单协议（`[ws] fallback single protocol`），最坏情况只是内核面/正文搜索不可用。
+
+---
+
+## 2026-11-21 · 真机验收与修正（内核帧形状 / FAB / 流式跟随 / 子代理页 / 图片查看器）
+
+### 真机环境（一次性验收）
+
+- HarmonyOS 真机 `3AX0225103005398`，桥在本机 `0.0.0.0:3090`，App 通过 DSH1 导入连接
+  （临时设备 `harmony-verify-001`，验收后可删）。
+- **@ohos webSocket 接受逗号串子协议**：真机日志 `[ws] open` → `hello caps=39` → `state -> 2`，
+  无 `[ws] fallback single protocol`。此前 node `ws` 探针的 SyntaxError 不适用于 @ohos；
+  `WsTransport` 的自动降级保留为兜底（最坏只丢内核面）。
+
+### 修正
+
+- **内核帧形状**：桥实际发 `{kind:'kernel-endpoints', data:{endpoints}}` 与
+  `{kind:'kernel-call-result', data:{callId,ok,value|error}}`（`ws-kernel-call.ts` 的
+  `announce()`/结果帧），docs 的「顶层字段」是旧口径。`KernelCall.ts` 改为先读 `data`、
+  读不到回退顶层；真机 `[gw] kernel endpoints=22`。`GatewayClient.traceMsg` 改为公开，
+  目录解析与调用收发各打一行（`[gw] kernel call/result`），便于真机排障。
+- **回底 FAB**：`Stack({alignContent})` 由 `Alignment.Bottom` 改 `BottomEnd`，48vp 圆钮回到右下。
+- **流式跟随**：`MessageList` 增粘性 `follow` 意图位——30ms 回调不再先用 `isAtEnd()` 判定
+  （内容刚撑高时必为 false，会永久停在旧位置）；`onScroll` 手指上滑（`ScrollState.Scroll` +
+  `delta < 0`）置 false，`onReachEnd`/点 FAB 置 true。
+- **子代理历史页**：新增 `pages/SubagentHistoryPage.ets`（REST + beforeSeq 翻页、只读、
+  标题回落「子会话 <id 前 8 位>」），团队 sheet 子会话行可进入；为守住 500 行把溢出菜单拆成
+  `components/ChatOverflowMenu.ets`（ChatView 492 → 后经二级弹层限宽补到 499）。
+- **图片全屏查看**：新增 `components/ImageViewer.ets`（黑底、双指 1–8x、放大后拖移、
+  双击 1x↔2.5x、单击原尺寸关闭、右上 ✕、安全区），`ImageTile` 改 `bindContentCover` 承载
+  （原先内联在 260 宽 Stack 里，实际不是全屏）。
+
+### 真机实测结果
+
+- 会话页：两行顶栏/状态行/流式思考行/工具行/composer/权限 chip 正常；流式贴底与回底 FAB 正常。
+- 抽屉搜索：@ohos 子协议通过、目录 22 条；`write` 查询 → 5s 后「搜索不可用：session search failed:
+  SessionQueryError: session search is disabled…」（**本部署索引被禁用**，接口本身通）。
+- 「改动卡 → 查看改动」：`改动了 1 个文件` / `+48 −0` / 文件 chip / `第 1 次修改` 红绿行均正常。
+- `@` 会话分组：6 条上限、插入 `@[标题](dsh-session:<id>)` 正常。
+- 交付文件卡（📎）在同一会话里出现多张重复——为历史里多次 present 同一 HAP，**待与安卓核对是否去重**。
+
+### 门禁
+
+- `npm --prefix harmony/test test`：**412 pass / 0 fail**（kernel data 包裹 2 例）。
+- `bash scripts/ci/docs-check.sh` ✅（ImageViewer/SubagentHistoryPage/ChatOverflowMenu 已登记）。
+- `hvigorw assembleHap --no-daemon` BUILD SUCCESSFUL；签名 HAP 已重签并装机。
+
+### 已知缺口（更新）
+
+- `@ohos protocol` 逗号串**已真机验证通过**（上条历史缺口关闭）。
+- 搜索不可用文案直接透出服务端错误（长句两行截断），未做「索引未启用」的归类提示。
+- 宽窗三档/横屏、团队→子代理历史页、多图选图、生成卡真实缩略图尚未在真机逐项点验。
