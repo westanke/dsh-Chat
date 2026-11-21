@@ -234,3 +234,198 @@ SlashCommand? resolvePaletteCommand(
   }
   return null;
 }
+
+// ---------------------------------------------------------------------------
+// 输入解析 / 面板状态 / 点选语义
+//
+// 这一段是 dsh-go `slash_palette.dart` + `commands_state.dart` 的逐条移植：
+// 面板不是「一个列表」，而是三态（候选 / 参数提示 / 不显示），点选也不是
+// 「总是插入」——无参宿主命令点一下就直接执行。只有把这几条搬全，面板的
+// 手感才和 dsh-go 一致（此前只搬了条目与文案，缺的正是这一层）。
+// ---------------------------------------------------------------------------
+
+/// 指令草稿：`/` 后的名字（可能为空或只打了半截）+ 名字之后的全部文本
+/// （含分隔空白）。`rest == null` 表示还在打名字，尚未出现空白。
+class SlashDraft {
+  const SlashDraft(this.token, this.rest);
+
+  final String token;
+  final String? rest;
+
+  bool get hasArgs => rest != null;
+}
+
+/// 把输入框内容解析成指令草稿；`/` 不是行首第一个非空白字符时返回 null。
+SlashDraft? parseSlashInput(String text) {
+  final t = text.trimLeft();
+  if (!t.startsWith('/')) return null;
+  final m = RegExp(r'\s').firstMatch(t);
+  if (m == null) return SlashDraft(t.substring(1), null);
+  return SlashDraft(t.substring(1, m.start), t.substring(m.start));
+}
+
+/// 面板三态。
+sealed class PaletteContent {
+  const PaletteContent();
+}
+
+/// 不显示面板。
+final class PaletteNone extends PaletteContent {
+  const PaletteNone();
+}
+
+/// 候选列表（名字还没打完）。
+final class PaletteMatches extends PaletteContent {
+  const PaletteMatches({
+    required this.matches,
+    required this.typed,
+    required this.hasSuffix,
+    required this.query,
+  });
+
+  final List<SlashCommand> matches;
+
+  /// 已经打了半个名字：此时第一行是「回车就会选中」的那行（面板高亮它）。
+  final bool typed;
+
+  /// 光标后面还有文本（在句子中间补全）。
+  final bool hasSuffix;
+
+  /// 用户敲的片段，空列表时用于「没有匹配的命令 ‹片段›」。
+  final String query;
+}
+
+/// 参数提示（名字已完整且该命令要参数）：单行，不可点。
+final class PaletteHint extends PaletteContent {
+  const PaletteHint(this.command);
+
+  final SlashCommand command;
+}
+
+/// 当前输入该显示哪种面板——与 dsh-go `PaletteContent.of` 同判据。
+PaletteContent paletteContentOf({
+  required Iterable<SlashCommand> commands,
+  required String text,
+  int? caret,
+}) {
+  final draft = parseSlashInput(text);
+  if (draft == null) return const PaletteNone();
+  final at = (caret ?? text.length).clamp(0, text.length);
+  final suffix = text.substring(at);
+  if (!draft.hasArgs) {
+    return PaletteMatches(
+      matches: filterPaletteCommands(commands, draft.token),
+      typed: draft.token.isNotEmpty,
+      hasSuffix: suffix.isNotEmpty,
+      query: draft.token,
+    );
+  }
+  final rest = draft.rest ?? '';
+  // 已经有参数 / 光标后有字 / 多行草稿：这是在写内容，不是在挑命令。
+  if (rest.trim().isNotEmpty || suffix.isNotEmpty || text.contains('\n')) {
+    return const PaletteNone();
+  }
+  final command = resolvePaletteCommand(commands, draft.token);
+  if (command == null || !command.takesInput) return const PaletteNone();
+  return PaletteHint(command);
+}
+
+/// 补全时保留哪一段：已知命令名整段替换，未知名字只替换光标之前的部分，
+/// 光标之后的文本原样保留（dsh-go `slashCompletionContext`）。
+({int leading, String suffix}) slashCompletionContext(
+  Iterable<SlashCommand> commands,
+  String text,
+  int caret,
+) {
+  final leading = text.length - text.trimLeft().length;
+  final at = caret.clamp(0, text.length);
+  final full = parseSlashInput(text);
+  final end =
+      full != null && resolvePaletteCommand(commands, full.token) != null
+      ? leading + 1 + full.token.length
+      : at;
+  return (leading: leading, suffix: text.substring(end.clamp(0, text.length)));
+}
+
+/// 点选这一行是「插入到输入框」还是「直接执行」。
+bool slashPickInsertsText(SlashCommand command, {required bool hasSuffix}) =>
+    hasSuffix ||
+    command.kind == SlashCommandKind.skill ||
+    (command.kind == SlashCommandKind.host && command.takesInput);
+
+/// 点选后的输入框内容与光标位置；null = 这一行应当直接执行。
+({String text, int caret})? slashPickCompletion(
+  Iterable<SlashCommand> commands,
+  SlashCommand command,
+  String text,
+  int caret,
+) {
+  final ctx = slashCompletionContext(commands, text, caret);
+  if (!slashPickInsertsText(command, hasSuffix: ctx.suffix.isNotEmpty)) {
+    return null;
+  }
+  final prefix = '${text.substring(0, ctx.leading)}/${command.name}';
+  final separator = ctx.suffix.isEmpty || !RegExp(r'^\s').hasMatch(ctx.suffix)
+      ? ' '
+      : '';
+  final out = '$prefix$separator${ctx.suffix}';
+  return (text: out, caret: (prefix.length + 1).clamp(0, out.length));
+}
+
+/// 回车发送时这一行是什么意思（dsh-go `_slashFor` 的判据）。
+sealed class SlashSend {
+  const SlashSend();
+}
+
+/// 普通消息。
+final class SlashSendMessage extends SlashSend {
+  const SlashSendMessage();
+}
+
+/// 吃掉这次回车（只敲了一个 `/`，面板开着等人挑）。
+final class SlashSendSwallow extends SlashSend {
+  const SlashSendSwallow();
+}
+
+/// 交给宿主执行整行。
+final class SlashSendRun extends SlashSend {
+  const SlashSendRun(this.command, this.line);
+
+  final SlashCommand command;
+  final String line;
+}
+
+/// 选中候选第一行（名字打了一半就回车）。
+final class SlashSendPick extends SlashSend {
+  const SlashSendPick(this.command);
+
+  final SlashCommand command;
+}
+
+/// 面板关闭标记的复位规则（dsh-go `_resetSlashDismissal` 同判据）：
+/// 离开斜杠输入、或重新敲成裸 `/`，就清掉关闭标记让面板再弹；否则跟着文本走。
+String? resetSlashDismissal(String? dismissed, String text) {
+  if (dismissed == null) return null;
+  final restarted = text.trim() == '/' && dismissed.trim() != '/';
+  return (parseSlashInput(text) == null || restarted) ? null : text;
+}
+
+/// 回车这个动作该怎么处理（dsh-go `_slashFor` 同口径）：普通消息 / 吃掉回车
+/// （只敲了裸 `/`）/ 执行整行 / 选中候选第一行。技能整行走消息，因为宿主是从
+/// 正文里加载技能的，客户端当命令发会 404。
+SlashSend classifySlashSend(Iterable<SlashCommand> commands, String text) {
+  final draft = parseSlashInput(text);
+  if (draft == null) return const SlashSendMessage();
+  if (draft.token.isEmpty && !draft.hasArgs) return const SlashSendSwallow();
+  final exact = resolvePaletteCommand(commands, draft.token);
+  if (exact != null) {
+    // 技能整行是消息：宿主从正文里加载技能，客户端不该当命令发（会 404）。
+    if (exact.kind == SlashCommandKind.skill) return const SlashSendMessage();
+    return SlashSendRun(exact, '/${exact.name}${draft.rest ?? ''}');
+  }
+  // 名字不认识但带了参数：多半是路径之类的正文。
+  if (draft.hasArgs) return const SlashSendMessage();
+  final matches = filterPaletteCommands(commands, draft.token);
+  if (matches.isEmpty) return const SlashSendMessage();
+  return SlashSendPick(matches.first);
+}

@@ -19,6 +19,7 @@ import {
   skillsListArgs,
   isAppCommand,
   SLASH_ORDER,
+  resetSlashDismissalOn,
 } from '../../entry/src/main/ets/core/SlashCommands.ts';
 
 function host(name: string, definitionId: string | null, input?: Object | null): SlashCommand {
@@ -197,4 +198,24 @@ test('SLASH_ORDER: 与 dsh-go _order 一致', () => {
     'new', 'model', 'compact', 'permission', 'plan', 'goal', 'feedback',
     'export', 'features',
   ]);
+});
+
+test('面板关闭复位：没关过不动 / 文本不变保持', () => {
+  assert.equal(resetSlashDismissalOn('', '/go'), '');
+  assert.equal(resetSlashDismissalOn('/go', '/go'), '/go');
+  assert.equal(resetSlashDismissalOn('/goal ', '/goal '), '/goal ');
+});
+
+test('面板关闭复位：离开斜杠输入就放开', () => {
+  assert.equal(resetSlashDismissalOn('/go', 'hello'), '');
+  assert.equal(resetSlashDismissalOn('/go', ''), '');
+});
+
+test('面板关闭复位：重敲裸斜杠才重开，本来就关裸斜杠不重开', () => {
+  assert.equal(resetSlashDismissalOn('/goal ', '/'), '');
+  assert.equal(resetSlashDismissalOn('/', '/'), '/');
+});
+
+test('面板关闭复位：关掉后继续打名字仍保持关闭，只跟文本走', () => {
+  assert.equal(resetSlashDismissalOn('/go', '/goa'), '/goa');
 });

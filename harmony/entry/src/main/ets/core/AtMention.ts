@@ -140,6 +140,11 @@ export function insertSessionMention(draft: string, at: AtMentionDraft,
   return draft.substring(0, at.start) + mention + draft.substring(at.end);
 }
 
+/** 文件条目点选后的原位插入（`@name ` 顶掉已敲的片段）。 */
+export function insertFileMention(draft: string, at: AtMentionDraft, name: string): string {
+  return draft.substring(0, at.start) + '@' + name + ' ' + draft.substring(at.end);
+}
+
 /** `@src/li` → 目录部分 `src`（无 `/` 返回空串）。 */
 export function atQueryDir(query: string): string {
   const i: number = query.lastIndexOf('/');

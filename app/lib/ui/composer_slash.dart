@@ -6,25 +6,51 @@
 /// 走 kernel-call；桥没放行或内核没装技能就自动没有技能行，不报错）。
 part of 'composer.dart';
 
-extension on _ComposerState {
+extension on ComposerState {
   // ---- 斜杠命令补全（真机反馈 2026-11-04 第 3 项）----
   // 状态字段（_palette / _paletteSid / _commandsLoading）留在 composer.dart 主类里
   // —— Dart 扩展不能声明实例字段。
 
-  /// 当前命令草稿（`/` 开头才有）：（命令名片段, 已敲参数）。
-  ({String nameFragment, String args})? get _slashDraft {
-    if (!widget.enabled || widget.sessionId == null) return null;
-    return parseSlashDraft(_controller.text);
+  /// 当前面板该显示什么：三态（候选 / 参数提示 / 不显示）由
+  /// bridge/slash_commands.dart 的 paletteContentOf 判定，与 dsh-go 同判据。
+  PaletteContent get _paletteContent {
+    final palette = _palette;
+    if (!widget.enabled || widget.sessionId == null || palette == null) {
+      return const PaletteNone();
+    }
+    // 用户主动关掉过（点外部/返回键/Esc），文本没变就别再弹。
+    if (_dismissedSlashText != null) return const PaletteNone();
+    return paletteContentOf(
+      commands: palette,
+      text: _controller.text,
+      caret: _controller.selection.isValid
+          ? _controller.selection.end
+          : _controller.text.length,
+    );
   }
 
-  /// 命令面板数据：草稿态 + 清单就绪时给出过滤结果（全量，面板自己滚动）。
+  /// 关掉面板（点外部 / 返回键 / Esc），记下当前文本；与 dsh-go
+  /// `_dismissSlashPalette` 同判据：已经关过或当前不是斜杠输入就什么都不做。
+  void _dismissSlashPalette() {
+    if (_dismissedSlashText != null) return;
+    if (parseSlashInput(_controller.text) == null) return;
+    _refresh(() => _dismissedSlashText = _controller.text);
+  }
+
+  /// 输入变化后复位关闭标记（dsh-go `_resetSlashDismissal`）：离开斜杠输入、
+  /// 或重新敲成裸 `/` 就重新允许弹出。
+  void _resetSlashDismissal() {
+    if (_dismissedSlashText == null) return;
+    _dismissedSlashText = resetSlashDismissal(
+      _dismissedSlashText,
+      _controller.text,
+    );
+  }
+
+  /// 候选行（仅候选态非空；参数提示态与不显示态都是空表）。
   List<SlashCommand> get _slashMatches {
-    final draft = _slashDraft;
-    final palette = _palette;
-    if (draft == null || palette == null) return const [];
-    // 过滤口径对齐 dsh-go：裸名前缀 → 中文名前缀 → 包含 → 子序列，
-    // 同级保序、空片段回全量（v1.0.11 曾 take(6) 截断——m04949）。
-    return filterPaletteCommands(palette, draft.nameFragment);
+    final content = _paletteContent;
+    return content is PaletteMatches ? content.matches : const [];
   }
 
   /// 拉一次面板清单并缓存：宿主命令走 `commands` 帧，技能走内核 `skills/list`
@@ -86,50 +112,71 @@ extension on _ComposerState {
     }
   }
 
-  /// 点选命令：客户端功能直接交给上层执行；其余把输入框换成 `/name ` 让用户
-  /// 接着敲参数（dsh-go 的 `slashPickInsertsText` 同理——带参数提示才插入不发送）。
-  void _applyCommand(SlashCommand cmd) {
-    if (cmd.kind == SlashCommandKind.app) {
-      // 本地功能：清掉 `/new` 这类草稿，别把它留在输入框里等发送。
-      _controller.clear();
-      _refresh(() {});
-      widget.onAppCommand?.call(cmd.name);
+  /// 点选一行（面板点击 / 键盘回车选中 / 发送时自动选中第一行都走这里）。
+  ///
+  /// 与 dsh-go `_pick` 一致：能插入的插入（保留光标后的文本），不能插入的
+  /// 直接执行——无参宿主命令点一下就跑，不必再让用户敲回车。
+  void _applyCommand(SlashCommand cmd, {bool atCaret = true}) {
+    final text = _controller.text;
+    final caret = atCaret && _controller.selection.isValid
+        ? _controller.selection.end
+        : text.length;
+    final completion = slashPickCompletion(
+      _palette ?? const [],
+      cmd,
+      text,
+      caret,
+    );
+    if (completion == null) {
+      _runSlash(cmd, '/${cmd.name}');
       return;
     }
-    final draft = _slashDraft;
-    final args = draft?.args ?? '';
-    _controller.text = args.isEmpty ? '/${cmd.name} ' : '/${cmd.name} $args';
-    _controller.selection = TextSelection.collapsed(
-      offset: _controller.text.length,
+    _controller.value = TextEditingValue(
+      text: completion.text,
+      selection: TextSelection.collapsed(offset: completion.caret),
     );
+    _focus.requestFocus();
     _refresh(() {});
   }
 
-  /// 发送时若整行是 `/xxx ...`（且没挂图片）→ 走命令执行而非聊天发送。
-  bool _trySendCommand() {
-    final sid = widget.sessionId;
-    if (sid == null || _pendingImages.isNotEmpty) return false;
-    final text = _controller.text.trim();
-    if (!text.startsWith('/')) return false;
-    // 首个 token 按面板清单解析：中文名也能认（`/目标 xxx` → `/goal xxx`，
-    // dsh-go 的 resolveSlashCommand 同口径）；桥的服务端正则只认 ASCII 裸名。
-    final token = text.substring(1).split(RegExp(r'\s+')).first;
-    if (token.isEmpty) return false;
-    final rest = text.substring(1 + token.length).trim();
-    final cmd = resolvePaletteCommand(_palette ?? const [], token);
-    if (cmd?.kind == SlashCommandKind.app) {
-      // 手打 `/new` 这类客户端功能：本地执行，绝不发给桥（会 404）。
-      _controller.clear();
-      _refresh(() {});
-      widget.onAppCommand?.call(cmd!.name);
-      return true;
+  /// 真正执行一条命令（已确定不插入输入框）。
+  void _runSlash(SlashCommand cmd, String line) {
+    switch (cmd.kind) {
+      case SlashCommandKind.app:
+        // 客户端功能：清掉草稿，本地执行，绝不发给桥（服务端会 404）。
+        _controller.clear();
+        _refresh(() {});
+        widget.onAppCommand?.call(cmd.name);
+      case SlashCommandKind.skill:
+        // 技能行本该插入文本让用户补参数；走到这里说明调用方要求直接执行，
+        // 与 dsh-go 的 `case skill: _pick(command)` 一样退回插入。
+        _applyCommand(cmd);
+      case SlashCommandKind.host:
+        _controller.clear();
+        _refresh(() {});
+        widget.onCommand(line);
     }
-    final line = cmd == null
-        ? text
-        : '/${cmd.name}${rest.isEmpty ? '' : ' $rest'}';
-    widget.onCommand(line);
-    _refresh(_controller.clear);
-    return true;
   }
 
+  /// 回车发送时的分流：普通消息 / 吃掉回车 / 执行整行 / 选中第一行。
+  ///
+  /// 返回 true 表示这次回车已被命令面板消费，调用方不要再当消息发出去。
+  bool _trySendCommand() {
+    if (widget.sessionId == null || _pendingImages.isNotEmpty) return false;
+    final text = _controller.text;
+    if (!text.trimLeft().startsWith('/')) return false;
+    switch (classifySlashSend(_palette ?? const [], text)) {
+      case SlashSendMessage():
+        return false;
+      case SlashSendSwallow():
+        // 只敲了一个 `/`：面板开着，等人挑一行。
+        return true;
+      case SlashSendRun(:final command, :final line):
+        _runSlash(command, line);
+        return true;
+      case SlashSendPick(:final command):
+        _applyCommand(command, atCaret: false);
+        return true;
+    }
+  }
 }

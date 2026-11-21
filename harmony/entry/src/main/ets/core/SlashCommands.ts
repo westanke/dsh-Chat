@@ -268,3 +268,202 @@ export function skillsListArgs(sessionId: string): JsonMap {
 export function isAppCommand(cmd: SlashCommand): boolean {
   return cmd.kind === SlashCommandKind.App;
 }
+
+// ---------------------------------------------------------------------------
+// 输入解析 / 面板三态 / 点选 / 发送分流
+//
+// 这一段是 dsh-go `slash_palette.dart` + `commands_state.dart` 的逐条移植：
+// 面板三态（候选 / 参数提示 / 不显示）、点选「插入或直接执行」、回车分流
+// （普通消息 / 吃掉回车 / 执行整行 / 选中第一行）。只搬条目与文案是不够的。
+// ---------------------------------------------------------------------------
+
+/** 指令草稿：`/` 后的名字 + 名字之后的全部文本（含分隔空白）。 */
+export class SlashDraft {
+  readonly token: string;
+  /** null = 还在打名字，尚未出现空白。 */
+  readonly rest: string | null;
+
+  constructor(token: string, rest: string | null) {
+    this.token = token;
+    this.rest = rest;
+  }
+
+  hasArgs(): boolean {
+    return this.rest !== null;
+  }
+}
+
+/** 把输入框内容解析成指令草稿；`/` 不是首个非空白字符时返回 null。 */
+export function parseSlashInput(text: string): SlashDraft | null {
+  const left: string = text.replace(/^\s+/, '');
+  if (!left.startsWith('/')) {
+    return null;
+  }
+  const m: RegExpMatchArray | null = left.match(/\s/);
+  if (m === null) {
+    return new SlashDraft(left.substring(1), null);
+  }
+  const at: number = left.indexOf(m[0]);
+  return new SlashDraft(left.substring(1, at), left.substring(at));
+}
+
+/** 面板三态。 */
+export enum PaletteKind {
+  None = 'none',
+  Matches = 'matches',
+  Hint = 'hint',
+}
+
+/** 面板内容：kind 决定渲染哪种；matches 只在候选态有意义。 */
+export class PaletteContent {
+  readonly kind: PaletteKind;
+  readonly matches: SlashCommand[];
+  /** 已经打了半个名字（第一行就是回车会选中的那行）。 */
+  readonly typed: boolean;
+  /** 光标后面还有文本。 */
+  readonly hasSuffix: boolean;
+  /** 用户敲的片段，空列表时用于「没有匹配的命令 ‹片段›」。 */
+  readonly query: string;
+  /** 参数提示态的命令；其余态为 null。 */
+  readonly command: SlashCommand | null;
+
+  constructor(kind: PaletteKind, matches: SlashCommand[], typed: boolean,
+    hasSuffix: boolean, query: string, command: SlashCommand | null) {
+    this.kind = kind;
+    this.matches = matches;
+    this.typed = typed;
+    this.hasSuffix = hasSuffix;
+    this.query = query;
+    this.command = command;
+  }
+}
+
+export const PALETTE_NONE: PaletteContent = new PaletteContent(PaletteKind.None, [], false, false, '', null);
+
+/** 当前输入该显示哪种面板（与 dsh-go `PaletteContent.of` 同判据）。 */
+export function paletteContentOf(commands: SlashCommand[], text: string,
+  caret: number): PaletteContent {
+  const draft: SlashDraft | null = parseSlashInput(text);
+  if (draft === null) {
+    return PALETTE_NONE;
+  }
+  const at: number = Math.max(0, Math.min(caret, text.length));
+  const suffix: string = text.substring(at);
+  if (!draft.hasArgs()) {
+    return new PaletteContent(PaletteKind.Matches,
+      filterPaletteCommands(commands, draft.token), draft.token.length > 0,
+      suffix.length > 0, draft.token, null);
+  }
+  const rest: string = draft.rest === null ? '' : draft.rest;
+  // 已经有参数 / 光标后有字 / 多行草稿：这是在写内容，不是在挑命令。
+  if (rest.trim().length > 0 || suffix.length > 0 || text.indexOf('\n') >= 0) {
+    return PALETTE_NONE;
+  }
+  const command: SlashCommand | null = resolvePaletteCommand(commands, draft.token);
+  if (command === null || !command.takesInput()) {
+    return PALETTE_NONE;
+  }
+  return new PaletteContent(PaletteKind.Hint, [], false, false, '', command);
+}
+
+/** 补全结果：文本 + 光标位置。 */
+export class SlashCompletion {
+  readonly text: string;
+  readonly caret: number;
+
+  constructor(text: string, caret: number) {
+    this.text = text;
+    this.caret = caret;
+  }
+}
+
+/** 点选这一行是「插入到输入框」还是「直接执行」。 */
+export function slashPickInsertsText(cmd: SlashCommand, hasSuffix: boolean): boolean {
+  return hasSuffix || cmd.kind === SlashCommandKind.Skill ||
+    (cmd.kind === SlashCommandKind.Host && cmd.takesInput());
+}
+
+/** 点选后的输入框内容与光标位置；null = 这一行应当直接执行。 */
+export function slashPickCompletion(commands: SlashCommand[], cmd: SlashCommand,
+  text: string, caret: number): SlashCompletion | null {
+  const leading: number = text.length - text.replace(/^\s+/, '').length;
+  const at: number = Math.max(0, Math.min(caret, text.length));
+  const full: SlashDraft | null = parseSlashInput(text);
+  const end: number = (full !== null && resolvePaletteCommand(commands, full.token) !== null)
+    ? leading + 1 + full.token.length
+    : at;
+  const suffix: string = text.substring(Math.max(0, Math.min(end, text.length)));
+  if (!slashPickInsertsText(cmd, suffix.length > 0)) {
+    return null;
+  }
+  const prefix: string = text.substring(0, leading) + '/' + cmd.name;
+  const separator: string = (suffix.length === 0 || /^\s/.test(suffix)) ? '' : ' ';
+  const out: string = prefix + separator + suffix;
+  return new SlashCompletion(out, Math.max(0, Math.min(prefix.length + 1, out.length)));
+}
+
+/** 回车分流的结果。 */
+export enum SlashSendKind {
+  /** 普通消息。 */
+  Message = 'message',
+  /** 吃掉这次回车（只敲了一个 `/`）。 */
+  Swallow = 'swallow',
+  /** 交给宿主执行整行。 */
+  Run = 'run',
+  /** 选中候选第一行。 */
+  Pick = 'pick',
+}
+
+export class SlashSend {
+  readonly kind: SlashSendKind;
+  readonly command: SlashCommand | null;
+  readonly line: string;
+
+  constructor(kind: SlashSendKind, command: SlashCommand | null, line: string) {
+    this.kind = kind;
+    this.command = command;
+    this.line = line;
+  }
+}
+
+/**
+ * 面板关闭标记的复位规则（dsh-go `_resetSlashDismissal` 同判据）：
+ * 离开斜杠输入、或重新敲成裸 `/`，就清掉关闭标记让面板再弹；否则跟着文本走。
+ * 空串表示「没关过」（ArkTS 侧不用 null 状态）。
+ */
+export function resetSlashDismissalOn(dismissed: string, text: string): string {
+  if (dismissed.length === 0) {
+    return '';
+  }
+  const restarted: boolean = text.trim() === '/' && dismissed.trim() !== '/';
+  return (parseSlashInput(text) === null || restarted) ? '' : text;
+}
+
+/** 回车发送时这一行是什么意思（dsh-go `_slashFor` 的判据）。 */
+export function classifySlashSend(commands: SlashCommand[], text: string): SlashSend {
+  const draft: SlashDraft | null = parseSlashInput(text);
+  if (draft === null) {
+    return new SlashSend(SlashSendKind.Message, null, '');
+  }
+  if (draft.token.length === 0 && !draft.hasArgs()) {
+    return new SlashSend(SlashSendKind.Swallow, null, '');
+  }
+  const exact: SlashCommand | null = resolvePaletteCommand(commands, draft.token);
+  if (exact !== null) {
+    // 技能整行是消息：宿主从正文里加载技能，客户端不该当命令发（会 404）。
+    if (exact.kind === SlashCommandKind.Skill) {
+      return new SlashSend(SlashSendKind.Message, null, '');
+    }
+    const rest: string = draft.rest === null ? '' : draft.rest;
+    return new SlashSend(SlashSendKind.Run, exact, '/' + exact.name + rest);
+  }
+  // 名字不认识但带了参数：多半是路径之类的正文。
+  if (draft.hasArgs()) {
+    return new SlashSend(SlashSendKind.Message, null, '');
+  }
+  const matches: SlashCommand[] = filterPaletteCommands(commands, draft.token);
+  if (matches.length === 0) {
+    return new SlashSend(SlashSendKind.Message, null, '');
+  }
+  return new SlashSend(SlashSendKind.Pick, matches[0], '');
+}

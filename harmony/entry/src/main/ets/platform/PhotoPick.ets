@@ -7,6 +7,30 @@ import { fileIo as fs } from '@kit.CoreFileKit';
 import { util } from '@kit.ArkTS';
 import { common } from '@kit.AbilityKit';
 import { isSupportedImageMediaType, sniffImageMediaType } from '../core/ImageMediaType';
+import { PromptPart } from '../core/Content';
+
+/** 待发送图片 → 内核 prompt parts（顺序即选图顺序）。 */
+export function promptPartsOf(images: PickedImage[]): PromptPart[] {
+  const parts: PromptPart[] = [];
+  for (const img of images) {
+    parts.push(PromptPart.image(img.mediaType, img.base64, img.name));
+  }
+  return parts;
+}
+
+/** 一条消息最多带几张图（与安卓对齐）。 */
+export const MAX_SELECTED_IMAGES: number = 6;
+
+/** 选图后的拦截原因：空串表示可以加入待发送列表。 */
+export function galleryErrorOf(img: PickedImage, current: number): string {
+  if (img.error.length > 0) {
+    return img.error;
+  }
+  if (current >= MAX_SELECTED_IMAGES) {
+    return '一条消息最多带 ' + MAX_SELECTED_IMAGES + ' 张图片';
+  }
+  return '';
+}
 
 export class PickedImage {
   path: string = '';
@@ -14,6 +38,26 @@ export class PickedImage {
   mediaType: string = '';
   base64: string = '';
   error: string = '';
+}
+
+/** 待发送图片的名字列表（chip 行只显示名字）。 */
+export function imageNamesOf(list: PickedImage[]): string[] {
+  const out: string[] = [];
+  for (const img of list) {
+    out.push(img.name);
+  }
+  return out;
+}
+
+/** 删掉第 index 张（返回新数组，不原地改——@State 需要换引用才刷新）。 */
+export function withoutImageAt(list: PickedImage[], index: number): PickedImage[] {
+  const out: PickedImage[] = [];
+  for (let i = 0; i < list.length; i++) {
+    if (i !== index) {
+      out.push(list[i]);
+    }
+  }
+  return out;
 }
 
 /** 8MiB 上限（安卓一致）。 */

@@ -201,6 +201,46 @@ class DsSpacing {
   /// 行内最小高度（仿官方 56dp 触控行）。
   static const settingsRowMinHeight = 52.0;
 
+  /// 斜杠面板的行基准高（dsh-go `_rowHeight`=56，仅用于算面板最大高度）。
+  static const paletteRowHeight = 56.0;
+
+  // ---- 斜杠命令面板（全部对齐 dsh-go slash_palette.dart，docs §4.7）----
+  /// 面板容器圆角（dsh-go `AppShape.xl`=28，与输入条同一圆角）。
+  static const paletteRadius = 28.0;
+
+  /// 面板最大高度（dsh-go `_rowHeight * _maxRows` = 56 × 5.5 = 308）。
+  static const paletteMaxHeight = 308.0;
+
+  /// 行左右内缩（dsh-go `rowInset`=6：行高亮块比容器窄 6，与容器圆角同心）。
+  static const paletteRowInset = 6.0;
+
+  /// 行圆角（dsh-go `radius - rowInset` = 28 - 6 = 22）。
+  static const paletteRowRadius = 22.0;
+
+  /// 行最小高度（dsh-go `_CommandTile` minHeight=52）。
+  static const paletteRowMinHeight = 52.0;
+
+  /// 行左右内边距（dsh-go L2 / R12）与上下内边距（8）。
+  static const paletteRowPadLeft = 2.0;
+  static const paletteRowPadRight = 12.0;
+  static const paletteRowPadV = 8.0;
+
+  /// 行首图标槽宽 / 图标边长（dsh-go 32 / 20，图标中心与输入条 ＋ 键对齐）。
+  static const paletteIconSlot = 32.0;
+  static const paletteIconSize = 20.0;
+
+  /// 图标槽与文字的间距（dsh-go 10）。
+  static const paletteIconGap = 10.0;
+
+  /// 尾部回车符号边长（dsh-go 16）与其左内距（8）。
+  static const paletteEnterSize = 16.0;
+  static const paletteEnterGap = 8.0;
+
+  /// 空态行内边距（dsh-go fromLTRB(14, 14, 18, 14)）。
+  static const paletteEmptyPadTop = 14.0;
+  static const paletteEmptyPadLeft = 14.0;
+  static const paletteEmptyPadRight = 18.0;
+
   /// 行内图标与文字间距、药丸间距。
   static const settingsIconGap = 14.0;
   static const settingsChipGap = 7.0;

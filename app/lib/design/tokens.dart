@@ -147,6 +147,11 @@ class DsColors {
   /// 品牌实心控件上的前景（白，两套主题一致）。
   Color get onBrand => DsPalette.c00;
 
+  /// 斜杠面板行高亮底色（dsh-go `colors.onSurface.withValues(alpha: 0.06)`：
+  /// 菜单行是淡淡一层前景色，不是 chip 那种品牌色底）。
+  Color get paletteRowHighlight =>
+      dark ? const Color(0x0FFFFFFF) : const Color(0x0F000000);
+
   /// 悬浮层阴影（官方输入条柔和投影）。
   Color get shadow => const Color(0x14000000);
 

@@ -182,6 +182,11 @@ export class DsColors {
     return this.dark ? DsPalette.chipSelectedDark : DsPalette.bubbleLight;
   }
 
+  /** 斜杠面板行高亮底色（dsh-go onSurface 6%：菜单行淡淡一层，非品牌色底）。 */
+  get paletteRowHighlight(): string {
+    return this.dark ? '#14FFFFFF' : '#0F000000';
+  }
+
   get chipSelectedFg(): string {
     return this.dark ? DsPalette.chipSelectedFgDark : DsPalette.chipSelectedFgLight;
   }

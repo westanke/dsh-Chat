@@ -289,4 +289,207 @@ void main() {
       expect(resolvePaletteCommand(p, ''), isNull);
     });
   });
+
+  // 面板三态 / 点选 / 发送分流：逐条对齐 dsh-go slash_palette.dart + _slashFor。
+  group('面板三态', () {
+    List<SlashCommand> palette() => mergePaletteCommands(
+      host: paletteHostCommands(_hostFixture()),
+      skills: paletteSkillCommands({
+        'skills': [
+          {'name': 'pdf', 'description': 'Read a PDF'},
+        ],
+      }),
+    );
+
+    test('只敲斜杠是候选态，列全量且 typed=false', () {
+      final content = paletteContentOf(commands: palette(), text: '/');
+      expect(content, isA<PaletteMatches>());
+      final matches = (content as PaletteMatches);
+      expect(matches.typed, isFalse);
+      expect(matches.matches.length, palette().length);
+    });
+
+    test('打了半个名字是候选态且 typed=true', () {
+      final content =
+          paletteContentOf(commands: palette(), text: '/go') as PaletteMatches;
+      expect(content.typed, isTrue);
+      expect(content.query, 'go');
+      expect(content.matches.first.name, 'goal');
+    });
+
+    test('名字打完加空格且无参数 → 参数提示态（单行）', () {
+      final content = paletteContentOf(commands: palette(), text: '/goal ');
+      expect(content, isA<PaletteHint>());
+      expect((content as PaletteHint).command.name, 'goal');
+    });
+
+    test('无参命令打完名字后不出面板', () {
+      // compact 的 fixture 带 hint（要参数），无参的是插件命令 todos。
+      expect(
+        paletteContentOf(commands: palette(), text: '/todos '),
+        isA<PaletteNone>(),
+      );
+    });
+
+    test('已填参数 / 光标后有字 / 多行 / 未知名字都不出面板', () {
+      final p = palette();
+      expect(paletteContentOf(commands: p, text: '/goal x'), isA<PaletteNone>());
+      expect(
+        paletteContentOf(commands: p, text: '/goal ', caret: 3),
+        isA<PaletteNone>(),
+      );
+      expect(
+        paletteContentOf(commands: p, text: '/goal a\nb'),
+        isA<PaletteNone>(),
+      );
+      expect(paletteContentOf(commands: p, text: '/zzz '), isA<PaletteNone>());
+    });
+
+    test('不是斜杠开头就不出面板', () {
+      expect(paletteContentOf(commands: palette(), text: 'hello'), isA<PaletteNone>());
+      expect(paletteContentOf(commands: palette(), text: ''), isA<PaletteNone>());
+    });
+
+    test('技能行的 whenToUse 被保留', () {
+      final skill = palette().firstWhere((c) => c.kind == SlashCommandKind.skill);
+      expect(skill.name, 'pdf');
+      expect(skill.takesInput, isFalse);
+    });
+  });
+
+  group('点选语义', () {
+    List<SlashCommand> palette() => mergePaletteCommands(
+      host: paletteHostCommands(_hostFixture()),
+      skills: paletteSkillCommands({
+        'skills': [
+          {'name': 'pdf', 'description': 'Read a PDF'},
+        ],
+      }),
+    );
+
+    SlashCommand byName(List<SlashCommand> p, String name) =>
+        p.firstWhere((c) => c.name == name);
+
+    test('无参宿主命令点一下直接执行（返回 null）', () {
+      final p = palette();
+      expect(slashPickCompletion(p, byName(p, 'todos'), '/to', 3), isNull);
+    });
+
+    test('要参数的命令点一下插入裸名 + 空格，光标留在名字后', () {
+      final p = palette();
+      final out = slashPickCompletion(p, byName(p, 'goal'), '/go', 3)!;
+      expect(out.text, '/goal ');
+      expect(out.caret, 6);
+    });
+
+    test('中文名点选插入的是裸名', () {
+      final p = palette();
+      final out = slashPickCompletion(p, byName(p, 'goal'), '/目标', 3)!;
+      expect(out.text, '/goal ');
+    });
+
+    test('技能行总是插入（不执行）', () {
+      final p = palette();
+      final out = slashPickCompletion(p, byName(p, 'pdf'), '/pd', 3)!;
+      expect(out.text, '/pdf ');
+    });
+
+    test('光标后有文本时保留后缀（不吞掉后半句）', () {
+      final p = palette();
+      // '/go 帮我看下' 光标在第 3 位：未知/半截名字只替换光标左侧，
+      // 后缀原样保留（后缀自带空白就不再补分隔空格）。
+      final out = slashPickCompletion(p, byName(p, 'goal'), '/go 帮我看下', 3)!;
+      expect(out.text, '/goal 帮我看下');
+      expect(out.caret, 6);
+    });
+
+    test('已有完整命令名时整段替换（不叠成 /goal/goal）', () {
+      final p = palette();
+      final out = slashPickCompletion(p, byName(p, 'goal'), '/goal ', 6)!;
+      expect(out.text, '/goal ');
+    });
+  });
+
+  group('发送分流', () {
+    List<SlashCommand> palette() => mergePaletteCommands(
+      host: paletteHostCommands(_hostFixture()),
+      skills: paletteSkillCommands({
+        'skills': [
+          {'name': 'pdf', 'description': 'Read a PDF'},
+        ],
+      }),
+    );
+
+    test('普通文本是消息', () {
+      expect(classifySlashSend(palette(), 'hello'), isA<SlashSendMessage>());
+      expect(classifySlashSend(palette(), ''), isA<SlashSendMessage>());
+    });
+
+    test('裸斜杠吃掉回车（面板开着等人挑）', () {
+      expect(classifySlashSend(palette(), '/'), isA<SlashSendSwallow>());
+      // 斜杠后已有空白说明开始敲参数了，按 dsh-go 口径当普通消息。
+      expect(classifySlashSend(palette(), '/  '), isA<SlashSendMessage>());
+    });
+
+    test('完整命令名执行整行，中文名换成裸名', () {
+      final run = classifySlashSend(palette(), '/目标 上线') as SlashSendRun;
+      expect(run.command.name, 'goal');
+      expect(run.line, '/goal 上线');
+    });
+
+    test('技能整行当消息发（宿主从正文加载技能，不能当命令执行）', () {
+      expect(
+        classifySlashSend(palette(), '/pdf 读一下这个文件'),
+        isA<SlashSendMessage>(),
+      );
+    });
+
+    test('名字不认识但带参数当消息（路径之类）', () {
+      expect(
+        classifySlashSend(palette(), '/usr/local/bin'),
+        isA<SlashSendMessage>(),
+      );
+    });
+
+    test('打了一半就回车 → 选中候选第一行', () {
+      final pick = classifySlashSend(palette(), '/go') as SlashSendPick;
+      expect(pick.command.name, 'goal');
+    });
+
+    test('打了一半且无候选 → 当消息', () {
+      expect(classifySlashSend(palette(), '/zzz'), isA<SlashSendMessage>());
+    });
+
+    test('客户端功能命令回车 → 走执行分支', () {
+      final run = classifySlashSend(palette(), '/new') as SlashSendRun;
+      expect(run.command.name, 'new');
+      expect(run.line, '/new');
+    });
+  });
+
+  group('面板关闭复位（dsh-go _resetSlashDismissal）', () {
+    test('没关过就不动', () {
+      expect(resetSlashDismissal(null, '/go'), isNull);
+    });
+
+    test('文本没变保持关闭', () {
+      expect(resetSlashDismissal('/go', '/go'), '/go');
+      expect(resetSlashDismissal('/goal ', '/goal '), '/goal ');
+    });
+
+    test('离开斜杠输入就放开', () {
+      expect(resetSlashDismissal('/go', 'hello'), isNull);
+      expect(resetSlashDismissal('/go', ''), isNull);
+    });
+
+    test('重新敲成裸斜杠就放开（关掉 /goal 后重开面板）', () {
+      expect(resetSlashDismissal('/goal ', '/'), isNull);
+      // 本来就关的是裸斜杠：再敲成裸斜杠不算「重新开始」，保持关闭。
+      expect(resetSlashDismissal('/', '/'), '/');
+    });
+
+    test('关掉后继续打名字仍保持关闭，只跟文本走', () {
+      expect(resetSlashDismissal('/go', '/goa'), '/goa');
+    });
+  });
 }

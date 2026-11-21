@@ -5,20 +5,21 @@
  */
 import { ChatStore } from '../core/ChatStore';
 import { GatewayState } from '../core/GatewayEvents';
-import { parseSlashDraft, parseAtMentionDraft, AtMentionDraft, SlashCommand,
-  SlashCommandList, PromptPart } from '../core/Content';
-import { filterPaletteCommands, resolvePaletteCommand,
-  isAppCommand } from '../core/SlashCommands';
+import { parseAtMentionDraft, AtMentionDraft, SlashCommand, SlashCommandKind } from '../core/Content';
+import { PaletteContent, PaletteKind, PALETTE_NONE, parseSlashInput, resetSlashDismissalOn,
+  paletteContentOf, slashPickCompletion,
+  SlashCompletion, SlashSend, SlashSendKind, classifySlashSend, isAppCommand } from '../core/SlashCommands';
 import { loadPaletteCommands } from '../core/SlashPalette';
 import { GatewayRoot } from '../core/Files';
 import { JsonMap } from '../core/JsonAccess';
 import { PermissionSheet } from './PermissionSheet';
-import { PickedImage, pickImageFromGallery } from '../platform/PhotoPick';
-import { ImageChips } from './ImageChips';
-import { ComposerActions } from './ComposerActions';
+import { PickedImage, pickImageFromGallery, galleryErrorOf, promptPartsOf,
+  imageNamesOf, withoutImageAt } from '../platform/PhotoPick';
 import { CommandPanel, AtFilePanel } from './ComposerPanels';
-import { ErrorBanner, HintBanner } from './ComposerBanners';
+import { ComposerShell } from './ComposerShell';
+import { ComposerBanners } from './ComposerBanners';
 import { AtEntry, AtSessionHit, AtMentionMerge, loadMergedAtEntries, inSubDirectory,
+  insertFileMention,
   sessionMatches, insertSessionMention, atLeafQuery, atQueryDir, joinAtDir } from '../core/AtMention';
 import { DsColors, DsTypography, DsSpacing } from '../ui/theme';
 import { permissionLabelOf } from '../core/Permissions';
@@ -48,6 +49,12 @@ export struct Composer {
   @State panel: PanelMode = 'none';
   /** 斜杠命令缓存（切会话失效，同安卓 _commands/_commandsSid）。 */
   @State palette: SlashCommand[] = [];
+  /** 命令面板三态内容（候选 / 参数提示 / 不显示）。 */
+  @State paletteContent: PaletteContent = paletteContentOf([], '', 0);
+  /** 面板被主动关掉时的输入快照（空串=没关过；dsh-go _dismissedSlashText）。 */
+  @State dismissedSlash: string = '';
+  /** 系统返回键先关面板：页面侧置 tick，这里收到就收起（dsh-go PopScope）。 */
+  @StorageProp('dshSlashCloseTick') @Watch('onSlashCloseTick') slashCloseTick: number = 0;
   @State commandsSid: string = '';
   /** 客户端功能命令（/new /model /export /features）的执行回调，由 ChatView 接。 */
   onAppCommand: (name: string) => void = (): void => {};
@@ -110,32 +117,32 @@ export struct Composer {
     this.syncVersion();
   }
 
-  private connected(): boolean {
-    return this.connectedView;
-  }
+  private connected(): boolean { return this.connectedView; }
 
-  private streaming(): boolean {
-    return this.streamingView;
-  }
+  private streaming(): boolean { return this.streamingView; }
 
   private sid(): string {
     const st: ChatStore | null = this.store;
     return st === null ? '' : (st.sessionId ?? '');
   }
 
-  private hasPending(): boolean {
-    return this.pendingImages.length > 0;
-  }
+  private hasPending(): boolean { return this.pendingImages.length > 0; }
 
   private pendingNames(): string[] {
-    const out: string[] = [];
-    for (const img of this.pendingImages) {
-      out.push(img.name);
-    }
-    return out;
+    return imageNamesOf(this.pendingImages);
   }
 
   /** ---------- 面板状态推导 ---------- */
+  /** 光标真值回填：与 onChange 的「末尾估计」不同才重算面板
+   *  （中途点击/方向键移动光标时，@ 片段解析依赖真实位置）。 */
+  private onCaretMoved(start: number): void {
+    if (start === this.cursor) {
+      return;
+    }
+    this.cursor = start;
+    this.updatePanel();
+  }
+
   private onChanged(v: string): void {
     this.draft = v;
     // 光标兜底：onChange 先于 onTextSelectionChange 触发，刚敲下 '@' 那一帧
@@ -143,22 +150,30 @@ export struct Composer {
     // 永远返回 null —— 面板要等下一次输入才弹。输入必然把光标推到插入点之后，
     // 这里按「末尾」估一次先算面板；随后 onTextSelectionChange 拿真位置再校正。
     this.cursor = v.length;
+    this.resetSlashDismissalHere();
     this.updatePanel();
   }
 
   private updatePanel(): void {
     // 命令清单按会话懒加载（切会话失效）；缺此调用会永远没有补全候选。
     this.ensureCommands();
-    const slash = parseSlashDraft(this.draft);
-    if (slash !== null && this.palette.length > 0) {
+    // 三态（候选 / 参数提示 / 不显示）与 dsh-go 同判据：名字打完带参数后
+    // 面板收起，只在该命令要参数时留一行提示。
+    const content: PaletteContent = this.dismissedSlash.length > 0
+      ? PALETTE_NONE
+      : paletteContentOf(this.palette, this.draft, this.cursor);
+    this.paletteContent = content;
+    if (content.kind !== PaletteKind.None) {
       this.panel = 'cmd';
       this.atDraft = null;
+      AppStorage.setOrCreate('dshSlashPanelOpen', true);
       return;
     }
     const at = parseAtMentionDraft(this.draft, this.cursor);
     if (at !== null) {
       this.panel = 'at';
       this.atDraft = at;
+      AppStorage.setOrCreate('dshSlashPanelOpen', false);
       const st: ChatStore | null = this.store;
       this.atSessions = sessionMatches(st === null ? [] : st.sessions,
         st === null ? null : st.sessionId, atLeafQuery(at.query));
@@ -168,6 +183,28 @@ export struct Composer {
     this.panel = 'none';
     this.atDraft = null;
     this.atSessions = [];
+    AppStorage.setOrCreate('dshSlashPanelOpen', false);
+  }
+
+  onSlashCloseTick(): void {
+    this.dismissSlash();
+  }
+
+  /** 关掉命令面板（返回键 / 点输入框外 / 失焦），记下当前文本。 */
+  private dismissSlash(): void {
+    if (this.dismissedSlash.length > 0 || parseSlashInput(this.draft) === null) {
+      return;
+    }
+    this.dismissedSlash = this.draft;
+    this.panel = 'none';
+  }
+
+  /** 输入变化后复位关闭标记（dsh-go _resetSlashDismissal）。 */
+  private resetSlashDismissalHere(): void {
+    if (this.dismissedSlash.length === 0) {
+      return;
+    }
+    this.dismissedSlash = resetSlashDismissalOn(this.dismissedSlash, this.draft);
   }
 
   /** 命令面板清单（切会话失效；失败不落缓存，onChanged 自动重试）。
@@ -245,7 +282,21 @@ export struct Composer {
     this.atSessions = [];
   }
 
+  /** 点选一行：能插入的插入（保留光标后的文本），不能插入的直接执行。 */
   private applyCommand(cmd: SlashCommand): void {
+    const done: SlashCompletion | null = slashPickCompletion(this.palette, cmd,
+      this.draft, this.cursor);
+    if (done === null) {
+      this.runSlash(cmd, '/' + cmd.name);
+      return;
+    }
+    this.panel = 'none';
+    this.draft = done.text;
+    this.cursor = done.caret;
+  }
+
+  /** 真正执行一条命令（已确定不插入输入框）。 */
+  private runSlash(cmd: SlashCommand, line: string): void {
     this.panel = 'none';
     if (isAppCommand(cmd)) {
       // 客户端功能命令：本地执行，绝不进输入框、绝不发服务端（服务端会 404）。
@@ -254,8 +305,17 @@ export struct Composer {
       this.onAppCommand(cmd.name);
       return;
     }
-    this.draft = '/' + cmd.name + ' ';
-    this.cursor = this.draft.length;
+    if (cmd.kind === SlashCommandKind.Skill) {
+      // 与 dsh-go 的 `case skill: _pick(command)` 一样退回插入。
+      this.applyCommand(cmd);
+      return;
+    }
+    const st: ChatStore | null = this.store;
+    this.draft = '';
+    this.cursor = 0;
+    if (st !== null) {
+      st.runCommand(line);
+    }
   }
 
   private applyAtEntry(e: AtEntry): void {
@@ -268,8 +328,7 @@ export struct Composer {
     if (at === null) {
       return;
     }
-    this.draft = this.draft.substring(0, at.start) + '@' + e.name + ' ' +
-      this.draft.substring(at.end);
+    this.draft = insertFileMention(this.draft, at, e.name);
     this.panel = 'none';
     this.atDir = '';
   }
@@ -299,43 +358,41 @@ export struct Composer {
     const busyMode: string = AppStorage.get<string>('dshBusySend') ?? 'queue';
     const text: string = this.draft.trim();
     const images: PickedImage[] = this.pendingImages;
-    this.draft = '';
-    this.pendingImages = [];
-    this.cursor = 0;
-    this.panel = 'none';
     if (images.length > 0) {
-      const parts: PromptPart[] = [];
-      for (const img of images) {
-        parts.push(PromptPart.image(img.mediaType, img.base64, img.name));
-      }
-      st.send(text, parts, busyMode);
+      this.draft = '';
+      this.pendingImages = [];
+      this.cursor = 0;
+      this.panel = 'none';
+      st.send(text, promptPartsOf(images), busyMode);
       return;
     }
-    const slash = parseSlashDraft(text);
     if (text.length === 0) {
       return;
     }
-    if (slash !== null) {
-      // 面板里可能选的是中文名（/目标），执行前换成内核认的裸名（/goal）。
-      const resolved: SlashCommand | null = resolvePaletteCommand(this.palette, slash.nameFragment);
-      if (resolved !== null && isAppCommand(resolved)) {
-        this.onAppCommand(resolved.name);
-        return;
-      }
-      const line: string = resolved === null
-        ? text
-        : ('/' + resolved.name + (slash.args.length > 0 ? ' ' + slash.args : ''));
-      st.runCommand(line);
+    // 回车分流与 dsh-go `_slashFor` 同口径：普通消息 / 吃掉回车 / 执行整行 /
+    // 选中候选第一行。中文名（/目标）在执行前换成内核认的裸名（/goal）。
+    const route: SlashSend = classifySlashSend(this.palette, text);
+    if (route.kind === SlashSendKind.Swallow) {
+      // 只敲了一个 `/`：面板开着，等人挑一行，这次回车不发消息。
       return;
     }
+    if (route.kind === SlashSendKind.Run && route.command !== null) {
+      this.runSlash(route.command, route.line);
+      return;
+    }
+    if (route.kind === SlashSendKind.Pick && route.command !== null) {
+      this.applyCommand(route.command);
+      return;
+    }
+    this.draft = '';
+    this.cursor = 0;
+    this.panel = 'none';
     st.send(text, undefined, busyMode);
   }
 
   private stop(): void {
     const st: ChatStore | null = this.store;
-    if (st !== null) {
-      st.cancelTurn();
-    }
+    if (st !== null) { st.cancelTurn(); }
   }
 
   private pickGallery(): void {
@@ -344,12 +401,9 @@ export struct Composer {
       if (img === null) {
         return;
       }
-      this.imageError = img.error;
-      if (img.error.length === 0) {
-        if (this.pendingImages.length >= 6) {
-          this.imageError = '一条消息最多带 6 张图片';
-          return;
-        }
+      const err: string = galleryErrorOf(img, this.pendingImages.length);
+      this.imageError = err;
+      if (err.length === 0) {
         this.pendingImages = [...this.pendingImages, img];
       }
     }).catch((): void => {
@@ -359,32 +413,25 @@ export struct Composer {
 
   @Builder
   permissionContent() {
-    PermissionSheet({
-      store: this.store,
-      onDone: (m: string): void => {
-        this.permHint = m;
-      },
-    })
+    PermissionSheet({ store: this.store, onDone: (m: string): void => { this.permHint = m; } })
   }
 
   build() {
     Column() {
-      if (this.lastError() !== null) {
-        ErrorBanner({ message: this.lastError() as string })
-      }
-      if (this.permHint.length > 0) {
-        HintBanner({ message: this.permHint, a11y: '权限提示，点按关闭', onDismiss: (): void => {
+      ComposerBanners({
+        error: this.lastError() ?? '',
+        permHint: this.permHint,
+        imageError: this.imageError,
+        onDismissPerm: (): void => {
           this.permHint = '';
-        } })
-      }
-      if (this.imageError.length > 0) {
-        HintBanner({ message: this.imageError, danger: true, a11y: '图片错误提示，点按关闭', onDismiss: (): void => {
+        },
+        onDismissImage: (): void => {
           this.imageError = '';
-        } })
-      }
+        },
+      })
       if (this.panel === 'cmd') {
         CommandPanel({
-          commands: filterPaletteCommands(this.palette, parseSlashDraft(this.draft)?.nameFragment ?? ''),
+          content: this.paletteContent,
           onPick: (cmd: SlashCommand): void => this.applyCommand(cmd),
         })
       } else if (this.panel === 'at') {
@@ -400,53 +447,21 @@ export struct Composer {
         })
       }
       // 官方输入框：文本框 + 底部按钮行（＋ / 权限 / 发送）共处一个圆角容器内。
-      Column({ space: 0 }) {
-      TextArea({ text: this.draft, placeholder: '发消息或创建任务，/ 调用指令，@ 文件或对话',
-        controller: new TextAreaController() })
-        .placeholderFont(DsTypography.inputPlaceholder)
-        .fontColor(this.c().labelPrimary)
-        .placeholderColor(this.c().inputHintText)
-        .backgroundColor(Color.Transparent)
-        // ArkUI TextArea 默认圆角 20；这里要跟外层胶囊贴合走直角，取最小合法档 2
-        //（R003 的圆角档位不含 0）。
-        .borderRadius(2)
-        .fontSize(16)
-        .caretColor(this.c().brand)
-        .constraintSize({ minHeight: 44, maxHeight: 120 })
-        .width('100%')
-        .padding({ left: 6, right: 6, top: 12, bottom: 2 })
-        .onChange((v: string) => {
-          this.onChanged(v);
-        })
-        .onTextSelectionChange((start: number, end: number) => {
-          // 光标真值回填：与 onChange 的「末尾估计」不同才重算面板
-          // （中途点击/方向键移动光标时，@ 片段解析依赖真实位置）。
-          if (start !== this.cursor) {
-            this.cursor = start;
-            this.updatePanel();
-          }
-        })
-        .enabled(this.connected())
-      if (this.pendingImages.length > 0) {
-        ImageChips({
-          names: this.pendingNames(),
-          onRemove: (index: number): void => {
-            const next: PickedImage[] = [];
-            for (let i = 0; i < this.pendingImages.length; i++) {
-              if (i !== index) {
-                next.push(this.pendingImages[i]);
-              }
-            }
-            this.pendingImages = next;
-          }
-        })
-      }
-      ComposerActions({
+      ComposerShell({
+        text: this.draft,
+        inputEnabled: this.connected(),
+        imageNames: this.pendingNames(),
         hasPending: this.hasPending(),
         streaming: this.streaming(),
         sendEnabled: this.sendEnabled(),
         permissionLabel: this.permissionLabel(),
         wide: this.atLeastMd(),
+        onChanged: (v: string): void => this.onChanged(v),
+        onCaret: (start: number): void => this.onCaretMoved(start),
+        onBlurred: (): void => this.dismissSlash(),
+        onRemoveImage: (index: number): void => {
+          this.pendingImages = withoutImageAt(this.pendingImages, index);
+        },
         onPickImage: (): void => this.pickGallery(),
         onProject: (): void => this.openProjectPanel(),
         onPermission: (): void => {
@@ -455,13 +470,6 @@ export struct Composer {
         onSend: (): void => this.send(),
         onStop: (): void => this.stop(),
       })
-      }
-      .width('100%')
-      .padding({ left: 10, right: 10, top: 6, bottom: 8 })
-      .backgroundColor(this.c().inputFill)
-      .borderRadius(24)
-      .border({ width: 1, color: this.c().inputBorder })
-      .margin({ left: DsSpacing.screenPad, right: DsSpacing.screenPad })
       if (!this.streaming()) {
         Text('回答由 AI 生成，仅供参考')
           .fontSize(10)
@@ -483,11 +491,7 @@ export struct Composer {
     return (this.draft.trim() !== '' || this.hasPending()) && this.connected();
   }
 
-  private permissionLabel(): string {
-    return this.permView;
-  }
+  private permissionLabel(): string { return this.permView; }
 
-  private lastError(): string | null {
-    return this.errView.length === 0 ? null : this.errView;
-  }
+  private lastError(): string | null { return this.errView.length === 0 ? null : this.errView; }
 }

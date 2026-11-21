@@ -1,10 +1,10 @@
 // 权限档位 chip：拉清单 → 底部弹层选档 → 需要时二次确认 → 调 setPermission。
 // 从 composer.dart 拆出（宪法 §7 单文件 ≤500 行）；同为 composer.dart 的 part，
-// 同库 part 可访问 _ComposerState 私有成员，所以用 extension 承载。
+// 同库 part 可访问 ComposerState 私有成员，所以用 extension 承载。
 part of 'composer.dart';
 
 /// 权限档位与选图——两项都是输入条上的次级交互，放一起便于守 §7 行数。
-extension _ComposerPermission on _ComposerState {
+extension _ComposerPermission on ComposerState {
   Future<void> _pickImage() async {
     final picked = await DshPlatform.pickImage();
     if (picked == null || !mounted) return;
@@ -17,9 +17,9 @@ extension _ComposerPermission on _ComposerState {
     }
     final img = await pickComposerImage(picked, resolved.mediaType!);
     if (img == null || !mounted) return;
-    if (_pendingImages.length >= _ComposerState._maxImages) {
+    if (_pendingImages.length >= ComposerState._maxImages) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('一条消息最多带 ${_ComposerState._maxImages} 张图片')),
+        SnackBar(content: Text('一条消息最多带 ${ComposerState._maxImages} 张图片')),
       );
       return;
     }

@@ -1,6 +1,6 @@
 // @ 面板的「对话」分组（@ 面板的会话候选）。
 //
-// 与 composer_panels.dart 同库 part：选中的会话由 _ComposerState 负责插入
+// 与 composer_panels.dart 同库 part：选中的会话由 ComposerState 负责插入
 // mention 文本，这里只负责渲染「对话」标题与命中列表。
 part of 'composer.dart';
 

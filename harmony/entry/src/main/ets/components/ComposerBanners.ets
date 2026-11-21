@@ -49,3 +49,39 @@ export struct HintBanner {
       })
   }
 }
+
+/** 三条提示合一（Composer.build 里一行调用）：各自空串即不显示。 */
+@Component
+export struct ComposerBanners {
+  /** 会话错误（空串 = 没有）。 */
+  @Prop error: string = '';
+  /** 权限切换结果提示。 */
+  @Prop permHint: string = '';
+  /** 选图失败提示（危险色）。 */
+  @Prop imageError: string = '';
+  onDismissPerm: () => void = (): void => {};
+  onDismissImage: () => void = (): void => {};
+
+  build() {
+    Column() {
+      if (this.error.length > 0) {
+        ErrorBanner({ message: this.error })
+      }
+      if (this.permHint.length > 0) {
+        HintBanner({
+          message: this.permHint,
+          a11y: '权限提示，点按关闭',
+          onDismiss: (): void => this.onDismissPerm(),
+        })
+      }
+      if (this.imageError.length > 0) {
+        HintBanner({
+          message: this.imageError,
+          danger: true,
+          a11y: '图片错误提示，点按关闭',
+          onDismiss: (): void => this.onDismissImage(),
+        })
+      }
+    }
+  }
+}

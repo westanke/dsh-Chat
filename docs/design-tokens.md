@@ -707,6 +707,30 @@ turnChangesOf(messages, turn)
 视觉复用 `bgLayer1` / `borderL2` / `brand` / `diffAdd` / `settingsCardRadius`，
 不新增颜色字号。
 
+**斜杠面板（2026-11-21，逐条对齐 dsh-go `slash_palette.dart`）**：三态（候选 /
+参数提示 / 不显示）与关闭语义（点外部 · 返回键 · Esc 只关面板、文本不变不重弹）
+见 `docs/FEATURE-PARITY.md`；视觉全部走新增的 `DsSpacing.palette*` 与
+`DsColors.paletteRowHighlight`，无裸值：
+
+| 位置 | token | 值（= dsh-go） | 说明 |
+|---|---|---|---|
+| 容器圆角 | `DsSpacing.paletteRadius` | 28 | `AppShape.xl` |
+| 容器最大高 | `DsSpacing.paletteMaxHeight` | 308 | 行高 56 × 5.5 行 |
+| 行内缩 | `DsSpacing.paletteRowInset` | 6 | 左右各 6，同时是列表上下 padding |
+| 行圆角 | `DsSpacing.paletteRowRadius` | 22 | `paletteRadius − paletteRowInset` |
+| 行最小高 | `DsSpacing.paletteRowMinHeight` | 52 | 两行文字 + 上下 8 |
+| 行内边距 | `paletteRowPadLeft/Right/Top/Bottom` | 2/12/8/8 | 图标槽左缘 2 |
+| 图标槽 / 图标 | `paletteIconSlot` / `paletteIconSize` | 32 / 20 | 槽宽 32 居中 20 号图标 |
+| 图标/文字间距 | `paletteIconGap` | 10 | 图标槽与文字列 |
+| 回车提示 | `paletteEnterSize` / `paletteEnterGap` | 16 / 8 | 只在「已输入名字且是第一行」显形 |
+| 选中底色 | `DsColors.paletteRowHighlight` | 黑 6% / 白 6% | dsh-go `onSurface.withAlpha(0.06)` |
+| 空态内边距 | `paletteEmptyPadTop/Left/Right` | 14 / 14 / 18 | 「没有匹配的指令，按普通消息发送」 |
+
+第二行文案口径（dsh-go `activitySlash*`）：`命令 · 执行` / `命令 · 填入` / `技能 · 填入`，
+再拼 ` · <description>`；参数提示态写 `<description> · 输入参数后发送`。鸿蒙端
+（`harmony/entry/.../ui/theme.ets` 的 `paletteRowHighlight` + `ComposerPanels.ets`）
+同一套数值，行高与圆角逐值相同。
+
 **历史加载错误条（工单 1）**：断链（`NOT_CONNECTED`）不再写成「加载历史失败」红条
 （顶栏已有连接态，重连成功会自动重拉）；重拉成功后会把残留的「加载历史失败」清掉。
 

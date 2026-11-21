@@ -214,6 +214,12 @@ class _ChatPageState extends State<ChatPage>
           _closeDrawer();
           return;
         }
+        // 斜杠面板开着时，返回只收面板（dsh-go PopScope 同口径）：不退页面。
+        final composer = _composerKey.currentState;
+        if (composer != null && composer.paletteOpen) {
+          composer.dismissPalette();
+          return;
+        }
         final now = DateTime.now().millisecondsSinceEpoch;
         if (_lastExitAt != null && now - _lastExitAt! < 2000) {
           // 第二次按返回：不拦截，让系统路由正常出栈/退出。
@@ -252,6 +258,9 @@ class _ChatPageState extends State<ChatPage>
 
   /// 退出 APP 双击确认的时间窗（主页 PopScope 回调读写）。
   int? _lastExitAt;
+
+  /// 输入框（斜杠面板）状态：返回键要先关面板再谈退出（dsh-go 同口径）。
+  final GlobalKey<ComposerState> _composerKey = GlobalKey<ComposerState>();
 
   Widget _buildChatScaffold(BuildContext context) {
     // 任务条摘要（dsh-go TodoDock 同口径）：没有清单时为 null，不占位。
@@ -329,6 +338,7 @@ class _ChatPageState extends State<ChatPage>
                 colors: c,
               ),
             Composer(
+              key: _composerKey,
               colors: c,
               enabled: st.connectionState == GatewayState.ready,
               onSend: st.send,

@@ -1,20 +1,27 @@
 /**
- * 输入条三块浮层 —— 对照安卓 composer_panels.dart（阶段 4）：
- * 命令面板 / @ 文件面板 / 权限档位面板。面板壳=inputFill 圆角+边框+阴影，
- * maxHeight 320 可滚，高亮行 chipSelectedBg，单行省略 description。
+ * 输入条三块浮层 —— 对照安卓 composer_palette.dart / composer_panels.dart：
+ * 命令面板 / @ 文件面板 / 权限档位面板。
+ * 命令面板视觉逐值对齐 dsh-go slash_palette.dart：容器圆角 28、最高 308（5.5 行×56），
+ * 行左右内缩 6、行圆角 22、行最小高 52、图标槽 32、尾部回车符 16。
  */
 
 import { SlashCommand, SlashCommandKind } from '../core/Content';
 import { AtEntry, AtSessionHit } from '../core/AtMention';
+import { PaletteContent, PaletteKind, paletteContentOf, slashPickInsertsText } from '../core/SlashCommands';
 import { PermissionOption } from '../core/Permissions';
 import { DsColors, DsTypography, DsSpacing } from '../ui/theme';
 
-/** 命令补全面板。 */
+/** 参数提示态的副标题（dsh-go：`{description} · 输入参数后发送`）。 */
+function hintDetailOf(cmd: SlashCommand): string {
+  return cmd.description.length === 0
+    ? '输入参数后发送' : cmd.description + ' · 输入参数后发送';
+}
+
+/** 命令补全面板：三态（候选 / 参数提示 / 不显示由父层跳过）。 */
 @Component
 export struct CommandPanel {
-  /** @Prop：普通成员只在首次创建时赋值，父层 @State 换新数组不重建子组件
-   * （实测表现：命令清单回来了面板仍显示空/旧候选）。 */
-  @Prop commands: SlashCommand[] = [];
+  /** @Prop：普通成员只在首次创建时赋值，父层 @State 换新对象不重建子组件。 */
+  @Prop content: PaletteContent = paletteContentOf([], '', 0);
   onPick: (cmd: SlashCommand) => void = (): void => {};
   @StorageProp('dshDark') dark: boolean = false;
 
@@ -22,69 +29,132 @@ export struct CommandPanel {
     return new DsColors(this.dark);
   }
 
+  private rowCount(): number {
+    if (this.content.kind === PaletteKind.Hint) {
+      return 1;
+    }
+    return Math.max(1, this.content.matches.length);
+  }
+
   build() {
     Scroll() {
       Column() {
-        Repeat<SlashCommand>(this.commands)
-          .each((item: RepeatItem<SlashCommand>) => {
-            Column() {
-              Row({ space: 6 }) {
-                Text(commandGlyph(item.item))
-                  .fontSize(14)
-                  .fontColor(this.c().labelSecondary)
-                if (item.item.displayLabel() !== item.item.name) {
-                  Text(item.item.displayLabel())
-                    .fontSize(14)
-                    .fontWeight(FontWeight.Medium)
-                    .fontColor(this.c().labelPrimary)
-                    .maxLines(1)
-                }
-                Text('/' + item.item.name)
-                  .fontSize(14)
-                  .fontWeight(FontWeight.Medium)
-                  .fontColor(item.item.displayLabel() !== item.item.name
-                    ? this.c().labelSecondary : this.c().labelPrimary)
-                  .maxLines(1)
-                if (item.item.inputHint !== null) {
-                  Text(item.item.inputHint as string)
-                    .fontSize(12)
-                    .fontColor(this.c().labelTertiary)
-                    .maxLines(1)
-                }
-                Blank().layoutWeight(1)
-              }
-              .width('100%')
-              if (item.item.description.length > 0) {
-                Text(item.item.description)
-                  .fontSize(12)
-                  .fontColor(this.c().labelTertiary)
-                  .maxLines(1)
-                  .textOverflow({ overflow: TextOverflow.Ellipsis })
-                  .width('100%')
-                  .margin({ top: 2 })
-              }
-            }
-            .width('100%')
-            .alignItems(HorizontalAlign.Start)
-            .padding({ left: 12, right: 12, top: 8, bottom: 8 })
-            .backgroundColor(item.index === 0 ? this.c().chipSelectedBg : Color.Transparent)
-            .accessibilityText(commandA11y(item.item))
-            .onClick(() => {
-              this.onPick(item.item);
+        if (this.content.kind === PaletteKind.Hint) {
+          this.commandRow(this.content.command as SlashCommand, false,
+            hintDetailOf(this.content.command as SlashCommand))
+        } else if (this.content.matches.length === 0) {
+          this.emptyRow()
+        } else {
+          Repeat<SlashCommand>(this.content.matches)
+            .each((item: RepeatItem<SlashCommand>) => {
+              // 已经打了半个名字时第一行就是「回车会选中的那行」，高亮它。
+              this.commandRow(item.item, this.content.typed && item.index === 0,
+                commandIntent(item.item))
             })
-          })
-          .key((item: SlashCommand) => item.name)
+            .key((item: SlashCommand) => item.name)
+        }
       }
       .width('100%')
+      // 行左右内缩 6（dsh-go rowInset）：高亮块比容器窄 6、圆角与容器同心。
+      .padding({ left: 6, right: 6, top: 6, bottom: 6 })
     }
-    .height(Math.min(320, Math.max(56, this.commands.length * 56)))
     .scrollBar(BarState.Off)
     .width('100%')
     .backgroundColor(this.c().inputFill)
-    .borderRadius(12)
-    .border({ width: 1, color: this.c().borderL2 })
+    .borderRadius(28)
+    .constraintSize({ maxHeight: 308 })
+    .shadow({ radius: 12, color: this.c().shadow, offsetY: 2 })
     .margin({ bottom: 6 })
   }
+
+  @Builder
+  commandRow(cmd: SlashCommand, selected: boolean, detail: string) {
+    Column() {
+      Row({ space: 10 }) {
+        Text(commandGlyph(cmd))
+          .fontSize(20)
+          .fontColor(this.c().labelSecondary)
+          .width(32)
+          .textAlign(TextAlign.Center)
+        if (cmd.displayLabel() !== cmd.name) {
+          Text(cmd.displayLabel())
+            .fontSize(14)
+            .fontWeight(FontWeight.Medium)
+            .fontColor(this.c().labelPrimary)
+            .maxLines(1)
+        }
+        Text('/' + cmd.name)
+          .fontSize(14)
+          .fontWeight(FontWeight.Medium)
+          .fontColor(cmd.displayLabel() !== cmd.name
+            ? this.c().labelSecondary : this.c().labelPrimary)
+          .maxLines(1)
+        if (cmd.inputHint !== null) {
+          Text(cmd.inputHint as string)
+            .fontSize(12)
+            .fontColor(this.c().labelTertiary)
+            .maxLines(1)
+        }
+        Blank().layoutWeight(1)
+        // 回车指示：这一行按回车就是它（dsh-go keyboard_return，16 号、带淡入）。
+        Text('⏎')
+          .fontSize(16)
+          .fontColor(this.c().labelTertiary)
+          .margin({ left: 8 })
+          .opacity(selected ? 1 : 0)
+          .animation({ duration: 150, curve: Curve.EaseOut })
+      }
+      .width('100%')
+      Text(detail)
+        .fontSize(12)
+        .fontColor(this.c().labelTertiary)
+        .maxLines(1)
+        .textOverflow({ overflow: TextOverflow.Ellipsis })
+        .width('100%')
+        .margin({ top: 2 })
+    }
+    .width('100%')
+    .alignItems(HorizontalAlign.Start)
+    .justifyContent(FlexAlign.Center)
+    .constraintSize({ minHeight: 52 })
+    .padding({ left: 2, right: 12, top: 8, bottom: 8 })
+    .borderRadius(22)
+    .backgroundColor(selected ? this.c().paletteRowHighlight : Color.Transparent)
+    .animation({ duration: 150, curve: Curve.EaseOut })
+    .accessibilityText(commandA11y(cmd))
+    .onClick(() => {
+      this.onPick(cmd);
+    })
+  }
+
+  /** 空态（dsh-go 单行：图标 + 一句「按普通消息发送」）。 */
+  @Builder
+  emptyRow() {
+    Row({ space: 10 }) {
+      Text('⌕')
+        .fontSize(20)
+        .fontColor(this.c().labelTertiary)
+        .width(32)
+        .textAlign(TextAlign.Center)
+      Text('没有匹配的指令，按普通消息发送')
+        .fontSize(12)
+        .fontColor(this.c().labelTertiary)
+        .maxLines(1)
+        .textOverflow({ overflow: TextOverflow.Ellipsis })
+        .layoutWeight(1)
+    }
+    .width('100%')
+    .padding({ left: 8, right: 12, top: 8, bottom: 8 })
+  }
+}
+
+/** 第二行的意图前缀（dsh-go 文案：技能 · 填入 / 命令 · 填入 / 命令 · 执行）。 */
+function commandIntent(cmd: SlashCommand): string {
+  if (cmd.kind === SlashCommandKind.Skill) {
+    return cmd.description.length === 0 ? '技能 · 填入' : '技能 · 填入 · ' + cmd.description;
+  }
+  const intent: string = slashPickInsertsText(cmd, false) ? '命令 · 填入' : '命令 · 执行';
+  return cmd.description.length === 0 ? intent : intent + ' · ' + cmd.description;
 }
 
 /** 命令行的前置符号：对齐安卓 `_commandIcon` 的语义分组（鸿蒙不引 Material 图标集）。 */

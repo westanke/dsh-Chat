@@ -61,7 +61,7 @@ class _PermissionSheet extends StatelessWidget {
 }
 
 /// 输入容器（白浮层卡）：输入框（键盘事件外抛）+ 权限 chip / 图片 chip /
-/// 加图与发送圆钮。纯展示 + 回调上行，状态都在 _ComposerState。
+/// 加图与发送圆钮。纯展示 + 回调上行，状态都在 ComposerState。
 class _ComposerBar extends StatelessWidget {
   const _ComposerBar({
     required this.colors,

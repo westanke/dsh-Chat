@@ -19,6 +19,7 @@ import 'window_class.dart';
 
 part 'composer_widgets.dart';
 part 'composer_panels.dart';
+part 'composer_palette.dart';
 part 'composer_at_sessions.dart';
 part 'composer_bar.dart';
 part 'composer_permission.dart';
@@ -87,10 +88,19 @@ class Composer extends StatefulWidget {
   final ValueChanged<String>? onAppCommand;
 
   @override
-  State<Composer> createState() => _ComposerState();
+  State<Composer> createState() => ComposerState();
 }
 
-class _ComposerState extends State<Composer> {
+/// 公开是为了让 ChatPage 用 GlobalKey 在返回键时先关面板
+/// （dsh-go PopScope：面板开着时返回只收面板，不退页面）。
+/// 嵌套 PopScope 在真机上不生效，所以改由外层页面统一分发。
+class ComposerState extends State<Composer> {
+  /// 斜杠面板当前是否可见。
+  bool get paletteOpen => _paletteContent is! PaletteNone;
+
+  /// 关掉斜杠面板（返回键路径）。
+  void dismissPalette() => _dismissSlashPalette();
+
   final _controller = TextEditingController();
   final _focus = FocusNode();
   bool _loadingOptions = false;
@@ -117,6 +127,13 @@ class _ComposerState extends State<Composer> {
   /// 键盘事件：面板可见时上下键移动高亮、回车选中；否则交还输入框。
   KeyEventResult _onKey(FocusNode node, KeyEvent event) {
     final at = _atDraft;
+    // Esc 先关面板（dsh-go chat_screen.dart 同口径），再让位给默认行为。
+    if (event is KeyDownEvent &&
+        event.logicalKey == LogicalKeyboardKey.escape &&
+        _paletteContent is! PaletteNone) {
+      _dismissSlashPalette();
+      return KeyEventResult.handled;
+    }
     return panelKeyEvent(
       node,
       event,
@@ -166,7 +183,8 @@ class _ComposerState extends State<Composer> {
   ///（m04149：失败不落缓存，下次输入自动重试）。
   void _onChanged(String _) {
     setState(() {});
-    if (_slashDraft != null) _ensureCommands();
+    _resetSlashDismissal();
+    if (parseSlashInput(_controller.text) != null) _ensureCommands();
     final at = _atDraft;
     if (at != null) {
       _ensureAtEntries(_atQueryDir);
@@ -181,6 +199,11 @@ class _ComposerState extends State<Composer> {
   /// null = 还没拉过；切会话由 _paletteSid 失效重拉。
   List<SlashCommand>? _palette;
   String? _paletteSid;
+
+  /// 面板被用户主动关掉（点面板外 / Esc / 返回键）时的输入快照：文本不变就
+  /// 不再弹，与 dsh-go `_dismissedSlashText` 同口径（输入变化由
+  /// `_resetSlashDismissal` 复位）。
+  String? _dismissedSlashText;
 
   // ---- @ 文件补全（第六轮反馈 m03878）----
 
@@ -346,6 +369,8 @@ class _ComposerState extends State<Composer> {
   Widget build(BuildContext context) {
     final at = _atDraft;
     final slashMatches = _slashMatches;
+    // 斜杠面板三态：候选（列表）/ 参数提示（单行）/ 不显示。
+    final slashContent = at == null ? _paletteContent : const PaletteNone();
     return Padding(
       padding: const EdgeInsets.fromLTRB(
         DsSpacing.composerMargin,
@@ -388,14 +413,23 @@ class _ComposerState extends State<Composer> {
                       onHighlightChanged: (i) =>
                           setState(() => _panelHighlight = i),
                     ),
-                  ] else if (slashMatches.isNotEmpty)
-                    _CommandPanel(
-                      colors: c,
-                      matches: slashMatches,
-                      highlighted: _panelHighlight,
-                      onPick: _applyCommand,
-                      onHighlightChanged: (i) =>
-                          setState(() => _panelHighlight = i),
+                  ] else if (slashContent is! PaletteNone)
+                    // 点面板外关闭 + 返回键先关面板（dsh-go TextFieldTapRegion
+                    // / PopScope 同口径），出现时淡入并轻微上浮。
+                    TextFieldTapRegion(
+                      onTapOutside: (_) => _dismissSlashPalette(),
+                      child: AnimatedSize(
+                        duration: const Duration(milliseconds: 150),
+                        alignment: Alignment.bottomCenter,
+                        child: _CommandPanel(
+                          colors: c,
+                          content: slashContent,
+                          highlighted: _panelHighlight,
+                          onPick: _applyCommand,
+                          onHighlightChanged: (i) =>
+                              setState(() => _panelHighlight = i),
+                        ),
+                      ),
                     ),
                 ],
               ),

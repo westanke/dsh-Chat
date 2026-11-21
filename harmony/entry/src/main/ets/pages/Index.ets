@@ -109,6 +109,12 @@ struct Index {
     if (this.route !== 'chat') {
       return false;
     }
+    const slashOpen: boolean = AppStorage.get<boolean>('dshSlashPanelOpen') === true;
+    if (slashOpen) {
+      AppStorage.setOrCreate('dshSlashCloseTick', Date.now());
+      this.lastBackAt = 0;
+      return true;
+    }
     const drawerOpen: boolean = AppStorage.get<boolean>('dshDrawerOpen') === true;
     const overlayOpen: boolean = AppStorage.get<boolean>('dshOverlayOpen') === true;
     if (drawerOpen || overlayOpen) {
