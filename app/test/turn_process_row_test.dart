@@ -88,6 +88,24 @@ void main() {
         '已完成',
       );
     });
+    test('轮真实起止优先于过程组首尾（问题 4：显示实际用时）', () {
+      final last = ChatMessage(role: 'assistant', text: '答', seq: 3)
+        ..turnStartedAt = 1000
+        ..turnFinishedAt = 9000;
+      final messages = [
+        _user(1),
+        _process(2, startedAt: 2000, finishedAt: 3000),
+        last,
+      ];
+      final info = turnEndInfoOf(
+        messages,
+        const TurnRange(0, 3),
+        canCollapse: true,
+        isGroupExpanded: (_) => false,
+      )!;
+      expect(info.durationMs, 8000);
+      expect(info.label, '已完成，用时 8秒');
+    });
     test('轮内 error 卡 → 处理失败；canCollapse=false 透传', () {
       final messages = [
         _user(1),

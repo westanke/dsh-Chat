@@ -7,8 +7,10 @@
 /// 底部 0.5px 分隔线、色 label-tertiary（hover 升 label-secondary）、标题在
 /// 左 chevron 紧随其后、chevron 14px open 时旋转 180°。
 ///
-/// 偏差记录：官方轮尾行的 start/end 来自桥 TurnProcessNode，App 侧没有
-/// 独立轮计时，用轮内过程组 startedAt/finishedAt 的最小/最大值近似（两端
+/// 偏差记录：官方轮尾行的 start/end 来自桥 TurnProcessNode。App 侧在装配
+/// 历史时把轮真实起止（user/message → turn/end 的 time）挂到本轮最后一条
+/// 消息的 `turnStartedAt/turnFinishedAt`，轮尾行优先用它；老历史/实时中途
+/// 缺轮起止时，退回轮内过程组 startedAt/finishedAt 的最小/最大值近似（两端
 /// 不齐时不出「用时」段）；stopped（aborted/interrupted）在 App 侧不可靠
 /// 区分，仅 error 卡可判定「处理失败」。
 library;
@@ -57,7 +59,8 @@ class TurnEndInfo {
   /// 轮内有 error 卡（官方 reason.kind=='error'）→「处理失败」。
   final bool error;
 
-  /// 轮内过程组首尾时间差（两端不齐为 null → 不出「用时」段）。
+  /// 轮用时（毫秒）：优先轮真实起止（turnStartedAt→turnFinishedAt），
+  /// 缺失时退回轮内过程组首尾；两端不齐为 null → 不出「用时」段。
   final int? durationMs;
 
   /// 轮内是否有过程组（官方 hasContent；无过程轮尾行不渲染）。
@@ -89,6 +92,8 @@ TurnEndInfo? turnEndInfoOf(
 }) {
   int? start;
   int? end;
+  int? turnStart;
+  int? turnEnd;
   var hasProcess = false;
   var error = false;
   var expanded = false;
@@ -96,6 +101,10 @@ TurnEndInfo? turnEndInfoOf(
   for (var i = turn.start + 1; i < turn.end; i++) {
     final m = messages[i];
     if (m.isError) error = true;
+    final ts = m.turnStartedAt;
+    if (ts != null && (turnStart == null || ts < turnStart)) turnStart = ts;
+    final te = m.turnFinishedAt;
+    if (te != null && (turnEnd == null || te > turnEnd)) turnEnd = te;
     if (!m.isProcess) continue;
     hasProcess = true;
     final key = processGroupKeyOf(m);
@@ -108,7 +117,11 @@ TurnEndInfo? turnEndInfoOf(
   }
   if (!hasProcess) return null;
   int? duration;
-  if (start != null && end != null) {
+  // 轮真实起止优先（问题 4：过程组首尾会漏掉工具之间的思考/钩子时间）。
+  if (turnStart != null && turnEnd != null) {
+    final span = turnEnd - turnStart;
+    if (span > 0) duration = span;
+  } else if (start != null && end != null) {
     final span = end - start;
     if (span > 0) duration = span;
   }

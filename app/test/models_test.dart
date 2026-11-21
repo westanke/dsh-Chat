@@ -86,6 +86,54 @@ void main() {
     expect(page.items[1].text, '# Title');
   });
 
+  test('HistoryPage.fromEvents 记录轮真实起止（问题 4）', () {
+    final page = HistoryPage.fromEvents([
+      {
+        'event': {
+          'type': 'user/message',
+          'seq': 1,
+          'time': 1000,
+          'data': {'content': '问'},
+        },
+      },
+      {
+        'event': {
+          'type': 'tool/call',
+          'seq': 2,
+          'time': 1500,
+          'data': {'name': 'bash', 'arguments': '{}', 'callId': 'c1'},
+        },
+      },
+      {
+        'event': {
+          'type': 'tool/result',
+          'seq': 3,
+          'time': 2500,
+          'data': {
+            'message': {
+              'toolCallId': 'c1',
+              'content': [
+                {'type': 'text', 'text': 'ok'},
+              ],
+            },
+          },
+        },
+      },
+      {
+        'event': {
+          'type': 'turn/end',
+          'seq': 4,
+          'time': 9000,
+          'data': {
+            'reason': {'kind': 'completed'},
+          },
+        },
+      },
+    ]);
+    expect(page.items.last.turnStartedAt, 1000);
+    expect(page.items.last.turnFinishedAt, 9000);
+  });
+
   test('HistoryPage.fromEvents 过滤 source.kind != user 的注入上下文', () {
     final page = HistoryPage.fromEvents([
       {

@@ -284,10 +284,10 @@ List<ChatRow> deriveRows(ChatRowsInput input) {
     final turn = _turnEndingAt(turns, i);
     if (turn == null) continue;
     if (!_turnHasProcess(messages, turn)) continue;
+    // 轮还在跑：不出轮尾行（问题 4：没执行完不能显示「已完成」）；
+    // 改动/生成卡同样等轮结束，工具结果没到齐时计数会一路跳。
+    if (turnIsRunning(messages, turn, input.streaming)) continue;
     rows.add(TurnEndRow(turn, hasProcess: true));
-    // 正在跑的那轮不出改动/生成卡：工具结果还没到齐，计数会一路跳。
-    final running = input.streaming && identical(turns.last, turn);
-    if (running) continue;
     final changes = turnChangesOf(messages, turn);
     if (changes != null && !changes.isEmpty) {
       rows.add(ChangeCardRow(changes, anchorSeq: changes.anchorSeq));

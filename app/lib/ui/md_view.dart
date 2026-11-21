@@ -3,6 +3,8 @@
 /// 渲染引擎 gpt_markdown 1.4.0；语法高亮用其内置 val_highlight（随 Brightness 切换）。
 library;
 
+import 'dart:async';
+
 import 'package:material_ui/material_ui.dart';
 import 'package:gpt_markdown/gpt_markdown.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -82,6 +84,7 @@ class DsMarkdownView extends StatelessWidget {
     required this.colors,
     this.streaming = false,
     this.small = false,
+    this.onLinkTap,
   });
 
   final String text;
@@ -90,6 +93,9 @@ class DsMarkdownView extends StatelessWidget {
 
   /// 思考流样式（官方 .ds-think-content：14/24，块间距收紧）。
   final bool small;
+
+  /// 链接点击的测试注入点；为空时走外接浏览器（线上口径）。
+  final void Function(String url)? onLinkTap;
 
   @override
   Widget build(BuildContext context) {
@@ -184,15 +190,7 @@ class DsMarkdownView extends StatelessWidget {
         useDollarSignsForLatex: true,
         // 链接可点（真机反馈第四轮 5）：外接浏览器打开，失败静默
         // （desktop/无法处理 scheme 时 launchUrl 抛异常，不打断聊天）。
-        onLinkTap: (url, _) async {
-          final uri = Uri.tryParse(url);
-          if (uri == null) return;
-          try {
-            await launchUrl(uri, mode: LaunchMode.externalApplication);
-          } on Exception {
-            // 无浏览器/不支持的 scheme：忽略（链接本来就是可选跳转）。
-          }
-        },
+        onLinkTap: (url, _) => _openLink(url),
         // 代码块自绘：官方是灰底 + 「python … 复制」纯文字 banner + 分隔线，
         // 内置 CodeField 的语言标签是 surfaceContainerHighest 粉色 pill，
         // 高亮主题也写死成 val_highlight 默认色，与官方 Atom One Light 不符。
@@ -200,8 +198,9 @@ class DsMarkdownView extends StatelessWidget {
             DsCodeBlock(name: name, code: code, colors: colors),
         // 表格自绘：官方有「表格 + 复制/下载/展开」banner，表头白底，
         // 内置表格表头取 surfaceContainerHighest（淡紫粉）且无 banner。
+        // config 必须传下去：单元格里的链接要继承 onLinkTap（问题 1）。
         tableBuilder: (context, rows, textStyle, config) =>
-            DsTable(rows: rows, colors: colors),
+            DsTable(rows: rows, colors: colors, config: config),
         // 上游 bug 绕行：gpt_markdown 1.4.0 把 Material Checkbox 塞进 WidgetSpan，
         // 中文行高下会算出 ~10 万像素宽度 → RenderFlex 溢出（debug 屏上那块红底黄黑斜纹）。
         // 自己画方框 + Expanded 文本，顺便贴近官方的「☑ 已完成」观感。
@@ -221,5 +220,25 @@ class DsMarkdownView extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  /// 链接出口：测试注入优先，否则外接浏览器（失败静默）。
+  void _openLink(String url) {
+    final custom = onLinkTap;
+    if (custom != null) {
+      custom(url);
+      return;
+    }
+    final uri = Uri.tryParse(url);
+    if (uri == null) return;
+    unawaited(_launchExternal(uri));
+  }
+
+  static Future<void> _launchExternal(Uri uri) async {
+    try {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } on Exception {
+      // 无浏览器/不支持的 scheme：忽略（链接本来就是可选跳转）。
+    }
   }
 }

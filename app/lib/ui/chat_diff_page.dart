@@ -30,9 +30,26 @@ class ChatDiffPage extends StatefulWidget {
 
 class _ChatDiffPageState extends State<ChatDiffPage> {
   late int _index = widget.initialIndex.clamp(0, widget.files.length - 1);
+  late final PageController _pageCtrl = PageController(initialPage: _index);
+
+  @override
+  void dispose() {
+    _pageCtrl.dispose();
+    super.dispose();
+  }
 
   int get _added => widget.files.fold(0, (sum, f) => sum + f.added);
   int get _removed => widget.files.fold(0, (sum, f) => sum + f.removed);
+
+  /// 左右滑动切文件：PageView 自带吸附动画，滑到哪页就同步到 tab。
+  void _goto(int i) {
+    if (i < 0 || i >= widget.files.length || i == _index) return;
+    _pageCtrl.animateToPage(
+      i,
+      duration: DsMotion.scrollSettle,
+      curve: Curves.easeOutCubic,
+    );
+  }
 
   void _copyPath() {
     final file = widget.files[_index];
@@ -48,7 +65,6 @@ class _ChatDiffPageState extends State<ChatDiffPage> {
   @override
   Widget build(BuildContext context) {
     final colors = widget.colors;
-    final file = widget.files[_index];
     return Scaffold(
       backgroundColor: colors.bgBase,
       body: SafeArea(
@@ -67,37 +83,53 @@ class _ChatDiffPageState extends State<ChatDiffPage> {
               files: widget.files,
               index: _index,
               colors: colors,
-              onSelect: (i) => setState(() => _index = i),
+              onSelect: _goto,
             ),
+            // 左右滑动切上一个/下一个文件（问题 5）：横向手势交给 PageView，
+            // 页内纵向滚动仍由各页 ListView 处理，两者不抢。
             Expanded(
-              child: ListView(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
-                children: [
-                  Text(
-                    file.path,
-                    style: DsTypography.codeBlockLabel.copyWith(
-                      color: colors.labelSecondary,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    '+${file.added}  −${file.removed}  '
-                    '修改 ${file.edits} 次  行号未知',
-                    style: DsTypography.small.copyWith(
-                      color: colors.labelTertiary,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  for (final hunk in file.hunks) _HunkBlock(
-                    hunk: hunk,
-                    colors: colors,
-                  ),
-                ],
+              child: PageView.builder(
+                controller: _pageCtrl,
+                itemCount: widget.files.length,
+                onPageChanged: (i) => setState(() => _index = i),
+                itemBuilder: (context, i) =>
+                    _FileBody(file: widget.files[i], colors: colors),
               ),
             ),
           ],
         ),
       ),
+    );
+  }
+}
+
+/// 单个文件的 diff 正文（PageView 的一页）。
+class _FileBody extends StatelessWidget {
+  const _FileBody({required this.file, required this.colors});
+
+  final FileChange file;
+  final DsColors colors;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+      children: [
+        Text(
+          file.path,
+          style: DsTypography.codeBlockLabel.copyWith(
+            color: colors.labelSecondary,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          '+${file.added}  −${file.removed}  '
+          '修改 ${file.edits} 次  行号未知',
+          style: DsTypography.small.copyWith(color: colors.labelTertiary),
+        ),
+        const SizedBox(height: 12),
+        for (final hunk in file.hunks) _HunkBlock(hunk: hunk, colors: colors),
+      ],
     );
   }
 }

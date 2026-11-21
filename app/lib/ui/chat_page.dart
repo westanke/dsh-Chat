@@ -2,6 +2,8 @@
 /// 布局对齐官方 App（docs/design-tokens.md 布局节：内容 x30dp 起、顶栏 44dp）。
 library;
 
+import 'dart:async';
+
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 
@@ -27,6 +29,13 @@ import 'stats_sheet.dart';
 import 'todo_dock.dart';
 import 'window_class.dart';
 import 'work_view_sheet.dart';
+
+/// 屏内右滑是否足以呼出会话抽屉：位移够远，或已越过最小行程且甩得够快。
+/// 纯函数便于单测（阈值在 design_tokens_layout.dart）。
+bool drawerSwipeOpens(double dx, double velocity) =>
+    dx >= DsSpacing.drawerSwipeOpenDistance ||
+    (dx > DsSpacing.drawerSwipeMinTravel &&
+        velocity >= DsSpacing.drawerSwipeOpenVelocity);
 
 class ChatPage extends StatefulWidget {
   const ChatPage({
@@ -85,19 +94,45 @@ class _ChatPageState extends State<ChatPage>
     super.dispose();
   }
 
+  /// 已经为哪个新会话补拉过一次清单（防止服务端清单不含当前会话时无限重拉）。
+  String? _listRefreshFor;
+
   void _onChange() {
     // 图片下载器要跟当前会话走：attachments 接口必填 sessionId query
     // （内核按会话事件校验引用），换会话就换下载器。
     final sid = st.sessionId;
     if (sid != null && sid.isNotEmpty) {
       MessageItem.imageFetcher = gatewayImageFetcher(st.gateway, sid);
+      // 新建会话（问题 2）：send() 预建/首帧建好会话后 sessions 里还没有它，
+      // 这里补拉一次；每个 sid 只补一次，服务端清单缺当前会话也不会死循环。
+      if (_listRefreshFor != sid && !st.sessions.any((s) => s.id == sid)) {
+        _listRefreshFor = sid;
+        unawaited(st.loadSessions());
+      }
     }
     if (mounted) setState(() {});
   }
 
-  void _openDrawer() => _drawerCtrl.forward();
+  void _openDrawer() {
+    // 每次打开都顺手重拉会话清单：别的地方（另一台设备/网页）新建的会话
+    // 也能出现在抽屉里，同时兜住「新建后列表不刷新」（问题 2）。
+    unawaited(st.loadSessions());
+    _drawerCtrl.forward();
+  }
 
   void _closeDrawer() => _drawerCtrl.reverse();
+
+  /// 屏内右滑的累计位移（逻辑像素）。
+  double _swipeDx = 0;
+
+  void _onSwipeStart(DragStartDetails _) => _swipeDx = 0;
+
+  void _onSwipeUpdate(DragUpdateDetails d) => _swipeDx += d.delta.dx;
+
+  void _onSwipeEnd(DragEndDetails d) {
+    if (_drawerShift.value > 0) return;
+    if (drawerSwipeOpens(_swipeDx, d.primaryVelocity ?? 0)) _openDrawer();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -125,18 +160,26 @@ class _ChatPageState extends State<ChatPage>
     // 抽屉打开时页面怎么让路：手机上整页推走（官方残条观感），宽窗上**缩窄**
     // 到右边剩余宽度——推走会让顶栏的 ⊕/⋮ 越出右缘被裁掉（真机反馈 2026-11-20）。
     final reflow = cls != DsWindowClass.compact;
-    final page = AnimatedBuilder(
-      animation: _drawerShift,
-      builder: (context, child) {
-        final inset = cls.pageInsetFor(width) * _drawerShift.value;
-        return reflow
-            ? Padding(
-                padding: EdgeInsets.only(left: inset),
-                child: child,
-              )
-            : Transform.translate(offset: Offset(inset, 0), child: child);
-      },
-      child: _buildChatScaffold(context),
+    final page = GestureDetector(
+      // 屏内从左往右滑一次即可呼出会话列表（问题 3）。整页接水平拖动：
+      // 表格横向滚动、消息列表纵向滚动这些子级手势会在竞技场里先胜出，
+      // 所以正常滚动不会被误判成开抽屉。
+      onHorizontalDragStart: _onSwipeStart,
+      onHorizontalDragUpdate: _onSwipeUpdate,
+      onHorizontalDragEnd: _onSwipeEnd,
+      child: AnimatedBuilder(
+        animation: _drawerShift,
+        builder: (context, child) {
+          final inset = cls.pageInsetFor(width) * _drawerShift.value;
+          return reflow
+              ? Padding(
+                  padding: EdgeInsets.only(left: inset),
+                  child: child,
+                )
+              : Transform.translate(offset: Offset(inset, 0), child: child);
+        },
+        child: _buildChatScaffold(context),
+      ),
     );
     final drawer = ClipRect(
       child: AnimatedBuilder(

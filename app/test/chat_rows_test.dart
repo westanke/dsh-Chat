@@ -122,6 +122,27 @@ void main() {
       expect(turnEnd.hasProcess, isTrue);
     });
 
+    test('轮仍在跑时不出轮尾行（问题 4：不能显示「已完成」）', () {
+      final rows = deriveRows(
+        _input([
+          _user('问', 1),
+          _process(seq: 2),
+          _assistant('答', 3),
+        ], streaming: true),
+      );
+      expect(rows.whereType<TurnEndRow>(), isEmpty);
+    });
+
+    test('轮内有未落库消息（seq<0）时也不出轮尾行', () {
+      final rows = deriveRows(
+        _input([
+          _user('问', 1),
+          _process(seq: -2),
+        ]),
+      );
+      expect(rows.whereType<TurnEndRow>(), isEmpty);
+    });
+
     test('轮内没有过程组时不出轮尾行', () {
       final rows = deriveRows(
         _input([

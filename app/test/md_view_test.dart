@@ -38,13 +38,18 @@ print("hi")
 [链接](https://example.com)
 ''';
 
-Widget _host(String text) => MaterialApp(
+Widget _host(String text, {void Function(String url)? onLinkTap}) =>
+    MaterialApp(
       home: Scaffold(
         body: SizedBox(
           // 官方窄屏下限：360dp 逻辑宽度。
           width: 360,
           child: SingleChildScrollView(
-            child: DsMarkdownView(text: text, colors: DsColors(false)),
+            child: DsMarkdownView(
+              text: text,
+              colors: DsColors(false),
+              onLinkTap: onLinkTap,
+            ),
           ),
         ),
       ),
@@ -76,11 +81,45 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('表格单元格里的裸 URL 可点（问题 1 回归）', (tester) async {
+    tester.view.physicalSize = const Size(1080, 2400);
+    tester.view.devicePixelRatio = 3.0;
+    addTearDown(tester.view.reset);
+
+    final opened = <String>[];
+    await tester.pumpWidget(
+      _host('| 标题 |\n| --- |\n| https://a.cn/x |', onLinkTap: opened.add),
+    );
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    final url = find.text('https://a.cn/x', findRichText: true);
+    expect(url, findsOneWidget, reason: '单元格里的 URL 应作为可点击文本渲染');
+    await tester.tap(url);
+    await tester.pump();
+    expect(opened, ['https://a.cn/x']);
+  });
+
+  testWidgets('正文裸 URL 也可点（基线未回归）', (tester) async {
+    tester.view.physicalSize = const Size(1080, 2400);
+    tester.view.devicePixelRatio = 3.0;
+    addTearDown(tester.view.reset);
+
+    final opened = <String>[];
+    await tester.pumpWidget(_host('https://a.cn/y', onLinkTap: opened.add));
+    await tester.pumpAndSettle();
+
+    final url = find.text('https://a.cn/y', findRichText: true);
+    expect(url, findsOneWidget);
+    await tester.tap(url);
+    await tester.pump();
+    expect(opened, ['https://a.cn/y']);
+  });
+
   test('表格紧贴段落时补空行（GFM 允许，引擎不认）', () {
     const glued = '下面是结果：\n| A | B |\n| --- | --- |\n| 1 | 2 |';
     final fixed = normalizeTables(glued);
-    expect(fixed.split('\n').take(3).toList(),
-        ['下面是结果：', '', '| A | B |']);
+    expect(fixed.split('\n').take(3).toList(), ['下面是结果：', '', '| A | B |']);
     // 单元格内容一个字都不动
     expect(fixed.replaceAll('\n', ''), glued.replaceAll('\n', ''));
   });
@@ -88,8 +127,10 @@ void main() {
   test('表格前本来就有空行 / 表格连续行 → 不重复插空行', () {
     const ok = '段落\n\n| A | B |\n| --- | --- |\n| 1 | 2 |';
     expect(normalizeTables(ok), ok);
-    expect('| A |\n| --- |'.split('\n').length,
-        normalizeTables('| A |\n| --- |').split('\n').length);
+    expect(
+      '| A |\n| --- |'.split('\n').length,
+      normalizeTables('| A |\n| --- |').split('\n').length,
+    );
   });
 
   test('围栏代码块里的竖线不算表格（整段原样保留）', () {

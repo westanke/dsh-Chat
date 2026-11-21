@@ -11,6 +11,11 @@
 /// 为什么不用 gpt_markdown 内置表格：它的表头底色默认取
 /// `colorScheme.surfaceContainerHighest`（浅色主题下是淡紫粉，官方是白），
 /// 而且没有官方那条 banner。这里用 tableBuilder 完全自绘。
+///
+/// 单元格必须自己再做一次行内解析：gpt_markdown 1.4.1 的 tableBuilder
+/// 只把单元格拍平成纯文本（plusparse/renderer.dart `_plainText`），裸 URL
+/// 原本是黑色死字、点不动（真机反馈 2026-11-21 问题 1）。这里把 data 重新
+/// 交给 plusparse 行内渲染，经 config.getRich 拿到 onLinkTap 的点击区。
 library;
 
 import 'package:material_ui/material_ui.dart';
@@ -20,10 +25,19 @@ import '../design/tokens.dart';
 
 /// 官方表格块：banner（表格 + 复制/下载/展开）+ 表头 + 数据行。
 class DsTable extends StatelessWidget {
-  const DsTable({super.key, required this.rows, required this.colors});
+  const DsTable({
+    super.key,
+    required this.rows,
+    required this.colors,
+    required this.config,
+  });
 
   final List<CustomTableRow> rows;
   final DsColors colors;
+
+  /// tableBuilder 的文档级配置：单元格重解析时继承同一套行内样式与
+  /// onLinkTap（链接点击由此生效）。
+  final GptMarkdownConfig config;
 
   @override
   Widget build(BuildContext context) {
@@ -75,7 +89,7 @@ class DsTable extends StatelessWidget {
                   defaultColumnWidth: const FlexColumnWidth(),
                   border: TableBorder.all(color: colors.tableBorder),
                   children: [
-                    for (final row in trimmed) _tableRow(row, columns),
+                    for (final row in trimmed) _tableRow(context, row, columns),
                   ],
                 ),
               ),
@@ -96,7 +110,7 @@ class DsTable extends StatelessWidget {
     return CustomTableRow(isHeader: row.isHeader, fields: fields);
   }
 
-  TableRow _tableRow(CustomTableRow row, int columns) {
+  TableRow _tableRow(BuildContext context, CustomTableRow row, int columns) {
     final isHead = row.isHeader;
     final style = (isHead ? DsTypography.tableHead : DsTypography.table)
         .copyWith(color: colors.labelPrimary);
@@ -108,16 +122,34 @@ class DsTable extends StatelessWidget {
               horizontal: DsSpacing.cellPadH,
               vertical: DsSpacing.cellPadV,
             ),
-            child: Text(
-              i < row.fields.length ? row.fields[i].data : '',
-              textAlign: i < row.fields.length
-                  ? row.fields[i].alignment
-                  : TextAlign.start,
-              style: style,
+            child: _cell(
+              context,
+              i < row.fields.length ? row.fields[i] : null,
+              style,
             ),
           ),
       ],
     );
+  }
+
+  /// 单元格：先按行内 Markdown 重解析纯文本，再交给 getRich 渲染。
+  /// 只有 getRich 会把链接做成 InlineTapTargets 的点击区（直接 Text.rich
+  /// 会把链接降级成普通文字，且不报错）。
+  Widget _cell(BuildContext context, CustomTableField? field, TextStyle style) {
+    final data = field?.data ?? '';
+    if (data.trim().isEmpty) return const SizedBox.shrink();
+    final cellConfig = config.copyWith(
+      style: style,
+      textAlign: field?.alignment ?? TextAlign.start,
+      scope: MarkdownScope.tableCell,
+    );
+    final spans = PlusparseRenderer.render(
+      context,
+      data,
+      cellConfig,
+      inlineOnly: true,
+    );
+    return cellConfig.getRich(TextSpan(style: style, children: spans));
   }
 }
 

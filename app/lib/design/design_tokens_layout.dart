@@ -103,6 +103,16 @@ class DsSpacing {
   /// 推挤式抽屉：菜单按钮点击热区宽（从左缘滑入可拖出抽屉）。
   static const drawerEdgeDragWidth = 20.0;
 
+  /// 屏内右滑呼出抽屉（问题 3）：水平位移达到这个值就开（逻辑像素）。
+  static const drawerSwipeOpenDistance = 64.0;
+
+  /// 屏内右滑的轻扫通道：位移至少先超过这个值，速度才作数，
+  /// 防止竖向滚动时手指的轻微横向抖动误开抽屉。
+  static const drawerSwipeMinTravel = 24.0;
+
+  /// 轻扫通道的速度阈值（逻辑像素/秒）。
+  static const drawerSwipeOpenVelocity = 700.0;
+
   /// 推挤式抽屉：聊天页被推出的位移 = `drawerWidth`（整页滑到屏外，
   /// 右缘与抽屉右缘对齐，官方 official-drawer.png 页面残条为空对齐）。
   ///

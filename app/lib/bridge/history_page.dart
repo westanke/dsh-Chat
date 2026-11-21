@@ -89,6 +89,12 @@ class ChatMessage {
   final int? startedAt;
   final int? finishedAt;
 
+  /// 轮的真实起止（epoch ms，装配层从 user/message（或 turn/start）与
+  /// turn/end 事件带下来）。只在该轮的**最后一条**消息上填；轮尾行优先用
+  /// 它算「用时」（问题 4：过程组首尾漏掉工具之间的模型思考时间）。
+  int? turnStartedAt;
+  int? turnFinishedAt;
+
   bool get isUser => role == 'user';
   bool get isProcess => role == 'process';
   bool get isError => role == 'error';
@@ -186,6 +192,10 @@ class HistoryPage {
     int? groupStart;
     int? groupEnd;
 
+    // 当前轮的真实起点：user/message 或 turn/start 的事件时间。轮尾行
+    // 用它算「用时」，避免只用过程组首尾（问题 4）。
+    int? turnStart;
+
     // 文件卡暂存（2026-11-14 反馈）：内核在 present 工具 result 成功的**当场**
     // 追加 deliverables/presented（dsh-tool-present/lib/index.js tools/result 分支），
     // seq 落在收尾正文之前 —— 按事件序内联插卡，卡片会卡在工具过程与收尾回复
@@ -253,6 +263,7 @@ class HistoryPage {
           if (parts.text.isNotEmpty || parts.images.isNotEmpty) {
             // 新一轮开始：上一轮的文件卡挂尾（本轮之后、这条用户消息之前）。
             flushFileCards();
+            turnStart = event.time;
             items.add(
               ChatMessage(
                 role: 'user',
@@ -383,21 +394,36 @@ class HistoryPage {
             ),
           );
 
+        case 'turn/start':
+          turnStart = event.time;
+
         case 'turn/end':
           // 本轮到此结束（正常/失败都算）：文件卡挂在本轮流尾 —— 两轮之间
           // 未必有 user/message（目标续跑、子任务回合），turn/end 是唯一
           // 稳定的轮边界，必须在这里收口。
           flushFileCards();
+          final turnEndTime = event.time;
+          final turnStartedAt = turnStart;
+          turnStart = null;
           // 一轮 turn 失败（如模型限流 / 额度耗尽）：内核只在 turn/end 的
           // reason 里给结论，没有 assistant/message 正文 —— 不解析就会表现成
           // 「用户发完消息、界面什么都没有」。官方 App 是红色错误提示，我们
           // 用同一套 role=error 消息渲染（见 ui/chat_page.dart）。
           final reason = event.data['reason'];
-          if (reason is! Map || reason['kind'] != 'error') break;
-          final err = reason['error'];
-          final msg = err is Map ? (err['message'] ?? '') as String : '';
-          if (msg.isEmpty) break;
-          items.add(ChatMessage(role: 'error', text: msg, seq: event.seq));
+          if (reason is Map && reason['kind'] == 'error') {
+            final err = reason['error'];
+            final msg = err is Map ? (err['message'] ?? '') as String : '';
+            if (msg.isNotEmpty) {
+              items.add(ChatMessage(role: 'error', text: msg, seq: event.seq));
+            }
+          }
+          // 轮的真实起止记到本轮最后一条消息上：轮尾行据此显示「用时」
+          // （问题 4），不再用过程组首尾近似（会漏掉钩子/模型思考的时间）。
+          if (items.isNotEmpty && turnStartedAt != null) {
+            final last = items.last;
+            last.turnStartedAt = turnStartedAt;
+            last.turnFinishedAt = turnEndTime;
+          }
       }
     }
     // 事件流末尾：最后一轮的文件卡挂尾。
