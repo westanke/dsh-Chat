@@ -123,13 +123,47 @@ class _ComposerBar extends StatelessWidget {
   /// 点模型 chip：上层打开模型选择（null = 不显示 chip）。
   final VoidCallback? onPickModel;
 
+  /// 输入框里的文字是否已经折到第二行。
+  ///
+  /// dsh-go `composer.dart:651` 按 `open` 在 28 → 20 之间补间（单行圆润、
+  /// 多行收窄）。本仓是常驻双行布局，没有单行↔双行的切换，所以改按
+  /// 「文字是否多行」来驱动同一段补间：一行时 28，多行时收敛到 20。
+  bool _multiline(BuildContext context) {
+    final text = controller.text;
+    if (text.isEmpty) return false;
+    final width =
+        MediaQuery.sizeOf(context).width -
+        2 * DsSpacing.screenPad -
+        2 * DsSpacing.composerKeyGap -
+        2 * DsSpacing.composerTextInset;
+    if (width <= 0) return false;
+    final painter = TextPainter(
+      text: TextSpan(
+        text: text,
+        style: const TextStyle(
+          fontSize: DsSpacing.composerFontSize,
+          height: DsSpacing.composerLineHeight,
+        ),
+      ),
+      maxLines: 5,
+      textDirection: TextDirection.ltr,
+    )..layout(maxWidth: width);
+    return painter.computeLineMetrics().length > 1;
+  }
+
   @override
   Widget build(BuildContext context) {
     final c = colors;
-    return Container(
+    final radius = _multiline(context)
+        ? DsSpacing.composerRadiusOpen
+        : DsSpacing.composerRadius;
+    return AnimatedContainer(
+      // dsh-go AppMotion.quick = 160ms：圆角在两个档之间滑过去，不跳。
+      duration: const Duration(milliseconds: 160),
+      curve: Curves.easeOut,
       decoration: BoxDecoration(
         color: c.inputFill,
-        borderRadius: BorderRadius.circular(DsSpacing.composerRadius),
+        borderRadius: BorderRadius.circular(radius),
         boxShadow: [
           BoxShadow(
             color: c.shadow,
