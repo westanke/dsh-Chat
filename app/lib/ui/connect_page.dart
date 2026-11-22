@@ -33,6 +33,16 @@ class _ConnectPageState extends State<ConnectPage> {
   bool _showImport = false;
   String? _error;
   String? _probeNote; // 探活诊断：试了哪几条、哪条成了（IKX5KQ）
+
+  /// 整个连接过程的硬上限：探活 2.5s×N + 每条配对握手都有各自超时，
+  /// 正常远用不到 2 分钟；超过这个数说明卡在某个不可取消的等待上，
+  /// 必须把界面从 busy 里放出来（否则用户只看见按钮变灰、没有报错）。
+  static const Duration _connectBudget = Duration(minutes: 2);
+
+  void _onProgress(String message) {
+    if (!mounted) return;
+    setState(() => _probeNote = message);
+  }
   DshHost? _failedHost; // 直连失败的主机，供「删除这条失效记录」定位
   List<DshHost> _hosts = const [];
 
@@ -131,7 +141,10 @@ class _ConnectPageState extends State<ConnectPage> {
         code: link.code,
         deviceId: _deviceId,
         deviceName: 'DSH Chat (Flutter)',
-      );
+        onProgress: _onProgress,
+      ).timeout(_connectBudget, onTimeout: () => throw HostConnectException(
+            '连接超时：探活或配对在 2 分钟内没有结果，请检查网络后重试',
+          ));
       if (!mounted) {
         r.gateway.dispose();
         return;
@@ -168,7 +181,10 @@ class _ConnectPageState extends State<ConnectPage> {
     });
     try {
       // 候选表探活择优 + 失败换下一条（IKX5KQ）；单地址老码行为不变。
-      final r = await connectHost(host);
+      final r = await connectHost(host, onProgress: _onProgress)
+          .timeout(_connectBudget, onTimeout: () => throw HostConnectException(
+                '连接超时：探活或握手在 2 分钟内没有结果，请检查网络后重试',
+              ));
       if (!mounted) {
         r.gateway.dispose();
         return;
@@ -385,7 +401,7 @@ class _ConnectPageState extends State<ConnectPage> {
                 colors: c,
                 bordered: true,
               ),
-              if (_probeNote != null && !_busy) ...[
+              if (_probeNote != null) ...[
                 const SizedBox(height: 12),
                 Text(
                   _probeNote!,

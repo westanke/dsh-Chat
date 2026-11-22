@@ -78,6 +78,7 @@ bool shouldProbeCandidates(List<String> candidates) {
 Future<HostConnectResult> connectHost(
   DshHost host, {
   Duration probeTimeout = kEndpointProbeTimeout,
+  void Function(String message)? onProgress,
 }) async {
   final token = host.token;
   if (token == null || token.isEmpty) {
@@ -87,11 +88,13 @@ Future<HostConnectResult> connectHost(
   EndpointSelection? selection;
   var target = host.baseUrl;
   if (shouldProbeCandidates(candidates)) {
+    onProgress?.call('正在探活 ${candidates.length} 条候选地址…');
     selection = await selectEndpoint(
       candidates,
       preferred: host.preferredEndpoint ?? host.baseUrl,
       timeout: probeTimeout,
     );
+    onProgress?.call(selection.note);
     final chosen = selection.chosen;
     if (chosen == null) {
       // 探活全失败就别再白等握手超时：直接说清是哪一层不通。
@@ -123,18 +126,22 @@ Future<HostConnectResult> pairHost(
   required String deviceId,
   required String deviceName,
   Duration probeTimeout = kEndpointProbeTimeout,
+  void Function(String message)? onProgress,
 }) async {
   final candidates = host.candidates;
   if (candidates.isEmpty) {
     throw HostConnectException('没有可用的地址，请重新导入配置');
   }
-  var selection = shouldProbeCandidates(candidates)
-      ? await selectEndpoint(
-          candidates,
-          preferred: host.preferredEndpoint ?? host.baseUrl,
-          timeout: probeTimeout,
-        )
-      : null;
+  EndpointSelection? selection;
+  if (shouldProbeCandidates(candidates)) {
+    onProgress?.call('正在探活 ${candidates.length} 条候选地址…');
+    selection = await selectEndpoint(
+      candidates,
+      preferred: host.preferredEndpoint ?? host.baseUrl,
+      timeout: probeTimeout,
+    );
+    onProgress?.call(selection.note);
+  }
   final order = <String>[
     if (selection?.chosen != null) selection!.chosen!,
     ...candidates.where((url) => url != selection?.chosen),
@@ -142,6 +149,7 @@ Future<HostConnectResult> pairHost(
   final failures = <String>[];
   for (final target in order) {
     final budget = timeoutsFor(target);
+    onProgress?.call('正在连接 ${_shortUrl(target)} 配对…');
     final gateway = GatewayClient(
       baseUrl: target,
       connectTimeout: budget.connect,
@@ -172,6 +180,8 @@ Future<HostConnectResult> pairHost(
     note: selection?.note ?? '',
   );
 }
+
+String _shortUrl(String url) => url.replaceFirst(RegExp(r'^https?://'), '');
 
 /// 从 [start] 起按候选表继续试（每条一次），成功则写回主机记录。
 Future<HostConnectResult> _retry({

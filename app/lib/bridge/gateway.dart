@@ -593,7 +593,12 @@ class GatewayClient {
     _ws = null;
     if (ws != null) {
       try {
-        await ws.sink.close(ws_status.normalClosure);
+        // 握手没完成时（TCP 连上了但服务端不回 101），sink.close 会一直等对端，
+        // 于是「超时到点」之后整个连接流程反而挂死：真机上表现为按钮变灰、
+        // 两分钟没有任何反馈。这里给关闭本身一个上限，超了就走人。
+        await ws.sink
+            .close(ws_status.normalClosure)
+            .timeout(const Duration(seconds: 2));
       } catch (_) {}
     }
   }
