@@ -24,6 +24,7 @@ import 'design/tokens.dart';
 import 'ui/chat_page.dart';
 import 'ui/chat_state.dart';
 import 'ui/connect_page.dart';
+import 'ui/update_prompt.dart';
 import 'ui/settings_page.dart';
 
 void main() {
@@ -121,6 +122,11 @@ class _AppRootState extends State<_AppRoot> {
   void initState() {
     super.initState();
     _autoConnect();
+    // 启动即查更新（需求 2026-11-22 第 3 项）：有新版弹「是否下载」。
+    // 放到首帧之后，等 Navigator 就绪；网络失败/版本读不到静默跳过。
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) checkUpdateOnLaunch(context);
+    });
   }
 
   /// 启动即读原生时区 + 恢复凭证；有 token 就直连（一次配对，此后自动连接）。
