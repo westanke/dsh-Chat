@@ -51,7 +51,7 @@ class _ArtifactCardState extends State<ArtifactCard> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(14, 12, 14, 6),
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
             child: Row(
               children: [
                 Icon(Icons.auto_awesome, size: 17, color: colors.labelSecondary),
@@ -77,7 +77,7 @@ class _ArtifactCardState extends State<ArtifactCard> {
             InkWell(
               onTap: () => setState(() => _expanded = true),
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(14, 8, 14, 10),
+                padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
                 child: Row(
                   children: [
                     Text(

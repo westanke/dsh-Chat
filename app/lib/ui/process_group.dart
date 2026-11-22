@@ -332,9 +332,18 @@ class _DsToolRowState extends State<DsToolRow> {
                               ),
                               TextSpan(
                                 text: summary,
-                                style: DsTypography.codeBlockLabel.copyWith(
-                                  color: summaryColor,
-                                ),
+                                // dsh-go thinking_pill：思考预览是常规体
+                                // bodySmall 13 / 1.3 / textTertiary，不是等宽体；
+                                // 工具行摘要仍用等宽体。
+                                style: kind == ToolActivityKind.thinking
+                                    ? DsTypography.small.copyWith(
+                                        fontSize: 13,
+                                        height: 1.3,
+                                        color: summaryColor,
+                                      )
+                                    : DsTypography.codeBlockLabel.copyWith(
+                                        color: summaryColor,
+                                      ),
                               ),
                             ],
                             // diff 增删统计：官方只在展开或 hover 时显色

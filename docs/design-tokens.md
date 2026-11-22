@@ -796,6 +796,9 @@ dsh-Go 的「拍照」（本仓原生通道无相机 Intent）、「生成」「
 | `DSpace.composerFontSize` / `composerLineHeight` | 15 / 1.45 | 输入条字号与行高 |
 | `DSpace.composerTextInset` | 8 | 文字区左右内缩（双行模式 `_inset`） |
 | 动作栏 | 36×36 格、图标 20、整条左出血 8 | `message_actions.dart` |
+| 思考行摘要 | 常规体 13 / 1.3 / textTertiary | `thinking_pill.dart`（思考预览不是等宽体，工具行摘要才是） |
+| 展开体缩进 / 竖线 | left 32 / 1px `borderL1` α0.8、上下 4/8 | `StreamThread` |
+| 卡片（改动 / 产物） | 标题行 (16,16,16,8)、底栏 (16,4,12,4) 且最小高 44、圆角 20 | `chat_card.dart` / `ChatCardFooter` |
 
 ## 5. 截图资产（ref/）
 - official-login-page.png 登录页（+86 152 1388 0002 / 验证码输入 / 发送验证码按钮）

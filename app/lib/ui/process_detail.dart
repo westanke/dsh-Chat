@@ -347,11 +347,15 @@ class _ToolDetail extends StatelessWidget {
     } else {
       children.addAll(_inputOutput(c));
     }
-    return Padding(
-      padding: const EdgeInsets.only(
-        left: DsSpacing.processIconSize + DsSpacing.processIconGap + 3,
-        top: 4,
-        bottom: 4,
+    // dsh-go StreamThread：展开体左侧一条 1px 竖线（outlineVariant α0.8），
+    // 内容从 streamIndent(32) 起排，上下各留 4/8。
+    return Container(
+      margin: const EdgeInsets.only(top: 4, bottom: 8),
+      padding: const EdgeInsets.only(left: DsSpacing.streamIndent - 1),
+      decoration: BoxDecoration(
+        border: Border(
+          left: BorderSide(color: c.borderL1.withValues(alpha: 0.8), width: 1),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

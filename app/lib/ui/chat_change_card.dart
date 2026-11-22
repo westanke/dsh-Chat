@@ -51,7 +51,7 @@ class ChangeCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(14, 12, 14, 6),
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
             child: Row(
               children: [
                 Icon(
@@ -96,8 +96,11 @@ class ChangeCard extends StatelessWidget {
           Container(height: 1, color: colors.borderL1),
           InkWell(
             onTap: () => _open(context, 0),
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(14, 10, 10, 10),
+            child: ConstrainedBox(
+              // dsh-go ChatCardFooter：minHeight 44。
+              constraints: const BoxConstraints(minHeight: 44),
+              child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 4, 12, 4),
               child: Row(
                 children: [
                   Text(
@@ -121,6 +124,7 @@ class ChangeCard extends StatelessWidget {
                     color: colors.labelTertiary,
                   ),
                 ],
+              ),
               ),
             ),
           ),
