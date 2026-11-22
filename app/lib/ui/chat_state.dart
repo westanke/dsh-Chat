@@ -372,6 +372,46 @@ class ChatState extends ChangeNotifier with GroupExpandState {
     }
   }
 
+  /// 确保当前有会话可挂（IKX5MV：斜杠命令必须带 sessionId 才能派发）。
+  ///
+  /// 新对话（sessionId 为空）里发 `/tunnel` 之类宿主命令时先建会话，路径与
+  /// send() 的预建通道一致：选了目录 → session-create{rootId,cwd}；否则
+  /// 手机工作区 → session-create{workspaceId}；老桥没工作区 → 未分组兜底。
+  /// 返回建好/已有的会话 id；建不出来返回 null（调用方给错误卡，别静默）。
+  Future<String?> ensureSessionOpen() async {
+    final existing = sessionId;
+    if (existing != null && existing.isNotEmpty) return existing;
+    String? sid;
+    try {
+      if (pendingLocation != null) {
+        final loc = pendingLocation!;
+        sid = await _gateway.createSessionAt(rootId: loc.rootId, cwd: loc.cwd);
+        pendingLocation = null; // 目录已定死，随会话落位。
+      } else {
+        final wsId = await ensureMobileWorkspace(_gateway, _mobileWorkspaceId);
+        if (wsId != null) {
+          sid = await _gateway.createSessionInWorkspace(wsId);
+          _mobileWorkspaceId = wsId;
+        } else {
+          // 老桥没有工作区概念：建到默认位置（未分组），不阻挠命令派发。
+          sid = await _gateway.createSessionAt();
+        }
+      }
+    } on RequestException catch (e) {
+      DshLog.w('ui ensure-session FAIL ${e.code}');
+      lastError = '建立会话失败：${e.message}';
+      notifyListeners();
+      return null;
+    }
+    if (sid.isEmpty) return null;
+    sessionId = sid;
+    _pendingSessionId = sid;
+    _gateway.subscribe(sid);
+    notifyListeners();
+    unawaited(loadSessions());
+    return sid;
+  }
+
   /// 执行斜杠命令（实现见 chat_command_actions.dart）。
   Future<void> runCommand(String line) => runChatCommand(this, line);
 

@@ -15,9 +15,9 @@ extension on ComposerState {
   /// bridge/slash_commands.dart 的 paletteContentOf 判定，与 dsh-go 同判据。
   PaletteContent get _paletteContent {
     final palette = _palette;
-    if (!widget.enabled || widget.sessionId == null || palette == null) {
-      return const PaletteNone();
-    }
+    // 新对话也放面板（只有客户端功能那四条）：命令要挂会话才能执行，
+    // 但面板先能看见、先能选，回车由 _trySendCommand 建会话（IKX5MV）。
+    if (!widget.enabled || palette == null) return const PaletteNone();
     // 用户主动关掉过（点外部/返回键/Esc），文本没变就别再弹。
     if (_dismissedSlashText != null) return const PaletteNone();
     return paletteContentOf(
@@ -58,8 +58,17 @@ extension on ComposerState {
   Future<void> _ensureCommands() async {
     final gw = widget.gateway;
     final sid = widget.sessionId;
-    if (gw == null || sid == null) return;
+    if (gw == null) return;
     if (_palette != null && _paletteSid == sid) return;
+    if (sid == null) {
+      // 新对话拉不到宿主命令（`commands` 帧要 sessionId），先只放客户端功能；
+      // 会话建好后 didUpdateWidget 会按新 sid 重拉一次（IKX5MV）。
+      _refresh(() {
+        _palette = mergePaletteCommands(host: const []);
+        _paletteSid = null;
+      });
+      return;
+    }
     if (_commandsLoading) return;
     _commandsLoading = true;
     try {
@@ -162,12 +171,26 @@ extension on ComposerState {
   ///
   /// 返回 true 表示这次回车已被命令面板消费，调用方不要再当消息发出去。
   bool _trySendCommand() {
-    if (widget.sessionId == null || _pendingImages.isNotEmpty) return false;
+    if (_pendingImages.isNotEmpty) return false;
     final text = _controller.text;
-    if (!text.trimLeft().startsWith('/')) return false;
-    switch (classifySlashSend(_palette ?? const [], text)) {
+    final draft = parseSlashInput(text);
+    if (draft == null) return false;
+    final sessionId = widget.sessionId;
+    // 新对话没有 sessionId 也要走命令派发：命令卡先上屏，ChatState
+    // ensureSessionOpen 建好会话后 execute（IKX5MV——老逻辑在这里直接
+    // return false，`/tunnel` 被当正文发给了模型）。新对话面板里还没有
+    // 宿主命令（`commands` 帧要 sessionId），用客户端功能兜底判定。
+    final palette = _palette ??
+        (sessionId == null ? appSlashCommands() : const <SlashCommand>[]);
+    switch (classifySlashSend(palette, text)) {
       case SlashSendMessage():
-        return false;
+        if (sessionId != null || draft.token.trim().isEmpty) return false;
+        // 面板里没有、但形如 `/x`：仍按命令派发（服务端不认识会回错误卡，
+        // 比静默降级成「发给模型」更诚实，也符合 issue 的验收）。
+        _controller.clear();
+        _refresh(() {});
+        widget.onCommand(text.trim());
+        return true;
       case SlashSendSwallow():
         // 只敲了一个 `/`：面板开着，等人挑一行。
         return true;

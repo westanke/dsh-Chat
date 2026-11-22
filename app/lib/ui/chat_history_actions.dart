@@ -77,8 +77,13 @@ Future<void> reloadChatHistory(ChatState state) async {
         'raw=${page.rawEvents.length} '
         'projections=${page.projections != null} '
         'hasMore=${page.hasMore} truncated=${page.truncated}');
+    // 命令卡保留（第六轮反馈 m03878 / IKX5MV）：reloadHistory 重建 messages，
+    // 本地命令卡（role=='command'，seq=-1）不在服务端历史里，merge 会把它丢掉。
+    // 必须在 merge **之前**收集（以前放在 merge 之后取，永远拿到空表）。
+    final cards =
+        state.messages.where((m) => m.role == 'command' && m.seq < 0).toList();
     final merged = mergeRefreshedHistory(state.messages, page.items);
-    state.messages = merged.messages;
+    state.messages = [...merged.messages, ...cards];
     // 去重：持久过程组已含这些工具，按 callId 从流式缓冲摘除对应行
     // （缓冲空后 streamingProcess 为 null，页面上只剩持久组）。
     state.dropPersistedToolRows();
@@ -87,12 +92,7 @@ Future<void> reloadChatHistory(ChatState state) async {
     state.historyHasMore = merged.keptOlder ? state.historyHasMore : page.hasMore;
     // 字节预算裁剪：只有真裁剪时服务端才带 truncated（未裁剪时字段缺席）。
     state.historyTruncated = page.truncated;
-    // 命令卡保留（第六轮反馈 m03878）：reloadHistory 重建 messages，
-    // 本地命令卡（role=='command'，seq=-1）会被冲掉——重灌回列表尾部。
-    final cards = state.messages.where((m) => m.role == 'command').toList();
-    if (cards.isNotEmpty) {
-      state.messages = [...state.messages, ...cards.where((m) => m.seq < 0)];
-    }
+    // 命令卡保留（第六轮反馈 m03878）：已在上方 merge 前收集并拼回尾部。
     // 翻页/刷新时 projections 可能缺席：保留上一份（同会话），避免面板闪空。
     // 切会话时 newChat()/openSession() 会先清空，不会串台。
     state.projections = page.projections ?? state.projections;

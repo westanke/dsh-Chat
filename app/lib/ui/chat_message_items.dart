@@ -186,6 +186,29 @@ class MessageItem extends StatelessWidget {
                 ],
               ),
             ),
+            // 复制整张命令卡（首行命令 + 结果全文）：命令输出常在别处要复用，
+            // 长按选词对卡里的小字不好使（IKX5MV 验收要求「带复制」）。
+            Tooltip(
+              message: '复制命令与结果',
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () async {
+                  await Clipboard.setData(ClipboardData(text: message.text));
+                  if (!context.mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('已复制命令与结果')),
+                  );
+                },
+                child: Padding(
+                  padding: const EdgeInsets.only(left: 8),
+                  child: Icon(
+                    Icons.copy,
+                    size: 15,
+                    color: colors.labelTertiary,
+                  ),
+                ),
+              ),
+            ),
           ],
         ),
       );

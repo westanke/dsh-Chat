@@ -11,9 +11,9 @@ import 'chat_state.dart';
 /// 回执以本地「命令卡」（role=='command'，seq=-1）注入会话流（m03878）；
 /// 重拉历史后由 chat_history_actions 的 merge 逻辑保留。
 Future<void> runChatCommand(ChatState state, String line) async {
-  final id = state.sessionId;
-  if (id == null || id.isEmpty) return;
   state.lastError = null;
+  // 先上屏命令卡（用户立刻看到「收到了这条命令」），再去建会话/执行——
+  // 新对话里建会话有一次网络往返，等回来再出卡就成了「点了没反应」（IKX5MV）。
   final card = ChatMessage(
     role: 'command',
     text: line,
@@ -21,6 +21,15 @@ Future<void> runChatCommand(ChatState state, String line) async {
   );
   state.messages = [...state.messages, card];
   state.notifyUi();
+  // 新对话没有 sessionId：先 session-create 再派发，别把 `/xxx` 当正文发。
+  final id = await state.ensureSessionOpen();
+  if (id == null) {
+    final text = state.lastError ?? '建立会话失败';
+    card.text = '$line\n✗ $text，命令未执行';
+    state.lastError = text;
+    state.notifyUi();
+    return;
+  }
   try {
     final r = await state.gateway.executeCommand(sessionId: id, line: line);
     final result = r['result'];

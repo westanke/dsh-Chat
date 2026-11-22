@@ -390,6 +390,17 @@ class ComposerState extends State<Composer> {
   /// 真实类型由原生侧按字节魔数判定并回传（HEIC 等已转码），这里不再按文件名
   /// 扩展名猜类型（华为 DISPLAY_NAME 常无扩展名，见 huawei-heic-upload-report.md）。
   /// 解析逻辑在 composer_widgets.dart 的 resolvePickedImage（同库顶层函数）。
+  /// 会话从「新对话」变成有 id 后，命令面板要换一份带宿主命令的清单
+  /// （IKX5MV：新对话里 `/tunnel` 派发完会话才建出来）。
+  @override
+  void didUpdateWidget(covariant Composer oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.sessionId != widget.sessionId &&
+        parseSlashInput(_controller.text) != null) {
+      _ensureCommands();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final at = _atDraft;
