@@ -28,6 +28,7 @@ import '../design/tokens.dart';
 import 'ask_present.dart';
 import 'code_diff.dart';
 import 'md_code_block.dart';
+import 'thinking_ticker.dart';
 import 'tool_glyph.dart';
 import 'tool_present.dart';
 import 'tool_titles.dart';
@@ -260,6 +261,12 @@ class _DsToolRowState extends State<DsToolRow> {
     final badgeColor = exitBadgeIsError(exit) ? c.danger : c.labelTertiary;
     // 官方 diff 增删统计只在行展开或 hover 时显色（折叠继承行色）。
     final highlighted = _detail || _hover;
+
+    // 进行中的思考行用多行滚动预览（dsh-go thinking_pill 的 ticker）。
+    final liveThought =
+        kind == ToolActivityKind.thinking &&
+        isToolRowLive(call) &&
+        (call.resultText ?? '').trim().isNotEmpty;
     // dsh-go StreamRow：整行最小高 32（24 图标 + 上下各 4），左右各 8 内衬。
     return ConstrainedBox(
       constraints: const BoxConstraints(minHeight: DsSpacing.streamMinHeight),
@@ -306,7 +313,29 @@ class _DsToolRowState extends State<DsToolRow> {
                     ),
                     const SizedBox(width: DsSpacing.streamGap),
                     Expanded(
-                      child: Text.rich(
+                      child: liveThought
+                          ? Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  toolTitle(call.name),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: DsTypography.small.copyWith(
+                                    fontSize: 14,
+                                    height: 1.3,
+                                    color: c.labelSecondary,
+                                  ),
+                                ),
+                                // 思考进行中：多行滚动预览（dsh-go ticker）。
+                                ThinkingTicker(
+                                  colors: c,
+                                  text: call.resultText ?? '',
+                                ),
+                              ],
+                            )
+                          : Text.rich(
                         TextSpan(
                           children: [
                             TextSpan(
