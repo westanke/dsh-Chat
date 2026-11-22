@@ -57,7 +57,7 @@
 
 | 平台 | 状态 |
 |---|---|
-| APK（GitHub）| [`dsh-Chat-v1.0.26.apk`](https://github.com/westanke/dsh-Chat/releases/download/v1.0.26/dsh-Chat-v1.0.26.apk)<br>26,483,348 字节 · SHA-256 `9c78bbc4f7f17ba345f30417e20f53aae65192b3c84fa98f430a74f664bbe991` |
+| APK | [`dsh-Chat-v1.0.26.apk`](https://gitee.com/westanke/dsh-Chat/releases/download/v1.0.26/dsh-Chat-v1.0.26.apk)<br>26,483,348 字节 · SHA-256 `9c78bbc4f7f17ba345f30417e20f53aae65192b3c84fa98f430a74f664bbe991` |
 | APK | [`dsh-Chat-v1.0.22.apk`](https://gitee.com/westanke/dsh-Chat/releases/download/v1.0.22/dsh-Chat-v1.0.22.apk)<br>26,154,480 字节 · SHA-256 `fee18e99369460d5adc6b96583a0b0b0c6702e1a13956423ee8dd4e68614d028` |
 | APK | [`dsh-Chat-v1.0.20.apk`](https://gitee.com/westanke/dsh-Chat/releases/download/v1.0.20/dsh-Chat-v1.0.20.apk)<br>26,022,440 字节 · SHA-256 `04bc3c5d23b6fb8679688ce51b179d001ce17bcebeca990de63da9ed234a95da` |
 | APK | [`dsh-Chat-v1.0.19.apk`](https://gitee.com/westanke/dsh-Chat/releases/download/v1.0.19/dsh-Chat-v1.0.19.apk)<br>26,022,440 字节 · SHA-256 `0072ebdece94c43b8f482a6e8ea542d9c10638041ce0013923852f483857e538` |
@@ -91,10 +91,8 @@
 
 | 产物 | 说明 |
 |---|---|
-| APK | [`dsh-Chat-v1.0.26.apk`](https://github.com/westanke/dsh-Chat/releases/download/v1.0.26/dsh-Chat-v1.0.26.apk)<br>26,483,348 字节 · SHA-256 `9c78bbc4f7f17ba345f30417e20f53aae65192b3c84fa98f430a74f664bbe991` |
+| APK | [`dsh-Chat-v1.0.26.apk`](https://gitee.com/westanke/dsh-Chat/releases/download/v1.0.26/dsh-Chat-v1.0.26.apk)<br>26,483,348 字节 · SHA-256 `9c78bbc4f7f17ba345f30417e20f53aae65192b3c84fa98f430a74f664bbe991` |
 | 校验 | `sha256sum -c` 前先比对上方 SHA-256；tag `v1.0.26` 内的 `artifacts/SHA256SUMS.txt` 为权威值 |
-
-> Gitee 附件配额（1 GB）已被历史发行版占满，**APK 从 GitHub 下载**；AtomGit 发行版只提供源码包。
 
 > 版本号以 [`app/pubspec.yaml`](app/pubspec.yaml) 的 `version` 为准（当前 `1.0.26+27`）。
 
