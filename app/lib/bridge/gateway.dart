@@ -17,17 +17,17 @@ import 'dart:math';
 import 'package:flutter/foundation.dart';
 
 import 'dlog.dart';
-import 'endpoint_select.dart';
 
 import 'package:web_socket_channel/status.dart' as ws_status;
 import 'package:web_socket_channel/io.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
-import 'models.dart';
+import 'endpoint_select.dart';
 import 'gateway_events.dart';
 import 'gateway_kernel.dart';
 import 'gateway_liveness.dart';
 import 'gateway_pending.dart';
+import 'models.dart';
 import 'questions.dart';
 import 'queue.dart';
 export 'gateway_api.dart';
@@ -658,6 +658,20 @@ class GatewayClient {
     String type,
     Map<String, dynamic> payload,
   ) => requestWithTimeout(type, payload, const Duration(seconds: 30));
+
+  /// `history` 的等待上限：隧道链路单独放宽。
+  ///
+  /// 真机反馈（2026-11-23）：隧道模式下 1.0.28 一直报「加载历史失败：请求 history 超时」。
+  /// 实测一个正常长度的会话首屏序列化后 **602 KB**（约 8000 条事件记录、首屏 200 条消息），
+  /// 过 Cloudflare quick tunnel 单帧要 4.5 秒；手机在移动网络、链路抖动时就更久，
+  /// 30 秒的通用上限会被顶穿。隧道模式给 90 秒，局域网/直连维持 30 秒不变。
+  ///
+  /// 这只是兜底：桥侧同时给 WS 开了 permessage-deflate（同一份 JSON 压到 19.5%），
+  /// 客户端也把首屏页从 200 条降到 80 条 —— 正常网络下不该再走到这个上限。
+  Duration get historyTimeout =>
+      classifyEndpoint(baseUrl) == EndpointKind.tunnel
+          ? const Duration(seconds: 90)
+          : const Duration(seconds: 30);
 
   // ---- 业务封装（实现在 gateway_api.dart 的 extension GatewayApi）----
 

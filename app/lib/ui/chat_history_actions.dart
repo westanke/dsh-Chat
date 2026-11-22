@@ -71,7 +71,12 @@ Future<void> reloadChatHistory(ChatState state) async {
   final id = state.sessionId;
   if (id == null || id.isEmpty) return;
   try {
-    final page = await state.gateway.history(id, maxMessages: 200);
+    // 首屏页从 200 降到 80（2026-11-23 真机：隧道模式下「打开会话很慢 / 加载历史超时」）。
+    //
+    // 200 条消息序列化后是 602 KB 级的大帧，过 quick tunnel 要好几秒；80 条把首屏压到
+    // 约 1/3，配上桥侧的 permessage-deflate（约 19.5%）与隧道 90s 超时，打开会话不再卡在
+    // 「等一个大帧」上。往下翻仍然一次 200 条（`loadOlderMessages`），滚动体验不变。
+    final page = await state.gateway.history(id, maxMessages: 80);
     if (id != state.sessionId) return; // 过期应答：期间切了会话，整块丢弃
     DshLog.w('ui history id=$id items=${page.items.length} '
         'raw=${page.rawEvents.length} '

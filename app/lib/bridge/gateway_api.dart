@@ -285,11 +285,12 @@ extension GatewayApi on GatewayClient {
     int? maxMessages,
     int? beforeSeq,
   }) async {
-    final r = await request('history', {
+    // 超时按链路走：隧道放宽到 90s（首屏 600 KB 级的大帧，见 `historyTimeout` 的说明）。
+    final r = await requestWithTimeout('history', {
       'sessionId': sessionId,
       'maxMessages': ?maxMessages,
       'beforeSeq': ?beforeSeq,
-    });
+    }, historyTimeout);
     final events = r['events'] as List? ?? const [];
     final raw = r['projections'];
     final projections = raw is Map
