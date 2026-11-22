@@ -187,12 +187,11 @@ class _TurnProcessRowState extends State<TurnProcessRow> {
       onExit: (_) => setState(() => _hover = false),
       child: InkWell(
         onTap: widget.onToggle,
+        // dsh-go turn_footnote：无分隔线，整行 minHeight 36、内衬 (8,4,4,4)，
+        // 左侧 8 让文字贴正文左缘，右侧 4 补箭头字形内空白。
         child: Container(
-          height: DsSpacing.turnRowHeight,
-          padding: const EdgeInsets.only(bottom: DsSpacing.turnRowPadBottom),
-          decoration: BoxDecoration(
-            border: Border(bottom: BorderSide(color: c.borderL2, width: 0.5)),
-          ),
+          constraints: const BoxConstraints(minHeight: DsSpacing.turnRowHeight),
+          padding: const EdgeInsets.fromLTRB(8, 4, 4, 4),
           alignment: Alignment.centerLeft,
           child: Row(
             mainAxisSize: MainAxisSize.min,

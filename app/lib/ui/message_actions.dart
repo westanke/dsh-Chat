@@ -79,8 +79,12 @@ class _DsMessageActionsState extends State<DsMessageActions> {
   @override
   Widget build(BuildContext context) {
     final c = widget.colors;
-    return Padding(
-      padding: const EdgeInsets.only(top: 10, bottom: 4),
+    // 出血 8：图标格 36 内图标 20，左右各 8 的白；把整条左移 8，让第一个图标
+    // 的墨迹贴正文左缘（dsh-go message_actions 的 Bleed(horizontal: 8)）。
+    return Transform.translate(
+      offset: const Offset(-8, 0),
+      child: Padding(
+      padding: const EdgeInsets.only(top: 4),
       child: Row(
         children: [
           _ActionIcon(
@@ -116,6 +120,7 @@ class _DsMessageActionsState extends State<DsMessageActions> {
           ),
         ],
       ),
+      ),
     );
   }
 }
@@ -146,14 +151,16 @@ class _ActionIcon extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // dsh-go message_actions.dart：IconButton 36×36、图标 20、点击格 shrinkWrap，
+    // 相邻按钮之间留 actionIconGap（8）。整条再向左出血 8，让第一个图标贴正文左缘。
     return Tooltip(
       message: tooltip,
-      child: InkResponse(
-        onTap: onTap,
-        radius: 20,
-        child: Padding(
-          padding: const EdgeInsets.only(right: DsSpacing.actionIconGap),
-          child: Icon(icon, size: DsSpacing.actionIconSize, color: color),
+      child: SizedBox.square(
+        dimension: 36,
+        child: InkResponse(
+          onTap: onTap,
+          radius: 20,
+          child: Center(child: Icon(icon, size: 20, color: color)),
         ),
       ),
     );

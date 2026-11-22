@@ -14,27 +14,45 @@ class _RoundIconButton extends StatelessWidget {
     required this.filled,
     required this.icon,
     required this.onPressed,
+    this.iconSize = 20,
+    this.quietFill = false,
   });
 
   final DsColors colors;
+
+  /// 主色实心（发送 / 停止）。false 时是淡底圆键（dsh-go 的 `+`）。
   final bool filled;
   final IconData icon;
   final VoidCallback? onPressed;
+  final double iconSize;
+
+  /// 淡底圆键（`+`、禁用态）：onSurface 6% 圆底、无描边。
+  final bool quietFill;
 
   @override
   Widget build(BuildContext context) {
+    // dsh-go composer：键一律 36 圆、图标 20（send）/18（stop）/22（`+`）。
+    final disabled = onPressed == null;
     return SizedBox(
-      width: DsSpacing.composerButtonSize,
-      height: DsSpacing.composerButtonSize,
+      width: DsSpacing.composerKeySize,
+      height: DsSpacing.composerKeySize,
       child: IconButton(
         onPressed: onPressed,
         padding: EdgeInsets.zero,
-        icon: Icon(icon, size: 18),
-        color: filled ? colors.onBrand : colors.labelPrimary,
+        icon: Icon(icon, size: iconSize),
+        color: filled
+            ? colors.onBrand
+            : disabled
+            ? colors.labelTertiary
+            : colors.labelPrimary,
         style: IconButton.styleFrom(
-          backgroundColor: filled ? colors.brand : colors.none,
+          backgroundColor: filled
+              ? (disabled ? colors.chipSelectedBg : colors.brand)
+              : quietFill
+              ? colors.chipSelectedBg
+              : colors.none,
           shape: CircleBorder(
-            side: filled
+            side: filled || quietFill
                 ? BorderSide.none
                 : BorderSide(color: colors.labelPrimary, width: 1.4),
           ),

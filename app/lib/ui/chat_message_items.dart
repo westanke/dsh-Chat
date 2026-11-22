@@ -217,7 +217,7 @@ class MessageItem extends StatelessWidget {
             alignment: Alignment.centerRight,
             child: Container(
               margin: const EdgeInsets.only(left: DsSpacing.hMargin),
-              padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               constraints: BoxConstraints(
                 maxWidth: avail * DsSpacing.userBubbleMaxFraction,
               ),

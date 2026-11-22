@@ -3,7 +3,7 @@ part of 'tokens.dart';
 /// 间距（App 实测 dp + Web 布局规则）。
 class DsSpacing {
   const DsSpacing._();
-  static const screenPad = 22.0; // 页面左右基础边距（官方 MD 内容左起 22.7dp）
+  static const screenPad = 12.0; // 页面左右基础边距（dsh-go AppSpace.floatInset = 12）
   static const contentPadRight = 15.0; // 官方用户气泡右缘距屏右 15dp（比左边距小 7dp）
   static const msgPad = 30.0; // MD 内容 x30dp（App 实测）
   static const hMargin = 32.0; // md h1-h3 margin-top
@@ -18,22 +18,24 @@ class DsSpacing {
   static const cellMinWidth = 100.0;
   static const inlineCodeRadius = 6.0;
   static const inlineCodePadH = 5.0;
-  static const bubbleRadius = 16.0;
+  static const bubbleRadius = 20.0;
 
   /// 用户气泡 maxWidth = 可见内容区宽 × 0.864（官方基准 279dp ÷ 内容区
   /// 323dp；360dp 屏 ≈ 279dp 与官方一致，宽屏/平板分栏随可见宽度自适应，
   /// 不再固定 280dp——issue #1 会话气泡宽度反馈）。
-  static const userBubbleMaxFraction = 0.864;
+  static const userBubbleMaxFraction = 0.82;
 
   /// HITL 挂起卡面板（提问/审批）最大高度占屏比；超出面板内滚动。
   /// （无官方基准，App 自定；2026-11-15 用户反馈提交按钮被推出屏幕。）
   static const hitlPanelMaxFraction = 0.5;
-  static const topBarHeight = 44.0;
+  /// 顶栏条高度（不含状态栏安全区）。dsh-go `chat_header.dart:89`
+  /// `barHeight = 56.0`——2026-11-22 按用户要求逐项对齐源码尺寸，原本 44。
+  static const topBarHeight = 56.0;
   static const thinkHMargin = 12.0; // 思考流内 h* margin
 
   // 助手消息底部操作条（官方实测：图标 30px/3.0 ≈ 10dp 视觉，间距 20dp）
   static const actionIconSize = 17.0;
-  static const actionIconGap = 20.0;
+  static const actionIconGap = 8.0;
   static const codeBlockRadius = 8.0; // 代码块圆角（App 实测）
   static const codeBlockPad = 12.0; // 代码块内边距
   static const codeBlockPadH = 15.0; // 官方代码首墨 x112px≈15.3dp
@@ -41,28 +43,56 @@ class DsSpacing {
   static const codeBlockBannerPadV = 8.0; // banner 上下内边距
 
   // 工具调用过程组（折叠一行；官方是 14sp 灰字 + 小图标，行高紧凑）
-  static const processRowHeight = 28.0;
+  static const processRowHeight = 32.0;
   static const processIconSize = 15.0;
   static const processIconGap = 6.0;
 
   /// 工具行左侧的色块图标（dsh-go 会话流：圆角方块底 + 描线图标）。
-  static const toolGlyphSize = 26.0;
-  static const toolGlyphRadius = 8.0;
-  static const toolGlyphIconSize = 15.0;
+  static const toolGlyphSize = 24.0;
+  static const toolGlyphRadius = 7.68;
+  static const toolGlyphIconSize = 14.4;
   static const processIndent = 2.0;
+
+  // ── 过程行骨架（dsh-go StreamRow，2026-11-22 完整复刻）──
+  /// 图形列宽：工具图标 / 思考图形都居中在这一格。
+  static const streamLead = 24.0;
+  /// 图形列 → 文字列间距。
+  static const streamGap = 8.0;
+  /// 文字列起点 = lead + gap，展开体也从这里起。
+  static const streamIndent = 32.0;
+  /// 单行最小高：24 图形 + 上下各 4。
+  static const streamMinHeight = 32.0;
+  /// 点按高亮向两侧溢出的宽度。
+  static const streamBleed = 8.0;
 
   // ---- 输入条（官方 ref/md-shot-2-lists.png 像素实测）----
   /// 容器左右外边距：容器左缘 x36px≈12dp。
   static const composerMargin = 12.0;
 
-  /// 容器圆角：官方胶囊化大圆角（高约 207px≈69dp，圆角约 26dp）。
-  static const composerRadius = 26.0;
+  /// 容器圆角。dsh-go `composer.dart:651` 收起态用 `AppShape.radiusXl = 28`
+  /// （多行展开时 lerp 到 `AppShape.lg = 20`），2026-11-22 对齐为 28（原 26）。
+  static const composerRadius = 28.0;
+
+  /// 多行展开时的容器圆角（dsh-go `composer.dart:646` `_opened = AppShape.lg`）。
+  static const composerRadiusOpen = 20.0;
+
+  /// 输入条两侧圆键（+ / 发送）尺寸，dsh-go `composer.dart:174` `_keySize = 36`。
+  static const composerKeySize = 36.0;
+
+  /// 键与容器边缘/键之间的间隙，dsh-go `composer.dart:175` `_keyGap = 6`。
+  static const composerKeyGap = 6.0;
+
+  /// 输入文字字号，dsh-go `composer.dart:178` `_fontSize = 15.0`。
+  static const composerFontSize = 15.0;
+
+  /// 输入文字行高倍数，dsh-go `composer.dart:28` `_lineHeight = 1.45`。
+  static const composerLineHeight = 1.45;
 
   /// 输入条容器左右内边距（官方 chip 行左缘 x66px=22dp，减容器左缘 12dp = 10dp）。
   static const composerPadH = 10.0;
 
   /// 占位文字相对 chip 行再内缩的量（官方占位首墨 x82px=27.3dp − chip 22dp ≈ 5dp）。
-  static const composerTextInset = 5.0;
+  static const composerTextInset = 8.0;
 
   /// 输入框顶部内边距：容器顶 y2088 → 占位文字基线区约 24dp。
   static const composerPadTop = 10.0;
@@ -89,7 +119,7 @@ class DsSpacing {
   static const composerButtonSize = 24.0;
 
   /// 两个圆按钮中心间距（官方 (931-878)/3 ≈ 17.7dp → 按钮间空隙约 10dp）。
-  static const composerButtonGap = 17.0;
+  static const composerButtonGap = 6.0;
 
   /// 待发送图片 chip 的宽度上限（真机反馈 2026-11-17）。
   /// 输入条内容宽 = 360dp 屏 - 2×screenPad(22) - 2×composerPadH(10) = 296dp；
@@ -315,10 +345,10 @@ class DsSpacing {
 
   // ---- task-5 对齐官方 Web 轮尾/思考行/工具行细节（官方 css 实测值）----
   /// 轮尾行高（TurnProcessNodeView height calc(33px+delta)）。
-  static const turnRowHeight = 33.0;
+  static const turnRowHeight = 36.0;
 
   /// 轮尾行底部内边距（padding 0 0 8px）。
-  static const turnRowPadBottom = 8.0;
+  static const turnRowPadBottom = 0.0;
 
   /// 思考折叠行高（ReasoningRow :not([data-expanded]) height 24px）。
   static const thinkRowHeight = 24.0;

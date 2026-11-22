@@ -774,6 +774,29 @@ dsh-Go 的「拍照」（本仓原生通道无相机 Intent）、「生成」「
 尚未折叠 `plan/mode` 投影，开关读不回服务端当前值，只记本会话最近一次发出的命令
 （`plus_panel.dart` 的 `_planMemoValue`），真实结果以命令卡 ✓/✗ 为准。
 
+## 4.20 会话页控件尺寸 · 按 dsh-go 源码逐值复刻（2026-11-22 task-14）
+
+数据来源：`dsh-go-src/dsh-Go/app/lib/ui/chat/`（`widgets/stream_row.dart`、`widgets/user_bubble.dart`、
+`widgets/message_actions.dart`、`widgets/turn_footnote.dart`、`composer.dart`、`chat_header.dart`、
+`theme/shapes.dart`）。**颜色仍用本仓 token**，只搬位置/尺寸/处理方式。
+
+| token | 值 | 出处 / 用途 |
+|---|---|---|
+| `DSpace.screenPad` | 12 | dsh-go `AppSpace.floatInset`：页面左右边距，顶栏与输入条同款 |
+| `DSpace.topBarHeight` | 56 | `chat_header.dart:89 barHeight`（不含状态栏） |
+| `DSpace.chatListOverlap` | 6 | 列表视口伸到输入条上沿下方 6dp（`_ChatLayout.overlap`） |
+| `DSpace.userBubbleMaxFraction` | 0.82 | 用户气泡最大宽 = 可用宽 × 0.82 |
+| `DSpace.bubbleRadius` | 20 | 用户气泡圆角（`AppShape.bubble`） |
+| `DSpace.streamLead` / `streamGap` / `streamIndent` | 24 / 8 / 32 | 过程行图形列宽 / 图形→文字 / 文字列起点 |
+| `DSpace.streamMinHeight` / `streamBleed` | 32 / 8 | 过程行最小高 / 点按高亮左右出血 |
+| `DSpace.toolGlyphSize` / `toolGlyphRadius` / `toolGlyphIconSize` | 24 / 7.68 / 14.4 | 过程行图形底块（圆角 = lead × 0.32） |
+| `DSpace.turnRowHeight` | 36 | 轮尾汇总行最小高（`turn_footnote.dart`），无分隔线 |
+| `DSpace.composerRadius` / `composerRadiusOpen` | 28 / 20 | 输入条玻璃圆角（双行展开 28→20） |
+| `DSpace.composerKeySize` / `composerKeyGap` | 36 / 6 | 输入条圆键直径 / 键与文字间距 |
+| `DSpace.composerFontSize` / `composerLineHeight` | 15 / 1.45 | 输入条字号与行高 |
+| `DSpace.composerTextInset` | 8 | 文字区左右内缩（双行模式 `_inset`） |
+| 动作栏 | 36×36 格、图标 20、整条左出血 8 | `message_actions.dart` |
+
 ## 5. 截图资产（ref/）
 - official-login-page.png 登录页（+86 152 1388 0002 / 验证码输入 / 发送验证码按钮）
 - official-welcome.png 欢迎引导页（开启对话主按钮）

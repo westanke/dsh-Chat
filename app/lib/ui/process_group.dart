@@ -260,8 +260,14 @@ class _DsToolRowState extends State<DsToolRow> {
     final badgeColor = exitBadgeIsError(exit) ? c.danger : c.labelTertiary;
     // 官方 diff 增删统计只在行展开或 hover 时显色（折叠继承行色）。
     final highlighted = _detail || _hover;
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 3),
+    // dsh-go StreamRow：整行最小高 32（24 图标 + 上下各 4），左右各 8 内衬。
+    return ConstrainedBox(
+      constraints: const BoxConstraints(minHeight: DsSpacing.streamMinHeight),
+      child: Padding(
+      padding: const EdgeInsets.symmetric(
+        horizontal: DsSpacing.streamBleed,
+        vertical: 4,
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -283,17 +289,18 @@ class _DsToolRowState extends State<DsToolRow> {
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Padding(
-                      padding: const EdgeInsets.only(
-                        top: 3,
-                        right: DsSpacing.processIconGap,
-                      ),
-                      child: ToolGlyph(
-                        colors: c,
-                        kind: kind,
-                        failed: call.failed,
+                    // 图形列固定 24 宽、图标在其中居中（streamLead）。
+                    SizedBox(
+                      width: DsSpacing.streamLead,
+                      child: Center(
+                        child: ToolGlyph(
+                          colors: c,
+                          kind: kind,
+                          failed: call.failed,
+                        ),
                       ),
                     ),
+                    const SizedBox(width: DsSpacing.streamGap),
                     Expanded(
                       child: Text.rich(
                         TextSpan(
@@ -301,7 +308,9 @@ class _DsToolRowState extends State<DsToolRow> {
                             TextSpan(
                               text: toolTitle(call.name),
                               style: DsTypography.small.copyWith(
-                                color: c.labelPrimary,
+                                fontSize: 14,
+                                height: 1.3,
+                                color: c.labelSecondary,
                               ),
                             ),
                             // 标题与摘要之间的 2px 圆点分隔（官方 .sep，
@@ -388,12 +397,20 @@ class _DsToolRowState extends State<DsToolRow> {
                     // 官方 ToolRow：run-state 文案走 visuallyHidden，只给读屏
                     // 引擎，行上不渲染「运行中/失败/已停止」文字（状态靠图标
                     // 色彩、TextShimmer、摘要红字表达）。
-                    if (expandable)
-                      Icon(
-                        _detail ? Icons.expand_less : Icons.expand_more,
-                        size: 14,
-                        color: c.labelTertiary,
+                    // dsh-go StreamChevron：16 号箭头，280ms 旋转半圈表示展开。
+                    if (expandable) ...[
+                      const SizedBox(width: 4),
+                      AnimatedRotation(
+                        turns: _detail ? 0.5 : 0,
+                        duration: const Duration(milliseconds: 280),
+                        curve: Curves.easeInOutCubic,
+                        child: Icon(
+                          Icons.expand_more,
+                          size: 16,
+                          color: c.labelTertiary,
+                        ),
                       ),
+                    ],
                   ],
                 ),
               ),
@@ -402,6 +419,7 @@ class _DsToolRowState extends State<DsToolRow> {
           if (_detail && widget.allowDetail)
             _ToolDetail(call: call, colors: c, answerable: widget.answerable),
         ],
+      ),
       ),
     );
   }

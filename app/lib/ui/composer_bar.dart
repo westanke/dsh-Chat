@@ -138,11 +138,12 @@ class _ComposerBar extends StatelessWidget {
           ),
         ],
       ),
+      // dsh-go composer.dart:601-604：左 18（无 leading 时）/6，上右下各 6。
       padding: const EdgeInsets.fromLTRB(
-        DsSpacing.composerPadH,
-        DsSpacing.composerPadTop,
-        DsSpacing.composerPadH,
-        0,
+        DsSpacing.composerKeyGap,
+        DsSpacing.composerKeyGap,
+        DsSpacing.composerKeyGap,
+        DsSpacing.composerKeyGap,
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -160,14 +161,22 @@ class _ComposerBar extends StatelessWidget {
                 enabled: enabled,
                 minLines: 1,
                 maxLines: 5,
-                style: DsTypography.base.copyWith(color: c.labelPrimary),
+                // dsh-go：字号 15、行高 1.45。
+                style: DsTypography.base.copyWith(
+                  fontSize: DsSpacing.composerFontSize,
+                  height: DsSpacing.composerLineHeight,
+                  color: c.labelPrimary,
+                ),
                 cursorColor: c.brand,
                 decoration: InputDecoration(
+                  // dsh-go 文案：空闲「给 DSH 发消息…」，生成中「生成中 · 可直接插话」。
                   hintText: !enabled
                       ? '未连接到 bridge'
                       : answering
                       ? '直接回答上面的提问…'
-                      : '发消息或按住说话',
+                      : onStop != null
+                      ? '生成中 · 可直接插话'
+                      : '给 DSH 发消息…',
                   hintStyle: DsTypography.inputPlaceholder.copyWith(
                     color: c.inputHintText,
                   ),
@@ -253,7 +262,9 @@ class _ComposerBar extends StatelessWidget {
               _RoundIconButton(
                 colors: c,
                 filled: false,
+                quietFill: true,
                 icon: Icons.add,
+                iconSize: 22,
                 onPressed: canPickImage ? onPickImage : null,
               ),
               // 「@ 引用」圆钮 2026-11-22 移除：dsh-go 输入条只有 `+`，@ 引用
@@ -269,15 +280,18 @@ class _ComposerBar extends StatelessWidget {
                 _SendKeyState.disabled => _RoundIconButton(
                   colors: c,
                   filled: sendState == _SendKeyState.send,
+                  quietFill: sendState != _SendKeyState.send,
                   icon: sendState == _SendKeyState.send
                       ? Icons.arrow_upward
                       : Icons.graphic_eq,
+                  iconSize: sendState == _SendKeyState.send ? 20 : 22,
                   onPressed: canSend ? onSend : null,
                 ),
                 _SendKeyState.stop => _RoundIconButton(
                   colors: c,
                   filled: true,
                   icon: Icons.stop,
+                  iconSize: 18,
                   onPressed: enabled ? onStop : null,
                 ),
               },
