@@ -487,3 +487,4 @@
 | 子代理历史页 | ◐ 代码 | `SubagentHistoryPage` + 团队 sheet 入口；未真机点验 |
 | 全屏图片查看 | ◐ 代码 | `ImageViewer`（缩放/拖移/双击/关闭）；待真机点验 |
 | 回底 FAB / 流式跟随 | ✅ 真机 | FAB 右下对齐；粘性 follow 修掉「流式永久停在旧位置」 |
+| 会话页外观第二批（d9887b6） | ⛔ 未同步 | **安卓已发 v1.0.24，鸿蒙待追**。待同步项：①顶栏单行化（双行标题胶囊 + 成员圆钮 + 新对话方钮，删独立状态行）；②输入条模型 chip + 上下文环形，权限 chip 与 @ 引用钮移进「+」面板；③抽屉工具条 / 「全部对话 ⌄」范围行 / 四个筛选胶囊 / 底部主机卡片；④会话信息面板（信息·插件分段 + 三元统计 + 工作区/模型/主机）；⑤附件面板（相册/文件宫格 + 本对话卡片）；⑥工具行彩色方块图标、思考段并入过程组、轮尾折叠行「已完成 · N 次工具调用 · M 条消息」；⑦移除输入框上方的上下文用量横条。参考实现全在 `app/lib/ui/{chat_top_bar,composer_status,composer_bar,composer_palette,drawer_*,sessions_drawer*,session_info_*,plus_panel,tool_glyph,turn_process_row}.dart` 与 `app/lib/bridge/history_page.dart`；桥侧无需改动 |
