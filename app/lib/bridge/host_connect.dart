@@ -39,6 +39,40 @@ class HostConnectException implements Exception {
   String toString() => note.isEmpty ? message : '$message；$note';
 }
 
+/// 一条候选地址的连接预算：隧道端点 RTT 比局域网高一个量级，握手要给足时间。
+class EndpointTimeouts {
+  const EndpointTimeouts({required this.connect, required this.hello});
+
+  final Duration connect;
+  final Duration hello;
+}
+
+/// 隧道地址放宽到 20s/15s，局域网保持 10s/8s。
+///
+/// 为什么按端点类型分：现场实测手机到 trycloudflare 的 ICMP RTT 288ms、本机 wss 握手
+/// 2.2s；同一个 10s 预算在弱网下会把「慢」判成「不通」，而局域网没有这个必要。
+EndpointTimeouts timeoutsFor(String baseUrl) =>
+    classifyEndpoint(baseUrl) == EndpointKind.tunnel
+        ? const EndpointTimeouts(
+            connect: Duration(seconds: 20),
+            hello: Duration(seconds: 15),
+          )
+        : const EndpointTimeouts(
+            connect: Duration(seconds: 10),
+            hello: Duration(seconds: 8),
+          );
+
+/// 这组候选要不要先探活。
+///
+/// 多候选必然要探（择优）；**单条的隧道地址也要探** —— 不探就分不清「手机到不了
+/// Cloudflare」和「到得了但桥握手超时」，现场只能看到一句 RequestException(TIMEOUT)。
+/// 局域名单条不探，省一个 RTT。
+bool shouldProbeCandidates(List<String> candidates) {
+  if (candidates.length > 1) return true;
+  if (candidates.isEmpty) return false;
+  return classifyEndpoint(candidates.first) == EndpointKind.tunnel;
+}
+
 /// 探活择优后连接；失败按候选表轮换重试（每条最多试一次）。
 /// 成功后把本次地址写回主机记录，下次启动先试它。
 Future<HostConnectResult> connectHost(
@@ -52,13 +86,21 @@ Future<HostConnectResult> connectHost(
   final candidates = host.candidates;
   EndpointSelection? selection;
   var target = host.baseUrl;
-  if (candidates.length > 1) {
+  if (shouldProbeCandidates(candidates)) {
     selection = await selectEndpoint(
       candidates,
       preferred: host.preferredEndpoint ?? host.baseUrl,
       timeout: probeTimeout,
     );
-    if (selection.chosen != null) target = selection.chosen!;
+    final chosen = selection.chosen;
+    if (chosen == null) {
+      // 探活全失败就别再白等握手超时：直接说清是哪一层不通。
+      throw HostConnectException(
+        '这些地址都探不通（/api/v1/healthz 无响应）',
+        note: selection.note,
+      );
+    }
+    target = chosen;
   }
   return _retry(
     host: host,
@@ -83,7 +125,12 @@ Future<HostConnectResult> _retry({
   final tried = <String>{};
   while (!tried.contains(target)) {
     tried.add(target);
-    final gateway = GatewayClient(baseUrl: target)..token = token;
+    final budget = timeoutsFor(target);
+    final gateway = GatewayClient(
+      baseUrl: target,
+      connectTimeout: budget.connect,
+      helloTimeout: budget.hello,
+    )..token = token;
     gateway.setEndpointCandidates(candidates);
     try {
       await gateway.connect();
@@ -100,15 +147,17 @@ Future<HostConnectResult> _retry({
         selection: selection,
       );
     } on Object catch (e) {
-      failures.add('$target：$e');
+      failures.add('$target：${e is RequestException ? e.message : e}');
       gateway.dispose();
+      // 令牌被吊销/失效这一类，换地址也是同样的结果，别把用户等满每条预算。
+      if (e is RequestException && e.code == 'AUTH_FAILED') break;
       final rotated = gateway.rotateEndpoint();
       target = gateway.baseUrl;
       if (!rotated) break;
     }
   }
   throw HostConnectException(
-    '连接失败：${failures.join('；')}',
+    failures.join('；'),
     note: selection?.note ?? '',
   );
 }

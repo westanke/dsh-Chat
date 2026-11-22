@@ -239,6 +239,36 @@ void main() {
   });
 
   group('connectHost 前置校验', () {
+    test('隧道放宽到 20s/15s，局域网保持 10s/8s', () {
+      final tunnel = timeoutsFor('https://x.trycloudflare.com');
+      expect(tunnel.connect, const Duration(seconds: 20));
+      expect(tunnel.hello, const Duration(seconds: 15));
+      final lan = timeoutsFor('http://192.168.1.9:3090');
+      expect(lan.connect, const Duration(seconds: 10));
+      expect(lan.hello, const Duration(seconds: 8));
+    });
+
+    test('单条隧道地址也要探活；单条局域网不探（省一个 RTT）', () {
+      expect(shouldProbeCandidates(['https://a.trycloudflare.com']), isTrue);
+      expect(shouldProbeCandidates(['http://192.168.1.9:3090']), isFalse);
+      expect(
+        shouldProbeCandidates(['http://192.168.1.9:3090', 'https://b.trycloudflare.com']),
+        isTrue,
+      );
+      expect(shouldProbeCandidates(const []), isFalse);
+    });
+
+    test('服务端关闭码翻成可读原因（令牌失效不再报「握手超时」）', () {
+      expect(gatewayDownMessage(4001, 'TOKEN_INVALID'), contains('令牌已失效'));
+      expect(gatewayDownMessage(4001, 'AUTH_FAILED'), contains('令牌已失效'));
+      expect(gatewayDownMessage(4001, 'Device revoked'), contains('已被吊销'));
+      expect(gatewayDownMessage(4001, 'AUTH_REQUIRED'), contains('没有令牌'));
+      expect(gatewayDownMessage(4001, 'PAIRING_FAILED'), contains('配对码'));
+      expect(gatewayDownMessage(429, null), contains('连接数已满'));
+      expect(gatewayDownMessage(1006, null), contains('1006'));
+      expect(gatewayDownMessage(null, null), '连接被服务端关闭');
+    });
+
     test('没有 token 直接报错（不走网络）', () async {
       const host = DshHost(
         id: 'x',

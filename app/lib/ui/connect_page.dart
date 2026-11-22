@@ -133,8 +133,10 @@ class _ConnectPageState extends State<ConnectPage> {
       setState(() {
         _busy = false;
         _failedHost = host;
-        _error = '直连失败：${e.message}（可重新配对）';
-        _probeNote = e.note.isEmpty ? _probeNote : e.note;
+        _error = '直连失败：${e.message}';
+        _probeNote = e.note.isEmpty
+            ? '（没有可用的探活结果；可再试一次或重新配对）'
+            : e.note;
       });
     } on Object catch (e) {
       if (!mounted) return;

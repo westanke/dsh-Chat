@@ -59,12 +59,44 @@ List<Map<String, Object?>> subscriptionFrames(String? current, String? next) {
   ];
 }
 
+/// 服务端在握手阶段关连接时，把这个关闭码翻成用户能照着做的一句话。
+///
+/// 桥的判据（`src/host/ws-handler.ts`）：4001 + `TOKEN_INVALID` / `AUTH_FAILED` /
+/// `Device revoked` / `AUTH_REQUIRED` / `PAIRING_FAILED`。不翻的话，`connect()` 只会
+/// 等到 helloTimeout 报「连接或握手超时」——现场分不清是网络不通还是令牌失效。
+String gatewayDownMessage(int? code, String? reason) {
+  if (code == 4001) {
+    return switch (reason) {
+      'Device revoked' => '这台设备已被吊销，请重新配对',
+      'TOKEN_INVALID' || 'AUTH_FAILED' => '配对令牌已失效，请重新配对',
+      'AUTH_REQUIRED' => '这条记录没有令牌，请重新配对',
+      'DEVICE_ID_REQUIRED' => '缺少设备标识，请重新配对',
+      'PAIRING_FAILED' => '配对失败，配对码可能已过期',
+      _ => '服务端拒绝连接：${reason ?? '未知原因'}',
+    };
+  }
+  if (code == 429) return '连接数已满，稍后再试';
+  return '连接被服务端关闭${code == null ? '' : '（close $code）'}';
+}
+
 class GatewayClient {
-  GatewayClient({required this.baseUrl});
+  GatewayClient({
+    required this.baseUrl,
+    Duration? connectTimeout,
+    Duration? helloTimeout,
+  })  : connectTimeout = connectTimeout ?? const Duration(seconds: 10),
+        helloTimeout = helloTimeout ?? const Duration(seconds: 8);
+
+  /// WebSocket 建连（TCP+TLS+upgrade）等待上限。隧道端点的 RTT 比局域网高一个量级，
+  /// 用同一个 10s 会把「慢」误判成「不通」（IKX5KQ 现场：288ms RTT + 冷启动）。
 
   /// 如 http://192.168.1.10:3090（不带路径）。重连换候选地址时会变
   /// （IKX5KQ：LAN 断了自动落到隧道，不让用户重贴配置）。
   String baseUrl;
+
+  /// 建连与 hello 的等待上限，见构造参数说明。
+  final Duration connectTimeout;
+  final Duration helloTimeout;
 
   /// 按序尝试的候选地址（DSH1 endpoints 全量；老单地址码为空表）。
   /// 当前订阅的会话（null = 未订阅/已退订）。重连后白名单在服务端被重置，
@@ -214,7 +246,7 @@ class GatewayClient {
         headers: headers,
       );
       _ws = ws;
-      await ws.ready.timeout(const Duration(seconds: 10));
+      await ws.ready.timeout(connectTimeout);
       _sub = ws.stream.listen(
         _onFrame,
         // close code 只能从 channel 取（onDone/onError 回调不带参数），
@@ -224,12 +256,15 @@ class GatewayClient {
       );
       _startHeartbeat();
       // hello 会异步到达；等它确认协议版本。
-      await _helloFuture.timeout(const Duration(seconds: 8));
+      await _helloFuture.timeout(helloTimeout);
     } on TimeoutException {
       await _teardown();
       throw RequestException('TIMEOUT', '连接或握手超时');
     } catch (e) {
       await _teardown();
+      // 已经是我们自己映射好的原因（掉线/鉴权）就原样抛：再包一层 CONNECT_FAIL
+      // 会把「令牌失效」说成「连接失败」，用户不知道该重新配对。
+      if (e is RequestException) rethrow;
       // WebSocketChannelException: connection rejected —— 401/403/429 都在这里
       throw RequestException('CONNECT_FAIL', e.toString());
     }
@@ -481,6 +516,14 @@ class GatewayClient {
   void _onDown(int? code, String? reason) {
     if (_downHandled) return; // 幂等：重入会与 failAll 的失败处理打成正反馈死循环
     _downHandled = true;
+    final hello = _helloCompleter;
+    if (hello != null && !hello.isCompleted) {
+      hello.completeError(RequestException(
+        code == 4001 ? 'AUTH_FAILED' : 'LINK_CLOSED',
+        gatewayDownMessage(code, reason),
+      ));
+    }
+    _helloCompleter = null;
     final revoked = code == 4001;
     if (revoked) _authDead = true;
     DshLog.w('gw down code=$code reason=$reason');
