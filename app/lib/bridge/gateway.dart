@@ -40,6 +40,25 @@ export 'questions.dart';
 
 /// 网关推送事件与异常类型在 gateway_events.dart（宪法 §7 拆分）。
 
+/// 订阅/退订要发的帧（纯函数，便于单测）。
+///
+/// 桥的语义：`subscribe` **合并**进入白名单（可订多个会话），`unsubscribe`
+/// 清空白名单回到「接收所有已授权会话」。单连接的 dsh-Chat 一次只跟一个会话，
+/// 所以换会话时要先退订再订阅——否则连接待过的每个会话都永久留在白名单里，
+/// 事件量与授权判定白付（以前 `subscribe(null)` 直接 return，一次都没退订过）。
+List<Map<String, Object?>> subscriptionFrames(String? current, String? next) {
+  if (next == null || next.isEmpty) {
+    return current == null ? const [] : const [
+      {'type': 'unsubscribe'},
+    ];
+  }
+  if (current == next) return const [];
+  return [
+    if (current != null) {'type': 'unsubscribe'},
+    {'type': 'subscribe', 'sessionId': next},
+  ];
+}
+
 class GatewayClient {
   GatewayClient({required this.baseUrl});
 
@@ -48,6 +67,10 @@ class GatewayClient {
   String baseUrl;
 
   /// 按序尝试的候选地址（DSH1 endpoints 全量；老单地址码为空表）。
+  /// 当前订阅的会话（null = 未订阅/已退订）。重连后白名单在服务端被重置，
+  /// 靠这个字段在 hello 里补订阅。
+  String? _subscribedSessionId;
+
   List<String> _endpointCandidates = const [];
 
   List<String> get endpointCandidates => _endpointCandidates;
@@ -268,6 +291,12 @@ class GatewayClient {
         _catalog.value = const [];
         DshLog.w('gw hello caps=${capabilities.length} port=$listenerPort');
         connectedEndpoint = baseUrl;
+        // 重连后服务端订阅白名单已重置：补发一次订阅，否则事件过滤退回
+        // 「接收所有已授权会话」（会影响后台会话的通知与流量）。
+        final resubscribe = _subscribedSessionId;
+        if (resubscribe != null) {
+          _sendRaw({'type': 'subscribe', 'sessionId': resubscribe});
+        }
         _backoffIndex = 0;
         _authDead = false;
         _setState(GatewayState.ready);
@@ -359,6 +388,14 @@ class GatewayClient {
             : null;
         _eventCtrl.add(
           TurnEndedEvent((payload['sessionId'] ?? '') as String, reasonKind),
+        );
+      case 'chat.session.status':
+        // host 级轮状态：turn/end 丢了也能把「生成中」收掉（兜底判据）。
+        _eventCtrl.add(
+          SessionStatusEvent(
+            (payload['sessionId'] ?? '') as String,
+            payload['running'] == true,
+          ),
         );
       case 'chat.session.event':
         // 实时流只带 eventType，不带事件体（工具名/参数要靠 history 重拉）。
@@ -584,9 +621,16 @@ class GatewayClient {
   /// 订阅会话推送。subscribed 在 REQUEST_ID_ECHO_EXCLUDED_KINDS 里（不回显
   /// requestId），不能走 request() 等应答——发出即成功（同 kotlin-sdk）。
   void subscribe(String? sessionId) {
-    if (sessionId == null || sessionId.isEmpty) return;
-    _sendRaw({'type': 'subscribe', 'sessionId': sessionId});
+    final next = (sessionId == null || sessionId.isEmpty) ? null : sessionId;
+    for (final frame in subscriptionFrames(_subscribedSessionId, next)) {
+      // 走公开的 sendRawFrame：测试可覆写它核对「到底发了什么帧」。
+      sendRawFrame(frame);
+    }
+    _subscribedSessionId = next;
   }
+
+  /// 当前订阅的会话（诊断/测试用；null = 已退订）。
+  String? get subscribedSessionId => _subscribedSessionId;
 
   void dispose() {
     _disposed = true;

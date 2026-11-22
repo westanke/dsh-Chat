@@ -72,6 +72,20 @@ void _onGatewayEvent(ChatState state, GatewayEvent event) {
       state._clearStream();
       state.lastError = message;
       state._notify();
+    case SessionStatusEvent(:final sessionId, :final running):
+      // 兜底：turn/end 走跟随流，丢了就永远「生成中」（桥 v2.16.1 已修根因，
+      // 老桥仍可能丢）。chat.session.status 走 host 流，不依赖那次跟随。
+      // 正常收尾时 turn.end 先到、streaming 已落，这里直接 no-op，不重复重拉。
+      if (!state._isCurrent(sessionId)) return;
+      if (running) {
+        state.streaming = true;
+        state._notify();
+        return;
+      }
+      if (!state.streaming) return;
+      state.streaming = false;
+      state._clearStream();
+      state.reloadHistory();
     case ResyncEvent():
       // 背压丢帧：走 REST/WS 重拉当前历史。
       state.reloadHistory();

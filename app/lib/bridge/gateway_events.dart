@@ -50,6 +50,17 @@ class TurnEndedEvent extends GatewayEvent {
   final String? reasonKind;
 }
 
+/// 会话轮状态（`chat.session.status`，桥 host 级推：与跟随流无关，
+/// 所以能补上「tail 帧丢了」时的结束判据）。
+///
+/// 语义：`running=false` = 该会话已无在跑的轮。正常收尾时 turn/end 先到、
+/// 这条紧随其后；**只有 turn/end 丢了**（老桥 / 断流）它才是有用的兜底。
+class SessionStatusEvent extends GatewayEvent {
+  SessionStatusEvent(this.sessionId, this.running);
+  final String sessionId;
+  final bool running;
+}
+
 class ResyncEvent extends GatewayEvent {
   ResyncEvent(this.dropped);
   final int dropped;

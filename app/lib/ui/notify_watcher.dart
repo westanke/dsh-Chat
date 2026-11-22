@@ -19,15 +19,32 @@ import 'chat_state.dart';
 import 'notify_prefs.dart';
 
 class NotifyWatcher with WidgetsBindingObserver {
-  NotifyWatcher(this._chat) {
+  NotifyWatcher(
+    this._chat, {
+    Future<NotifyStatus> Function()? statusOf,
+    Future<bool> Function(NotifyPayload payload)? show,
+  }) : _statusOf = statusOf ?? DshNotify.status,
+       _show = show ?? DshNotify.show {
     _sub = _chat.gateway.events.listen(_onEvent);
     WidgetsBinding.instance.addObserver(this);
     _foreground = _lifecycleIsForeground();
   }
 
   final ChatState _chat;
+
+  /// 状态/发送两个副作用点做成可注入的：单测能核对「发了几条、发了什么」，
+  /// 不依赖真机系统通知（MethodChannel 在测试里恒不可用）。
+  final Future<NotifyStatus> Function() _statusOf;
+  final Future<bool> Function(NotifyPayload payload) _show;
   StreamSubscription<GatewayEvent>? _sub;
   bool _foreground = true;
+
+  /// 已经为「这一轮」发过结束类通知的会话。
+  ///
+  /// 正常路径：`chat.turn.end` 到 → 记一笔并发通知；随后 `chat.session.status`
+  /// 的 running=false 只是收尾，不重复打扰。反过来（turn.end 丢了）就靠
+  /// status 兜一条，避免「回答结束了但一条通知都没有」。
+  final Set<String> _turnNotified = <String>{};
 
   /// 点击通知后跳会话（由 main 注入，负责切到该会话）。
   void Function(String sessionId)? onOpenSession;
@@ -49,6 +66,7 @@ class NotifyWatcher with WidgetsBindingObserver {
 
   void _onEvent(GatewayEvent e) {
     if (e is TurnFailedEvent) {
+      _turnNotified.add(e.sessionId);
       _post(
         kind: NotifyKind.failed,
         attention: false,
@@ -57,10 +75,14 @@ class NotifyWatcher with WidgetsBindingObserver {
         title: '执行失败',
         text: _titleOf(e.sessionId, fallback: _clip(e.message)),
       );
+    } else if (e is SessionStatusEvent) {
+      _onSessionStatus(e);
     } else if (e is TurnEndedEvent) {
       final failed = e.reasonKind == 'error' || e.reasonKind == 'failed';
-      final stopped = e.reasonKind == 'aborted' || e.reasonKind == 'interrupted';
+      final stopped =
+          e.reasonKind == 'aborted' || e.reasonKind == 'interrupted';
       if (stopped) return; // 用户自己停的，不打扰
+      _turnNotified.add(e.sessionId);
       _post(
         kind: failed ? NotifyKind.failed : NotifyKind.done,
         attention: false,
@@ -90,9 +112,31 @@ class NotifyWatcher with WidgetsBindingObserver {
         title: '有新提问',
         text: _titleOf(
           q.sessionId,
-          fallback: q.questions.isEmpty ? '有提问等你回答' : '${q.questions.length} 个问题等你回答',
+          fallback: q.questions.isEmpty
+              ? '有提问等你回答'
+              : '${q.questions.length} 个问题等你回答',
         ),
         eventId: q.callId,
+      );
+    }
+  }
+
+  /// 轮状态兜底：running=false 但这一轮没发过结束通知 → 补一条「回答已完成」。
+  ///
+  /// 只补 done，不猜失败/中止（status 不带 reason）；启动新一轮时清掉标记。
+  void _onSessionStatus(SessionStatusEvent e) {
+    if (e.running) {
+      _turnNotified.remove(e.sessionId);
+      return;
+    }
+    if (!_turnNotified.remove(e.sessionId)) {
+      _post(
+        kind: NotifyKind.done,
+        attention: false,
+        sessionId: e.sessionId,
+        key: 'turn:${e.sessionId}',
+        title: '回答已完成',
+        text: _titleOf(e.sessionId, fallback: '点开查看结果'),
       );
     }
   }
@@ -107,7 +151,7 @@ class NotifyWatcher with WidgetsBindingObserver {
     String? eventId,
   }) async {
     final prefs = NotifyPrefs.instance;
-    final status = await DshNotify.status();
+    final status = await _statusOf();
     final sameSession = _chat.sessionId == sessionId;
     if (!NotifyPrefs.shouldPost(
       allowsKind: prefs.allows(kind),
@@ -117,7 +161,7 @@ class NotifyWatcher with WidgetsBindingObserver {
     )) {
       return;
     }
-    await DshNotify.show(
+    await _show(
       NotifyPayload(
         title: title,
         text: text,
