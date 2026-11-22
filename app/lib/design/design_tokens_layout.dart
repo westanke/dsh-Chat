@@ -343,6 +343,25 @@ class DsSpacing {
   /// FAB 内箭头图标尺寸。
   static const fabIconSize = 20.0;
 
+  // ---- 输入条上方的「当前活动」条（dsh-go activity_strip） ----
+  /// 条子圆角（胶囊）。
+  static const activityStripRadius = 18.0;
+
+  /// 条子左右内衬。
+  static const activityStripPadH = 12.0;
+
+  /// 条子上下内衬。
+  static const activityStripPadV = 7.0;
+
+  /// 条子与输入条之间的竖直间距。
+  static const activityStripGap = 6.0;
+
+  /// 图形与文字之间的间距。
+  static const activityStripIconGap = 8.0;
+
+  /// 图形尺寸。
+  static const menuIconSize = 18.0;
+
   // ---- task-5 对齐官方 Web 轮尾/思考行/工具行细节（官方 css 实测值）----
   /// 轮尾行高（TurnProcessNodeView height calc(33px+delta)）。
   static const turnRowHeight = 36.0;

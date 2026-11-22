@@ -28,6 +28,7 @@ import 'model_sheet.dart';
 import 'question_card.dart';
 import 'session_location_sheet.dart';
 import 'sessions_drawer.dart';
+import 'activity_strip.dart';
 import 'todo_dock.dart';
 import 'window_class.dart';
 
@@ -263,6 +264,11 @@ class _ChatPageState extends State<ChatPage>
   final GlobalKey<ComposerState> _composerKey = GlobalKey<ComposerState>();
 
   Widget _buildChatScaffold(BuildContext context) {
+    // 当前活动（dsh-go runActivityOf 的同口径本地版）：不在跑就是 null。
+    final activity = liveActivityOf(
+      messages: st.messages,
+      streaming: st.streaming,
+    );
     // 任务条摘要（dsh-go TodoDock 同口径）：没有清单时为 null，不占位。
     final todoDock = TodoDockSummary.of(
       todoItems(st.projections),
@@ -330,6 +336,10 @@ class _ChatPageState extends State<ChatPage>
                 colors: c,
                 onTap: () => runGoalActions(context, st, c),
               ),
+            // 当前活动条（dsh-go ActivityStrip 移植）：这一轮在跑时显示
+            // 「思考中 / 正在调用工具 + 细节 + 实时秒表」，不跑就不占位。
+            if (activity != null)
+              ActivityStrip(activity: activity, colors: c),
             // 输入条上方的任务条（dsh-go TodoDock 移植）：没有清单时不占位。
             if (todoDock != null)
               TodoDockBar(
