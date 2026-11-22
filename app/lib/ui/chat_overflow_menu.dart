@@ -6,14 +6,10 @@ import 'package:flutter/services.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../bridge/platform.dart';
-import '../design/app_settings.dart';
 import '../design/tokens.dart';
 import 'chat_state.dart';
 import 'model_sheet.dart';
-import 'projection_sheets.dart';
-import 'session_info_sheet.dart';
-import 'stats_sheet.dart';
-import 'work_view_sheet.dart';
+import 'session_tabs_sheet.dart';
 
 class ChatOverflowMenu extends StatelessWidget {
   const ChatOverflowMenu({
@@ -34,23 +30,14 @@ class ChatOverflowMenu extends StatelessWidget {
       color: c.settingsSurface,
       onSelected: (value) async {
         switch (value) {
-          case 'info':
-            await showSessionInfoSheet(
+          // 2026-11-22：原来分散的六个面板收进一个可左右滑动的 TAB 容器。
+          case 'panels':
+            await showSessionTabsSheet(
               context,
               state,
               c,
               onShare: () => _export(context, share: true),
             );
-          case 'stats':
-            showChatStatsSheet(context, state, c);
-          case 'trajectory':
-            showTrajectorySheet(context, state, c);
-          case 'workview':
-            showWorkViewSheet(context, state, c);
-          case 'team':
-            showTeamSheet(context, state, c);
-          case 'todo':
-            showTodoSheet(context, state, c);
           case 'export':
             await _export(context, share: false);
           case 'share':
@@ -73,14 +60,7 @@ class ChatOverflowMenu extends StatelessWidget {
         }
       },
       itemBuilder: (context) => <PopupMenuEntry<String>>[
-        _menuItem('info', Icons.info_outline, '会话信息'),
-        _menuItem('stats', Icons.bar_chart, '会话统计'),
-        _menuItem('trajectory', Icons.timeline, '运行轨迹'),
-        // D 项：设置「显示代码工作视图」开启后才出现（官方通用设置）。
-        if (appSettings.codeWorkView)
-          _menuItem('workview', Icons.difference_outlined, '代码工作视图'),
-        _menuItem('team', Icons.groups_outlined, '智能团队'),
-        _menuItem('todo', Icons.checklist_outlined, '任务'),
+        _menuItem('panels', Icons.dashboard_customize_outlined, '会话面板'),
         _menuItem('model', Icons.tune, '调整模型'),
         if (state.sessionId != null && state.messages.isNotEmpty) ...[
           const PopupMenuDivider(),

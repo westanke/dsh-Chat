@@ -32,7 +32,7 @@ void showWorkViewSheet(
     constraints: modalSheetConstraints(context),
     backgroundColor: colors.bgLayer1,
     isScrollControlled: true,
-    builder: (context) => _WorkViewSheet(state: state, colors: colors),
+    builder: (context) => WorkViewContent(state: state, colors: colors),
   );
 }
 
@@ -46,17 +46,17 @@ DshSession? _currentSessionOf(ChatState state) {
   return null;
 }
 
-class _WorkViewSheet extends StatefulWidget {
-  const _WorkViewSheet({required this.state, required this.colors});
+class WorkViewContent extends StatefulWidget {
+  const WorkViewContent({super.key, required this.state, required this.colors});
 
   final ChatState state;
   final DsColors colors;
 
   @override
-  State<_WorkViewSheet> createState() => _WorkViewSheetState();
+  State<WorkViewContent> createState() => _WorkViewSheetState();
 }
 
-class _WorkViewSheetState extends State<_WorkViewSheet> {
+class _WorkViewSheetState extends State<WorkViewContent> {
   List<GatewayAgentPreset>? _presets;
   String? _presetsError;
   String? _switchError;

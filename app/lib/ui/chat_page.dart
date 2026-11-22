@@ -11,12 +11,12 @@ import '../bridge/gateway.dart';
 import '../bridge/goal.dart';
 import '../bridge/projections.dart';
 import '../design/tokens.dart';
-import 'brand_mark.dart';
 import 'chat_header_status.dart';
 import 'chat_image.dart';
 import 'chat_list.dart';
 import 'chat_message_items.dart';
 import 'chat_overflow_menu.dart';
+import 'chat_side_rails.dart';
 import 'chat_shell.dart';
 import 'chat_state.dart';
 import 'goal_dock.dart';
@@ -26,10 +26,10 @@ import 'projection_sheets.dart';
 import 'composer.dart';
 import 'model_sheet.dart';
 import 'question_card.dart';
-import 'session_location_sheet.dart';
+import 'session_tabs_sheet.dart';
 import 'sessions_drawer.dart';
 import 'activity_strip.dart';
-import 'empty_suggestions.dart';
+import 'empty_greeting.dart';
 import 'todo_dock.dart';
 import 'window_class.dart';
 
@@ -57,12 +57,16 @@ class ChatPage extends StatefulWidget {
 }
 
 class _ChatPageState extends State<ChatPage>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   final _scaffoldKey = GlobalKey<ScaffoldState>();
   late final AnimationController _drawerCtrl;
   // 抽屉打开时，官方是把聊天页整体推出屏外（推挤式），不是 Scaffold.drawer
   // 的覆盖式。曲线/时长登记在 docs/design-tokens.md §4.2 与 DsMotion。
   late final Animation<double> _drawerShift;
+
+  /// 右侧「会话面板」侧栏（左滑推出，会话页同时向左让位）。
+  late final AnimationController _panelCtrl;
+  late final Animation<double> _panelShift;
 
   ChatState get st => widget.state;
   DsColors get c => widget.colors;
@@ -88,12 +92,23 @@ class _ChatPageState extends State<ChatPage>
       curve: Curves.easeOutCubic,
       reverseCurve: Curves.easeInCubic,
     );
+    _panelCtrl = AnimationController(
+      vsync: this,
+      duration: DsMotion.drawerShift,
+      value: 0,
+    );
+    _panelShift = CurvedAnimation(
+      parent: _panelCtrl,
+      curve: Curves.easeOutCubic,
+      reverseCurve: Curves.easeInCubic,
+    );
   }
 
   @override
   void dispose() {
     st.removeListener(_onChange);
     _drawerCtrl.dispose();
+    _panelCtrl.dispose();
     super.dispose();
   }
 
@@ -125,6 +140,13 @@ class _ChatPageState extends State<ChatPage>
 
   void _closeDrawer() => _drawerCtrl.reverse();
 
+  void _openPanels() {
+    if (_panelCtrl.value == 1) return;
+    _panelCtrl.forward();
+  }
+
+  void _closePanels() => _panelCtrl.reverse();
+
   /// 屏内右滑的累计位移（逻辑像素）。
   double _swipeDx = 0;
 
@@ -133,8 +155,22 @@ class _ChatPageState extends State<ChatPage>
   void _onSwipeUpdate(DragUpdateDetails d) => _swipeDx += d.delta.dx;
 
   void _onSwipeEnd(DragEndDetails d) {
-    if (_drawerShift.value > 0) return;
-    if (drawerSwipeOpens(_swipeDx, d.primaryVelocity ?? 0)) _openDrawer();
+    final intent = swipeIntent(
+      dx: _swipeDx,
+      velocity: d.primaryVelocity ?? 0,
+      drawerOpen: _drawerShift.value > 0,
+      panelOpen: _panelShift.value > 0,
+    );
+    switch (intent) {
+      case SwipeIntent.openDrawer:
+        _openDrawer();
+      case SwipeIntent.closePanel:
+        _closePanels();
+      case SwipeIntent.openPanel:
+        _openPanels();
+      case SwipeIntent.none:
+        break;
+    }
   }
 
   @override
@@ -147,18 +183,20 @@ class _ChatPageState extends State<ChatPage>
     // 深色保留淡遮罩（drawerScrim 深色 0x50000000）；浅色官方无灰幕（全透明），
     // 页面被推走本身就是「打开中」的视觉反馈。
     final scrim = AnimatedBuilder(
-      animation: _drawerShift,
-      builder: (context, _) => _drawerShift.value == 0
-          ? const SizedBox.shrink()
-          : Positioned.fill(
-              child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: _closeDrawer,
-                child: ColoredBox(
-                  color: Color.lerp(c.none, c.drawerScrim, _drawerShift.value)!,
-                ),
-              ),
-            ),
+      animation: Listenable.merge([_drawerShift, _panelShift]),
+      builder: (context, _) {
+        final v = _drawerShift.value > _panelShift.value
+            ? _drawerShift.value
+            : _panelShift.value;
+        if (v == 0) return const SizedBox.shrink();
+        return Positioned.fill(
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: _drawerShift.value > 0 ? _closeDrawer : _closePanels,
+            child: ColoredBox(color: Color.lerp(c.none, c.drawerScrim, v)!),
+          ),
+        );
+      },
     );
     // 抽屉打开时页面怎么让路：手机上整页推走（官方残条观感），宽窗上**缩窄**
     // 到右边剩余宽度——推走会让顶栏的 ⊕/⋮ 越出右缘被裁掉（真机反馈 2026-11-20）。
@@ -171,12 +209,16 @@ class _ChatPageState extends State<ChatPage>
       onHorizontalDragUpdate: _onSwipeUpdate,
       onHorizontalDragEnd: _onSwipeEnd,
       child: AnimatedBuilder(
-        animation: _drawerShift,
+        animation: Listenable.merge([_drawerShift, _panelShift]),
         builder: (context, child) {
-          final inset = cls.pageInsetFor(width) * _drawerShift.value;
+          final step = cls.pageInsetFor(width);
+          final inset = step * _drawerShift.value - step * _panelShift.value;
           return reflow
               ? Padding(
-                  padding: EdgeInsets.only(left: inset),
+                  padding: EdgeInsets.only(
+                    left: inset > 0 ? inset : 0,
+                    right: inset < 0 ? -inset : 0,
+                  ),
                   child: child,
                 )
               : Transform.translate(offset: Offset(inset, 0), child: child);
@@ -184,24 +226,32 @@ class _ChatPageState extends State<ChatPage>
         child: _buildChatScaffold(context),
       ),
     );
-    final drawer = ClipRect(
-      child: AnimatedBuilder(
-        animation: _drawerShift,
-        builder: (context, child) => Align(
-          alignment: Alignment.centerLeft,
-          widthFactor: _drawerShift.value,
-          child: child,
+    final drawer = sideRail(
+      shift: _drawerShift,
+      alignment: Alignment.centerLeft,
+      width: cls.sidebarWidth,
+      child: SessionsDrawer(
+        state: st,
+        colors: c,
+        onOpenSettings: widget.onOpenSettings,
+        onClose: _closeDrawer,
+        width: cls.sidebarWidth,
+      ),
+    );
+    // 右侧「会话面板」：把原来散在「更多」菜单里的几个面板收成一个可左右滑
+    // 的 TAB 容器（用户 2026-11-22 要求）。左滑推出，会话页同时向左让位。
+    final panels = sideRail(
+      shift: _panelShift,
+      alignment: Alignment.centerRight,
+      width: cls.sidebarWidth,
+      child: SessionTabsSheet(
+        state: st,
+        colors: c,
+        tabs: sessionTabsOf(
+          onShare: () async => _runAppCommand('export'),
         ),
-        child: SizedBox(
-          width: cls.sidebarWidth,
-          child: SessionsDrawer(
-            state: st,
-            colors: c,
-            onOpenSettings: widget.onOpenSettings,
-            onClose: _closeDrawer,
-            width: cls.sidebarWidth,
-          ),
-        ),
+        embedded: true,
+        onClose: _closePanels,
       ),
     );
     return PopScope(
@@ -214,6 +264,11 @@ class _ChatPageState extends State<ChatPage>
         // 抽屉开着时，返回先收起抽屉（宽窗和手机上一样）。
         if (_drawerShift.value > 0) {
           _closeDrawer();
+          return;
+        }
+        // 右侧面板开着时同理。
+        if (_panelShift.value > 0) {
+          _closePanels();
           return;
         }
         // 斜杠面板开着时，返回只收面板（dsh-go PopScope 同口径）：不退页面。
@@ -238,6 +293,8 @@ class _ChatPageState extends State<ChatPage>
       },
       child: Stack(
         children: [
+          // 铺一层底色：侧栏展开时页外露出的区域不能是黑的。
+          Positioned.fill(child: ColoredBox(color: c.bgBase)),
           Positioned.fill(child: page),
           // 抽屉关闭时给左缘留一条手势热区，可像官方一样从边缘拖出/点按呼出。
           Positioned(
@@ -253,6 +310,8 @@ class _ChatPageState extends State<ChatPage>
           ),
           scrim,
           drawer,
+          // 右侧面板必须钉在右缘：Stack 的非定位子级默认从左上开始排。
+          Positioned(top: 0, bottom: 0, right: 0, child: panels),
         ],
       ),
     );
@@ -308,7 +367,7 @@ class _ChatPageState extends State<ChatPage>
             ),
             Expanded(
               child: st.isEmpty
-                  ? _Greeting(
+                  ? EmptyGreeting(
                       colors: c,
                       state: st,
                       onPickSuggestion: (text) =>
@@ -352,10 +411,18 @@ class _ChatPageState extends State<ChatPage>
                 summary: todoDock,
                 todos: todoItems(st.projections),
                 colors: c,
+                topGap: activity != null
+                    ? DsSpacing.activityStripGap
+                    : DsSpacing.blockGap,
               ),
             Composer(
               key: _composerKey,
               colors: c,
+              // 上方已有活动条/任务条时，间距收到 6（dsh-go dock 与输入条之间 6），
+              // 否则保留 16 的正文间隔。
+              topGap: (activity != null || todoDock != null)
+                  ? DsSpacing.activityStripGap
+                  : DsSpacing.blockGap,
               enabled: st.connectionState == GatewayState.ready,
               onSend: st.send,
               onSendWithImages: st.sendWithImages,
@@ -393,18 +460,7 @@ class _ChatPageState extends State<ChatPage>
   /// 这些名字桥不认识（服务端只有内核命令），所以必须在本地落到已有界面上：
   /// new→清空会话、model→模型面板、export→复制 Markdown、features→设置页。
   /// 输入条模型 chip → 模型选择（成功后刷新历史，与「更多 → 模型」同口径）。
-  Future<void> _pickModel() async {
-    final st = widget.state;
-    final sid = st.sessionId;
-    if (sid == null) return;
-    final changed = await showModelSheet(
-      context,
-      colors: widget.colors,
-      gateway: st.gateway,
-      sessionId: sid,
-    );
-    if (changed) await st.reloadHistory();
-  }
+  Future<void> _pickModel() => _runAppCommand('model');
 
   Future<void> _runAppCommand(String name) async {
     switch (name) {
@@ -435,111 +491,6 @@ class _ChatPageState extends State<ChatPage>
 }
 
 // ---------- 空态问候 ----------
-
-class _Greeting extends StatelessWidget {
-  const _Greeting({
-    required this.colors,
-    required this.state,
-    required this.onPickSuggestion,
-  });
-
-  final DsColors colors;
-  final ChatState state;
-
-  /// 点了建议卡：把 prompt 填进输入框（不直接发）。
-  final ValueChanged<String> onPickSuggestion;
-
-  @override
-  Widget build(BuildContext context) {
-    final loc = state.pendingLocation;
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          DsBrandMark(
-            color: colors.brandMark,
-            bellyColor: colors.bgBase,
-            width: DsSpacing.brandMarkWidth,
-            height: DsSpacing.brandMarkHeight,
-          ),
-          const SizedBox(height: DsSpacing.brandMarkGap),
-          Text(
-            '嗨！今天想聊些什么？',
-            style: DsTypography.greeting.copyWith(color: colors.labelPrimary),
-          ),
-          // 工作目录选择（2026-11-15 反馈）：新建会话默认「手机会话」，
-          // 发首条消息前可在此换成授权根下的指定目录。选中后 label 显示
-          // 在 chip 上；会话建好后随 sessionId 定死（本组件只在空态显示）。
-          const SizedBox(height: DsSpacing.liGap),
-          InkWell(
-            onTap: () => showSessionLocationSheet(context, state, colors),
-            borderRadius: BorderRadius.circular(18),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-              decoration: BoxDecoration(
-                color: colors.bgLayer1,
-                borderRadius: BorderRadius.circular(18),
-                border: Border.all(color: colors.inputBorder),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    loc == null ? Icons.smartphone : Icons.folder,
-                    size: 15,
-                    color: colors.brand,
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    '工作目录：${loc == null ? '手机会话（默认）' : loc.label}',
-                    style: DsTypography.small.copyWith(
-                      color: colors.labelPrimary,
-                    ),
-                  ),
-                  const SizedBox(width: 6),
-                  Icon(
-                    Icons.expand_more,
-                    size: 15,
-                    color: colors.labelTertiary,
-                  ),
-                ],
-              ),
-            ),
-          ),
-          // 建议卡与技巧行（dsh-go empty_actions 移植）：左右留出页面边距，
-          // 桌面宽度下再限宽，两列不会被拉长也不会贴边。
-          const SizedBox(height: DsSpacing.suggestionsGap),
-          Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: DsSpacing.screenPad,
-            ),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(
-                maxWidth: DsSpacing.suggestionsMaxWidth,
-              ),
-              child: SuggestionCards(
-                colors: colors,
-                onPick: onPickSuggestion,
-              ),
-            ),
-          ),
-          const SizedBox(height: DsSpacing.emptyTipGap),
-          Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: DsSpacing.screenPad,
-            ),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(
-                maxWidth: DsSpacing.suggestionsMaxWidth,
-              ),
-              child: EmptyTip(colors: colors),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
 
 // 消息列表已拆到 chat_list.dart（居中锚定的两段滚动）；
 // 消息项拆到 chat_message_items.dart；行渲染层拆到 chat_row_view.dart。

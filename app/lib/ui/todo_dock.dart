@@ -82,7 +82,11 @@ class TodoDockBar extends StatefulWidget {
     required this.summary,
     required this.todos,
     required this.colors,
+    this.topGap = DsSpacing.blockGap,
   });
+
+  /// 与上方组件的间距（dsh-go dock 之间 6）。
+  final double topGap;
 
   final TodoDockSummary summary;
   final List<TodoItem> todos;
@@ -100,9 +104,9 @@ class _TodoDockBarState extends State<TodoDockBar> {
     final c = widget.colors;
     final s = widget.summary;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(
+      padding: EdgeInsets.fromLTRB(
         DsSpacing.composerMargin,
-        DsSpacing.blockGap,
+        widget.topGap,
         DsSpacing.composerMargin,
         0,
       ),

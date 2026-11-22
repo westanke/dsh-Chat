@@ -114,8 +114,12 @@ class _TitleCapsule extends StatelessWidget {
     return Semantics(
       label: '$title，${status.spokenLabel}',
       excludeSemantics: true,
+      // 高度按内容撑、下限 44（dsh-go pillHeightOf = max(44, 15*1.3 + 11*1.25 + 8)）。
+      // 之前写死 44 且沿用 16 号/行高 1.75 的标题体，两行合计 53 会溢到胶囊外。
       child: Container(
-        height: DsSpacing.topBarCapsuleHeight,
+        constraints: const BoxConstraints(
+          minHeight: DsSpacing.topBarCapsuleHeight,
+        ),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
         decoration: BoxDecoration(
           color: c.chipSelectedBg,
@@ -130,7 +134,12 @@ class _TitleCapsule extends StatelessWidget {
               title,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: DsTypography.baseStrong.copyWith(color: c.labelPrimary),
+              // dsh-go titleSmall：15 / 1.3。
+              style: DsTypography.baseStrong.copyWith(
+                fontSize: 15,
+                height: 1.3,
+                color: c.labelPrimary,
+              ),
             ),
             Row(
               children: [
@@ -144,7 +153,10 @@ class _TitleCapsule extends StatelessWidget {
                     status.spokenLabel,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
+                    // dsh-go labelSmall：11 / 1.25，紧贴标题不额外留白。
                     style: DsTypography.caption.copyWith(
+                      fontSize: 11,
+                      height: 1.25,
                       color: c.labelTertiary,
                     ),
                   ),

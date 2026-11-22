@@ -100,13 +100,13 @@ void showChatStatsSheet(
     backgroundColor: c.bgLayer1,
     builder: (context) => AnimatedBuilder(
       animation: state,
-      builder: (context, _) => _StatsBody(state: state, colors: c),
+      builder: (context, _) => StatsBody(state: state, colors: c),
     ),
   );
 }
 
-class _StatsBody extends StatelessWidget {
-  const _StatsBody({required this.state, required this.colors});
+class StatsBody extends StatelessWidget {
+  const StatsBody({super.key, required this.state, required this.colors});
 
   final ChatState state;
   final DsColors colors;

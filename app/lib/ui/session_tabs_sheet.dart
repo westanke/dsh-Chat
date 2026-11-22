@@ -1,0 +1,281 @@
+/// 会话侧栏：把原来散在「更多」菜单里的几个面板收进一个可左右滑动的 TAB 容器
+/// （2026-11-22 用户要求：集合到一个窗口里多个 TAB，支持左右滑动查看）。
+///
+/// 每个 TAB 直接复用既有面板的身体类，不复制逻辑：
+/// 会话信息 / 会话统计 / 运行轨迹 / 智能团队 / 任务（代码工作视图按设置出现）。
+library;
+
+import 'package:material_ui/material_ui.dart';
+
+import '../design/app_settings.dart';
+import '../design/tokens.dart';
+import 'chat_state.dart';
+import 'projection_sheets.dart';
+import 'session_info_sheet.dart';
+import 'stats_sheet.dart';
+import 'window_class.dart';
+import 'work_view_sheet.dart';
+
+/// 一个 TAB 的声明：标签 + 图标 + 内容构造器。
+class SessionTab {
+  const SessionTab({
+    required this.label,
+    required this.icon,
+    required this.builder,
+  });
+
+  final String label;
+  final IconData icon;
+  final Widget Function(BuildContext context, ChatState state, DsColors colors)
+  builder;
+}
+
+/// 当前会话可用的 TAB（按显示顺序）。
+List<SessionTab> sessionTabsOf({Future<void> Function()? onShare}) {
+  return <SessionTab>[
+    SessionTab(
+      label: '信息',
+      icon: Icons.info_outline,
+      builder: (context, state, colors) => SessionInfoContent(
+        state: state,
+        colors: colors,
+        onShare: onShare,
+      ),
+    ),
+    SessionTab(
+      label: '统计',
+      icon: Icons.bar_chart,
+      builder: (context, state, colors) =>
+          StatsBody(state: state, colors: colors),
+    ),
+    SessionTab(
+      label: '轨迹',
+      icon: Icons.timeline,
+      builder: (context, state, colors) =>
+          TrajectoryBody(state: state, colors: colors),
+    ),
+    SessionTab(
+      label: '团队',
+      icon: Icons.groups_outlined,
+      builder: (context, state, colors) =>
+          TeamSheet(state: state, colors: colors),
+    ),
+    SessionTab(
+      label: '任务',
+      icon: Icons.checklist_outlined,
+      builder: (context, state, colors) =>
+          TodoSheet(state: state, colors: colors),
+    ),
+    if (appSettings.codeWorkView)
+      SessionTab(
+        label: '代码',
+        icon: Icons.difference_outlined,
+        builder: (context, state, colors) =>
+            WorkViewContent(state: state, colors: colors),
+      ),
+  ];
+}
+
+/// 打开会话侧栏。`initial` 是打开时落在第几个 TAB。
+Future<void> showSessionTabsSheet(
+  BuildContext context,
+  ChatState state,
+  DsColors colors, {
+  int initial = 0,
+  Future<void> Function()? onShare,
+}) {
+  final tabs = sessionTabsOf(onShare: onShare);
+  final start = initial.clamp(0, tabs.length - 1);
+  return showModalBottomSheet<void>(
+    context: context,
+    constraints: modalSheetConstraints(context),
+    backgroundColor: colors.bgLayer1,
+    isScrollControlled: true,
+    builder: (_) => SessionTabsSheet(
+      state: state,
+      colors: colors,
+      tabs: tabs,
+      initial: start,
+    ),
+  );
+}
+
+/// TAB 容器本体：顶部横滑标签 + 下方 PageView（左右滑动切页）。
+class SessionTabsSheet extends StatefulWidget {
+  const SessionTabsSheet({
+    super.key,
+    required this.state,
+    required this.colors,
+    required this.tabs,
+    this.initial = 0,
+    this.embedded = false,
+    this.onClose,
+  });
+
+  /// 嵌进侧栏时的关闭回调（点顶部把手 / 下拖 / 右滑）。
+  final VoidCallback? onClose;
+
+  /// 嵌进侧栏（左滑推出）时撑满可用高度；作为 bottom sheet 时留 88% 高。
+  final bool embedded;
+
+  final ChatState state;
+  final DsColors colors;
+  final List<SessionTab> tabs;
+  final int initial;
+
+  @override
+  State<SessionTabsSheet> createState() => _SessionTabsSheetState();
+}
+
+class _SessionTabsSheetState extends State<SessionTabsSheet> {
+  late final PageController _controller = PageController(
+    initialPage: widget.initial,
+  );
+  late int _index = widget.initial;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _go(int index) {
+    if (index == _index) return;
+    setState(() => _index = index);
+    _controller.animateToPage(
+      index,
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOut,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = widget.colors;
+    final height = MediaQuery.sizeOf(context).height;
+    final box = SafeArea(
+      child: SizedBox(
+        height: widget.embedded ? null : height * 0.88,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _handle(c),
+            _TabBar(
+              colors: c,
+              tabs: widget.tabs,
+              index: _index,
+              onPick: _go,
+            ),
+            const SizedBox(height: DsSpacing.composerKeyGap),
+            Expanded(
+              child: PageView.builder(
+                controller: _controller,
+                itemCount: widget.tabs.length,
+                onPageChanged: (i) => setState(() => _index = i),
+                itemBuilder: (context, i) => SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(
+                    DsSpacing.screenPad,
+                    0,
+                    DsSpacing.screenPad,
+                    DsSpacing.screenPad,
+                  ),
+                  child: widget.tabs[i].builder(
+                    context,
+                    widget.state,
+                    c,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (!widget.embedded) return box;
+    return Material(
+      color: c.bgLayer1,
+      child: SizedBox.expand(child: box),
+    );
+  }
+
+  Widget _handle(DsColors c) => GestureDetector(
+    behavior: HitTestBehavior.opaque,
+    onTap: widget.onClose,
+    onVerticalDragEnd: (d) {
+      if ((d.primaryVelocity ?? 0) > 200) widget.onClose?.call();
+    },
+    child: Padding(
+      padding: const EdgeInsets.only(top: 8, bottom: 6),
+      child: Center(
+        child: Container(
+          width: 36,
+          height: 4,
+          decoration: BoxDecoration(
+            color: c.borderL1,
+            borderRadius: BorderRadius.circular(2),
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
+class _TabBar extends StatelessWidget {
+  const _TabBar({
+    required this.colors,
+    required this.tabs,
+    required this.index,
+    required this.onPick,
+  });
+
+  final DsColors colors;
+  final List<SessionTab> tabs;
+  final int index;
+  final ValueChanged<int> onPick;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = colors;
+    return SizedBox(
+      height: 36,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: DsSpacing.screenPad),
+        itemCount: tabs.length,
+        separatorBuilder: (context, i) => const SizedBox(width: 8),
+        itemBuilder: (context, i) {
+          final on = i == index;
+          final t = tabs[i];
+          return Material(
+            color: on ? c.chipSelectedBg : c.drawerSearchFill,
+            borderRadius: BorderRadius.circular(18),
+            clipBehavior: Clip.antiAlias,
+            child: InkWell(
+              onTap: () => onPick(i),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      t.icon,
+                      size: 16,
+                      color: on ? c.chipSelectedFg : c.labelSecondary,
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      t.label,
+                      style: DsTypography.smallStrong.copyWith(
+                        color: on ? c.chipSelectedFg : c.labelSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}

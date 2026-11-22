@@ -55,7 +55,11 @@ class Composer extends StatefulWidget {
     this.answering = false,
     this.onAppCommand,
     this.onPickModel,
+    this.topGap = DsSpacing.blockGap,
   });
+
+  /// 与上方组件（活动条 / 任务条）的间距；有 dock 时传小值，避免叠成一大块空白。
+  final double topGap;
 
   final DsColors colors;
   final ValueChanged<String> onSend;
@@ -393,9 +397,9 @@ class ComposerState extends State<Composer> {
     // 斜杠面板三态：候选（列表）/ 参数提示（单行）/ 不显示。
     final slashContent = at == null ? _paletteContent : const PaletteNone();
     return Padding(
-      padding: const EdgeInsets.fromLTRB(
+      padding: EdgeInsets.fromLTRB(
         DsSpacing.composerMargin,
-        DsSpacing.blockGap,
+        widget.topGap,
         DsSpacing.composerMargin,
         0,
       ),

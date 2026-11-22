@@ -91,7 +91,7 @@ void showTrajectorySheet(
     constraints: modalSheetConstraints(context),
     backgroundColor: colors.bgLayer1,
     isScrollControlled: true,
-    builder: (context) => _TrajectorySheet(state: state, colors: colors),
+    builder: (context) => TrajectorySheet(state: state, colors: colors),
   );
 }
 
@@ -208,8 +208,8 @@ class _TrajectoryBodyState extends State<TrajectoryBody> {
   }
 }
 
-class _TrajectorySheet extends StatelessWidget {
-  const _TrajectorySheet({required this.state, required this.colors});
+class TrajectorySheet extends StatelessWidget {
+  const TrajectorySheet({super.key, required this.state, required this.colors});
 
   final ChatState state;
   final DsColors colors;
@@ -256,12 +256,12 @@ void showTeamSheet(
     constraints: modalSheetConstraints(context),
     backgroundColor: colors.bgLayer1,
     isScrollControlled: true,
-    builder: (context) => _TeamSheet(state: state, colors: colors),
+    builder: (context) => TeamSheet(state: state, colors: colors),
   );
 }
 
-class _TeamSheet extends StatelessWidget {
-  const _TeamSheet({required this.state, required this.colors});
+class TeamSheet extends StatelessWidget {
+  const TeamSheet({super.key, required this.state, required this.colors});
 
   final ChatState state;
   final DsColors colors;
@@ -391,12 +391,12 @@ void showTodoSheet(
     constraints: modalSheetConstraints(context),
     backgroundColor: colors.bgLayer1,
     isScrollControlled: true,
-    builder: (context) => _TodoSheet(state: state, colors: colors),
+    builder: (context) => TodoSheet(state: state, colors: colors),
   );
 }
 
-class _TodoSheet extends StatelessWidget {
-  const _TodoSheet({required this.state, required this.colors});
+class TodoSheet extends StatelessWidget {
+  const TodoSheet({super.key, required this.state, required this.colors});
 
   final ChatState state;
   final DsColors colors;

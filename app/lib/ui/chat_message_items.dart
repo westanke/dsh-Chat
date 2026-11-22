@@ -16,6 +16,7 @@ import 'chat_state.dart';
 import 'chat_thinking.dart';
 import 'md_view.dart';
 import 'md_viewer.dart';
+import 'workspace_link.dart';
 import 'message_actions.dart';
 import 'process_group.dart';
 import 'work_steps.dart';
@@ -288,7 +289,18 @@ class MessageItem extends StatelessWidget {
                     fetcher: imageFetcher!,
                   ),
                 ),
-              DsMarkdownView(text: message.text, colors: colors),
+              DsMarkdownView(
+                text: message.text,
+                colors: colors,
+                // 正文里的工作区路径（`/abs/x.md`、`docs/x.md`）点击进全屏查看；
+                // http/https 仍走系统浏览器（见 md_view 的兜底分支）。
+                onOpenPath: (raw) => openWorkspacePath(
+                  context,
+                  state,
+                  raw,
+                  colors: colors,
+                ),
+              ),
               DsMessageActions(
                 colors: colors,
                 text: message.text,
@@ -326,6 +338,8 @@ class StreamingItem extends StatelessWidget {
           text: state.streamText,
           colors: colors,
           streaming: true,
+          onOpenPath: (raw) =>
+              openWorkspacePath(context, state, raw, colors: colors),
         ),
       ],
     );

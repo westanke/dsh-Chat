@@ -44,7 +44,7 @@ Future<void> showSessionInfoSheet(
         top: Radius.circular(DsSpacing.settingsCardRadius),
       ),
     ),
-    builder: (_) => _SessionInfoSheet(
+    builder: (_) => SessionInfoContent(
       state: state,
       colors: colors,
       onShare: onShare,
@@ -52,8 +52,8 @@ Future<void> showSessionInfoSheet(
   );
 }
 
-class _SessionInfoSheet extends StatefulWidget {
-  const _SessionInfoSheet({
+class SessionInfoContent extends StatefulWidget {
+  const SessionInfoContent({super.key, 
     required this.state,
     required this.colors,
     this.onShare,
@@ -64,10 +64,10 @@ class _SessionInfoSheet extends StatefulWidget {
   final Future<void> Function()? onShare;
 
   @override
-  State<_SessionInfoSheet> createState() => _SessionInfoSheetState();
+  State<SessionInfoContent> createState() => _SessionInfoSheetState();
 }
 
-class _SessionInfoSheetState extends State<_SessionInfoSheet> {
+class _SessionInfoSheetState extends State<SessionInfoContent> {
   bool _plugins = false;
 
   /// models 帧的当前选择；null = 还没读到（或读不到，行直接消失）。

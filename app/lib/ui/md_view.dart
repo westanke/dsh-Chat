@@ -85,6 +85,7 @@ class DsMarkdownView extends StatelessWidget {
     this.streaming = false,
     this.small = false,
     this.onLinkTap,
+    this.onOpenPath,
   });
 
   final String text;
@@ -96,6 +97,9 @@ class DsMarkdownView extends StatelessWidget {
 
   /// 链接点击的测试注入点；为空时走外接浏览器（线上口径）。
   final void Function(String url)? onLinkTap;
+
+  /// 工作区文件路径出口：返回 true 表示已处理（不再交给系统浏览器）。
+  final Future<bool> Function(String raw)? onOpenPath;
 
   @override
   Widget build(BuildContext context) {
@@ -227,6 +231,18 @@ class DsMarkdownView extends StatelessWidget {
     final custom = onLinkTap;
     if (custom != null) {
       custom(url);
+      return;
+    }
+    final pathSink = onOpenPath;
+    if (pathSink != null) {
+      // 工作区文件（绝对/相对路径）先在应用内打开；不是文件再走浏览器。
+      unawaited(
+        pathSink(url).then((handled) {
+          if (handled) return;
+          final uri = Uri.tryParse(url);
+          if (uri != null) unawaited(_launchExternal(uri));
+        }),
+      );
       return;
     }
     final uri = Uri.tryParse(url);
