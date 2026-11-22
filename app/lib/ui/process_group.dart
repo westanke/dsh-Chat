@@ -297,6 +297,10 @@ class _DsToolRowState extends State<DsToolRow> {
                           colors: c,
                           kind: kind,
                           failed: call.failed,
+                          // 进行中的思考行底块呼吸（dsh-go ThinkingOrb）。
+                          pulsing:
+                              kind == ToolActivityKind.thinking &&
+                              isToolRowLive(call),
                         ),
                       ),
                     ),
