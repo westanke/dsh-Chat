@@ -132,9 +132,24 @@ class _SessionTabsSheetState extends State<SessionTabsSheet> {
     initialPage: widget.initial,
   );
   late int _index = widget.initial;
+  final GlobalKey<_TabBarState> _tabKey = GlobalKey<_TabBarState>();
+
+  @override
+  void initState() {
+    super.initState();
+    // 手指拖 PageView 时头栏跟着走（不只在翻页完成时跳一下）。
+    _controller.addListener(_onPageScroll);
+  }
+
+  void _onPageScroll() {
+    final page = _controller.page;
+    if (page == null) return;
+    _tabKey.currentState?.follow(page);
+  }
 
   @override
   void dispose() {
+    _controller.removeListener(_onPageScroll);
     _controller.dispose();
     super.dispose();
   }
@@ -161,6 +176,7 @@ class _SessionTabsSheetState extends State<SessionTabsSheet> {
           children: [
             _handle(c),
             _TabBar(
+              key: _tabKey,
               colors: c,
               tabs: widget.tabs,
               index: _index,
@@ -220,8 +236,9 @@ class _SessionTabsSheetState extends State<SessionTabsSheet> {
   );
 }
 
-class _TabBar extends StatelessWidget {
+class _TabBar extends StatefulWidget {
   const _TabBar({
+    super.key,
     required this.colors,
     required this.tabs,
     required this.index,
@@ -234,45 +251,129 @@ class _TabBar extends StatelessWidget {
   final ValueChanged<int> onPick;
 
   @override
+  State<_TabBar> createState() => _TabBarState();
+}
+
+class _TabBarState extends State<_TabBar> {
+  final ScrollController _ctrl = ScrollController();
+  late List<GlobalKey> _keys;
+  int _followed = -1;
+
+  @override
+  void initState() {
+    super.initState();
+    _keys = List<GlobalKey>.generate(widget.tabs.length, (_) => GlobalKey());
+    WidgetsBinding.instance.addPostFrameCallback((_) => _center(widget.index));
+  }
+
+  @override
+  void didUpdateWidget(_TabBar old) {
+    super.didUpdateWidget(old);
+    if (_keys.length != widget.tabs.length) {
+      _keys = List<GlobalKey>.generate(widget.tabs.length, (_) => GlobalKey());
+    }
+    // 翻页后把当前项滚到正中：滑到哪页，头就跟到哪页。
+    if (old.index != widget.index) _center(widget.index);
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  /// 拖动 PageView 时每帧调用：跨过半页就把头滚到对应项（不带动画，跟手）。
+  void follow(double page) {
+    final i = page.round().clamp(0, widget.tabs.length - 1);
+    if (i == _followed) return;
+    _followed = i;
+    _scrollTo(i, animate: false);
+  }
+
+  void _center(int i) {
+    _followed = i;
+    _scrollTo(i, animate: true);
+  }
+
+  /// 第 i 项居中所需的偏移。
+  ///
+  /// chip 等宽、两端各留半屏 padding，所以目标就是 `i * (chip + gap)`；
+  /// 不去测 RenderBox —— 翻页动画中间态会把测量结果带偏，实测停不稳。
+  void _scrollTo(int i, {required bool animate}) {
+    if (i < 0 || i >= widget.tabs.length) return;
+    if (!_ctrl.hasClients) return;
+    const step = DsSpacing.tabChipWidth + DsSpacing.tabChipGap;
+    final target = (i * step).clamp(0.0, _ctrl.position.maxScrollExtent);
+    if ((_ctrl.offset - target).abs() < 0.5) return;
+    if (animate) {
+      _ctrl.animateTo(
+        target,
+        duration: const Duration(milliseconds: 220),
+        curve: Curves.easeOutCubic,
+      );
+    } else {
+      _ctrl.jumpTo(target);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final c = colors;
+    final c = widget.colors;
+    const chipW = DsSpacing.tabChipWidth;
     return SizedBox(
       height: 36,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: DsSpacing.screenPad),
-        itemCount: tabs.length,
-        separatorBuilder: (context, i) => const SizedBox(width: 8),
-        itemBuilder: (context, i) {
-          final on = i == index;
-          final t = tabs[i];
-          return Material(
-            color: on ? c.chipSelectedBg : c.drawerSearchFill,
-            borderRadius: BorderRadius.circular(18),
-            clipBehavior: Clip.antiAlias,
-            child: InkWell(
-              onTap: () => onPick(i),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 14),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      t.icon,
-                      size: 16,
-                      color: on ? c.chipSelectedFg : c.labelSecondary,
-                    ),
-                    const SizedBox(width: 6),
-                    Text(
-                      t.label,
-                      style: DsTypography.smallStrong.copyWith(
-                        color: on ? c.chipSelectedFg : c.labelSecondary,
+      child: LayoutBuilder(
+        builder: (context, box) {
+          // 两端各留半屏：第一项与最后一项也能滚到正中，
+          // 不会像普通 ListView 那样被 maxScrollExtent 卡在边上。
+          final edge = ((box.maxWidth - chipW) / 2);
+          return ListView.separated(
+            controller: _ctrl,
+            scrollDirection: Axis.horizontal,
+            padding: EdgeInsets.symmetric(horizontal: edge < 0 ? 0 : edge),
+            itemCount: widget.tabs.length,
+            separatorBuilder: (context, i) =>
+                const SizedBox(width: DsSpacing.tabChipGap),
+            itemBuilder: (context, i) {
+              final on = i == widget.index;
+              final t = widget.tabs[i];
+              return KeyedSubtree(
+                key: _keys[i],
+                child: SizedBox(
+                  width: chipW,
+                  child: Material(
+                    color: on ? c.chipSelectedBg : c.drawerSearchFill,
+                    borderRadius: BorderRadius.circular(18),
+                    clipBehavior: Clip.antiAlias,
+                    child: InkWell(
+                      onTap: () => widget.onPick(i),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            t.icon,
+                            size: 16,
+                            color: on ? c.chipSelectedFg : c.labelSecondary,
+                          ),
+                          const SizedBox(width: 6),
+                          Flexible(
+                            child: Text(
+                              t.label,
+                              maxLines: 1,
+                              overflow: TextOverflow.clip,
+                              style: DsTypography.smallStrong.copyWith(
+                                color:
+                                    on ? c.chipSelectedFg : c.labelSecondary,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                  ],
+                  ),
                 ),
-              ),
-            ),
+              );
+            },
           );
         },
       ),

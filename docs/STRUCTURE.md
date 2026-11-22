@@ -107,7 +107,7 @@
 | `ui/empty_greeting.dart` | 空态问候块（品牌标 / 问候语 / 工作目录 chip / 建议卡 / 技巧行），从 `chat_page.dart` 拆出以守住 §7 | ✅ 页面拆分 |
 | `ui/workspace_link.dart` | 消息内链接出口：`http/https` 交给系统浏览器，绝对/相对（拼会话 cwd）文件路径进 `MdViewerPage` 全屏查看；只认同白名单扩展名 | ✅ 单测覆盖 |
 | `ui/chat_side_rails.dart` | 会话页左右推挤侧栏公共件：`sideRail()` 按 shift 展开、`swipeIntent()` 判定右滑开抽屉 / 左滑开面板（抽屉内左滑不接管） | ✅ 单测覆盖 |
-| `ui/session_tabs_sheet.dart` | 会话面板：把原来「更多」菜单里的信息/统计/轨迹/团队/任务/代码收成一个可左右滑动的 TAB 容器；`embedded: true` 时撑满侧栏 | ✅ 页面接入 |
+| `ui/session_tabs_sheet.dart` | 会话面板：把原来「更多」菜单里的信息/统计/轨迹/团队/任务/代码收成一个可左右滑动的 TAB 容器；`embedded: true` 时撑满侧栏 | ✅ 页面接入；顶部 TAB 等宽 78 且两端留半屏 padding，翻页时按 `i*(78+8)` 滚动让选中项始终居中 |
 | `ui/context_usage_bar.dart` | 输入条上方的上下文用量条（对照 dsh-go 输入条右侧圆环）：`ContextUsageBar(gateway, sessionId, streaming)` 自己在切会话/轮末重拉 `context-usage`，画 18dp 环 + 「上下文 42% · 61k / 1M」，80% 起转警示色；点开面板列本次占用/含新增预估/窗口大小；老桥没有该帧或窗口未知时整条不占位 | ✅ 单测覆盖（解析层） |
 | `ui/queue_dock.dart` | 输入条上方的排队条（bridge mobile-queue-v1 / IKX2AE）：`QueueDockBar`（「排队」+ 单条正文或「N 条 · 等本轮结束」+ 管理）与 `runQueueActions`（面板逐条「撤回 / 改插话 / 改写后重发」；带图项 resendable=false 不给改写；改写弹多行对话框；失败 SnackBar） | ✅ 单测覆盖 |
 | `ui/goal_dock.dart` | 输入条上方的目标条（对照 dsh-go dsh-go 的 goal_bar.dart + goal_sheet.dart）：`GoalDockBar`（⚑ 目标 + 目标首行 + 暂停/受阻状态词，进行中不写状态词）+ `runGoalActions`（弹 `_GoalSheet`：完整目标、`goalStatusLine`、编辑/暂停/继续/清除；编辑弹多行 `_GoalEditor`，清除二次确认；动作走 `goal-edit/pause/resume/clear` 帧后 `reloadHistory()` 让投影追平；`goalErrorText` 把 GOAL_STALE_REVISION/GOAL_NOT_FOUND/GOAL_AGENT_NOT_LIVE/unsupported 译成人话；失败 SnackBar；**2026-11-21：`_GoalSheet` 改 Stateful，按 mobile-goal-activation-v1 拉 `goals-get` 显示「自动续跑：已启用/未启用」**） | ✅ 单测覆盖 |

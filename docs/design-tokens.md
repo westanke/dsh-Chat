@@ -800,6 +800,7 @@ dsh-Go 的「拍照」（本仓原生通道无相机 Intent）、「生成」「
 | 展开体缩进 / 竖线 | left 32 / 1px `borderL1` α0.8、上下 4/8 | `StreamThread` |
 | 卡片（改动 / 产物） | 标题行 (16,16,16,8)、底栏 (16,4,12,4) 且最小高 44、圆角 20 | `chat_card.dart` / `ChatCardFooter` |
 | 回到底部圆钮 | 44 圆 / 图标 20 / 右 12 / 下 12 | `chat_list.dart` 的 `_jumpToLatest`（dsh-go 同款 44 + floatInset 12） |
+| 会话面板 TAB | 胶囊等宽 78、间距 8；两端各留半屏 padding，选中项滚到正中（偏移 = i×(78+8)） | `session_tabs_sheet.dart` |
 | 贴底判定容差 | 24 | `kAtBottomTolerance`：离底 ≤24 算贴底（跟随/圆钮显隐同口径） |
 
 ## 5. 截图资产（ref/）

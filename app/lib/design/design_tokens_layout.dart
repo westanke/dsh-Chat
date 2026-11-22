@@ -346,6 +346,11 @@ class DsSpacing {
   // ---- 输入条上方的「当前活动」条（dsh-go activity_strip） ----
   /// 条子圆角（胶囊）。
   static const activityStripRadius = 18.0;
+  /// 会话面板顶部 TAB 胶囊的固定宽度：等宽才能让选中项稳稳定在正中。
+  static const tabChipWidth = 78.0;
+
+  /// TAB 胶囊之间的间距（与居中偏移计算共用）。
+  static const tabChipGap = 8.0;
 
   /// 条子左右内衬。
   static const activityStripPadH = 12.0;
