@@ -44,6 +44,11 @@ class DsSpacing {
   static const processRowHeight = 28.0;
   static const processIconSize = 15.0;
   static const processIconGap = 6.0;
+
+  /// 工具行左侧的色块图标（dsh-go 会话流：圆角方块底 + 描线图标）。
+  static const toolGlyphSize = 26.0;
+  static const toolGlyphRadius = 8.0;
+  static const toolGlyphIconSize = 15.0;
   static const processIndent = 2.0;
 
   // ---- 输入条（官方 ref/md-shot-2-lists.png 像素实测）----
@@ -93,8 +98,58 @@ class DsSpacing {
   /// Android 侧原先没有上限（长文件名会把 Spacer 与发送钮顶出 Row ⇒ 发不出去）。
   static const composerImageChipMaxWidth = 128.0;
 
+  /// 输入条上的模型 chip 最大宽度（dsh-go 输入条那枚 `V4.1 Flash` 胶囊）。
+  /// 手机 360dp 宽度下，权限 chip + 模型 chip + 两个圆钮 + 环形 + 发送键刚好挤满，
+  /// 所以这里卡 96——长模型名截断，绝不把右侧按钮顶出屏幕。
+  static const composerModelChipMaxWidth = 140.0;
+
+  // ---- 顶栏标题胶囊（2026-11-22 对齐 dsh-go chat_header）----
+  /// 胶囊高（两行：会话名 + 状态行）。
+  static const topBarCapsuleHeight = 44.0;
+
+  /// 胶囊圆角（全胶囊）。
+  static const topBarCapsuleRadius = 22.0;
+
+  /// 顶栏「新对话」方形钮边长与圆角。
+  static const topBarNewChatSize = 34.0;
+  static const topBarNewChatRadius = 10.0;
+
   /// 输入条底部免责提示与容器间距。
   static const composerHintGap = 10.0;
+
+  // ---- 抽屉工具条 / 筛选胶囊（2026-11-22 对齐 dsh-go sessions_drawer + drawer_filter_bar）----
+  /// 工具条高度（品牌标 + 两个圆钮 + 「新对话」胶囊一行）。
+  static const drawerToolbarHeight = 56.0;
+
+  /// 工具条左右内距（与搜索框左边 15 对齐）。
+  static const drawerToolbarPadH = 15.0;
+
+  /// 品牌标与圆钮 / 圆钮之间的间距。
+  static const drawerToolbarGap = 8.0;
+
+  /// 圆钮直径（dsh-go DrawerViewButton.size = 36）。
+  static const drawerRoundButtonSize = 36.0;
+
+  /// 「新对话」胶囊高 / 左右内距 / 图标与文字间距。
+  static const drawerNewChatHeight = 36.0;
+  static const drawerNewChatPadH = 14.0;
+  static const drawerNewChatIconGap = 6.0;
+
+  /// 筛选胶囊行内距（dsh-go `fromLTRB(10, 2, 10, 4)`）。
+  static const drawerFilterPadH = 10.0;
+  static const drawerFilterPadTop = 2.0;
+  static const drawerFilterPadBottom = 4.0;
+
+  /// 胶囊高度 / 左右内距 / 胶囊间距（dsh-go gap = 8）。
+  static const drawerFilterChipHeight = 30.0;
+  static const drawerFilterChipPadH = 14.0;
+  static const drawerFilterGap = 8.0;
+
+  /// 「全部对话」那一行高（文字 + 下拉箭头 + 右侧「…」）。
+  static const drawerScopeRowHeight = 40.0;
+
+  /// 会话行尾状态点直径（dsh-go SessionTile.dot = 7）。
+  static const drawerStatusDot = 7.0;
 
   // ---- 侧边抽屉（官方 ref/official-drawer.png 实测，1080px/3=dp）----
   /// 抽屉宽度：右缘 x864px ≈ 288dp（屏宽 360dp 的 80%）。

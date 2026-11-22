@@ -73,7 +73,8 @@ void main() {
       )!;
       expect(info.hasProcess, isTrue);
       expect(info.durationMs, 2000);
-      expect(info.label, '已完成，用时 2秒');
+      // 2026-11-22 起折叠行改 dsh-go 口径：行动量优先，用时只在没有行动量时兜底。
+      expect(info.label, '已完成 · 1 次工具调用 · 1 条消息');
       expect(info.canCollapse, isTrue);
       expect(info.expanded, isFalse);
 
@@ -85,7 +86,7 @@ void main() {
           canCollapse: true,
           isGroupExpanded: (_) => false,
         )!.label,
-        '已完成',
+        '已完成 · 1 次工具调用 · 1 条消息',
       );
     });
     test('轮真实起止优先于过程组首尾（问题 4：显示实际用时）', () {
@@ -104,7 +105,7 @@ void main() {
         isGroupExpanded: (_) => false,
       )!;
       expect(info.durationMs, 8000);
-      expect(info.label, '已完成，用时 8秒');
+      expect(info.label, '已完成 · 1 次工具调用 · 2 条消息');
     });
     test('轮内 error 卡 → 处理失败；canCollapse=false 透传', () {
       final messages = [

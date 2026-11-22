@@ -3,50 +3,9 @@ part of 'composer.dart';
 /// Composer 的私有小组件（宪法 §7 单文件 ≤500 行：chip / 圆形按钮 /
 /// 斜杠命令建议面板 / @ 文件引用面板从 composer.dart 拆出）。
 
-/// 胶囊 chip：未选中为白底 + 细描边，选中为浅蓝底 + 品牌色文字。
-class _Chip extends StatelessWidget {
-  const _Chip({
-    required this.icon,
-    required this.label,
-    required this.active,
-    required this.colors,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final String label;
-  final bool active;
-  final DsColors colors;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final fg = active ? colors.chipSelectedFg : colors.labelPrimary;
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(DsSpacing.chipRadius),
-      child: Container(
-        height: DsSpacing.chipHeight,
-        padding: const EdgeInsets.symmetric(horizontal: DsSpacing.chipPadH),
-        decoration: BoxDecoration(
-          color: active ? colors.chipSelectedBg : colors.inputFill,
-          borderRadius: BorderRadius.circular(DsSpacing.chipRadius),
-          border: Border.all(
-            color: active ? colors.chipSelectedBg : colors.inputBorder,
-          ),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: DsSpacing.chipIconSize, color: fg),
-            const SizedBox(width: DsSpacing.chipIconGap),
-            Text(label, style: DsTypography.chipLabel.copyWith(color: fg)),
-          ],
-        ),
-      ),
-    );
-  }
-}
+// 输入条的权限胶囊 chip 2026-11-22 移除（dsh-go 输入条只有 `+` / 文本框 /
+// 模型 chip / 环 / 发送；权限档位在「+」面板『本对话』第一行），
+// 这里的 _Chip 随之删除，避免 analyze 报 unused_element。
 
 /// 圆形按钮：filled=品牌色实心（发送），否则细描边（+ / 语音）。
 class _RoundIconButton extends StatelessWidget {

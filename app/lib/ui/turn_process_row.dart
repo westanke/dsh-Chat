@@ -54,6 +54,8 @@ class TurnEndInfo {
     required this.hasProcess,
     required this.canCollapse,
     required this.expanded,
+    this.toolCalls = 0,
+    this.messages = 0,
   });
 
   /// 轮内有 error 卡（官方 reason.kind=='error'）→「处理失败」。
@@ -72,12 +74,24 @@ class TurnEndInfo {
   /// 折叠行当前是否展开（轮内过程组的展开态聚合）。
   final bool expanded;
 
-  /// 展示文案（stop/error/duration 已合成）。
+  /// 轮内工具调用条数（dsh-go 折叠行第二段「N 次工具调用」）。
+  final int toolCalls;
+
+  /// 轮内消息条数（user + assistant 正文，不含过程组/命令回显/错误卡）。
+  final int messages;
+
+  /// 展示文案：`已完成 · N 次工具调用 · M 条消息`（2026-11-22 对齐 dsh-go
+  /// 折叠行；用时移到会话信息面板，这一行只留行动量）。
   String get label {
     if (error) return '处理失败';
-    final ms = durationMs;
-    if (ms == null) return '已完成';
-    return '已完成，用时 ${formatRunDuration(ms)}';
+    final parts = <String>['已完成'];
+    if (toolCalls > 0) parts.add('$toolCalls 次工具调用');
+    if (messages > 0) parts.add('$messages 条消息');
+    if (parts.length == 1) {
+      final ms = durationMs;
+      if (ms != null) parts.add('用时 ${formatRunDuration(ms)}');
+    }
+    return parts.join(' · ');
   }
 }
 
@@ -85,7 +99,7 @@ class TurnEndInfo {
 /// 无过程组的轮返回 null（官方 processHidden：foldCompleted 且不可折叠时
 /// 隐藏轮尾行）。[groupKeys]=轮内各组 key（展开态聚合与回调用）。
 TurnEndInfo? turnEndInfoOf(
-  List<ChatMessage> messages,
+  List<ChatMessage> list,
   TurnRange turn, {
   required bool canCollapse,
   required bool Function(String key) isGroupExpanded,
@@ -97,10 +111,15 @@ TurnEndInfo? turnEndInfoOf(
   var hasProcess = false;
   var error = false;
   var expanded = false;
+  var toolCalls = 0;
+  var messages = 0;
   final keys = <String>[];
-  for (var i = turn.start + 1; i < turn.end; i++) {
-    final m = messages[i];
+  // 从 turn.start 起算：user 那条消息也是这一轮的消息（dsh-go 的「N 条消息」含它）。
+  for (var i = turn.start; i < turn.end; i++) {
+    final m = list[i];
     if (m.isError) error = true;
+    toolCalls += m.toolCalls.length;
+    if (m.role == 'user' || m.role == 'assistant') messages++;
     final ts = m.turnStartedAt;
     if (ts != null && (turnStart == null || ts < turnStart)) turnStart = ts;
     final te = m.turnFinishedAt;
@@ -131,6 +150,8 @@ TurnEndInfo? turnEndInfoOf(
     hasProcess: true,
     canCollapse: canCollapse && keys.isNotEmpty,
     expanded: expanded,
+    toolCalls: toolCalls,
+    messages: messages,
   );
 }
 
@@ -176,6 +197,18 @@ class _TurnProcessRowState extends State<TurnProcessRow> {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
+              // 左侧状态图标：dsh-go 是「✓ 已完成 · N 次工具调用 · M 条消息」，
+              // 失败态换红圈叹号（2026-11-22）。
+              Padding(
+                padding: const EdgeInsets.only(right: DsSpacing.chipIconGap),
+                child: Icon(
+                  info.error
+                      ? Icons.error_outline
+                      : Icons.check_circle_outline,
+                  size: 14,
+                  color: info.error ? c.danger : color,
+                ),
+              ),
               Flexible(
                 child: Text(
                   info.label,

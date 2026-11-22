@@ -734,6 +734,45 @@ turnChangesOf(messages, turn)
 **历史加载错误条（工单 1）**：断链（`NOT_CONNECTED`）不再写成「加载历史失败」红条
 （顶栏已有连接态，重连成功会自动重拉）；重拉成功后会把残留的「加载历史失败」清掉。
 
+## 4.19 「+」附件面板 · 彩色宫格 + 本对话分组（2026-11-22 task-13）
+
+结构对照 dsh-Go `app/lib/ui/chat/widgets/plus_panel.dart`（`PlusPanelMetrics`：
+side=16 / gap=8 / square=60），**不 import 其组件**，尺寸与配色全部落本仓 token。
+落点：`app/lib/ui/plus_panel.dart`（面板）+ `app/lib/design/design_tokens_plus.dart`
+（`DsPlusPanel` 尺寸与 `DsPlusTileColors` 宫格配色，同为 `tokens.dart` 的 part ——
+`design_tokens_layout.dart` 已 501 行，再加就破宪法 §7 的单文件 500 行）。
+
+**格子取舍（宁缺勿假）**：只留本仓真有能力的「相册」（`DshPlatform.pickImage`，
+Android 侧 `ACTION_GET_CONTENT`）与「文件」（输入条既有 `@` 提及插入）。
+dsh-Go 的「拍照」（本仓原生通道无相机 Intent）、「生成」「语音通话」整格删除；
+「手机操控 · 确认方式」是 dsh-Go 的原生 `setPolicies`，本仓没有，整块删除。
+
+| 位置 | token | 值 | 说明 |
+|---|---|---|---|
+| 面板左右边距 | `DsPlusPanel.side` | 16 | 宫格首/末格与分组卡片对齐（dsh-go side） |
+| 格间距 | `DsPlusPanel.gap` | 8 | 两格之间（dsh-go gap） |
+| 彩色方块 | `DsPlusPanel.tileSize` | 60 | dsh-go `square` |
+| 方块图标 | `DsPlusPanel.tileIconSize` | 26 | dsh-go `Icon(size: 26)` |
+| 方块圆角 | `DsPlusPanel.tileRadius` | 18 | dsh-go `AppShape.lg` Squircle 同值圆角 |
+| 单格上下内距 | `DsPlusPanel.tilePadV` | 10 | dsh-go `symmetric(vertical: 10)` |
+| 方块↔文字 | `DsPlusPanel.tileLabelGap` | 8 | dsh-go `SizedBox(height: 8)` |
+| 宫格上内距 | `DsPlusPanel.tilesTop` | 4 | dsh-go `fromLTRB(16, 4, 16, 0)` |
+| 宫格↔卡片 | `DsPlusPanel.cardGap` | 16 | dsh-go `SizedBox(height: 16)` |
+| 分组标题左缩/下距 | `cardTitlePadH` / `cardTitleGap` | 4 / 8 | 比卡片左缘再进 4 |
+| 行标题↔取值 | `DsPlusPanel.rowGap` | 12 | 行内弹性空隙 |
+| 行尾 › | `DsPlusPanel.chevronSize` | 18 | 与设置页行尾同观感 |
+| 面板底部留白 | `DsPlusPanel.bottomPad` | 20 | dsh-go 末尾 `SizedBox(20)` |
+| 拖拽把手 | `handleWidth` / `handleHeight` / `handleTop` / `handleBottom` | 36 / 4 / 8 / 6 | 纯装饰把手，sheet 本身可下拉 |
+| 相册格底色/图标 | `DsColors.plusAlbumBg` / `plusAlbumFg` | `brand` 淡染 10%（深 18%）/ `brand` | 无新色值，取品牌语义色 |
+| 文件格底色/图标 | `DsColors.plusFilesBg` / `plusFilesFg` | `chatStatusOk` 淡染 12%（深 18%）/ `chatStatusOk` | 与相册格区分开的第二色 |
+| 卡片底/圆角/行高 | `DsColors.settingsSurface` / `DsSpacing.settingsCardRadius` / `settingsRowMinHeight` | 复用 | 与设置页分区同一套 |
+| 文字 | `DsTypography.smallStrong`（分组标题）/ `base`（行标题）/ `small`（取值、格名） | 复用 | 无新增字号 |
+
+「本对话」卡片两行：`权限 → <当前档位> ›`（叠一层既有 `_PermissionSheet`，
+换完重读当前档位）、`计划模式 → Switch`（`/plan` / `/plan off`）。本仓 ChatState
+尚未折叠 `plan/mode` 投影，开关读不回服务端当前值，只记本会话最近一次发出的命令
+（`plus_panel.dart` 的 `_planMemoValue`），真实结果以命令卡 ✓/✗ 为准。
+
 ## 5. 截图资产（ref/）
 - official-login-page.png 登录页（+86 152 1388 0002 / 验证码输入 / 发送验证码按钮）
 - official-welcome.png 欢迎引导页（开启对话主按钮）

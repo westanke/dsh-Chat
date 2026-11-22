@@ -11,6 +11,7 @@ import '../design/tokens.dart';
 import 'chat_state.dart';
 import 'model_sheet.dart';
 import 'projection_sheets.dart';
+import 'session_info_sheet.dart';
 import 'stats_sheet.dart';
 import 'work_view_sheet.dart';
 
@@ -33,6 +34,13 @@ class ChatOverflowMenu extends StatelessWidget {
       color: c.settingsSurface,
       onSelected: (value) async {
         switch (value) {
+          case 'info':
+            await showSessionInfoSheet(
+              context,
+              state,
+              c,
+              onShare: () => _export(context, share: true),
+            );
           case 'stats':
             showChatStatsSheet(context, state, c);
           case 'trajectory':
@@ -65,6 +73,7 @@ class ChatOverflowMenu extends StatelessWidget {
         }
       },
       itemBuilder: (context) => <PopupMenuEntry<String>>[
+        _menuItem('info', Icons.info_outline, '会话信息'),
         _menuItem('stats', Icons.bar_chart, '会话统计'),
         _menuItem('trajectory', Icons.timeline, '运行轨迹'),
         // D 项：设置「显示代码工作视图」开启后才出现（官方通用设置）。

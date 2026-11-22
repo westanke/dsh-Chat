@@ -5,6 +5,43 @@ part of 'composer.dart';
 
 /// 权限档位与选图——两项都是输入条上的次级交互，放一起便于守 §7 行数。
 extension _ComposerPermission on ComposerState {
+  /// 「+」圆钮：弹附件面板（2026-11-22，对齐 dsh-Go `plus_panel.dart`）。
+  /// 面板里选「相册」再走回 [_pickImage]、「文件」走 `@` 提及插入。
+  Future<void> _openPlusPanel() async {
+    final action = await showPlusPanel(
+      context,
+      colors: c,
+      sessionId: widget.sessionId,
+      permissionLabel: () => _plusPermissionValue,
+      planEnabled: (widget.sessionId ?? '').isNotEmpty,
+      onPickPermission: _pickPermission,
+      onPlanChanged: _setPlanMode,
+    );
+    if (!mounted || action == null) return;
+    switch (action) {
+      case PlusAction.album:
+        await _pickImage();
+      case PlusAction.files:
+        _focus.requestFocus();
+        insertAtMention(_controller, _onChanged);
+    }
+  }
+
+  /// 面板「权限」行的取值：还没取到当前档位时写「默认」（否则读成「权限 权限」）。
+  String get _plusPermissionValue =>
+      (widget.currentPermission ?? '').isEmpty ? '默认' : _permissionLabel;
+
+  /// 面板「计划模式」开关：命令走 `ChatState.runCommand`（`/plan` / `/plan off`，
+  /// 与 dsh-Go `plus_panel.dart:285` 同一对内核命令，桥不拦截、整行透传）。
+  ///
+  /// 本仓 ChatState 还没折叠 `plan/mode` 投影（只有 `currentPermission`），读不回
+  /// 服务端当前档位，所以开关的界面口径记在面板侧（plus_panel.dart 的
+  /// `_planMemoValue`）：真实结果以命令卡（✓/✗）为准。
+  void _setPlanMode(bool on) {
+    if ((widget.sessionId ?? '').isEmpty) return;
+    widget.onCommand(on ? '/plan' : '/plan off');
+  }
+
   Future<void> _pickImage() async {
     final picked = await DshPlatform.pickImage();
     if (picked == null || !mounted) return;

@@ -83,6 +83,9 @@ class _ComposerBar extends StatelessWidget {
     required this.onSend,
     required this.onStop,
     required this.answering,
+    this.gateway,
+    this.sessionId,
+    this.onPickModel,
   });
 
   final DsColors colors;
@@ -112,6 +115,13 @@ class _ComposerBar extends StatelessWidget {
   final bool answering;
   final VoidCallback onSend;
   final VoidCallback? onStop;
+
+  /// 输入条右侧的状态小件要自己按会话拉数据（模型名 / 上下文用量）。
+  final GatewayClient? gateway;
+  final String? sessionId;
+
+  /// 点模型 chip：上层打开模型选择（null = 不显示 chip）。
+  final VoidCallback? onPickModel;
 
   @override
   Widget build(BuildContext context) {
@@ -172,13 +182,24 @@ class _ComposerBar extends StatelessWidget {
           const SizedBox(height: 10),
           Row(
             children: [
-              _Chip(
-                icon: Icons.verified_user_outlined,
-                label: permissionLabel,
-                active: permissionActive,
-                colors: c,
-                onTap: onPickPermission,
-              ),
+              // 权限档位 chip 2026-11-22 移出输入条（dsh-go 的输入条只有
+              // `+` / 文本框 / 模型 chip / 环 / 发送；权限在「+」面板的
+              // 『本对话』第一行，同一个 `_pickPermission` 入口）。
+              // 模型 chip：固定上限宽度，绝不参与 Row 的 flex 分配——
+              // 否则多图和窄屏时会挤走右侧按钮（工单 2 回归）。
+              if (onPickModel != null)
+                ConstrainedBox(
+                  constraints: const BoxConstraints(
+                    maxWidth: DsSpacing.composerModelChipMaxWidth,
+                  ),
+                  child: ComposerModelChip(
+                    colors: c,
+                    gateway: gateway,
+                    sessionId: sessionId,
+                    enabled: enabled,
+                    onTap: onPickModel!,
+                  ),
+                ),
               // 待发送图片（真机反馈 2026-11-17 / 11-21 多图）：
               // 文件名过长时 Chip 无界变宽，会把 Spacer 吃掉、把右侧按钮挤出
               // Row。有图时用 Expanded + 横向滚动 + 单行省略号，多个 chip 从左
@@ -235,16 +256,12 @@ class _ComposerBar extends StatelessWidget {
                 icon: Icons.add,
                 onPressed: canPickImage ? onPickImage : null,
               ),
-              // 「选择项目中的内容」（官方输入条 @ 引用入口）：
-              // 光标处插 @ 唤起面板，禁用条件与加图钮一致。
-              Tooltip(
-                message: '选择项目中的内容',
-                child: _RoundIconButton(
-                  colors: c,
-                  filled: false,
-                  icon: Icons.folder_open_outlined,
-                  onPressed: canPickImage ? onInsertContent : null,
-                ),
+              // 「@ 引用」圆钮 2026-11-22 移除：dsh-go 输入条只有 `+`，@ 引用
+              // 挂在「+」面板的『文件』格（plus_panel → insertAtMention）。
+              ComposerUsageRing(
+                colors: c,
+                gateway: gateway,
+                sessionId: sessionId,
               ),
               const SizedBox(width: DsSpacing.composerButtonGap),
               switch (sendState) {

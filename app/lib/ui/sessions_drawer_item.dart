@@ -15,6 +15,7 @@ class SessionsDrawerItem extends StatelessWidget {
     required this.session,
     required this.selected,
     this.badge,
+    this.running = false,
     this.subtitle,
     required this.colors,
     this.onTap,
@@ -26,6 +27,10 @@ class SessionsDrawerItem extends StatelessWidget {
 
   /// 行尾状态小字（null = 不显示）。
   final String? badge;
+
+  /// 这一条正在跑（行尾画一颗状态点；有 badge 时 badge 优先，与 dsh-go
+  /// session_tile 的 pending > running > unread 优先级同序）。
+  final bool running;
 
   /// 第二行（正文命中片段）。null = 单行条目（默认形态）。
   final String? subtitle;
@@ -66,7 +71,17 @@ class SessionsDrawerItem extends StatelessWidget {
                   const SizedBox(width: DsSpacing.drawerSearchIconGap),
                   Text(
                     badge!,
-                    style: DsTypography.small.copyWith(color: colors.brand),
+                    style: DsTypography.small.copyWith(color: colors.chatStatusWarn),
+                  ),
+                ] else if (running) ...[
+                  const SizedBox(width: DsSpacing.drawerSearchIconGap + 4),
+                  Container(
+                    width: DsSpacing.drawerStatusDot,
+                    height: DsSpacing.drawerStatusDot,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: colors.brand,
+                    ),
                   ),
                 ],
               ],

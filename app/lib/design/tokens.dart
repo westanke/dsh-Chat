@@ -8,6 +8,7 @@ import 'package:material_ui/material_ui.dart';
 /// 引用方只 import 本文件即可（part 成员随库可见）。
 
 part 'design_tokens_layout.dart';
+part 'design_tokens_plus.dart';
 
 /// neutral-bluish 静态色阶（官方变量原值）。
 class DsPalette {

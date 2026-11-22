@@ -65,6 +65,7 @@ class ChatMessage {
     this.seq = -1,
     this.streaming = false,
     this.toolCalls = const [],
+    this.thoughts = const [],
     this.startedAt,
     this.finishedAt,
   });
@@ -84,6 +85,11 @@ class ChatMessage {
 
   /// role == 'process' 时：本组内的工具调用（按时间顺序）。
   final List<ToolCallInfo> toolCalls;
+
+  /// role == 'process' 时：组内的推理段（伪工具名 `thinking`），排在工具行前面
+  /// 渲染。与 [toolCalls] 分开存，是因为「工具调用次数」这类统计不该把思考算进去
+  /// （dsh-go 折叠行的「N 次工具调用」只数真工具）。
+  final List<ToolCallInfo> thoughts;
 
   /// 过程组的墙钟起止（epoch ms，可能缺一端）。
   final int? startedAt;
@@ -188,6 +194,11 @@ class HistoryPage {
 
     // 当前过程组的累积缓冲。
     final groupCalls = <ToolCallInfo>[];
+    final groupThoughts = <ToolCallInfo>[];
+    // 过程组的 seq：取收口前最后一条事件的 seq。历史过程组原先写死 -1，
+    // 而 turnIsRunning 把 seq<0 当「流式未完成」，导致轮尾折叠行永不渲染
+    // （2026-11-22 修）。
+    var lastEventSeq = -1;
     final pending = <String, RawToolCall>{}; // callId → 调用信息（等 result 补全）
     int? groupStart;
     int? groupEnd;
@@ -206,18 +217,20 @@ class HistoryPage {
     final pendingFileCards = <ChatMessage>[];
 
     void flushGroup() {
-      if (groupCalls.isEmpty) return;
+      if (groupCalls.isEmpty && groupThoughts.isEmpty) return;
       items.add(
         ChatMessage(
           role: 'process',
           text: '',
-          seq: -1,
+          seq: lastEventSeq,
           toolCalls: List<ToolCallInfo>.unmodifiable(groupCalls),
+          thoughts: List<ToolCallInfo>.unmodifiable(groupThoughts),
           startedAt: groupStart,
           finishedAt: groupEnd,
         ),
       );
       groupCalls.clear();
+      groupThoughts.clear();
       pending.clear();
       groupStart = null;
       groupEnd = null;
@@ -236,6 +249,7 @@ class HistoryPage {
           ? Map<String, dynamic>.from(e['event'] as Map)
           : Map<String, dynamic>.from(e as Map);
       final event = SessionEvent.fromJson(ev);
+      if (event.seq >= 0) lastEventSeq = event.seq;
       // 保留归一化后的原始事件（剥掉 REST 外包装），轨迹 Sheet 用它分组。
       // data 用 SessionEvent.fromJson 已做过的 Map<String,dynamic> 转换结果。
       normalized.add(<String, dynamic>{
@@ -270,6 +284,9 @@ class HistoryPage {
                 text: parts.text,
                 images: parts.images,
                 seq: event.seq,
+                // 记事件时间：轮用时在缺 turn/start 时靠消息首末差兜底
+                // （2026-11-22 会话信息「用时」列）。
+                startedAt: event.time,
               ),
             );
           }
@@ -282,7 +299,26 @@ class HistoryPage {
             break;
           }
           if (parts.text.isEmpty) {
-            // 没有正文：这是「过程」，不进消息流。工具调用进当前过程组。
+            // 没有正文：这是「过程」，不进消息流。推理段 + 工具调用都进当前过程组
+            // （dsh-go 把「思考 · …」和工具行混排在同一条折叠列表里，2026-11-22）。
+            final thought = parts.reasoning.trim();
+            if (thought.isNotEmpty) {
+              final key = 'thought-${event.seq}';
+              if (!groupThoughts.any((g) => g.callId == key)) {
+                groupThoughts.add(
+                  ToolCallInfo(
+                    callId: key,
+                    name: 'thinking',
+                    phrases: const ['思考'],
+                    summary: _thoughtSummary(thought),
+                    resultText: thought,
+                  ),
+                );
+              }
+              groupStart ??= event.time;
+              groupEnd = event.time;
+            }
+            // 工具调用进当前过程组。
             //
             // 注意去重：内核对同一次调用会**发两遍** —— 一次内嵌在
             // assistant/message 的 content 里（type=tool-call），一次是独立的
@@ -305,6 +341,7 @@ class HistoryPage {
               text: parts.text,
               reasoning: parts.reasoning,
               seq: event.seq,
+              startedAt: event.time,
             ),
           );
 
@@ -440,4 +477,11 @@ class HistoryPage {
       historyFormatVersion: historyFormatVersion,
     );
   }
+}
+
+/// 推理段的一行摘要：压掉换行、按 120 字截断（面板单行显示，详情里看全文）。
+String _thoughtSummary(String text) {
+  final oneLine = text.replaceAll(RegExp(r'\s+'), ' ').trim();
+  if (oneLine.length <= 120) return oneLine;
+  return '${oneLine.substring(0, 120)}…';
 }

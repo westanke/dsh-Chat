@@ -15,6 +15,8 @@ import '../bridge/permissions.dart';
 import '../bridge/platform.dart';
 import '../bridge/slash_commands.dart';
 import '../design/tokens.dart';
+import 'composer_status.dart';
+import 'plus_panel.dart';
 import 'window_class.dart';
 
 part 'composer_widgets.dart';
@@ -52,6 +54,7 @@ class Composer extends StatefulWidget {
     this.sessions = const [],
     this.answering = false,
     this.onAppCommand,
+    this.onPickModel,
   });
 
   final DsColors colors;
@@ -86,6 +89,9 @@ class Composer extends StatefulWidget {
   /// 客户端自带命令（new/model/export/features）点选后的本地动作。
   /// 这些名字服务端不认识，走 [onCommand] 会被桥 404，所以单独回调。
   final ValueChanged<String>? onAppCommand;
+
+  /// 点输入条上的模型 chip：上层打开模型选择（null = 不显示 chip）。
+  final VoidCallback? onPickModel;
 
   @override
   State<Composer> createState() => ComposerState();
@@ -468,7 +474,7 @@ class ComposerState extends State<Composer> {
             pendingImageNames: [for (final i in _pendingImages) i.name],
             onRemoveImage: (i) => setState(() => _pendingImages.removeAt(i)),
             canPickImage: widget.enabled,
-            onPickImage: _pickImage,
+            onPickImage: _openPlusPanel,
             onInsertContent: () {
               _focus.requestFocus();
               insertAtMention(_controller, _onChanged);
@@ -478,6 +484,9 @@ class ComposerState extends State<Composer> {
             onSend: _send,
             onStop: widget.onCancel,
             answering: widget.answering,
+            gateway: widget.gateway,
+            sessionId: widget.sessionId,
+            onPickModel: widget.onPickModel,
           ),
           const SizedBox(height: DsSpacing.composerHintGap),
           // 免责声明：流式思考中不显示（思考块已在消息流里滚动展示）。

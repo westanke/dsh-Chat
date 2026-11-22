@@ -29,6 +29,8 @@ ToolVariant classifyTool(String bareName) => switch (bareName) {
 
 /// TOOL_TITLE_KEYS + SEARCH_TITLE_KEYS + WEB_TITLE_KEYS（zh 值）。
 const Map<String, String> _toolTitles = {
+  // 过程组里的推理段（bridge 用伪工具名 `thinking` 插入，见 history_page）。
+  'thinking': '思考',
   'apply_patch': '应用补丁',
   'cordis_package_inspect': '查询 Cordis 环境',
   'cordis_runtime_inspect': '查询 Cordis 环境',

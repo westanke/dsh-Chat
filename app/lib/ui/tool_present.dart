@@ -41,6 +41,9 @@ enum ToolActivityKind {
 ToolActivityKind activityKind(String toolName) {
   final bare = toolName.startsWith('tools.') ? toolName.substring(6) : toolName;
   if (bare.isEmpty) return ToolActivityKind.thinking;
+  // 过程组里的「思考」行用伪工具名 `thinking`（bridge 组装时插入），
+  // 与空名同义——都是模型推理段，不是真工具调用。
+  if (bare == 'thinking') return ToolActivityKind.thinking;
   if (bare == 'read') return ToolActivityKind.read;
   if (bare == 'read_image') return ToolActivityKind.readImage;
   if (bare == 'grep' || bare == 'glob' || bare.endsWith('_inspect')) {

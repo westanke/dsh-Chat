@@ -81,9 +81,18 @@ void main() {
     await tester.pump();
   }
 
+  /// 点「+」→ 面板 →「相册」（2026-11-22 起「+」先弹附件面板，不再直跳相册）。
   Future<void> tapAdd(WidgetTester tester) async {
     await tester.runAsync(() async {
       await tester.tap(find.byIcon(Icons.add));
+      await Future<void>.delayed(const Duration(milliseconds: 30));
+    });
+    await tester.pumpAndSettle();
+    // 面板里只该有本仓真能跑的两格。
+    expect(find.text('相册'), findsOneWidget);
+    expect(find.text('文件'), findsOneWidget);
+    await tester.runAsync(() async {
+      await tester.tap(find.text('相册'));
       await Future<void>.delayed(const Duration(milliseconds: 30));
     });
     await tester.pumpAndSettle();
@@ -120,13 +129,14 @@ void main() {
     });
   });
 
-  group('「+」与文件夹按钮常驻（工单 5）', () {
-    testWidgets('运行中空输入时两个按钮仍在（以前会整排消失）', (tester) async {
+  group('「+」按钮常驻（工单 5；2026-11-22 起对齐 dsh-go 只留 `+`）', () {
+    testWidgets('运行中空输入时按钮仍在（以前会整排消失）', (tester) async {
       await pumpComposer(tester, streaming: true);
       await tester.pump();
 
       expect(find.byIcon(Icons.add), findsOneWidget);
-      expect(find.byIcon(Icons.folder_open_outlined), findsOneWidget);
+      // @ 引用入口移进「+」面板（plus_panel 的『文件』格），输入条不再挂文件夹钮。
+      expect(find.byIcon(Icons.folder_open_outlined), findsNothing);
 
       final addRect = tester.getRect(find.byIcon(Icons.add));
       expect(addRect.right, lessThanOrEqualTo(_screenWidth));
@@ -154,7 +164,7 @@ void main() {
       await tester.pump();
 
       expect(find.byIcon(Icons.add), findsOneWidget);
-      expect(find.byIcon(Icons.folder_open_outlined), findsOneWidget);
+      expect(find.byIcon(Icons.folder_open_outlined), findsNothing);
       final addButton = find.ancestor(
         of: find.byIcon(Icons.add),
         matching: find.byType(InkResponse),

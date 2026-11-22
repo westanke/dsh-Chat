@@ -28,6 +28,7 @@ import '../design/tokens.dart';
 import 'ask_present.dart';
 import 'code_diff.dart';
 import 'md_code_block.dart';
+import 'tool_glyph.dart';
 import 'tool_present.dart';
 import 'tool_titles.dart';
 
@@ -71,7 +72,8 @@ class DsProcessGroup extends StatelessWidget {
     final running = calls.any(isCallRunning);
     // 运行中标题弱化（官方弱化色；无 shimmer 组件不新增大组件）。
     final headColor = failed || running ? c.labelTertiary : c.labelSecondary;
-    final canExpand = detail != WorkStepsDetail.concise && calls.isNotEmpty;
+    final canExpand = detail != WorkStepsDetail.concise &&
+        (calls.isNotEmpty || group.thoughts.isNotEmpty);
     final open = expanded || forceOpen;
     final title = processGroupTitle(
       group,
@@ -94,10 +96,9 @@ class DsProcessGroup extends StatelessWidget {
                   padding: const EdgeInsets.only(
                     right: DsSpacing.processIconGap,
                   ),
-                  child: Icon(
-                    toolIcon(_groupActivityKind(group)),
-                    size: DsSpacing.processIconSize,
-                    color: headColor,
+                  child: ToolGlyph(
+                    colors: c,
+                    kind: _groupActivityKind(group),
                   ),
                 ),
                 // 官方 ProcessGroupHeader：chevron 紧跟图标、都在标题左侧。
@@ -130,6 +131,14 @@ class DsProcessGroup extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // 思考行排在工具行前面（dsh-go 折叠列表里「思考 · …」先于工具）。
+                for (final t in group.thoughts)
+                  DsToolRow(
+                    call: t,
+                    colors: c,
+                    allowDetail: detail != WorkStepsDetail.standard,
+                    answerable: answerable,
+                  ),
                 for (final t in calls)
                   DsToolRow(
                     call: t,
@@ -280,10 +289,10 @@ class _DsToolRowState extends State<DsToolRow> {
                         top: 3,
                         right: DsSpacing.processIconGap,
                       ),
-                      child: Icon(
-                        call.failed ? Icons.error_outline : toolIcon(kind),
-                        size: DsSpacing.processIconSize,
-                        color: call.failed ? c.danger : c.labelSecondary,
+                      child: ToolGlyph(
+                        colors: c,
+                        kind: kind,
+                        failed: call.failed,
                       ),
                     ),
                     Expanded(
@@ -402,7 +411,8 @@ class _DsToolRowState extends State<DsToolRow> {
 /// 过程组图标的活动类型：运行中取最新 live 调用（官方 live.activity），
 /// 完成组取首类（官方 counts[0].kind 的近似），空组按 thinking。
 ToolActivityKind _groupActivityKind(ChatMessage group) {
-  for (final call in group.toolCalls) {
+  // 思考段也是组内活动：dsh-go 的运行中组头会显示思考图标。
+  for (final call in [...group.thoughts, ...group.toolCalls]) {
     if (isToolRowLive(call)) return activityKind(call.name);
   }
   if (group.toolCalls.isEmpty) return ToolActivityKind.thinking;

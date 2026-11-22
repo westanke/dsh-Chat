@@ -19,10 +19,10 @@ import 'chat_message_items.dart';
 import 'chat_overflow_menu.dart';
 import 'chat_shell.dart';
 import 'chat_state.dart';
-import 'context_usage_bar.dart';
 import 'goal_dock.dart';
 import 'queue_dock.dart';
 import 'chat_top_bar.dart';
+import 'projection_sheets.dart';
 import 'composer.dart';
 import 'model_sheet.dart';
 import 'question_card.dart';
@@ -283,6 +283,10 @@ class _ChatPageState extends State<ChatPage>
           status: _headerStatus,
           onMenu: _openDrawer,
           onNewChat: () => st.newChat(),
+          // 成员圆钮（dsh-go chat_header 同位置）：复用「更多」菜单里的团队面板。
+          onOpenTeam: st.sessionId == null
+              ? null
+              : () => showTeamSheet(context, st, c),
           trailing: ChatOverflowMenu(colors: c, state: st),
         ),
         body: Column(
@@ -316,13 +320,9 @@ class _ChatPageState extends State<ChatPage>
                 colors: c,
                 onManage: () => runQueueActions(context, st, c),
               ),
-            // 上下文用量（dsh-go 输入条右侧的环）：窗口未知/老桥不显示。
-            ContextUsageBar(
-              gateway: st.gateway,
-              sessionId: st.sessionId,
-              streaming: st.streaming,
-              colors: c,
-            ),
+            // 上下文用量条 2026-11-22 移除：dsh-go 输入框上方没有这条横条，
+            // 用量只在输入条右侧的小环里（composer_status.dart 的
+            // ComposerUsageRing），点环看明细走同一个 showContextUsageSheet。
             // 目标条（dsh-go GoalBar 移植）：有未完成的目标时常驻。
             if (goal != null && goal.goal.phase != GoalPhase.complete)
               GoalDockBar(
@@ -355,6 +355,7 @@ class _ChatPageState extends State<ChatPage>
               answering: st.singleOpenQuestion != null,
               // 斜杠面板的客户端功能（/new /model /export /features）。
               onAppCommand: _runAppCommand,
+            onPickModel: _pickModel,
             ),
           ],
         ),
@@ -375,6 +376,20 @@ class _ChatPageState extends State<ChatPage>
   ///
   /// 这些名字桥不认识（服务端只有内核命令），所以必须在本地落到已有界面上：
   /// new→清空会话、model→模型面板、export→复制 Markdown、features→设置页。
+  /// 输入条模型 chip → 模型选择（成功后刷新历史，与「更多 → 模型」同口径）。
+  Future<void> _pickModel() async {
+    final st = widget.state;
+    final sid = st.sessionId;
+    if (sid == null) return;
+    final changed = await showModelSheet(
+      context,
+      colors: widget.colors,
+      gateway: st.gateway,
+      sessionId: sid,
+    );
+    if (changed) await st.reloadHistory();
+  }
+
   Future<void> _runAppCommand(String name) async {
     switch (name) {
       case 'new':

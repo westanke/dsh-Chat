@@ -143,9 +143,17 @@ class _ContextUsageBarState extends State<ContextUsageBar> {
     );
   }
 
-  void _openSheet(ContextUsage usage) {
-    final c = widget.colors;
-    showModalBottomSheet<void>(
+  void _openSheet(ContextUsage usage) =>
+      showContextUsageSheet(context, widget.colors, usage);
+}
+
+/// 上下文用量明细（输入条的环和流里的条共用这一个 sheet）。
+Future<void> showContextUsageSheet(
+  BuildContext context,
+  DsColors c,
+  ContextUsage usage,
+) {
+  return showModalBottomSheet<void>(
       context: context,
       backgroundColor: c.bgBase,
       showDragHandle: true,
@@ -161,13 +169,13 @@ class _ContextUsageBarState extends State<ContextUsageBar> {
                 style: DsTypography.h4.copyWith(color: c.labelPrimary),
               ),
               const SizedBox(height: 16),
-              _row('本次占用', ContextUsage.short(usage.pressureTokens)),
+              _usageRow('本次占用', ContextUsage.short(usage.pressureTokens), c),
               const SizedBox(height: 10),
-              _row('含新增预估', ContextUsage.short(usage.projectedTokens)),
+              _usageRow('含新增预估', ContextUsage.short(usage.projectedTokens), c),
               const SizedBox(height: 10),
-              _row('窗口大小', ContextUsage.short(usage.contextWindow)),
+              _usageRow('窗口大小', ContextUsage.short(usage.contextWindow), c),
               const SizedBox(height: 10),
-              _row('占比', usage.percent == null ? '未知' : '${usage.percent}%'),
+              _usageRow('占比', usage.percent == null ? '未知' : '${usage.percent}%', c),
               const SizedBox(height: 16),
               Text(
                 '占用超过 80% 后内核会开始压缩历史；长期会话建议及时开新会话。',
@@ -178,23 +186,21 @@ class _ContextUsageBarState extends State<ContextUsageBar> {
         ),
       ),
     );
-  }
+}
 
-  Widget _row(String label, String value) {
-    final c = widget.colors;
-    return Row(
-      children: [
-        Expanded(
-          child: Text(
-            label,
-            style: DsTypography.small.copyWith(color: c.labelSecondary),
-          ),
+Widget _usageRow(String label, String value, DsColors c) {
+  return Row(
+    children: [
+      Expanded(
+        child: Text(
+          label,
+          style: DsTypography.small.copyWith(color: c.labelSecondary),
         ),
-        Text(
-          value,
-          style: DsTypography.smallStrong.copyWith(color: c.labelPrimary),
-        ),
-      ],
-    );
-  }
+      ),
+      Text(
+        value,
+        style: DsTypography.smallStrong.copyWith(color: c.labelPrimary),
+      ),
+    ],
+  );
 }

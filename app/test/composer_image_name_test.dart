@@ -92,6 +92,12 @@ void main() {
       await Future<void>.delayed(const Duration(milliseconds: 50));
     });
     await tester.pumpAndSettle();
+    // 2026-11-22 起「+」先弹附件面板，点「相册」才走原来的选图通路。
+    await tester.runAsync(() async {
+      await tester.tap(find.text('相册'));
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+    });
+    await tester.pumpAndSettle();
   }
 
   group('输入条长文件名不挤掉发送键（2026-11-17 真机反馈）', () {
