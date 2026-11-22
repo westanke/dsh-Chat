@@ -79,3 +79,5 @@
 | P2 | 语音输入 | 依赖原生 ASR 通道，工作量最大 | 大 |
 | P3 | 文件夹/置顶/未读 | 抽屉信息架构升级 | 中 |
 | P3 | 分叉/编辑重发 | 与「会话不可变」模型绑定，需先接 fork | 中 |
+| P3 | 思考胶囊扫光 | dsh-Go `thinking_pill.dart` 的 shimmer（lead 600ms / sweep 1s / period 4s）；只影响进行中思考行的装饰 | 小 |
+| P3 | 思考胶囊翻译 chip | 同文件里的翻译 chip（高 26、padding 10、`StadiumBorder`）；本仓无翻译通道，需先定数据来源 | 中 |
