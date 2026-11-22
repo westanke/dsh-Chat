@@ -70,18 +70,18 @@ void main() {
   group('computeAtBottom', () {
     test('extentAfter 在容差内算贴底', () {
       expect(
-        computeAtBottom(maxScrollExtent: 1000, pixels: 1000 - 48),
+        computeAtBottom(maxScrollExtent: 1000, pixels: 1000 - 24),
         isTrue,
       );
       expect(
-        computeAtBottom(maxScrollExtent: 1000, pixels: 1000 - 47.9),
+        computeAtBottom(maxScrollExtent: 1000, pixels: 1000 - 23.9),
         isTrue,
       );
     });
 
     test('超过容差不算贴底', () {
       expect(
-        computeAtBottom(maxScrollExtent: 1000, pixels: 1000 - 49),
+        computeAtBottom(maxScrollExtent: 1000, pixels: 1000 - 24.1),
         isFalse,
       );
     });

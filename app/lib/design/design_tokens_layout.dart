@@ -335,13 +335,13 @@ class DsSpacing {
 
   // ---- 跳转最新 FAB（本工程自定义，docs/design-tokens.md §4.6）----
   /// 圆形按钮直径（仿 companion ChatDetail.kt:697 size 48.dp）。
-  static const fabSize = 48.0;
+  static const fabSize = 44.0;
 
   /// FAB 到右下角的间距（仿 companion padding 16.dp）。
-  static const fabMargin = 16.0;
+  static const fabMargin = 12.0;
 
   /// FAB 内箭头图标尺寸。
-  static const fabIconSize = 24.0;
+  static const fabIconSize = 20.0;
 
   // ---- task-5 对齐官方 Web 轮尾/思考行/工具行细节（官方 css 实测值）----
   /// 轮尾行高（TurnProcessNodeView height calc(33px+delta)）。

@@ -18,7 +18,7 @@ import 'package:flutter/widgets.dart';
 /// companion 没有固定 dp 阈值（用最后可见 item index ≥ totalItemsCount-3），
 /// 但 dsh-Chat 用 ScrollController + extentAfter，取其精神：给一个小容差，
 /// 让「几乎到底」也算贴底，避免亚像素抖动导致 FAB 闪烁。
-const double kAtBottomTolerance = 48.0;
+const double kAtBottomTolerance = 24.0;
 
 /// 自动贴底跟随的唯一守卫：粘性意图 + 有内容。
 ///
