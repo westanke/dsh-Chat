@@ -10,6 +10,7 @@ import '../bridge/credentials.dart';
 import '../bridge/gateway.dart';
 import '../bridge/host_connect.dart';
 import '../bridge/hosts.dart';
+import '../bridge/pairing_link.dart';
 import '../design/tokens.dart';
 
 class ConnectPage extends StatefulWidget {
@@ -106,6 +107,53 @@ class _ConnectPageState extends State<ConnectPage> {
     }
   }
 
+  /// 一行短码入场：多候选先探活择优，再在选中的地址上配对（配对码一次性）。
+  Future<void> _pairWithLink(PairingLink link) async {
+    setState(() {
+      _busy = true;
+      _error = null;
+      _failedHost = null;
+      _probeNote = link.endpoints.length > 1
+          ? '正在探活 ${link.endpoints.length} 条候选地址…'
+          : null;
+    });
+    final draft = DshHost(
+      id: DshHost.stableId(link.baseUrl),
+      displayName: 'DSH Bridge',
+      baseUrl: link.baseUrl,
+      endpoints: link.endpoints,
+      preferredEndpoint: link.baseUrl,
+      lastUsedAt: 0,
+    );
+    try {
+      final r = await pairHost(
+        draft,
+        code: link.code,
+        deviceId: _deviceId,
+        deviceName: 'DSH Chat (Flutter)',
+      );
+      if (!mounted) {
+        r.gateway.dispose();
+        return;
+      }
+      setState(() => _probeNote = r.note);
+      await _enterWith(r.gateway, r.gateway.baseUrl, host: r.host);
+    } on HostConnectException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _busy = false;
+        _error = e.message;
+        _probeNote = e.note.isEmpty ? null : e.note;
+      });
+    } on Object catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _busy = false;
+        _error = '配对失败：$e';
+      });
+    }
+  }
+
   /// 历史主机直连（有 token 才显示；失败给显式反馈——手动点击
   /// 不同于静默自动连接）。失败时记下该主机，供「删除失效记录」入口。
   Future<void> _connectHost(DshHost host) async {
@@ -185,12 +233,24 @@ class _ConnectPageState extends State<ConnectPage> {
     });
   }
 
-  /// 导入 DSH1 配置文本；成功直接连（有 token）或填表。
+  /// 导入配置文本：`DSH1:…` 长码直接连（有 token）或填表；`<地址>#<配对码>` 短码
+  /// 自动拆进地址与配对码两格并立即配对（桥 `/tunnel` 的回复形状）。
   Future<void> _importConfig() async {
     final text = _config.text;
+    final link = parsePairingLink(text);
+    if (link != null) {
+      _host.text = link.baseUrl;
+      _code.text = link.code;
+      setState(() {
+        _error = null;
+        _showImport = false;
+      });
+      await _pairWithLink(link);
+      return;
+    }
     final host = decodeDsh1(text);
     if (host == null) {
-      setState(() => _error = '配置格式无法识别（应为 DSH1: 开头的文本）');
+      setState(() => _error = '配置格式无法识别（应为 DSH1: 开头，或「地址#配对码」一行）');
       return;
     }
     setState(() => _error = null);

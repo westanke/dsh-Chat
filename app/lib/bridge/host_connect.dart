@@ -112,6 +112,67 @@ Future<HostConnectResult> connectHost(
   );
 }
 
+/// 用一次性配对码换令牌，多候选时同样先探活、失败换地址（桥 `/tunnel` 的一行短码入口）。
+///
+/// 为什么不复用 [connectHost]：那条路要有 token；这里恰恰是**还没有 token**、
+/// 要先在选中的地址上完成配对。配对只在一条地址上做——成功了就把整张候选表
+/// 记进主机记录，之后自动连接按 [connectHost] 的规则探活换址。
+Future<HostConnectResult> pairHost(
+  DshHost host, {
+  required String code,
+  required String deviceId,
+  required String deviceName,
+  Duration probeTimeout = kEndpointProbeTimeout,
+}) async {
+  final candidates = host.candidates;
+  if (candidates.isEmpty) {
+    throw HostConnectException('没有可用的地址，请重新导入配置');
+  }
+  var selection = shouldProbeCandidates(candidates)
+      ? await selectEndpoint(
+          candidates,
+          preferred: host.preferredEndpoint ?? host.baseUrl,
+          timeout: probeTimeout,
+        )
+      : null;
+  final order = <String>[
+    if (selection?.chosen != null) selection!.chosen!,
+    ...candidates.where((url) => url != selection?.chosen),
+  ];
+  final failures = <String>[];
+  for (final target in order) {
+    final budget = timeoutsFor(target);
+    final gateway = GatewayClient(
+      baseUrl: target,
+      connectTimeout: budget.connect,
+      helloTimeout: budget.hello,
+    );
+    try {
+      await gateway.pair(code: code, newDeviceId: deviceId, name: deviceName);
+      gateway.setEndpointCandidates(candidates);
+      final now = DateTime.now().millisecondsSinceEpoch;
+      final updated = host.copyWith(
+        baseUrl: gateway.baseUrl,
+        preferredEndpoint: gateway.baseUrl,
+        lastUsedAt: now,
+      );
+      await DshHosts.upsert(updated);
+      return HostConnectResult(
+        gateway: gateway,
+        host: updated,
+        selection: selection,
+      );
+    } on Object catch (e) {
+      failures.add('$target：${e is RequestException ? e.message : e}');
+      gateway.dispose();
+    }
+  }
+  throw HostConnectException(
+    '配对失败：${failures.join('；')}',
+    note: selection?.note ?? '',
+  );
+}
+
 /// 从 [start] 起按候选表继续试（每条一次），成功则写回主机记录。
 Future<HostConnectResult> _retry({
   required DshHost host,
