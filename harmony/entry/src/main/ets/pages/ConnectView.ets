@@ -9,9 +9,11 @@ import { GatewayApi } from '../core/GatewayApi';
 import { RequestException } from '../core/GatewayEvents';
 import { DshCredentials, CREDENTIALS_STORAGE_KEY } from '../core/Credentials';
 import {
-  DshHost, decodeDsh1, upsertHost, removeHost, stableId,
+  DshHost, decodeDsh1, upsertHost, removeHost, stableId, candidatesOf,
   parseHosts, encodeHosts, HOSTS_STORAGE_KEY,
 } from '../core/Hosts';
+import { EndpointProbe, pickEndpoint, selectionNote } from '../core/EndpointSelect';
+import { probeEndpoints } from '../platform/EndpointProbe';
 import { WsTransport } from '../platform/WsTransport';
 import { HttpTransportImpl } from '../platform/HttpTransport';
 import {
@@ -54,6 +56,8 @@ export struct ConnectView {
   /** 窗口宽度断点：输入框高度等固定尺寸按档放大（R007 一多）。 */
   @StorageProp('dshBreakpoint') bp: string = BP_SM;
   @State hosts: DshHost[] = [];
+  /** 探活诊断（试了哪几条、选了哪条）；空串不显示。 */
+  @State probeNote: string = '';
   /** 错误条（附「删除这条失效记录」）。抽 @Builder 降嵌套深度（R014）。 */
   @Builder
   errorBar() {
@@ -241,7 +245,8 @@ export struct ConnectView {
   }
 
   /** 凭证 + 主机记录 + 上报就绪（安卓 _enterWith 同口径）。 */
-  private enterWith(gateway: GatewayClient, baseUrl: string, token: string): void {
+  private enterWith(gateway: GatewayClient, baseUrl: string, token: string,
+    source: DshHost | null, candidates: string[]): void {
     const credentials = new DshCredentials(baseUrl, token);
     PrefsStore.putString(CREDENTIALS_STORAGE_KEY, credentials.encode())
       .catch((e: Error): void => {
@@ -251,10 +256,13 @@ export struct ConnectView {
     // 用户每次都得重贴 DSH1。stableId 以 baseUrl 为键，同址重复连接会覆盖。
     const host: DshHost = new DshHost();
     host.baseUrl = baseUrl;
-    host.token = token;
-    host.displayName = 'DSH Bridge';
+    host.token = token.length > 0 ? token : null;
+    host.displayName = source !== null && source.displayName.length > 0
+      ? source.displayName : 'DSH Bridge';
     host.lastUsedAt = Date.now();
-    host.id = stableId(baseUrl);
+    host.id = source !== null && source.id.length > 0 ? source.id : stableId(baseUrl);
+    host.endpoints = candidates;
+    host.preferredEndpoint = baseUrl;
     this.persistHosts(upsertHost(this.hosts, host));
     const api = new GatewayApi(gateway, new HttpTransportImpl());
     this.onReady(gateway, api, baseUrl, token);
@@ -262,6 +270,9 @@ export struct ConnectView {
   }
 
   /// 直连历史主机（只显示存了 token 的记录）。
+  ///
+  /// 有多条候选（IKX5KQ）就先并发探活择优，再按「选中的在前」的顺序逐条试；
+  /// 单地址老码不探活、不换地址，行为与以前完全一致。
   private connectHost(host: DshHost): void {
     if (host.token === null || this.busy) {
       return;
@@ -269,15 +280,54 @@ export struct ConnectView {
     this.busy = true;
     this.error = '';
     this.failedHostId = '';
-    const gateway = this.buildGateway(host.baseUrl);
-    gateway.setToken(host.token, DEVICE_NAME);
-    gateway.connect().then((): void => {
-      this.enterWith(gateway, host.baseUrl, host.token === null ? '' : host.token);
-    }).catch((err: Error): void => {
+    const candidates: string[] = candidatesOf(host);
+    this.probeNote = '';
+    if (candidates.length <= 1) {
+      this.tryCandidate(host, candidates, 0, []);
+      return;
+    }
+    const transport: HttpTransportImpl = new HttpTransportImpl();
+    probeEndpoints(transport, candidates).then((probes: EndpointProbe[]): void => {
+      const chosen: string | null = pickEndpoint(probes, host.preferredEndpoint);
+      this.probeNote = selectionNote(probes, chosen);
+      this.tryCandidate(host, this.orderCandidates(candidates, chosen), 0, []);
+    }).catch((): void => {
+      this.tryCandidate(host, candidates, 0, []);
+    });
+  }
+
+  /// 选中的地址排最前，其余保持原顺序（探活全失败时就是原顺序）。
+  private orderCandidates(candidates: string[], chosen: string | null): string[] {
+    if (chosen === null) {
+      return candidates;
+    }
+    const out: string[] = [chosen];
+    for (const c of candidates) {
+      if (c !== chosen) {
+        out.push(c);
+      }
+    }
+    return out;
+  }
+
+  /// 按顺序试候选：失败换下一条，全部失败才报错（逐条原因拼进错误条）。
+  private tryCandidate(host: DshHost, list: string[], index: number,
+    failures: string[]): void {
+    if (index >= list.length) {
       this.busy = false;
-      gateway.dispose();
-      this.error = this.describeError(err);
+      this.error = '直连失败：' + failures.join('；');
       this.failedHostId = host.id;
+      return;
+    }
+    const url: string = list[index];
+    const gateway: GatewayClient = this.buildGateway(url);
+    gateway.setToken(host.token === null ? '' : host.token, DEVICE_NAME);
+    gateway.connect().then((): void => {
+      this.enterWith(gateway, url, host.token === null ? '' : host.token, host, list);
+    }).catch((err: Error): void => {
+      gateway.dispose();
+      failures.push(url + '：' + this.describeError(err));
+      this.tryCandidate(host, list, index + 1, failures);
     });
   }
 
@@ -303,7 +353,7 @@ export struct ConnectView {
       return gateway.connect();
     }).then((): void => {
       const token: string | null = gateway.getToken();
-      this.enterWith(gateway, url, token === null ? '' : token);
+      this.enterWith(gateway, url, token === null ? '' : token, null, [url]);
     }).catch((err: Error): void => {
       this.busy = false;
       gateway.dispose();
@@ -395,6 +445,14 @@ export struct ConnectView {
 
       if (this.error.length > 0) {
         this.errorBar()
+      }
+
+      if (this.probeNote.length > 0) {
+        Text(this.probeNote)
+          .fontSize(12)
+          .fontColor(this.c().labelTertiary)
+          .width('100%')
+          .margin({ top: 6 })
       }
 
       Row() {

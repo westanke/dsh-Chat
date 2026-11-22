@@ -17,6 +17,8 @@ import 'bridge/credentials.dart';
 import 'bridge/device.dart';
 import 'bridge/dlog.dart';
 import 'bridge/gateway.dart';
+import 'bridge/host_connect.dart';
+import 'bridge/hosts.dart';
 import 'design/app_settings.dart';
 import 'design/tokens.dart';
 import 'ui/chat_page.dart';
@@ -128,13 +130,30 @@ class _AppRootState extends State<_AppRoot> {
     final base = DshCredentials.baseUrl;
     final token = DshCredentials.token;
     if (base == null || base.isEmpty || token == null || token.isEmpty) return;
-    final gateway = GatewayClient(baseUrl: base)..token = token;
+    // 导入时留了候选表（IKX5KQ）：启动也先探活择优，在家走 LAN、在外走隧道。
+    final hosts = await DshHosts.load();
+    DshHost? host;
+    for (final h in hosts) {
+      if (h.id == DshHost.stableId(base) || h.candidates.contains(base)) {
+        host = h;
+        break;
+      }
+    }
     try {
+      if (host != null) {
+        final r = await connectHost(host.copyWith(token: token));
+        if (!mounted) {
+          r.gateway.dispose();
+          return;
+        }
+        _onReady(r.gateway);
+        return;
+      }
+      final gateway = GatewayClient(baseUrl: base)..token = token;
       await gateway.connect();
       if (!mounted) return;
       _onReady(gateway);
     } catch (_) {
-      gateway.dispose();
       // 静默回连接页（凭证可能被吊销 4001），用户重新配对即可。
     }
   }

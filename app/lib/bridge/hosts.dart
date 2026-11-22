@@ -13,6 +13,8 @@ import 'dart:convert';
 
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'endpoint_select.dart';
+
 /// 一条主机记录（导入/配对成功后落库；点击即可直连）。
 class DshHost {
   const DshHost({
@@ -21,6 +23,8 @@ class DshHost {
     required this.baseUrl,
     this.token,
     required this.lastUsedAt,
+    this.endpoints = const [],
+    this.preferredEndpoint,
   });
 
   factory DshHost.fromJson(Map<String, dynamic> j) => DshHost(
@@ -29,6 +33,11 @@ class DshHost {
     baseUrl: (j['baseUrl'] ?? '') as String,
     token: j['token'] as String?,
     lastUsedAt: (j['lastUsedAt'] ?? 0) as int,
+    endpoints: [
+      for (final e in (j['endpoints'] as List? ?? const []))
+        if (e is String) e,
+    ],
+    preferredEndpoint: j['preferredEndpoint'] as String?,
   );
 
   /// 幂等 id：FNV-1a 摘要 16 hex（同地址重复导入只更新不重复建行）。
@@ -39,9 +48,44 @@ class DshHost {
 
   final String id;
   final String displayName;
+
+  /// 最近一次连通/导入时的首个地址（老单地址码就是它本身）。
   final String baseUrl;
   final String? token;
   final int lastUsedAt;
+
+  /// DSH1 `endpoints` 的全部候选（隧道在前，其后 LAN/虚拟网）；老记录为空。
+  final List<String> endpoints;
+
+  /// 上次连接成功的地址（IKX5KQ 第 4 点：下次先试它，失败立刻换）。
+  final String? preferredEndpoint;
+
+  /// 连接时该试的地址表：老记录只有 baseUrl，也要能照常连。
+  List<String> get candidates {
+    final list = <String>[];
+    for (final e in [baseUrl, ...endpoints]) {
+      final v = e.trim().replaceAll(RegExp(r'/+$'), '');
+      if (v.isEmpty || list.contains(v)) continue;
+      list.add(v);
+    }
+    return list;
+  }
+
+  DshHost copyWith({
+    String? baseUrl,
+    String? preferredEndpoint,
+    List<String>? endpoints,
+    int? lastUsedAt,
+    String? token,
+  }) => DshHost(
+    id: id,
+    displayName: displayName,
+    baseUrl: baseUrl ?? this.baseUrl,
+    token: token ?? this.token,
+    lastUsedAt: lastUsedAt ?? this.lastUsedAt,
+    endpoints: endpoints ?? this.endpoints,
+    preferredEndpoint: preferredEndpoint ?? this.preferredEndpoint,
+  );
 
   Map<String, dynamic> toJson() => {
     'id': id,
@@ -49,6 +93,8 @@ class DshHost {
     'baseUrl': baseUrl,
     'token': ?token,
     'lastUsedAt': lastUsedAt,
+    'endpoints': endpoints,
+    'preferredEndpoint': ?preferredEndpoint,
   };
 }
 
@@ -100,7 +146,11 @@ class DshHosts {
   /// 按 lastUsedAt 降序。
   static Future<void> upsert(DshHost host) async {
     final hosts = [...await load()];
-    final idx = hosts.indexWhere((h) => h.baseUrl == host.baseUrl);
+    // 同一条主机可能经不同地址连过（LAN/隧道）：id 相同也算同一条，
+    // 否则换个地址连一次就多出一行历史主机（IKX5KQ）。
+    final idx = hosts.indexWhere(
+      (h) => h.id == host.id && host.id.isNotEmpty || h.baseUrl == host.baseUrl,
+    );
     if (idx >= 0) {
       hosts[idx] = host;
     } else {
@@ -174,16 +224,26 @@ DshHost? decodeDsh1(String text) {
       parsed = jsonDecode(json.substring(start, end + 1));
     }
     if (parsed is! Map) return null;
-    // 5) 提字段：endpoints[0].baseUrl 为准（companion buildHost 取首个）。
-    String? baseUrl;
-    final endpoints = parsed['endpoints'];
-    if (endpoints is List && endpoints.isNotEmpty) {
-      final first = endpoints.first;
-      if (first is Map) baseUrl = first['baseUrl'] as String?;
+    // 5) 提字段：endpoints 全留（IKX5KQ——隧道在首个，其后 LAN/虚拟网；
+    // 只取首个会让「在家生成的码出门连不上」/「出门的码回家绕远」）。
+    final endpoints = <String>[];
+    final rawEndpoints = parsed['endpoints'];
+    if (rawEndpoints is List) {
+      for (final e in rawEndpoints) {
+        if (e is! Map) continue;
+        final u = e['baseUrl'];
+        if (u is! String || u.trim().isEmpty) continue;
+        endpoints.add(u.trim().replaceFirst(RegExp(r'/api/v1/?$'), ''));
+      }
     }
-    if (baseUrl == null || baseUrl.isEmpty) return null;
-    // 归一：剥 /api/v1 后缀（companion normalizeBaseUrl 口径）。
-    baseUrl = baseUrl.replaceFirst(RegExp(r'/api/v1/?$'), '');
+    // 兼容极老的码：顶层 baseUrl。
+    final topLevel = parsed['baseUrl'];
+    if (topLevel is String && topLevel.trim().isNotEmpty) {
+      endpoints.add(topLevel.trim().replaceFirst(RegExp(r'/api/v1/?$'), ''));
+    }
+    final candidates = normalizeEndpoints(endpoints);
+    if (candidates.isEmpty) return null;
+    final baseUrl = candidates.first;
     final displayName =
         (parsed['displayName'] as String?)?.trim() ?? '导入的主机';
     final token = parsed['token'] as String?;
@@ -193,6 +253,8 @@ DshHost? decodeDsh1(String text) {
       baseUrl: baseUrl,
       token: (token == null || token.isEmpty) ? null : token,
       lastUsedAt: DateTime.now().millisecondsSinceEpoch,
+      endpoints: candidates,
+      preferredEndpoint: baseUrl,
     );
   } on Object {
     return null;

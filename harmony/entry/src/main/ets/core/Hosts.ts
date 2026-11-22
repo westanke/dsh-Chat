@@ -12,15 +12,24 @@
  */
 
 import { JsonAccess, JsonMap } from './JsonAccess';
+import { normalizeEndpoints } from './EndpointSelect';
 import { WireBuilder } from './Wire';
 
 /** 一条主机记录（导入/配对成功后落库；点击即可直连）。 */
 export class DshHost {
   id: string = '';
   displayName: string = '';
+
+  /** 最近一次连通/导入时的首个地址（老单地址码就是它本身）。 */
   baseUrl: string = '';
   token: string | null = null;
   lastUsedAt: number = 0;
+
+  /** DSH1 endpoints 的全部候选（隧道在前，其后 LAN/虚拟网）；老记录为空。 */
+  endpoints: string[] = [];
+
+  /** 上次连接成功的地址（下次先试它，失败立刻换）。 */
+  preferredEndpoint: string | null = null;
 
   static fromJson(j: JsonMap | null): DshHost {
     const h: DshHost = new DshHost();
@@ -33,6 +42,14 @@ export class DshHost {
     const token: string | null = JsonAccess.str(j, 'token');
     h.token = token === null || token.length === 0 ? null : token;
     h.lastUsedAt = JsonAccess.numOr(j, 'lastUsedAt', 0);
+    const eps: Object[] = JsonAccess.arr(j, 'endpoints');
+    for (const e of eps) {
+      if (typeof e === 'string') {
+        h.endpoints.push(e as string);
+      }
+    }
+    const pref: string | null = JsonAccess.str(j, 'preferredEndpoint');
+    h.preferredEndpoint = pref === null || pref.length === 0 ? null : pref;
     return h;
   }
 
@@ -43,8 +60,20 @@ export class DshHost {
     b.put('baseUrl', this.baseUrl);
     b.putIf(this.token !== null, 'token', this.token as Object | null);
     b.put('lastUsedAt', this.lastUsedAt);
+    b.put('endpoints', this.endpoints);
+    b.putIf(this.preferredEndpoint !== null, 'preferredEndpoint',
+      this.preferredEndpoint as Object | null);
     return b.buildMap();
   }
+}
+
+/** 连接时应试的地址表：baseUrl + endpoints 去重保序（老记录只有 baseUrl）。 */
+export function candidatesOf(host: DshHost): string[] {
+  const raw: string[] = [host.baseUrl];
+  for (const e of host.endpoints) {
+    raw.push(e);
+  }
+  return normalizeEndpoints(raw);
 }
 
 /**
@@ -201,20 +230,31 @@ export function decodeDsh1(text: string, nowMs: number): DshHost | null {
     if (map === null) {
       return null;
     }
-    // 5) 提字段：endpoints[0].baseUrl 为准（companion buildHost 取首个）。
-    const endpoints: Object[] = JsonAccess.arr(map, 'endpoints');
-    let baseUrl: string = '';
-    if (endpoints.length > 0) {
-      const first: JsonMap | null = JsonAccess.asMap(endpoints[0]);
-      if (first !== null) {
-        baseUrl = JsonAccess.strOr(first, 'baseUrl', '');
+    // 5) 提字段：endpoints 全留（IKX5KQ——隧道在首个，其后 LAN/虚拟网；
+    // 只取首个会让「在家生成的码出门连不上」/「出门的码回家绕远」）。
+    const rawEndpoints: Object[] = JsonAccess.arr(map, 'endpoints');
+    const urls: string[] = [];
+    for (const e of rawEndpoints) {
+      const item: JsonMap | null = JsonAccess.asMap(e);
+      if (item === null) {
+        continue;
       }
+      const u: string = JsonAccess.strOr(item, 'baseUrl', '').trim();
+      if (u.length === 0) {
+        continue;
+      }
+      urls.push(u.replace(/\/api\/v1\/?$/, ''));
     }
-    if (baseUrl.length === 0) {
+    // 兼容极老的码：顶层 baseUrl。
+    const topLevel: string = JsonAccess.strOr(map, 'baseUrl', '').trim();
+    if (topLevel.length > 0) {
+      urls.push(topLevel.replace(/\/api\/v1\/?$/, ''));
+    }
+    const candidates: string[] = normalizeEndpoints(urls);
+    if (candidates.length === 0) {
       return null;
     }
-    // 归一：剥 /api/v1 后缀（companion normalizeBaseUrl 口径）。
-    baseUrl = baseUrl.replace(/\/api\/v1\/?$/, '');
+    const baseUrl: string = candidates[0];
     let displayName: string = JsonAccess.strOr(map, 'displayName', '').trim();
     if (displayName.length === 0) {
       displayName = '导入的主机';
@@ -226,6 +266,8 @@ export function decodeDsh1(text: string, nowMs: number): DshHost | null {
     host.baseUrl = baseUrl;
     host.token = token === null || token.length === 0 ? null : token;
     host.lastUsedAt = nowMs;
+    host.endpoints = candidates;
+    host.preferredEndpoint = baseUrl;
     return host;
   } catch (e) {
     return null;
@@ -237,7 +279,9 @@ export function upsertHost(hosts: DshHost[], host: DshHost): DshHost[] {
   const out: DshHost[] = hosts.slice();
   let idx: number = -1;
   for (let i = 0; i < out.length; i++) {
-    if (out[i].baseUrl === host.baseUrl) {
+    // 同一主机可能经不同地址连过（LAN/隧道）：id 相同也算同一条，
+    // 否则换个地址连一次就多出一行历史主机（IKX5KQ）。
+    if ((host.id.length > 0 && out[i].id === host.id) || out[i].baseUrl === host.baseUrl) {
       idx = i;
       break;
     }

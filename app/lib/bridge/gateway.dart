@@ -17,6 +17,7 @@ import 'dart:math';
 import 'package:flutter/foundation.dart';
 
 import 'dlog.dart';
+import 'endpoint_select.dart';
 
 import 'package:web_socket_channel/status.dart' as ws_status;
 import 'package:web_socket_channel/io.dart';
@@ -42,8 +43,36 @@ export 'questions.dart';
 class GatewayClient {
   GatewayClient({required this.baseUrl});
 
-  /// 如 http://192.168.1.10:3090（不带路径）。
-  final String baseUrl;
+  /// 如 http://192.168.1.10:3090（不带路径）。重连换候选地址时会变
+  /// （IKX5KQ：LAN 断了自动落到隧道，不让用户重贴配置）。
+  String baseUrl;
+
+  /// 按序尝试的候选地址（DSH1 endpoints 全量；老单地址码为空表）。
+  List<String> _endpointCandidates = const [];
+
+  List<String> get endpointCandidates => _endpointCandidates;
+
+  /// 最近一次握手成功的地址（写回 DshHost.preferredEndpoint）。
+  String? connectedEndpoint;
+
+  /// 设置候选表：baseUrl 不在表里时以表首为准（导入新码覆盖旧地址）。
+  void setEndpointCandidates(Iterable<String> urls) {
+    final list = normalizeEndpoints(urls);
+    if (list.isEmpty) return;
+    _endpointCandidates = list;
+    if (!list.contains(baseUrl)) baseUrl = list.first;
+  }
+
+  /// 当前地址连不上时换下一条；只有一条候选时返回 false（老行为不变）。
+  bool rotateEndpoint() {
+    if (_endpointCandidates.length < 2) return false;
+    final i = _endpointCandidates.indexOf(baseUrl);
+    final next = _endpointCandidates[(i + 1) % _endpointCandidates.length];
+    if (next == baseUrl) return false;
+    baseUrl = next;
+    DshLog.w('gw endpoint rotate → $next');
+    return true;
+  }
 
   WebSocketChannel? _ws;
   GatewayState _state = GatewayState.idle;
@@ -238,6 +267,7 @@ class GatewayClient {
         // dshrb-v1。留着上一轮的目录会让 UI 以为端点还在，点了才报端点不存在。
         _catalog.value = const [];
         DshLog.w('gw hello caps=${capabilities.length} port=$listenerPort');
+        connectedEndpoint = baseUrl;
         _backoffIndex = 0;
         _authDead = false;
         _setState(GatewayState.ready);
@@ -456,6 +486,9 @@ class GatewayClient {
           _setState(GatewayState.authFailed);
           return;
         }
+        // 这条地址连不上：还有别的候选就换下一条（IKX5KQ 家用 LAN、
+        // 出门落隧道），换完重置退避，别让用户等 30s。
+        if (rotateEndpoint()) _backoffIndex = 0;
         if (_ws == null) _scheduleReconnect();
       });
     });

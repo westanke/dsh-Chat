@@ -8,6 +8,7 @@ import 'package:material_ui/material_ui.dart';
 
 import '../bridge/credentials.dart';
 import '../bridge/gateway.dart';
+import '../bridge/host_connect.dart';
 import '../bridge/hosts.dart';
 import '../design/tokens.dart';
 
@@ -30,6 +31,7 @@ class _ConnectPageState extends State<ConnectPage> {
   bool _busy = false;
   bool _showImport = false;
   String? _error;
+  String? _probeNote; // 探活诊断：试了哪几条、哪条成了（IKX5KQ）
   DshHost? _failedHost; // 直连失败的主机，供「删除这条失效记录」定位
   List<DshHost> _hosts = const [];
 
@@ -52,19 +54,22 @@ class _ConnectPageState extends State<ConnectPage> {
   }
 
   /// 建网关并进入聊天；成功即记录主机（幂等）。
+  ///
+  /// [host] 有值时保留它的候选地址表与 id（IKX5KQ：换地址连同一个主机
+  /// 不能多出一行历史记录），并把本次成功地址记为 preferredEndpoint。
   Future<void> _enterWith(GatewayClient gateway, String baseUrl,
-      {String? token}) async {
-    await DshCredentials.save(
-      baseUrl: baseUrl,
-      token: token ?? gateway.token ?? '',
-    );
+      {String? token, DshHost? host}) async {
+    final savedToken = token ?? gateway.token ?? '';
+    await DshCredentials.save(baseUrl: baseUrl, token: savedToken);
     await DshHosts.upsert(
       DshHost(
-        id: DshHost.stableId(baseUrl),
-        displayName: 'DSH Bridge',
+        id: host?.id ?? DshHost.stableId(baseUrl),
+        displayName: host?.displayName ?? 'DSH Bridge',
         baseUrl: baseUrl,
-        token: token ?? gateway.token,
+        token: savedToken.isEmpty ? null : savedToken,
         lastUsedAt: DateTime.now().millisecondsSinceEpoch,
+        endpoints: host?.candidates ?? const [],
+        preferredEndpoint: baseUrl,
       ),
     );
     if (!mounted) return;
@@ -109,12 +114,29 @@ class _ConnectPageState extends State<ConnectPage> {
       _busy = true;
       _error = null;
       _failedHost = null;
+      _probeNote = host.candidates.length > 1
+          ? '正在探活 ${host.candidates.length} 条候选地址…'
+          : null;
     });
-    final gateway = GatewayClient(baseUrl: host.baseUrl)..token = host.token;
     try {
-      await gateway.connect();
-      await _enterWith(gateway, host.baseUrl, token: host.token);
-    } catch (e) {
+      // 候选表探活择优 + 失败换下一条（IKX5KQ）；单地址老码行为不变。
+      final r = await connectHost(host);
+      if (!mounted) {
+        r.gateway.dispose();
+        return;
+      }
+      setState(() => _probeNote = r.note);
+      await _enterWith(r.gateway, r.gateway.baseUrl,
+          token: host.token, host: r.host);
+    } on HostConnectException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _busy = false;
+        _failedHost = host;
+        _error = '直连失败：${e.message}（可重新配对）';
+        _probeNote = e.note.isEmpty ? _probeNote : e.note;
+      });
+    } on Object catch (e) {
       if (!mounted) return;
       setState(() {
         _busy = false;
@@ -171,15 +193,8 @@ class _ConnectPageState extends State<ConnectPage> {
     }
     setState(() => _error = null);
     if (host.token != null && host.token!.isNotEmpty) {
-      await _connectHost(
-        DshHost(
-          id: host.id,
-          displayName: host.displayName,
-          baseUrl: host.baseUrl,
-          token: host.token,
-          lastUsedAt: host.lastUsedAt,
-        ),
-      );
+      // 连整个 host（含 endpoints 候选表），不要只挑 baseUrl。
+      await _connectHost(host);
     } else {
       // 无 token：只有地址，填进手动配对表单。
       _host.text = host.baseUrl;
@@ -308,6 +323,13 @@ class _ConnectPageState extends State<ConnectPage> {
                 colors: c,
                 bordered: true,
               ),
+              if (_probeNote != null && !_busy) ...[
+                const SizedBox(height: 12),
+                Text(
+                  _probeNote!,
+                  style: DsTypography.small.copyWith(color: c.labelTertiary),
+                ),
+              ],
               if (_error != null) ...[
                 const SizedBox(height: 12),
                 Text(
