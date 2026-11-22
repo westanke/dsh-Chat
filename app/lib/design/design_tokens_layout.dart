@@ -362,6 +362,37 @@ class DsSpacing {
   /// 图形尺寸。
   static const menuIconSize = 18.0;
 
+  // ---- 空态建议卡与技巧行（dsh-go empty_actions） ----
+  /// 卡片圆角。
+  static const suggestionRadius = 20.0;
+
+  /// 卡片内衬。
+  static const suggestionPad = 14.0;
+
+  /// 卡片最小高（dsh-go minCell 150 宽、纵向由内容撑）。
+  static const suggestionMinHeight = 104.0;
+
+  /// 卡片间距（横向与纵向同值）。
+  static const suggestionRowGap = 8.0;
+
+  /// 图标方块边长。
+  static const suggestionBadge = 34.0;
+
+  /// 图标本体尺寸。
+  static const suggestionGlyph = 18.0;
+
+  /// 图标块与标题之间的间距。
+  static const suggestionTitleGap = 8.0;
+
+  /// 建议卡区与工作目录 chip 之间的间距（dsh-go suggestionsGap 28）。
+  static const suggestionsGap = 28.0;
+
+  /// 建议卡区的最大宽度，桌面宽窗下两列不被拉长。
+  static const suggestionsMaxWidth = 420.0;
+
+  /// 建议卡与技巧行之间的间距（dsh-go tipGap 6）。
+  static const emptyTipGap = 6.0;
+
   // ---- task-5 对齐官方 Web 轮尾/思考行/工具行细节（官方 css 实测值）----
   /// 轮尾行高（TurnProcessNodeView height calc(33px+delta)）。
   static const turnRowHeight = 36.0;

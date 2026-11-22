@@ -107,6 +107,21 @@ class ComposerState extends State<Composer> {
   /// 关掉斜杠面板（返回键路径）。
   void dismissPalette() => _dismissSlashPalette();
 
+  /// 把一段文字填进输入框并聚焦（空态建议卡点一下就走这条路）。
+  ///
+  /// 只填不发：dsh-go 的建议卡也是把 prompt 放进输入框，用户还能改。
+  void fillDraft(String text) {
+    _controller.value = TextEditingValue(
+      text: text,
+      selection: TextSelection.collapsed(offset: text.length),
+    );
+    _focus.requestFocus();
+    notifyUiChanged();
+  }
+
+  /// 输入内容变化后的刷新入口（供 fillDraft 这类外部写入触发重绘）。
+  void notifyUiChanged() => _refresh(() {});
+
   final _controller = TextEditingController();
   final _focus = FocusNode();
   bool _loadingOptions = false;

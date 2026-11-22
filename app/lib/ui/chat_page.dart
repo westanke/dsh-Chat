@@ -29,6 +29,7 @@ import 'question_card.dart';
 import 'session_location_sheet.dart';
 import 'sessions_drawer.dart';
 import 'activity_strip.dart';
+import 'empty_suggestions.dart';
 import 'todo_dock.dart';
 import 'window_class.dart';
 
@@ -307,7 +308,12 @@ class _ChatPageState extends State<ChatPage>
             ),
             Expanded(
               child: st.isEmpty
-                  ? _Greeting(colors: c, state: st)
+                  ? _Greeting(
+                      colors: c,
+                      state: st,
+                      onPickSuggestion: (text) =>
+                          _composerKey.currentState?.fillDraft(text),
+                    )
                   : ChatList(
                       state: st,
                       colors: c,
@@ -431,10 +437,17 @@ class _ChatPageState extends State<ChatPage>
 // ---------- 空态问候 ----------
 
 class _Greeting extends StatelessWidget {
-  const _Greeting({required this.colors, required this.state});
+  const _Greeting({
+    required this.colors,
+    required this.state,
+    required this.onPickSuggestion,
+  });
 
   final DsColors colors;
   final ChatState state;
+
+  /// 点了建议卡：把 prompt 填进输入框（不直接发）。
+  final ValueChanged<String> onPickSuggestion;
 
   @override
   Widget build(BuildContext context) {
@@ -491,6 +504,35 @@ class _Greeting extends StatelessWidget {
                   ),
                 ],
               ),
+            ),
+          ),
+          // 建议卡与技巧行（dsh-go empty_actions 移植）：左右留出页面边距，
+          // 桌面宽度下再限宽，两列不会被拉长也不会贴边。
+          const SizedBox(height: DsSpacing.suggestionsGap),
+          Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: DsSpacing.screenPad,
+            ),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(
+                maxWidth: DsSpacing.suggestionsMaxWidth,
+              ),
+              child: SuggestionCards(
+                colors: colors,
+                onPick: onPickSuggestion,
+              ),
+            ),
+          ),
+          const SizedBox(height: DsSpacing.emptyTipGap),
+          Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: DsSpacing.screenPad,
+            ),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(
+                maxWidth: DsSpacing.suggestionsMaxWidth,
+              ),
+              child: EmptyTip(colors: colors),
             ),
           ),
         ],
