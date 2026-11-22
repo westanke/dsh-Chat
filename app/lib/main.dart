@@ -13,17 +13,22 @@ import 'package:flutter_localizations/flutter_localizations.dart'
     hide GlobalMaterialLocalizations, GlobalCupertinoLocalizations;
 import 'package:material_ui/material_ui.dart';
 
+import 'dart:async';
+
 import 'bridge/credentials.dart';
 import 'bridge/device.dart';
 import 'bridge/dlog.dart';
 import 'bridge/gateway.dart';
 import 'bridge/host_connect.dart';
 import 'bridge/hosts.dart';
+import 'bridge/notify.dart';
 import 'design/app_settings.dart';
 import 'design/tokens.dart';
 import 'ui/chat_page.dart';
 import 'ui/chat_state.dart';
 import 'ui/connect_page.dart';
+import 'ui/notify_prefs.dart';
+import 'ui/notify_watcher.dart';
 import 'ui/update_prompt.dart';
 import 'ui/settings_page.dart';
 
@@ -118,10 +123,16 @@ class _AppRootState extends State<_AppRoot> {
   GatewayClient? _gateway;
   ChatState? _chatState;
 
+  // 系统通知（对齐 dsh-go）：监听网关事件弹通知，点通知跳回对应会话。
+  NotifyWatcher? _notifyWatcher;
+  StreamSubscription<void>? _tapSub;
+  String? _pendingNotifySession; // 未连接/未就绪时先记下要跳的会话
+
   @override
   void initState() {
     super.initState();
     _autoConnect();
+    _initNotifications();
     // 启动即查更新（需求 2026-11-22 第 3 项）：有新版弹「是否下载」。
     // 放到首帧之后，等 Navigator 就绪；网络失败/版本读不到静默跳过。
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -166,10 +177,39 @@ class _AppRootState extends State<_AppRoot> {
 
   void _onReady(GatewayClient gateway) {
     final state = ChatState(gateway);
+    _notifyWatcher?.dispose();
+    _notifyWatcher = NotifyWatcher(state)
+      ..onOpenSession = (sid) => state.openSessionById(sid);
     setState(() {
       _gateway = gateway;
       _chatState = state;
     });
+    final pending = _pendingNotifySession;
+    if (pending != null) {
+      _pendingNotifySession = null;
+      unawaited(state.openSessionById(pending));
+    }
+  }
+
+  /// 通知：建通道 + 读偏好 + 监听点击（冷启动那次从 takeLaunchTap 取）。
+  Future<void> _initNotifications() async {
+    DshNotify.init();
+    await NotifyPrefs.instance.load();
+    unawaited(DshNotify.ensureChannels());
+    _tapSub = DshNotify.taps.listen(_onNotifyTap);
+    final launch = await DshNotify.takeLaunchTap();
+    if (launch != null) _onNotifyTap(launch);
+  }
+
+  void _onNotifyTap(Map<Object?, Object?> payload) {
+    final sid = payload['sessionId'];
+    if (sid is! String || sid.isEmpty) return;
+    final state = _chatState;
+    if (state == null) {
+      _pendingNotifySession = sid; // 连接还没就绪，等 _onReady 再跳
+      return;
+    }
+    unawaited(state.openSessionById(sid));
   }
 
   /// 从抽屉进入设置页；设置页只读展示 hello 帧里的连接/设备信息。
@@ -214,6 +254,8 @@ class _AppRootState extends State<_AppRoot> {
 
   @override
   void dispose() {
+    _tapSub?.cancel();
+    _notifyWatcher?.dispose();
     _chatState?.dispose();
     _gateway?.dispose();
     super.dispose();

@@ -193,6 +193,22 @@ class ChatState extends ChangeNotifier with GroupExpandState {
     }
   }
 
+  /// 按 id 打开会话（通知点击用）：先查已加载列表，没命中就重拉一次；
+  /// 还找不到就按最小会话对象打开（bridge 会补齐投影/历史）。
+  Future<void> openSessionById(String id) async {
+    if (id.isEmpty || id == sessionId) return;
+    for (final s in sessions) {
+      if (s.id == id) return openSession(s);
+    }
+    await loadSessions();
+    for (final s in sessions) {
+      if (s.id == id) return openSession(s);
+    }
+    await openSession(
+      DshSession(id: id, rootId: '', updatedAt: 0, running: false, blank: false),
+    );
+  }
+
   Future<void> openSession(DshSession s) async {
     sessionId = s.id;
     // 切会话先清空原始事件/投影：防止上一会话的团队/TODO 串台

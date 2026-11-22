@@ -1,9 +1,12 @@
 package com.dsh.dshchat
 
+import android.Manifest
 import android.app.DownloadManager
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
 import android.os.Environment
 import android.provider.OpenableColumns
 import android.speech.tts.TextToSpeech
@@ -22,6 +25,11 @@ class MainActivity : FlutterActivity() {
     private var ttsReady = false
     private var pendingSpeak: String? = null
 
+    // 通知（dsh/notify）：通道回调 + 权限申请回执 + 冷启动时未送达的点击载荷。
+    private var notifyChannel: MethodChannel? = null
+    private var notifyPermissionResult: MethodChannel.Result? = null
+    private var pendingTap: Map<String, String>? = null
+
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "dsh/device")
@@ -34,6 +42,77 @@ class MainActivity : FlutterActivity() {
                     else -> result.notImplemented()
                 }
             }
+        val notify = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "dsh/notify")
+        notifyChannel = notify
+        notify.setMethodCallHandler { call, result ->
+            when (call.method) {
+                "ensureChannels" -> {
+                    NotificationHelper.ensureChannels(this)
+                    result.success(null)
+                }
+                "status" -> result.success(NotificationHelper.status(this))
+                "requestPermission" -> {
+                    // Android 13+ 才需要运行时权限；已有权限直接回 true。
+                    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+                        checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) ==
+                        PackageManager.PERMISSION_GRANTED
+                    ) {
+                        result.success(NotificationHelper.canPost(this))
+                    } else if (notifyPermissionResult != null) {
+                        // 同时只允许一个在途申请（每个分支恰好回一次 result）。
+                        result.success(false)
+                    } else {
+                        notifyPermissionResult = result
+                        requestPermissions(
+                            arrayOf(Manifest.permission.POST_NOTIFICATIONS),
+                            notifyPermissionRequest,
+                        )
+                    }
+                }
+                "openSettings" -> {
+                    NotificationHelper.openSettings(this)
+                    result.success(null)
+                }
+                "show" -> {
+                    val args = call.arguments as? Map<*, *>
+                    val key = args?.get("key") as? String
+                    val title = args?.get("title") as? String
+                    val text = args?.get("text") as? String
+                    if (key.isNullOrBlank() || title.isNullOrBlank()) {
+                        result.success(false)
+                    } else {
+                        result.success(
+                            NotificationHelper.show(
+                                this,
+                                key,
+                                title,
+                                text ?: "",
+                                args?.get("attention") == true,
+                                args?.get("sessionId") as? String,
+                            )
+                        )
+                    }
+                }
+                "cancel" -> {
+                    val args = call.arguments as? Map<*, *>
+                    val key = args?.get("key") as? String
+                    if (!key.isNullOrBlank()) NotificationHelper.cancel(this, key)
+                    result.success(null)
+                }
+                "cancelAll" -> {
+                    NotificationHelper.cancelAll(this)
+                    result.success(null)
+                }
+                "takeLaunchTap" -> {
+                    val tap = pendingTap
+                    pendingTap = null
+                    result.success(tap)
+                }
+                else -> result.notImplemented()
+            }
+        }
+        // 冷启动：从通知点进来时，把载荷交给 Dart（Dart 侧 takeLaunchTap 取）。
+        handleNotifyIntent(intent)
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "dsh/platform")
             .setMethodCallHandler { call, result ->
                 when (call.method) {
@@ -245,6 +324,52 @@ class MainActivity : FlutterActivity() {
                     else -> result.notImplemented()
                 }
             }
+    }
+
+    private val notifyPermissionRequest = 4301
+
+    /** 从通知点进来：单例 Activity 不复用启动参数，靠 onNewIntent 补齐。 */
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleNotifyIntent(intent)
+    }
+
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray,
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode != notifyPermissionRequest) return
+        val result = notifyPermissionResult
+        notifyPermissionResult = null
+        val granted = grantResults.isNotEmpty() &&
+            grantResults[0] == PackageManager.PERMISSION_GRANTED
+        // 已授权但系统总开关关着也算发不出去，统一回 canPost。
+        result?.success(granted && NotificationHelper.canPost(this))
+    }
+
+    /**
+     * 把通知点击的 sessionId 转成 Flutter 事件：Flutter 侧已在监听就直接推，
+     * 引擎还没起来（冷启动）就先存着等 takeLaunchTap 来取。
+     */
+    private fun handleNotifyIntent(intent: Intent?) {
+        if (intent == null) return
+        val sessionId = intent.getStringExtra(NotificationHelper.EXTRA_SESSION_ID)
+        val key = intent.getStringExtra(NotificationHelper.EXTRA_KEY)
+        if (sessionId.isNullOrBlank() && key.isNullOrBlank()) return
+        val payload = HashMap<String, String>()
+        if (!sessionId.isNullOrBlank()) payload["sessionId"] = sessionId
+        if (!key.isNullOrBlank()) payload["key"] = key
+        intent.removeExtra(NotificationHelper.EXTRA_SESSION_ID)
+        intent.removeExtra(NotificationHelper.EXTRA_KEY)
+        val channel = notifyChannel
+        if (channel == null) {
+            pendingTap = payload
+        } else {
+            channel.invokeMethod("tap", payload)
+        }
     }
 
     // 选图请求码（pickImage：ACTION_GET_CONTENT 系统选择器，零权限零依赖）。

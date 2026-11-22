@@ -1,6 +1,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <!-- 连自建 bridge 必需（release 构建不会自动获得该权限，debug 模板里才有）。 -->
     <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- Android 13+ 通知运行时权限（回答完成/等待审批提醒；通知设置页负责引导） -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
 
     <!-- 应用内更新：下载完成自动拉起安装器（真机反馈第三轮 2）。
          缺它时 startActivity(ACTION_VIEW apk) 被系统静默拒绝（v1.0.3 不弹安装的根因）；

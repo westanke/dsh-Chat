@@ -22,15 +22,18 @@ import 'dart:async';
 import '../bridge/credentials.dart';
 import '../bridge/dlog.dart';
 import '../bridge/gateway.dart';
+import '../bridge/notify.dart';
 import '../bridge/platform.dart';
 import '../bridge/release_check.dart';
 import '../design/app_settings.dart';
 import '../design/tokens.dart';
 import 'window_class.dart';
+import 'notify_prefs.dart';
 
 part 'settings_sections.dart';
 part 'settings_widgets.dart';
 part 'settings_update.dart';
+part 'settings_notify.dart';
 
 /// 版本展示与更新检查的基准：运行时经 DshPlatform.appVersion() 读构建系统
 /// 注入的 versionName+versionCode（Flutter 工具链自动从 app/pubspec.yaml 的
@@ -99,6 +102,7 @@ class SettingsPage extends StatelessWidget {
                     _ConnectionSection(colors: c, gateway: gateway),
                     _AppearanceSection(colors: c),
                     _GeneralSection(colors: c),
+                    _NotifySection(colors: c),
                     _SendSection(colors: c),
                     _DiagnosticsSection(colors: c),
                     _AboutSection(colors: c),
