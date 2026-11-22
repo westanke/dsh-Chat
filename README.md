@@ -7,7 +7,7 @@
 </p>
 
 <p align="center">
-  <img alt="Version" src="https://img.shields.io/badge/version-1.0.27-087f8c">
+  <img alt="Version" src="https://img.shields.io/badge/version-1.0.28-087f8c">
   <img alt="License" src="https://img.shields.io/badge/license-AGPL--3.0-2da44e">
   <img alt="Platforms" src="https://img.shields.io/badge/platform-Android%20%7C%20iOS-586069">
   <img alt="Built with Flutter" src="https://img.shields.io/badge/built%20with-Flutter-02569B">
@@ -57,6 +57,7 @@
 
 | 平台 | 状态 |
 |---|---|
+| APK | [`dsh-Chat-v1.0.28.apk`](https://gitee.com/westanke/dsh-Chat/releases/download/v1.0.28/dsh-Chat-v1.0.28.apk)<br>26,614,572 字节 · SHA-256 `ecac81ebb8016ac68b9e20145b76618ac1fc61096df57ef7118fc2e939f7f286` |
 | APK | [`dsh-Chat-v1.0.27.apk`](https://gitee.com/westanke/dsh-Chat/releases/download/v1.0.27/dsh-Chat-v1.0.27.apk)<br>26,483,348 字节 · SHA-256 `ebd9aba6d05101d13f7945e43b4206dcbde9441f66d098c31f55c6b86d64c396` |
 | APK | [`dsh-Chat-v1.0.22.apk`](https://gitee.com/westanke/dsh-Chat/releases/download/v1.0.22/dsh-Chat-v1.0.22.apk)<br>26,154,480 字节 · SHA-256 `fee18e99369460d5adc6b96583a0b0b0c6702e1a13956423ee8dd4e68614d028` |
 | APK | [`dsh-Chat-v1.0.20.apk`](https://gitee.com/westanke/dsh-Chat/releases/download/v1.0.20/dsh-Chat-v1.0.20.apk)<br>26,022,440 字节 · SHA-256 `04bc3c5d23b6fb8679688ce51b179d001ce17bcebeca990de63da9ed234a95da` |
@@ -81,7 +82,7 @@
 | Android | **已装机验证**（vivo V2080A 真机）：配对、自动重连、流式对话、Markdown 全家福、工具行五态与专属详情、过程组四档、轮尾行、思考预览、提问卡、抽屉、深色模式 |
 | iOS | **未验证**。`ios/Runner` 平台壳（IANA 时区通道、显示名、ATS 放行）已就位，但未在 iOS 设备或模拟器上构建运行过 |
 | 鸿蒙（HarmonyOS） | `harmony/` 是同一套协议的 ArkTS 客户端（bundleName `com.dsh.dshchat`，独立版本线 1.0.0）。**已装机验证**（鸿蒙真机 3AX0225103005398）：配对、会话、工具行五态、过程组、轮尾行、思考预览、设置页。**未发版**——签名材料目前只有绑定单台设备 UDID 的调试 Profile，公开发布需先补 AGC 发布证书与发布 Profile（口径见 `harmony/docs/RELEASE.md`） |
-| 版本 | `app/pubspec.yaml` 为 `1.0.27+28`；tag `v1.0.27`，产物见下方「下载安装」 |
+| 版本 | `app/pubspec.yaml` 为 `1.0.28+29`；tag `v1.0.28`，产物见下方「下载安装」 |
 
 未验证的功能不会被写成「已完成」。真机截图是唯一验收证据。
 
@@ -91,10 +92,10 @@
 
 | 产物 | 说明 |
 |---|---|
-| APK | [`dsh-Chat-v1.0.27.apk`](https://gitee.com/westanke/dsh-Chat/releases/download/v1.0.27/dsh-Chat-v1.0.27.apk)<br>26,483,348 字节 · SHA-256 `ebd9aba6d05101d13f7945e43b4206dcbde9441f66d098c31f55c6b86d64c396` |
-| 校验 | `sha256sum -c` 前先比对上方 SHA-256；tag `v1.0.27` 内的 `artifacts/SHA256SUMS.txt` 为权威值 |
+| APK | [`dsh-Chat-v1.0.28.apk`](https://gitee.com/westanke/dsh-Chat/releases/download/v1.0.28/dsh-Chat-v1.0.28.apk)<br>26,614,572 字节 · SHA-256 `ecac81ebb8016ac68b9e20145b76618ac1fc61096df57ef7118fc2e939f7f286` |
+| 校验 | `sha256sum -c` 前先比对上方 SHA-256；tag `v1.0.28` 内的 `artifacts/SHA256SUMS.txt` 为权威值 |
 
-> 版本号以 [`app/pubspec.yaml`](app/pubspec.yaml) 的 `version` 为准（当前 `1.0.27+28`）。
+> 版本号以 [`app/pubspec.yaml`](app/pubspec.yaml) 的 `version` 为准（当前 `1.0.28+29`）。
 
 ## 怎么跑
 
