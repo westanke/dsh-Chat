@@ -404,6 +404,7 @@ ioCard/轮尾行/思考行全部复用既有语义色（mdCodeBlockBg/borderL1/b
 | 浮层控件离阅读列两边距离 | `DsSpacing.chatFloatInset` | 14 | 手机态边距 22，浮层比正文窄 4（各边 2） |
 | 浮层控件列宽 | `floatingColumnWidth(页宽)` | 可读列 − 2×floatInset；没有富余时铺满 | 手机上 360（原 692 也比屏宽，效果相同） |
 | 正文伸到输入条上沿以下的距离 | `DsSpacing.chatListOverlap` | 6 | dsh-go `_ChatLayout.overlap` |
+| 正文与顶栏之间的呼吸位 | `DsSpacing.chatBodyTopGap` | 8 | 本仓独有：dsh-go 顶栏浮在内容上、靠渐隐过渡；我们是分槽布局，留 8 才能让首行不贴死胶囊 |
 | 底部渐隐带高度（羽化） | `DsSpacing.chatVeilFeather` | 14 | dsh-go `BackdropVeil.feather` |
 | 列表底部留白（末尾 spacer，与 anchor 同值） | `DsSpacing.chatListOverlap` + `DsSpacing.chatVeilFeather` | 20 | dsh-go `chat_list.dart` 末尾 `SliverToBoxAdapter(SizedBox(height: bottomPad))`，其 bottomPad 同时喂给 anchor |
 | 输入条底部安全区余量 | `DsSpacing.chatComposerBottomPad` | 8 | dsh-go composer 槽 SafeArea minimum |

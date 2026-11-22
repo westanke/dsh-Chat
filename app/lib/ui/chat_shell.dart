@@ -108,7 +108,8 @@ class ChatShellLayout extends MultiChildLayoutDelegate {
     positionChild(ChatShellSlot.header, Offset.zero);
 
     // 正文伸到输入条上沿以下 chatListOverlap：底色在那里已经是实心，看不见裁切。
-    final bodyTop = header.height;
+    // 顶部让出 chatBodyTopGap：否则首行文字与顶栏胶囊贴死（真机上看起来像被压住）。
+    final bodyTop = header.height + DsSpacing.chatBodyTopGap;
     final bodyHeight = math.max(
       0.0,
       composerTop + DsSpacing.chatListOverlap - bodyTop,

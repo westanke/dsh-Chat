@@ -66,6 +66,7 @@ class ChatMessage {
     this.streaming = false,
     this.toolCalls = const [],
     this.thoughts = const [],
+    this.processRows = const [],
     this.startedAt,
     this.finishedAt,
   });
@@ -86,10 +87,16 @@ class ChatMessage {
   /// role == 'process' 时：本组内的工具调用（按时间顺序）。
   final List<ToolCallInfo> toolCalls;
 
-  /// role == 'process' 时：组内的推理段（伪工具名 `thinking`），排在工具行前面
-  /// 渲染。与 [toolCalls] 分开存，是因为「工具调用次数」这类统计不该把思考算进去
+  /// role == 'process' 时：组内的推理段（伪工具名 `thinking`）。与 [toolCalls]
+  /// 分开存，是因为「工具调用次数」这类统计不该把思考算进去
   /// （dsh-go 折叠行的「N 次工具调用」只数真工具）。
   final List<ToolCallInfo> thoughts;
+
+  /// role == 'process' 时：**按事件到达顺序**混排后的行序列（思考与工具交错）。
+  /// dsh-go 把「思考 · …」和工具行按发生顺序排在同一条折叠列表里；只按
+  /// [...thoughts, ...toolCalls] 拼会把一轮里的思考全堆到最前面（2026-11-22 修）。
+  /// 为空时渲染侧回退到「先思考后工具」。
+  final List<ToolCallInfo> processRows;
 
   /// 过程组的墙钟起止（epoch ms，可能缺一端）。
   final int? startedAt;
@@ -195,6 +202,8 @@ class HistoryPage {
     // 当前过程组的累积缓冲。
     final groupCalls = <ToolCallInfo>[];
     final groupThoughts = <ToolCallInfo>[];
+    // 思考与工具的真实到达顺序（callId 序列），收口时据此拼 processRows。
+    final groupOrder = <String>[];
     // 过程组的 seq：取收口前最后一条事件的 seq。历史过程组原先写死 -1，
     // 而 turnIsRunning 把 seq<0 当「流式未完成」，导致轮尾折叠行永不渲染
     // （2026-11-22 修）。
@@ -218,6 +227,15 @@ class HistoryPage {
 
     void flushGroup() {
       if (groupCalls.isEmpty && groupThoughts.isEmpty) return;
+      // 按到达顺序混排（同 callId 后到的以最终形态为准）。
+      final byId = <String, ToolCallInfo>{
+        for (final c in groupCalls) c.callId: c,
+        for (final t in groupThoughts) t.callId: t,
+      };
+      final rows = <ToolCallInfo>[
+        for (final id in groupOrder)
+          if (byId[id] != null) byId[id]!,
+      ];
       items.add(
         ChatMessage(
           role: 'process',
@@ -225,12 +243,14 @@ class HistoryPage {
           seq: lastEventSeq,
           toolCalls: List<ToolCallInfo>.unmodifiable(groupCalls),
           thoughts: List<ToolCallInfo>.unmodifiable(groupThoughts),
+          processRows: List<ToolCallInfo>.unmodifiable(rows),
           startedAt: groupStart,
           finishedAt: groupEnd,
         ),
       );
       groupCalls.clear();
       groupThoughts.clear();
+      groupOrder.clear();
       pending.clear();
       groupStart = null;
       groupEnd = null;
@@ -305,6 +325,7 @@ class HistoryPage {
             if (thought.isNotEmpty) {
               final key = 'thought-${event.seq}';
               if (!groupThoughts.any((g) => g.callId == key)) {
+                groupOrder.add(key);
                 groupThoughts.add(
                   ToolCallInfo(
                     callId: key,
@@ -327,6 +348,7 @@ class HistoryPage {
             for (final c in calls) {
               pending[c.callId] = c;
               if (!groupCalls.any((g) => g.callId == c.callId)) {
+                groupOrder.add(c.callId);
                 groupCalls.add(c.toInfo());
               }
               groupStart ??= event.time;
@@ -363,6 +385,7 @@ class HistoryPage {
           if (dup >= 0) {
             groupCalls[dup] = raw.toInfo();
           } else {
+            groupOrder.add(callId);
             groupCalls.add(raw.toInfo());
           }
           groupStart ??= event.time;

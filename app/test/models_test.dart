@@ -400,6 +400,12 @@ void main() {
     expect(page.items[1].isProcess, isTrue);
     expect(page.items[1].toolCalls.length, 3);
     expect(page.items[1].phraseText, '执行了命令');
+    // 思考与工具按到达顺序混排：每条 assistant 消息是「思考在前、工具在后」
+    // 交替出现，所以序列应是 thought-2/c0/thought-3/c1/thought-4/c2。
+    expect(
+      page.items[1].processRows.map((r) => r.callId).toList(),
+      ['thought-2', 'c0', 'thought-3', 'c1', 'thought-4', 'c2'],
+    );
     expect(page.items[2].role, 'assistant');
     expect(page.items[2].text, 'done');
   });

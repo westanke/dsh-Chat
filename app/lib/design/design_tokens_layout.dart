@@ -377,6 +377,10 @@ class DsSpacing {
   /// 列表视口伸到输入条上沿以下的距离：底色在那里已经是实心，看不见裁切。
   static const chatListOverlap = 6.0;
 
+  /// 正文与顶栏之间的呼吸位。顶栏胶囊是不透明容器，正文紧贴会让第一行
+  /// 像被胶囊压住（2026-11-22 真机反馈「思考的位置被挡住」）。
+  static const chatBodyTopGap = 8.0;
+
   /// 列表顶部留白（顶栏之下）。
   static const chatListTopGap = 8.0;
 

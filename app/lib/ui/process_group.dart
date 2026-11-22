@@ -34,6 +34,11 @@ import 'tool_titles.dart';
 
 part 'process_detail.dart';
 
+/// 过程组要渲染的行序列：优先用装配层给的到达顺序，回退到「先思考后工具」。
+List<ToolCallInfo> _rowsOf(ChatMessage group) => group.processRows.isNotEmpty
+    ? group.processRows
+    : <ToolCallInfo>[...group.thoughts, ...group.toolCalls];
+
 class DsProcessGroup extends StatelessWidget {
   const DsProcessGroup({
     super.key,
@@ -131,15 +136,9 @@ class DsProcessGroup extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // 思考行排在工具行前面（dsh-go 折叠列表里「思考 · …」先于工具）。
-                for (final t in group.thoughts)
-                  DsToolRow(
-                    call: t,
-                    colors: c,
-                    allowDetail: detail != WorkStepsDetail.standard,
-                    answerable: answerable,
-                  ),
-                for (final t in calls)
+                // 思考与工具**按到达顺序混排**（dsh-go 折叠列表就是这么排的）。
+                // processRows 为空时（老装配路径/纯工具组）退回「先思考后工具」。
+                for (final t in _rowsOf(group))
                   DsToolRow(
                     call: t,
                     colors: c,
