@@ -84,9 +84,9 @@ Future<void> reloadChatHistory(ChatState state) async {
         'hasMore=${page.hasMore} truncated=${page.truncated}');
     // 命令卡保留（第六轮反馈 m03878 / IKX5MV）：reloadHistory 重建 messages，
     // 本地命令卡（role=='command'，seq=-1）不在服务端历史里，merge 会把它丢掉。
-    // 必须在 merge **之前**收集（以前放在 merge 之后取，永远拿到空表）。
-    final cards =
-        state.messages.where((m) => m.role == 'command' && m.seq < 0).toList();
+    // 从**按会话归属**的 commandCards 取，不扫 messages：扫 messages 会把上一会话
+    // 的卡片一起带走（真机 2026-11-23 的「命令结果跨会话串台」）。
+    final cards = state.commandCards[id] ?? const <ChatMessage>[];
     final merged = mergeRefreshedHistory(state.messages, page.items);
     state.messages = [...merged.messages, ...cards];
     // 去重：持久过程组已含这些工具，按 callId 从流式缓冲摘除对应行

@@ -107,6 +107,12 @@ class ChatState extends ChangeNotifier with GroupExpandState {
   List<DshSession> sessions = [];
   List<ChatMessage> messages = [];
 
+  /// 命令卡（role=='command'，seq=-1）**按会话归属**保存：服务端历史里没有这类
+  /// 本地回执，reloadHistory 重建 messages 时要拼回尾部。必须按会话 id 归属：
+  /// 只存在 messages 里的话，切会话时 merge 会把上一会话的卡片当本地消息保留，
+  /// 于是「A 执行的命令结果挂在所有会话尾巴上，重进才消」（真机 2026-11-23）。
+  final Map<String, List<ChatMessage>> commandCards = {};
+
   /// 待发送队列（mobile-queue-v1；老桥恒空；身份用 inboxId）。
   List<QueueEntry> queue = const [];
 
@@ -210,6 +216,9 @@ class ChatState extends ChangeNotifier with GroupExpandState {
   }
 
   Future<void> openSession(DshSession s) async {
+    // 命令卡只活在执行它的那一次会话里：进会话即清，切走也不带走
+    // （真机 2026-11-23：命令结果卡跨会话串台，只有重进会话才消失）。
+    commandCards.remove(s.id);
     sessionId = s.id;
     // 切会话先清空原始事件/投影：防止上一会话的团队/TODO 串台
     // （reloadHistory 里 projections 缺席时会保留上一份）。
@@ -250,6 +259,7 @@ class ChatState extends ChangeNotifier with GroupExpandState {
     sessionId = null;
     streaming = false; // 生成中标记属于上一会话，不清会带成新会话的空「生成中」
     messages = [];
+    commandCards.clear(); // 新对话不继承上一会话的命令卡
     queue = const [];
     rawEvents = [];
     projections = null;

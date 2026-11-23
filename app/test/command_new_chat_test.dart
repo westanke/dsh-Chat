@@ -17,6 +17,18 @@ class _FakeGateway extends GatewayClient {
   bool failCreate = false;
 
   @override
+  void subscribe(String? sessionId) {}
+
+  // history 走 requestWithTimeout（真正的发送要连上链路才做），这里直接转 request。
+  @override
+  Future<Map<String, dynamic>> requestWithTimeout(
+    String type,
+    Map<String, dynamic> payload,
+    Duration timeout,
+  ) =>
+      request(type, payload);
+
+  @override
   Future<Map<String, dynamic>> request(
     String type,
     Map<String, dynamic> payload,
@@ -68,6 +80,35 @@ void main() {
     // 执行成功后 reloadHistory 已跑过，卡不能又被冲掉（merge 的经典坑）。
     expect(state.messages.where((m) => m.role == 'command'), hasLength(1));
     expect(state.pendingLocation, isNull);
+  });
+
+  test('命令卡只属于执行它的会话：切会话/重进都不再挂着', () async {
+    final gw = _FakeGateway();
+    final state = ChatState(gw);
+    state.setPendingLocation(
+      const SessionLocation(rootId: 'root-1', cwd: 'projects/dsh', label: 'dsh'),
+    );
+
+    await state.runCommand('/tunnel');
+    expect(state.messages.where((m) => m.role == 'command'), hasLength(1));
+
+    // 切到另一个会话并拉历史：上一会话的卡片不能跟过来（真机 2026-11-23）。
+    state.sessionId = 'sid-other';
+    await state.reloadHistory();
+    expect(state.messages.where((m) => m.role == 'command'), isEmpty);
+
+    // 再回到原会话（重新打开）：卡片按设计消失，不会永久挂在结尾。
+    state.sessionId = null;
+    await state.openSession(
+      const DshSession(
+        id: 'sid-new',
+        rootId: 'root-1',
+        updatedAt: 0,
+        running: false,
+        blank: false,
+      ),
+    );
+    expect(state.messages.where((m) => m.role == 'command'), isEmpty);
   });
 
   test('已有会话不会重复建会话', () async {

@@ -30,6 +30,9 @@ Future<void> runChatCommand(ChatState state, String line) async {
     state.notifyUi();
     return;
   }
+  // 归属到执行它的会话：reloadHistory 只拼回本会话的卡片，切会话不带过去
+  // （真机 2026-11-23：命令结果挂在所有会话尾巴上，重进才消）。
+  state.commandCards.putIfAbsent(id, () => <ChatMessage>[]).add(card);
   try {
     final r = await state.gateway.executeCommand(sessionId: id, line: line);
     final result = r['result'];
