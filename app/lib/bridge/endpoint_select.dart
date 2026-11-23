@@ -4,16 +4,19 @@
 /// 局域网/虚拟网地址）。客户端不能只取首个：一份码要「在家走 LAN、在外走隧道」，
 /// 就得把所有候选都留着，连接时并发探活、择优，失败再换下一条。
 ///
-/// 判据与 companion 的 `EndpointSelection.rank` 对齐：
-/// LAN 地址延迟 ≤ 最快地址 ×1.5 的排在最前，其余按延迟，并列看上次成功的地址。
+/// 择优顺序（用户 2026-11-23 定的口径）：**局域网 → 虚拟网 → 隧道 → 其它**，
+/// 同一档里按延迟取最快，并列时上次成功过的地址优先。
+/// 这样在家一定走局域网（哪怕比隧道慢几十毫秒），在外才落到隧道；
+/// 虚拟网（100.64/10 CGNAT，Tailscale 之类）排在隧道前面，因为它通常更直连。
 library;
 
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-/// 地址类型：局域网/虚拟网（LAN 优先）、隧道、其它。
-enum EndpointKind { lan, tunnel, other }
+/// 地址类型，同时也是择优的档位（值越小越优先）：
+/// `lan` 局域网 → `virtualNet` 虚拟网（100.64/10）→ `tunnel` 隧道 → `other` 公网。
+enum EndpointKind { lan, virtualNet, tunnel, other }
 
 /// 探活超时（单条）：桥的 healthz 是纯内存应答，2.5s 足够；
 /// 再长会让「两条都不通」的等待变得难以忍受。
@@ -26,8 +29,19 @@ EndpointKind classifyEndpoint(String baseUrl) {
       host.contains('tunnel')) {
     return EndpointKind.tunnel;
   }
+  if (isVirtualNetHost(host)) return EndpointKind.virtualNet;
   if (isPrivateHost(host)) return EndpointKind.lan;
   return EndpointKind.other;
+}
+
+/// 虚拟网地址：100.64/10（CGNAT，Tailscale/ZeroTier 常用）。
+/// 单独成档：它比隧道直连，但比真局域网绕，排在两者中间。
+bool isVirtualNetHost(String host) {
+  final v4 = RegExp(r'^(\d{1,3})\.(\d{1,3})\.').firstMatch(host.toLowerCase());
+  if (v4 == null) return false;
+  return int.parse(v4.group(1)!) == 100 &&
+      int.parse(v4.group(2)!) >= 64 &&
+      int.parse(v4.group(2)!) <= 127;
 }
 
 /// 私有/虚拟网地址：10/8、172.16/12、192.168/16、100.64/10（CGNAT，
@@ -155,21 +169,13 @@ Future<List<EndpointProbe>> probeEndpoints(
   }
 }
 
-/// 在可达的候选里择优：LAN（延迟 ≤ 最快×1.5）优先，其次按延迟，
-/// 并列时上次成功过的地址优先。全不可达返回 null。
+/// 在可达的候选里择优：先按档位（局域网 → 虚拟网 → 隧道 → 其它），
+/// 同档按延迟，并列时上次成功过的地址优先。全不可达返回 null。
 String? pickEndpoint(List<EndpointProbe> probes, {String? preferred}) {
   final ok = probes.where((p) => p.ok).toList();
   if (ok.isEmpty) return null;
-  final fastest = ok
-      .map((p) => p.latencyMs ?? 1 << 30)
-      .reduce((a, b) => a < b ? a : b);
-  final lanCutoff = (fastest * 1.5).round();
-  int rank(EndpointProbe p) => (p.kind == EndpointKind.lan &&
-          (p.latencyMs ?? 1 << 30) <= lanCutoff)
-      ? 0
-      : 1;
   ok.sort((a, b) {
-    final r = rank(a).compareTo(rank(b));
+    final r = a.kind.index.compareTo(b.kind.index);
     if (r != 0) return r;
     final l = (a.latencyMs ?? 1 << 30).compareTo(b.latencyMs ?? 1 << 30);
     if (l != 0) return l;
@@ -198,7 +204,12 @@ class EndpointSelection {
     final tried = probes.map((p) => p.label).join('、');
     if (chosen == null) return '试了 ${probes.length} 条都不通：$tried';
     final picked = probes.firstWhere((p) => p.baseUrl == chosen);
-    final why = picked.kind == EndpointKind.lan ? '局域网优先' : '按延迟择优';
+    final why = switch (picked.kind) {
+      EndpointKind.lan => '局域网优先',
+      EndpointKind.virtualNet => '虚拟网优先',
+      EndpointKind.tunnel => '隧道（同档按延迟）',
+      EndpointKind.other => '公网（同档按延迟）',
+    };
     return '试了 ${probes.length} 条：$tried → 选 ${_shorten(chosen!)}（$why）';
   }
 

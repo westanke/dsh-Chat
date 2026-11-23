@@ -7,10 +7,15 @@
  * （core 禁 import @kit，见 PORT-MAP §分层铁律）。
  */
 
+/**
+ * 地址档位（值越小越优先）：局域网 → 虚拟网（100.64/10）→ 隧道 → 公网。
+ * 用户 2026-11-23 定的口径：任何重连都按这个顺序探活，同档取最快。
+ */
 export enum EndpointKind {
   LAN = 0,
-  TUNNEL = 1,
-  OTHER = 2,
+  VIRTUAL_NET = 1,
+  TUNNEL = 2,
+  OTHER = 3,
 }
 
 /** 单条探活结果（平台层填，纯逻辑层只读）。 */
@@ -99,11 +104,23 @@ export function isPrivateHost(host: string): boolean {
   return false;
 }
 
+/** 虚拟网地址：100.64/10（CGNAT，Tailscale/ZeroTier 常用）。比隧道直连、比局域网绕。 */
+export function isVirtualNetHost(host: string): boolean {
+  const m: RegExpMatchArray | null = host.match(/^(\d{1,3})\.(\d{1,3})\./);
+  if (m === null) {
+    return false;
+  }
+  return Number(m[1]) === 100 && Number(m[2]) >= 64 && Number(m[2]) <= 127;
+}
+
 export function classifyEndpoint(baseUrl: string): EndpointKind {
   const host: string = hostOf(baseUrl);
   if (host.indexOf('trycloudflare.com') >= 0 || host.indexOf('ngrok') >= 0
     || host.indexOf('tunnel') >= 0) {
     return EndpointKind.TUNNEL;
+  }
+  if (isVirtualNetHost(host)) {
+    return EndpointKind.VIRTUAL_NET;
   }
   if (isPrivateHost(host)) {
     return EndpointKind.LAN;
@@ -138,17 +155,9 @@ export function pickEndpoint(probes: EndpointProbe[], preferred: string | null):
   if (ok.length === 0) {
     return null;
   }
-  let fastest: number = Number.MAX_SAFE_INTEGER;
-  for (const p of ok) {
-    const ms: number = p.latencyMs < 0 ? Number.MAX_SAFE_INTEGER : p.latencyMs;
-    if (ms < fastest) {
-      fastest = ms;
-    }
-  }
-  const cutoff: number = Math.round(fastest * 1.5);
   ok.sort((a: EndpointProbe, b: EndpointProbe): number => {
-    const ra: number = rankOf(a, cutoff);
-    const rb: number = rankOf(b, cutoff);
+    const ra: number = rankOf(a);
+    const rb: number = rankOf(b);
     if (ra !== rb) {
       return ra - rb;
     }
@@ -170,9 +179,9 @@ export function pickEndpoint(probes: EndpointProbe[], preferred: string | null):
   return ok[0].baseUrl;
 }
 
-function rankOf(p: EndpointProbe, cutoff: number): number {
-  const ms: number = p.latencyMs < 0 ? Number.MAX_SAFE_INTEGER : p.latencyMs;
-  return p.kind() === EndpointKind.LAN && ms <= cutoff ? 0 : 1;
+function rankOf(p: EndpointProbe): number {
+  // 档位即优先级：不再用「LAN 延迟 ≤ 最快×1.5」的门槛——在家就该走局域网。
+  return p.kind();
 }
 
 /** 一句诊断：「试了 2 条：LAN 42ms、隧道 380ms → 选 LAN（局域网优先）」。 */
@@ -190,8 +199,18 @@ export function selectionNote(probes: EndpointProbe[], chosen: string | null): s
   }
   let why: string = '按延迟择优';
   for (const p of probes) {
-    if (p.baseUrl === chosen && p.kind() === EndpointKind.LAN) {
+    if (p.baseUrl !== chosen) {
+      continue;
+    }
+    const k: EndpointKind = p.kind();
+    if (k === EndpointKind.LAN) {
       why = '局域网优先';
+    } else if (k === EndpointKind.VIRTUAL_NET) {
+      why = '虚拟网优先';
+    } else if (k === EndpointKind.TUNNEL) {
+      why = '隧道（同档按延迟）';
+    } else {
+      why = '公网（同档按延迟）';
     }
   }
   const shown: string = chosen.replace(/^https?:\/\//, '');

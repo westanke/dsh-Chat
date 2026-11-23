@@ -44,12 +44,17 @@ void main() {
         EndpointKind.tunnel,
       );
       expect(classifyEndpoint('http://192.168.1.5:3090'), EndpointKind.lan);
+      // 虚拟网（100.64/10，Tailscale 之类）单独一档，排在隧道前面。
+      expect(
+        classifyEndpoint('http://100.64.250.1:3090'),
+        EndpointKind.virtualNet,
+      );
       expect(classifyEndpoint('http://example.com:3090'), EndpointKind.other);
     });
   });
 
   group('择优排序', () {
-    test('LAN 可达且延迟 ≤ 最快×1.5 → 选 LAN', () {
+    test('局域网优先：即使比隧道慢也先走局域网', () {
       final picked = pickEndpoint([
         _ok('https://x.trycloudflare.com', 300),
         _ok('http://192.168.1.5:3090', 40),
@@ -57,12 +62,29 @@ void main() {
       expect(picked, 'http://192.168.1.5:3090');
     });
 
-    test('LAN 明显更慢 → 选隧道', () {
-      final picked = pickEndpoint([
-        _ok('https://x.trycloudflare.com', 300),
-        _ok('http://192.168.1.5:3090', 900),
-      ]);
-      expect(picked, 'https://x.trycloudflare.com');
+    test('档位优先：虚拟网排在隧道前，局域网排在虚拟网前', () {
+      expect(
+        pickEndpoint([
+          _ok('https://x.trycloudflare.com', 60),
+          _ok('http://100.64.250.1:3090', 200),
+        ]),
+        'http://100.64.250.1:3090',
+      );
+      expect(
+        pickEndpoint([
+          _ok('http://100.64.250.1:3090', 20),
+          _ok('http://192.168.1.5:3090', 300),
+        ]),
+        'http://192.168.1.5:3090',
+      );
+      // 旧口径「LAN 慢就绕隧道」已被取代：同一份码在家就该走局域网。
+      expect(
+        pickEndpoint([
+          _ok('https://x.trycloudflare.com', 300),
+          _ok('http://192.168.1.5:3090', 900),
+        ]),
+        'http://192.168.1.5:3090',
+      );
     });
 
     test('并列延迟时上次成功的地址优先', () {

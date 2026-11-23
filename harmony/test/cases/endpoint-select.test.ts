@@ -40,9 +40,10 @@ test('私有网段/回环/.local 算 LAN，公网不算', () => {
   assert.equal(isPrivateHost('172.32.0.1'), false);
 });
 
-test('classifyEndpoint：隧道域名归 TUNNEL，私有归 LAN，其余 OTHER', () => {
+test('classifyEndpoint：隧道域名归 TUNNEL，私有归 LAN，虚拟网单列，其余 OTHER', () => {
   assert.equal(classifyEndpoint('https://abc.trycloudflare.com'), EndpointKind.TUNNEL);
   assert.equal(classifyEndpoint('http://192.168.1.5:3090'), EndpointKind.LAN);
+  assert.equal(classifyEndpoint('http://100.64.250.1:3090'), EndpointKind.VIRTUAL_NET);
   assert.equal(classifyEndpoint('http://example.com:3090'), EndpointKind.OTHER);
 });
 
@@ -51,11 +52,14 @@ test('normalizeEndpoints：去重保序、去尾斜杠与空白', () => {
     ['https://a', 'http://b']);
 });
 
-test('pickEndpoint：LAN 达标优先；LAN 太慢选隧道；全失败 null', () => {
+test('pickEndpoint：档位优先（局域网 > 虚拟网 > 隧道），全失败 null', () => {
+  assert.equal(pickEndpoint([ok('https://x.trycloudflare.com', 60),
+    ok('http://100.64.250.1:3090', 200)], null), 'http://100.64.250.1:3090');
+  assert.equal(pickEndpoint([ok('http://100.64.250.1:3090', 20),
+    ok('http://192.168.1.5:3090', 300)], null), 'http://192.168.1.5:3090');
+  // 旧口径「LAN 慢就绕隧道」已废弃：在家就该走局域网。
   assert.equal(pickEndpoint([ok('https://x.trycloudflare.com', 300),
-    ok('http://192.168.1.5:3090', 40)], null), 'http://192.168.1.5:3090');
-  assert.equal(pickEndpoint([ok('https://x.trycloudflare.com', 300),
-    ok('http://192.168.1.5:3090', 900)], null), 'https://x.trycloudflare.com');
+    ok('http://192.168.1.5:3090', 900)], null), 'http://192.168.1.5:3090');
   assert.equal(pickEndpoint([bad('http://a'), bad('https://b')], null), null);
 });
 

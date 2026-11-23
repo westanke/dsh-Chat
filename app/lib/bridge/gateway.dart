@@ -129,6 +129,26 @@ class GatewayClient {
     return true;
   }
 
+  /// 重连前重新探活并择优（用户 2026-11-23 口径：任何场景要重连都先按
+  /// 「局域网 → 虚拟网 → 隧道」探活，同档取最快，再连过去）。
+  ///
+  /// 与 [rotateEndpoint] 的区别：换址不是「轮流试」，而是按档位+延迟重挑一次；
+  /// 挑不到可达地址时返回 false，交回退避循环继续重试。
+  Future<bool> reprobeEndpoints() async {
+    final candidates = _endpointCandidates;
+    if (candidates.length < 2) return false;
+    final selection = await selectEndpoint(
+      candidates,
+      preferred: connectedEndpoint ?? baseUrl,
+    );
+    final chosen = selection.chosen;
+    DshLog.w('gw endpoint reprobe ${selection.note}');
+    if (chosen == null) return false;
+    if (chosen == baseUrl) return false;
+    baseUrl = chosen;
+    return true;
+  }
+
   WebSocketChannel? _ws;
   GatewayState _state = GatewayState.idle;
   int _deltaCount = 0;
@@ -557,20 +577,23 @@ class GatewayClient {
     final delay = Duration(seconds: min(30, 1 << _backoffIndex));
     _backoffIndex = min(_backoffIndex + 1, 5);
     _setState(GatewayState.connecting);
-    Timer(delay, () {
+    Timer(delay, () async {
       if (_disposed || _authDead || _ws != null) return;
-      connect().catchError((Object e) {
+      try {
+        await connect();
+        return;
+      } catch (e) {
+        // 落到下面统一处理（凭据类收口、其余按探活/退避接力）。
         if (e is RequestException &&
             (e.code == 'NO_TOKEN' || e.code == 'PROTOCOL')) {
           _authDead = true;
           _setState(GatewayState.authFailed);
           return;
         }
-        // 这条地址连不上：还有别的候选就换下一条（IKX5KQ 家用 LAN、
-        // 出门落隧道），换完重置退避，别让用户等 30s。
-        if (rotateEndpoint()) _backoffIndex = 0;
+        // 重连失败先重新探活择优（LAN→虚拟网→隧道），挑到了就重置退避。
+        if (await reprobeEndpoints()) _backoffIndex = 0;
         if (_ws == null) _scheduleReconnect();
-      });
+      }
     });
   }
 
