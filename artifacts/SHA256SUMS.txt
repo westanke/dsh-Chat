@@ -1,2 +1,2 @@
-# dsh-Chat 产物校验（v1.0.31）
-acdd2c841c79c5c5f68514358c9bd5ac1f1d113bdea50561856e0ce27cf828f6  dsh-Chat-v1.0.31.apk
+# dsh-Chat 产物校验（v1.0.34）
+94ab89c4bad791840c8251891ec9a94165a62501b3612d691d85a689b91127e3  dsh-Chat-v1.0.34.apk
