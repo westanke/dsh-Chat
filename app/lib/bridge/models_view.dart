@@ -140,6 +140,33 @@ class SessionModels {
   final List<ModelFailure> failures;
 }
 
+/// 全局模型目录（default-model 应答收敛；ws-settings.ts:40-58）。
+///
+/// 应答形状 `{groups:[...], failures:[...]}` —— **没有 current / routable**
+/// （那两个字段是会话维度的：目录只回答「有哪些模型可选」）。
+/// 新建会话还没有会话号时用它列模型（问题1：＋号面板选模型）。
+class ModelCatalog {
+  const ModelCatalog({required this.groups, required this.failures});
+
+  factory ModelCatalog.fromJson(Map<String, dynamic> j) => ModelCatalog(
+    groups: (j['groups'] as List? ?? const [])
+        .map(
+          (e) => ModelProviderGroup.fromJson(Map<String, dynamic>.from(e as Map)),
+        )
+        .toList(),
+    failures: (j['failures'] as List? ?? const [])
+        .map((e) => ModelFailure.fromJson(Map<String, dynamic>.from(e as Map)))
+        .toList(),
+  );
+
+  /// 从 gateway.defaultModelCatalog() 的原始 data 收敛。
+  static ModelCatalog parse(Map<String, dynamic> data) =>
+      ModelCatalog.fromJson(data);
+
+  final List<ModelProviderGroup> groups;
+  final List<ModelFailure> failures;
+}
+
 /// 当前选中模型三元组（也用于 select-model 应答的 data.selected）。
 class ModelSelection {
   const ModelSelection({

@@ -55,6 +55,11 @@ class Composer extends StatefulWidget {
     this.answering = false,
     this.onAppCommand,
     this.onPickModel,
+    this.modelLabel,
+    this.presetLabel,
+    this.onPickPreset,
+    this.pendingPermissionLabel,
+    this.onPendingPermission,
     this.topGap = DsSpacing.blockGap,
   });
 
@@ -96,6 +101,22 @@ class Composer extends StatefulWidget {
 
   /// 点输入条上的模型 chip：上层打开模型选择（null = 不显示 chip）。
   final VoidCallback? onPickModel;
+
+  /// 输入条模型 chip 显示的模型名（由 ChatState 持有；空 = 不显示 chip）。
+  final String? modelLabel;
+
+  /// 「+」面板「模式」行显示的名字（没有会话时是待应用的那个）。
+  final String? presetLabel;
+
+  /// 「+」面板「模式」行：上层打开模式选择（null = 不显示该行）。
+  final VoidCallback? onPickPreset;
+
+  /// 「+」面板「权限」行在没有会话时显示的待应用档位（null = 显示当前档位）。
+  final String? pendingPermissionLabel;
+
+  /// 「+」面板「权限」行在没有会话时选了档位：交给上层存进草稿
+  /// （会话维度才有 permission 帧，建会话后补应用）。
+  final void Function(PermissionOption option)? onPendingPermission;
 
   @override
   State<Composer> createState() => ComposerState();
@@ -517,6 +538,7 @@ class ComposerState extends State<Composer> {
             gateway: widget.gateway,
             sessionId: widget.sessionId,
             onPickModel: widget.onPickModel,
+            modelLabel: widget.modelLabel,
           ),
           const SizedBox(height: DsSpacing.composerHintGap),
           // 免责声明：流式思考中不显示（思考块已在消息流里滚动展示）。

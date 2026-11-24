@@ -1,33 +1,37 @@
 /// 输入条右侧的状态小件（2026-11-22 对齐 dsh-go 输入条）：
 /// 模型 chip（显示当前模型，点开模型选择）+ 上下文环形（点开用量明细）。
 ///
-/// 两者都自己按 sessionId 拉一次数据、轮末刷新，不占 ChatState：
-/// - 模型：`gateway.sessionModels(sid)` → `SessionModels.current.model`
-/// - 上下文：`gateway.contextUsage(sid)` → `ContextUsage.fromProjections`
+/// 上下文环形自己按 sessionId 拉一次数据、轮末刷新，不占 ChatState：
+/// `gateway.contextUsage(sid)` → `ContextUsage.fromProjections`。
+///
+/// 模型 chip 的文案由 ChatState 持有（`modelLabel`，服务端 models 帧的
+/// current.model）：以前 chip 自己拉一次并按会话号短路
+/// （`if (_loadedFor == sid) return;`），同会话内切完模型界面永远不更新
+/// （问题2：框里显示的模型与实际运行的不一致）。现在切完模型立刻重读一次，
+/// 显示的就是服务端在跑的那个。
 library;
 
 import 'package:material_ui/material_ui.dart';
 
 import '../bridge/context_usage.dart';
 import '../bridge/gateway.dart';
-import '../bridge/models_view.dart';
 import '../design/tokens.dart';
 import 'context_usage_bar.dart';
 
 /// 模型 chip：一个安静胶囊，显示当前模型名，点击交给上层打开模型选择。
-class ComposerModelChip extends StatefulWidget {
+class ComposerModelChip extends StatelessWidget {
   const ComposerModelChip({
     super.key,
     required this.colors,
-    required this.gateway,
-    required this.sessionId,
+    required this.modelLabel,
     required this.onTap,
     this.enabled = true,
   });
 
   final DsColors colors;
-  final GatewayClient? gateway;
-  final String? sessionId;
+
+  /// 当前模型名（由 ChatState 持有；空 = 不显示 chip）。
+  final String? modelLabel;
 
   /// 点一下：上层打开模型选择（`showModelSheet`）。
   final VoidCallback onTap;
@@ -35,48 +39,9 @@ class ComposerModelChip extends StatefulWidget {
   final bool enabled;
 
   @override
-  State<ComposerModelChip> createState() => _ComposerModelChipState();
-}
-
-class _ComposerModelChipState extends State<ComposerModelChip> {
-  String? _model;
-  String? _loadedFor;
-
-  @override
-  void initState() {
-    super.initState();
-    _load();
-  }
-
-  @override
-  void didUpdateWidget(ComposerModelChip old) {
-    super.didUpdateWidget(old);
-    if (old.sessionId != widget.sessionId) _load();
-  }
-
-  Future<void> _load() async {
-    final gw = widget.gateway;
-    final sid = widget.sessionId;
-    if (gw == null || sid == null) {
-      _loadedFor = null;
-      if (_model != null) setState(() => _model = null);
-      return;
-    }
-    if (_loadedFor == sid) return;
-    _loadedFor = sid;
-    try {
-      final models = SessionModels.parse(await gw.sessionModels(sid));
-      if (!mounted || widget.sessionId != sid) return;
-      setState(() => _model = models.current.model);
-    } catch (_) {
-      // 老桥没有该帧：不显示 chip，别拿假名字占位。
-    }
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final c = widget.colors;
-    final name = _model;
+    final c = colors;
+    final name = modelLabel;
     if (name == null || name.isEmpty) return const SizedBox.shrink();
     return Padding(
       padding: const EdgeInsets.only(left: DsSpacing.composerButtonGap),
@@ -87,7 +52,7 @@ class _ComposerModelChipState extends State<ComposerModelChip> {
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          onTap: widget.enabled ? widget.onTap : null,
+          onTap: enabled ? onTap : null,
           borderRadius: BorderRadius.circular(DsSpacing.chipRadius),
           child: Container(
             height: DsSpacing.chipHeight,

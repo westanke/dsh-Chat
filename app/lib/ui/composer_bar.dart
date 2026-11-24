@@ -85,6 +85,7 @@ class _ComposerBar extends StatelessWidget {
     required this.answering,
     this.gateway,
     this.sessionId,
+    this.modelLabel,
     this.onPickModel,
   });
 
@@ -116,9 +117,12 @@ class _ComposerBar extends StatelessWidget {
   final VoidCallback onSend;
   final VoidCallback? onStop;
 
-  /// 输入条右侧的状态小件要自己按会话拉数据（模型名 / 上下文用量）。
+  /// 输入条右侧的状态小件要自己按会话拉数据（上下文用量）。
   final GatewayClient? gateway;
   final String? sessionId;
+
+  /// 模型 chip 显示的模型名（由 ChatState 持有；空 = 不显示 chip）。
+  final String? modelLabel;
 
   /// 点模型 chip：上层打开模型选择（null = 不显示 chip）。
   final VoidCallback? onPickModel;
@@ -237,8 +241,7 @@ class _ComposerBar extends StatelessWidget {
                   ),
                   child: ComposerModelChip(
                     colors: c,
-                    gateway: gateway,
-                    sessionId: sessionId,
+                    modelLabel: modelLabel,
                     enabled: enabled,
                     onTap: onPickModel!,
                   ),

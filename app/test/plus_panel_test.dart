@@ -101,4 +101,52 @@ void main() {
     expect(field.controller?.text, '@');
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('「+」面板有「模型」「模式」行：没有会话也能点（问题1）', (tester) async {
+    var modelTaps = 0;
+    var presetTaps = 0;
+    tester.view.physicalSize = const Size(1080, 2400);
+    tester.view.devicePixelRatio = 3.0;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Composer(
+            colors: DsColors(false),
+            onSend: (_) {},
+            onSendWithImages: (_, _) {},
+            onCancel: () {},
+            onCommand: (line) {},
+            // 还没有会话（sessionId 为 null）。
+            sessionId: null,
+            modelLabel: 'model-a',
+            presetLabel: '标准模式',
+            onPickModel: () => modelTaps++,
+            onPickPreset: () => presetTaps++,
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.tap(find.byIcon(Icons.add));
+    await tester.pumpAndSettle();
+
+    expect(find.text('模型'), findsOneWidget);
+    expect(find.text('模式'), findsOneWidget);
+    // 两行都显示当前值（模型名在输入条 chip 上也有一份）。
+    expect(find.text('model-a'), findsWidgets);
+    expect(find.text('标准模式'), findsOneWidget);
+    // 新增的两行不是开关：面板里仍然只有一个 Switch（计划模式）。
+    expect(find.byType(Switch), findsOneWidget);
+
+    // 没有会话时也能点（先选 → 建会话 → 补应用）。
+    await tester.tap(find.text('模型'));
+    await tester.pumpAndSettle();
+    expect(modelTaps, 1);
+
+    await tester.tap(find.text('模式'));
+    await tester.pumpAndSettle();
+    expect(presetTaps, 1);
+  });
 }

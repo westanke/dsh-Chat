@@ -98,13 +98,14 @@ class _SessionInfoSheetState extends State<SessionInfoContent> {
   Future<void> _openModelSheet() async {
     final sid = widget.state.sessionId;
     if (sid == null || sid.isEmpty) return;
-    final changed = await showModelSheet(
+    // 返回服务端确认后的 selected（问题2：面板不只回「变了没有」）。
+    final selection = await showModelSheet(
       context,
       colors: widget.colors,
       gateway: widget.state.gateway,
       sessionId: sid,
     );
-    if (!changed) return;
+    if (selection == null) return;
     await widget.state.reloadHistory();
     await _loadModel();
   }

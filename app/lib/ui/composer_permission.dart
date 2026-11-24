@@ -16,6 +16,18 @@ extension _ComposerPermission on ComposerState {
       planEnabled: (widget.sessionId ?? '').isNotEmpty,
       onPickPermission: _pickPermission,
       onPlanChanged: _setPlanMode,
+      modelLabel: widget.modelLabel ?? '默认',
+      presetLabel: widget.presetLabel,
+      onPickModel: widget.onPickModel == null
+          ? null
+          : () async {
+              widget.onPickModel!();
+            },
+      onPickPreset: widget.onPickPreset == null
+          ? null
+          : () async {
+              widget.onPickPreset!();
+            },
     );
     if (!mounted || action == null) return;
     switch (action) {
@@ -28,8 +40,15 @@ extension _ComposerPermission on ComposerState {
   }
 
   /// 面板「权限」行的取值：还没取到当前档位时写「默认」（否则读成「权限 权限」）。
-  String get _plusPermissionValue =>
-      (widget.currentPermission ?? '').isEmpty ? '默认' : _permissionLabel;
+  /// 没有会话时显示的是「待应用」的那一档（草稿），不是上一个会话的。
+  String get _plusPermissionValue {
+    if ((widget.sessionId ?? '').isEmpty) {
+      final pending = widget.pendingPermissionLabel;
+      if (pending != null && pending.isNotEmpty) return pending;
+      return '默认';
+    }
+    return (widget.currentPermission ?? '').isEmpty ? '默认' : _permissionLabel;
+  }
 
   /// 面板「计划模式」开关：命令走 `ChatState.runCommand`（`/plan` / `/plan off`，
   /// 与 dsh-Go `plus_panel.dart:285` 同一对内核命令，桥不拦截、整行透传）。
@@ -100,8 +119,20 @@ extension _ComposerPermission on ComposerState {
     if (selected == null || !mounted) return;
     final sid = widget.sessionId;
     if (sid == null || sid.isEmpty) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('请先打开一个会话再切换权限档位')));
+      // 还没有会话：会话维度才有 permission 帧（bridge ws-commands.ts），
+      // 所以先把选中的档位交给上层存成草稿，建会话后补应用
+      // （问题1：新建会话时权限也要能选）。
+      final onPending = widget.onPendingPermission;
+      if (onPending != null) {
+        onPending(selected);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('已选择「${selected.label}」，创建会话后生效')),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('请先打开一个会话再切换权限档位')),
+        );
+      }
       return;
     }
     if (selected.needsConfirm) {

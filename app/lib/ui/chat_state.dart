@@ -17,6 +17,8 @@ import 'chat_history_actions.dart';
 import 'chat_queue_actions.dart';
 import 'chat_expand_state.dart';
 import 'chat_hitl_actions.dart';
+import 'chat_setup_state.dart';
+import 'chat_setup_draft.dart';
 import 'mobile_workspace.dart';
 import 'session_groups.dart';
 import 'streaming_tools.dart';
@@ -39,7 +41,8 @@ String? lastUserTextBefore(List<ChatMessage> messages, int end) {
   return last;
 }
 
-class ChatState extends ChangeNotifier with GroupExpandState {
+class ChatState extends ChangeNotifier
+    with GroupExpandState, ChatSetupState {
   ChatState(this._gateway) {
     _sub = _gateway.events.listen((event) => _onGatewayEvent(this, event));
     _stateSub = _gateway.state.listen(_onGatewayState);
@@ -56,6 +59,7 @@ class ChatState extends ChangeNotifier with GroupExpandState {
   GatewayState get connectionState => _gateway.currentState;
 
   /// 权限档位 chip 需要：底层网关（发 permission-options / permission 帧）。
+  @override
   GatewayClient get gateway => _gateway;
 
   /// 当前会话权限档位 value（projections.values.permissions.currentValue；
@@ -102,8 +106,10 @@ class ChatState extends ChangeNotifier with GroupExpandState {
   /// 真机反馈 2026-11-16：时间优先分桶（今天/昨天/更早），超 2 天折叠。
   List<SessionGroup> get sessionGroups => groupSessionsByTime(sessions);
 
+  @override
   String? sessionId;
   String? _pendingSessionId;
+  @override
   List<DshSession> sessions = [];
   List<ChatMessage> messages = [];
 
@@ -183,6 +189,7 @@ class ChatState extends ChangeNotifier with GroupExpandState {
   String streamText = '';
   String streamReasoning = '';
   bool streaming = false;
+  @override
   String? lastError;
 
   bool get isEmpty => !streaming && messages.isEmpty;
@@ -244,6 +251,8 @@ class ChatState extends ChangeNotifier with GroupExpandState {
     unawaited(_refreshPendingQuestions(s.id));
     await reloadHistory();
     unawaited(loadChatQueue(this));
+    // 模型 chip 的文案跟着会话走（服务端 models 帧的 current.model）。
+    await refreshModelLabel();
   }
 
   /// REST 拉会话挂起提问并合流进 hitl 表（见 GatewayApi.fetchQuestions）。
@@ -269,6 +278,9 @@ class ChatState extends ChangeNotifier with GroupExpandState {
     historyTruncated = false;
     // 目录选择随新会话重置回「手机会话」默认（不沿用上次选择）。
     pendingLocation = null;
+    // 模型 chip 的文案属于上一个会话：清掉（草稿保留 —— 那是给「接下来这个
+    // 新会话」选的配置，newChat 不该把它丢掉）。
+    modelLabel = null;
     _clearStream();
     _gateway.subscribe(null);
     notifyListeners();
@@ -316,25 +328,33 @@ class ChatState extends ChangeNotifier with GroupExpandState {
     try {
       DshLog.w('ui send start sid=$sessionId mode=$mode');
       // 建会话通道：选了目录走 session-create{rootId,cwd}；否则落手机工作区。
+      // 模式（Agent 预设）随 session-create 的 agentPreset 字段下发
+      // （bridge ws-sessions.ts:49-95 支持该字段）。
       if (sessionId == null && pendingLocation != null) {
         final loc = pendingLocation!;
         final sid = await _gateway.createSessionAt(
           rootId: loc.rootId,
           cwd: loc.cwd,
+          agentPreset: setup.agentPresetId,
         );
         DshLog.w('ui pre-created session $sid at ${loc.cwd}');
         sessionId = sid;
         _pendingSessionId = sid;
         pendingLocation = null; // 目录已定死，随会话落位。
+        await _applySetupTo(sid);
       } else if (sessionId == null) {
         final wsId = await ensureMobileWorkspace(_gateway, _mobileWorkspaceId);
         if (wsId != null) {
           try {
-            final sid = await _gateway.createSessionInWorkspace(wsId);
+            final sid = await _gateway.createSessionInWorkspace(
+              wsId,
+              agentPreset: setup.agentPresetId,
+            );
             DshLog.w('ui pre-created session $sid in workspace $wsId');
             _mobileWorkspaceId = wsId;
             sessionId = sid;
             _pendingSessionId = sid;
+            await _applySetupTo(sid);
           } on RequestException catch (e) {
             // 建会话失败不阻断发消息：退回 message 帧自动建（落未分组）。
             DshLog.w('ui pre-create session FAIL ${e.code}');
@@ -398,6 +418,25 @@ class ChatState extends ChangeNotifier with GroupExpandState {
     }
   }
 
+  /// 建会话成功后把「先选好的配置」补应用到这个会话（问题1）。
+  ///
+  /// 协议层没有「建会话时带模型 / 权限」的帧：会话维度的模型与权限只有
+  /// `select-model` / `permission` 两帧，都要会话号。所以流程是「先选 →
+  /// 建会话 → 补应用」（见 chat_setup_draft.dart）。
+  Future<void> _applySetupTo(String sid) async {
+    if (setup.isEmpty) return;
+    await applyChatSetup(
+      _gateway,
+      sid,
+      setup,
+      onError: (message) {
+        lastError = message;
+        notifyListeners();
+      },
+    );
+    await refreshModelLabel();
+  }
+
   /// 确保当前有会话可挂（IKX5MV：斜杠命令必须带 sessionId 才能派发）。
   ///
   /// 新对话（sessionId 为空）里发 `/tunnel` 之类宿主命令时先建会话，路径与
@@ -411,16 +450,23 @@ class ChatState extends ChangeNotifier with GroupExpandState {
     try {
       if (pendingLocation != null) {
         final loc = pendingLocation!;
-        sid = await _gateway.createSessionAt(rootId: loc.rootId, cwd: loc.cwd);
+        sid = await _gateway.createSessionAt(
+          rootId: loc.rootId,
+          cwd: loc.cwd,
+          agentPreset: setup.agentPresetId,
+        );
         pendingLocation = null; // 目录已定死，随会话落位。
       } else {
         final wsId = await ensureMobileWorkspace(_gateway, _mobileWorkspaceId);
         if (wsId != null) {
-          sid = await _gateway.createSessionInWorkspace(wsId);
+          sid = await _gateway.createSessionInWorkspace(
+            wsId,
+            agentPreset: setup.agentPresetId,
+          );
           _mobileWorkspaceId = wsId;
         } else {
           // 老桥没有工作区概念：建到默认位置（未分组），不阻挠命令派发。
-          sid = await _gateway.createSessionAt();
+          sid = await _gateway.createSessionAt(agentPreset: setup.agentPresetId);
         }
       }
     } on RequestException catch (e) {
@@ -435,6 +481,7 @@ class ChatState extends ChangeNotifier with GroupExpandState {
     _gateway.subscribe(sid);
     notifyListeners();
     unawaited(loadSessions());
+    await _applySetupTo(sid);
     return sid;
   }
 

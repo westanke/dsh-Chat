@@ -99,8 +99,18 @@ extension GatewayApi on GatewayClient {
   /// createSessionInWorkspace（复用空白会话，reuseBlank 默认 true），
   /// 新会话自动归入该工作区分组（抽屉组名 = workspace title）。
   /// 应答 kind=session-created{sessionId,workspaceId}。
-  Future<String> createSessionInWorkspace(String workspaceId) async {
-    final r = await request('session-create', {'workspaceId': workspaceId});
+  ///
+  /// [agentPreset] 是「模式」（Agent 预设档位）。帧上可带（ws-sessions.ts
+  /// handleSessionCreate 读 frame.agentPreset），建会话时就定好预设，
+  /// 不用建完再切（空白会话之外的会话切预设会被桥锁 409）。
+  Future<String> createSessionInWorkspace(
+    String workspaceId, {
+    String? agentPreset,
+  }) async {
+    final r = await request('session-create', {
+      'workspaceId': workspaceId,
+      'agentPreset': ?agentPreset,
+    });
     final sid = r['sessionId'];
     if (sid is! String || sid.isEmpty) {
       throw RequestException('BAD_REPLY', 'session-create 应答缺 sessionId');
@@ -116,10 +126,17 @@ extension GatewayApi on GatewayClient {
   /// 应答 kind=session-created{sessionId,rootId}。
   /// 注意：失败必须显式报错，不要静默回退手机工作区——那等于「建到了
   /// 用户没选的地方」（ws-sessions.ts 防呆注释的同款精神）。
-  Future<String> createSessionAt({String? rootId, String cwd = ''}) async {
+  ///
+  /// [agentPreset] 同 createSessionInWorkspace：「模式」在建会话帧上可带。
+  Future<String> createSessionAt({
+    String? rootId,
+    String cwd = '',
+    String? agentPreset,
+  }) async {
     final r = await request('session-create', {
       'rootId': ?rootId,
       'cwd': cwd,
+      'agentPreset': ?agentPreset,
     });
     final sid = r['sessionId'];
     if (sid is! String || sid.isEmpty) {
@@ -428,6 +445,15 @@ extension GatewayApi on GatewayClient {
   /// models_view.dart 收敛成 SessionModels（models 层单向依赖）。
   Future<Map<String, dynamic>> sessionModels(String sessionId) =>
       request('models', {'sessionId': sessionId});
+
+  /// 全局模型目录（default-model 帧，ws-settings.ts:40-58）。
+  ///
+  /// **不带 sessionId**：会话还没建时也能列模型（问题1：新建会话先选模型）。
+  /// 应答 data 只有 {groups, failures} —— 没有 current/routable（那两个是
+  /// 会话维度的）。需要 settings.read scope（在桥默认设备 scope 内）。
+  /// 原始 data 由 models_view.dart 的 `ModelCatalog` 收敛。
+  Future<Map<String, dynamic>> defaultModelCatalog() =>
+      request('default-model', const {});
 
   /// 会话可用斜杠命令清单（真机反馈 2026-11-04 第 3 项）。
   /// 应答 kind=commands 在回显表内（ws-commands.ts:62-100），可直接 await；

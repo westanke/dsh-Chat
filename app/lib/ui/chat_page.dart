@@ -24,7 +24,7 @@ import 'queue_dock.dart';
 import 'chat_top_bar.dart';
 import 'projection_sheets.dart';
 import 'composer.dart';
-import 'model_sheet.dart';
+import 'chat_setup.dart';
 import 'question_card.dart';
 import 'session_tabs_sheet.dart';
 import 'sessions_drawer.dart';
@@ -438,7 +438,19 @@ class _ChatPageState extends State<ChatPage>
               answering: st.singleOpenQuestion != null,
               // 斜杠面板的客户端功能（/new /model /export /features）。
               onAppCommand: _runAppCommand,
-            onPickModel: _pickModel,
+              // 输入条上的模型 chip：显示服务端 models 帧的 current.model。
+              onPickModel: _pickModel,
+              modelLabel: st.modelLabel,
+              // 「+」面板：模式（Agent 预设）行。
+              presetLabel: st.currentAgentPresetName ?? st.setup.agentPresetName,
+              onPickPreset: () => pickSessionPreset(context, st, c),
+              // 「+」面板：没有会话时选好的权限档位先存草稿，建会话后补应用。
+              pendingPermissionLabel: st.setup.permissionLabel,
+              onPendingPermission: (option) {
+                st.setup.permissionValue = option.value;
+                st.setup.permissionLabel = option.label;
+                st.notifyUi();
+              },
             ),
           ],
         ),
@@ -467,15 +479,10 @@ class _ChatPageState extends State<ChatPage>
       case 'new':
         await st.newChat();
       case 'model':
-        final sid = st.sessionId;
-        if (sid == null) return;
-        final changed = await showModelSheet(
-          context,
-          colors: widget.colors,
-          gateway: st.gateway,
-          sessionId: sid,
-        );
-        if (changed) await st.reloadHistory();
+        // 有会话 → 切当前会话的模型；没有会话 → 选一个「接下来要用的模型」
+        // （存草稿，建会话后补应用，见 chat_setup.dart）。
+        final selection = await pickSessionModel(context, st, c);
+        if (selection) await st.reloadHistory();
       case 'export':
         final body = sessionMarkdown(st);
         if (body.trim().isEmpty) return;

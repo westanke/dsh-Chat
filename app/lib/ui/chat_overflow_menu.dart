@@ -8,7 +8,7 @@ import 'package:material_ui/material_ui.dart';
 import '../bridge/platform.dart';
 import '../design/tokens.dart';
 import 'chat_state.dart';
-import 'model_sheet.dart';
+import 'chat_setup.dart';
 import 'session_tabs_sheet.dart';
 
 class ChatOverflowMenu extends StatelessWidget {
@@ -43,20 +43,10 @@ class ChatOverflowMenu extends StatelessWidget {
           case 'share':
             await _export(context, share: true);
           case 'model':
-            final sid = state.sessionId;
-            if (sid == null || sid.isEmpty) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('请先打开一个会话再调整模型')),
-              );
-              return;
-            }
-            final changed = await showModelSheet(
-              context,
-              colors: c,
-              gateway: state.gateway,
-              sessionId: sid,
-            );
-            if (changed) await state.reloadHistory();
+            // 有会话 → 切当前会话的模型；没有会话 → 选一个「接下来要用的模型」
+            // （存草稿，建会话后补应用，见 chat_setup.dart）。
+            final picked = await pickSessionModel(context, state, c);
+            if (picked) await state.reloadHistory();
         }
       },
       itemBuilder: (context) => <PopupMenuEntry<String>>[

@@ -1,5 +1,11 @@
 /// 模型选择面板（真机反馈 2026-11-04 第 3 项）：models 帧拉清单，
 /// select-model 帧切换；对照 companion ChatSheets/ModelSheetGroups。
+///
+/// 两种形态（问题1：新建会话还没有会话号）：
+/// - 有 [sessionId]：会话维度清单（current/routable/groups/failures），
+///   确认时发 select-model 帧，返回**服务端回传的**选中三元组。
+/// - 无 [sessionId]：全局目录（default-model 帧，只有 groups/failures），
+///   确认时不发任何帧，直接返回本地选中的三元组（由调用方在建会话后补应用）。
 library;
 
 import 'package:material_ui/material_ui.dart';
@@ -9,40 +15,75 @@ import '../bridge/models_view.dart';
 import '../design/tokens.dart';
 import 'window_class.dart';
 
-/// 弹出模型选择面板。返回是否切换成功（用于外层刷新）。
-Future<bool> showModelSheet(
+/// 弹出模型选择面板。返回选中的模型三元组；取消/失败返回 null。
+///
+/// 有 [sessionId] 时确认会真的切模型（select-model 帧），返回值是服务端
+/// 回传的那份（`data.selected`），不是本地猜的 —— 外层拿它刷新 chip，
+/// 避免「界面显示的是上一个模型、实际跑的是另一个」。
+/// 无 [sessionId] 时只列目录，返回本地选中的三元组，由外层在建会话后补应用。
+Future<ModelSelection?> showModelSheet(
   BuildContext context, {
   required DsColors colors,
   required GatewayClient gateway,
-  required String sessionId,
+  String? sessionId,
 }) async {
-  SessionModels? models;
-  String? error;
-  try {
-    models = SessionModels.parse(await gateway.sessionModels(sessionId));
-  } on RequestException catch (e) {
-    error = e.message;
-  }
-  if (!context.mounted) return false;
-  if (error != null) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('模型清单获取失败：$error')),
-    );
-    return false;
-  }
-  if (models == null) return false;
+  final hasSession = sessionId != null && sessionId.isNotEmpty;
+  List<ModelProviderGroup> groups;
+  List<ModelFailure> failures;
+  String? currentProvider = '';
+  String? currentModel = '';
+  String? currentEffort;
+  var routable = true;
 
-  final current = models.current;
-  final groups = models.groups;
-  final failures = models.failures;
-  final routable = models.routable;
-  String? pendingProvider = current.provider;
-  String? pendingModel = current.model;
-  String? pendingEffort = current.reasoningEffort;
+  if (hasSession) {
+    SessionModels? models;
+    String? error;
+    try {
+      models = SessionModels.parse(await gateway.sessionModels(sessionId));
+    } on RequestException catch (e) {
+      error = e.message;
+    }
+    if (!context.mounted) return null;
+    if (error != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('模型清单获取失败：$error')),
+      );
+      return null;
+    }
+    if (models == null) return null;
+    groups = models.groups;
+    failures = models.failures;
+    routable = models.routable;
+    currentProvider = models.current.provider;
+    currentModel = models.current.model;
+    currentEffort = models.current.reasoningEffort;
+  } else {
+    ModelCatalog? catalog;
+    String? error;
+    try {
+      catalog = ModelCatalog.parse(await gateway.defaultModelCatalog());
+    } on RequestException catch (e) {
+      error = e.message;
+    }
+    if (!context.mounted) return null;
+    if (error != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('模型清单获取失败：$error')),
+      );
+      return null;
+    }
+    if (catalog == null) return null;
+    groups = catalog.groups;
+    failures = catalog.failures;
+  }
+
+  String? pendingProvider = currentProvider.isEmpty ? null : currentProvider;
+  String? pendingModel = currentModel.isEmpty ? null : currentModel;
+  String? pendingEffort = currentEffort;
   // 分组收缩状态（真机反馈第 4 项）：默认只展开当前供应商，其余折叠。
-  final expanded = <String>{if (current.provider.isNotEmpty) current.provider};
+  final expanded = <String>{if (currentProvider.isNotEmpty) currentProvider};
 
-  final changed = await showModalBottomSheet<bool>(
+  final selection = await showModalBottomSheet<ModelSelection>(
     context: context,
     constraints: modalSheetConstraints(context),
     backgroundColor: colors.bgLayer1,
@@ -64,7 +105,7 @@ Future<bool> showModelSheet(
                 child: Row(
                   children: [
                     Text(
-                      '调整模型',
+                      hasSession ? '调整模型' : '选择模型',
                       style: DsTypography.baseStrong.copyWith(
                         color: colors.labelPrimary,
                       ),
@@ -208,6 +249,17 @@ Future<bool> showModelSheet(
                       : () async {
                           final nav = Navigator.of(sheetContext);
                           final messenger = ScaffoldMessenger.of(sheetContext);
+                          if (!hasSession) {
+                            // 没有会话：只回本地选择，等会话建好再补应用。
+                            nav.pop(
+                              ModelSelection(
+                                provider: pendingProvider!,
+                                model: pendingModel!,
+                                reasoningEffort: pendingEffort,
+                              ),
+                            );
+                            return;
+                          }
                           try {
                             final reply = await gateway.selectModel(
                               sessionId: sessionId,
@@ -222,14 +274,15 @@ Future<bool> showModelSheet(
                               ));
                               return;
                             }
-                            nav.pop(true);
+                            // 回服务端那份：界面显示与实际运行必须是同一个模型。
+                            nav.pop(selected);
                           } on RequestException catch (e) {
                             messenger.showSnackBar(
                               SnackBar(content: Text('切换失败：${e.message}')),
                             );
                           }
                         },
-                  child: const Text('确认切换'),
+                  child: Text(hasSession ? '确认切换' : '确认选择'),
                 ),
               ),
             ],
@@ -238,5 +291,5 @@ Future<bool> showModelSheet(
       ),
     ),
   );
-  return changed == true;
+  return selection;
 }

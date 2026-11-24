@@ -8,7 +8,12 @@
 /// - `手机操控 · 确认方式` 是 dsh-Go 的原生 `setPolicies`，本仓没有，整块不放。
 ///
 /// 分组卡片：
-/// - `本对话`：`权限`（叠一层既有档位 sheet）+ `计划模式`（`/plan` / `/plan off`）。
+/// - `本对话`：`模型` + `模式` + `权限`（叠一层既有档位 sheet）+
+///   `计划模式`（`/plan` / `/plan off`）。
+///
+/// 「模型」「模式」「权限」三行在没有会话时也能点：协议层没有「建会话时带
+/// 模型 / 权限」的帧，客户端走「先选 → 建会话 → 补应用」（见 chat_setup_draft.dart）；
+/// 模式（Agent 预设）随 `session-create` 的 `agentPreset` 字段下发。
 library;
 
 import 'package:material_ui/material_ui.dart';
@@ -36,6 +41,7 @@ enum PlusAction {
 ///
 /// [onPickPermission] 与 [onPlanChanged] 在面板内部即时生效（与 dsh-Go 一致：
 /// 权限行叠一层档位 sheet、计划模式行当场发命令），不关闭面板。
+/// [onPickModel] / [onPickPreset] 同理：叠一层选择面板，换完回到本面板。
 Future<PlusAction?> showPlusPanel(
   BuildContext context, {
   required DsColors colors,
@@ -44,6 +50,10 @@ Future<PlusAction?> showPlusPanel(
   required bool planEnabled,
   required Future<void> Function() onPickPermission,
   required ValueChanged<bool> onPlanChanged,
+  String modelLabel = '默认',
+  String? presetLabel,
+  Future<void> Function()? onPickModel,
+  Future<void> Function()? onPickPreset,
 }) {
   return showModalBottomSheet<PlusAction>(
     context: context,
@@ -62,6 +72,10 @@ Future<PlusAction?> showPlusPanel(
       planEnabled: planEnabled,
       onPickPermission: onPickPermission,
       onPlanChanged: onPlanChanged,
+      modelLabel: modelLabel,
+      presetLabel: presetLabel,
+      onPickModel: onPickModel,
+      onPickPreset: onPickPreset,
     ),
   );
 }
@@ -74,6 +88,10 @@ class _PlusPanelBody extends StatefulWidget {
     required this.planEnabled,
     required this.onPickPermission,
     required this.onPlanChanged,
+    required this.modelLabel,
+    required this.presetLabel,
+    required this.onPickModel,
+    required this.onPickPreset,
   });
 
   final DsColors colors;
@@ -82,6 +100,18 @@ class _PlusPanelBody extends StatefulWidget {
   final bool planEnabled;
   final Future<void> Function() onPickPermission;
   final ValueChanged<bool> onPlanChanged;
+
+  /// 模型行右侧显示的模型名（没有会话时显示待应用的那个）。
+  final String modelLabel;
+
+  /// 模式行右侧显示的模式名（没有会话时显示待应用的那个）。
+  final String? presetLabel;
+
+  /// 点「模型」行（叠一层模型选择面板）。
+  final Future<void> Function()? onPickModel;
+
+  /// 点「模式」行（叠一层模式选择面板）。
+  final Future<void> Function()? onPickPreset;
 
   @override
   State<_PlusPanelBody> createState() => _PlusPanelBodyState();
@@ -138,6 +168,28 @@ class _PlusPanelBodyState extends State<_PlusPanelBody> {
             ),
             const SizedBox(height: DsPlusPanel.cardGap),
             _card(c, '本对话', [
+              if (widget.onPickModel != null)
+                _PlusRow(
+                  colors: c,
+                  title: '模型',
+                  value: widget.modelLabel,
+                  // 叠一层模型选择面板：换完回到面板，重读当前模型（面板不关）。
+                  onTap: () async {
+                    await widget.onPickModel!();
+                    if (mounted) setState(() {});
+                  },
+                ),
+              if (widget.onPickPreset != null)
+                _PlusRow(
+                  colors: c,
+                  title: '模式',
+                  value: widget.presetLabel ?? '默认',
+                  // 叠一层模式选择面板：换完回到面板（面板不关）。
+                  onTap: () async {
+                    await widget.onPickPreset!();
+                    if (mounted) setState(() {});
+                  },
+                ),
               _PlusRow(
                 colors: c,
                 title: '权限',
