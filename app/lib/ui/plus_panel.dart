@@ -11,9 +11,10 @@
 /// - `本对话`：`模型` + `模式` + `权限`（叠一层既有档位 sheet）+
 ///   `计划模式`（`/plan` / `/plan off`）。
 ///
-/// 「模型」「模式」「权限」三行在没有会话时也能点：协议层没有「建会话时带
-/// 模型 / 权限」的帧，客户端走「先选 → 建会话 → 补应用」（见 chat_setup_draft.dart）；
-/// 模式（Agent 预设）随 `session-create` 的 `agentPreset` 字段下发。
+/// 「模型」「模式」「权限」「计划模式」四行在没有会话时也能点：协议层没有
+/// 「建会话时带模型 / 权限」的帧，客户端走「先选 → 建会话 → 补应用」
+/// （见 chat_setup_draft.dart）；模式（Agent 预设）随 `session-create` 的
+/// `agentPreset` 字段下发；计划模式是命令帧，建会话后补发一次 `/plan`。
 library;
 
 import 'package:material_ui/material_ui.dart';
@@ -42,18 +43,22 @@ enum PlusAction {
 /// [onPickPermission] 与 [onPlanChanged] 在面板内部即时生效（与 dsh-Go 一致：
 /// 权限行叠一层档位 sheet、计划模式行当场发命令），不关闭面板。
 /// [onPickModel] / [onPickPreset] 同理：叠一层选择面板，换完回到本面板。
+///
+/// 「计划模式」开关**总是可点**：有会话时当场发 `/plan` / `/plan off`；没有
+/// 会话时 `/plan` 发不出去（命令帧要会话号），[onPlanChanged] 把选择交给上层
+/// 存草稿，建会话后补发（见 chat_setup_draft.dart）。
 Future<PlusAction?> showPlusPanel(
   BuildContext context, {
   required DsColors colors,
   required String? sessionId,
   required String Function() permissionLabel,
-  required bool planEnabled,
   required Future<void> Function() onPickPermission,
   required ValueChanged<bool> onPlanChanged,
   String modelLabel = '默认',
   String? presetLabel,
   Future<void> Function()? onPickModel,
   Future<void> Function()? onPickPreset,
+  bool planOn = false,
 }) {
   return showModalBottomSheet<PlusAction>(
     context: context,
@@ -69,13 +74,13 @@ Future<PlusAction?> showPlusPanel(
       colors: colors,
       sessionId: sessionId,
       permissionLabel: permissionLabel,
-      planEnabled: planEnabled,
       onPickPermission: onPickPermission,
       onPlanChanged: onPlanChanged,
       modelLabel: modelLabel,
       presetLabel: presetLabel,
       onPickModel: onPickModel,
       onPickPreset: onPickPreset,
+      planOn: planOn,
     ),
   );
 }
@@ -85,19 +90,18 @@ class _PlusPanelBody extends StatefulWidget {
     required this.colors,
     required this.sessionId,
     required this.permissionLabel,
-    required this.planEnabled,
     required this.onPickPermission,
     required this.onPlanChanged,
     required this.modelLabel,
     required this.presetLabel,
     required this.onPickModel,
     required this.onPickPreset,
+    required this.planOn,
   });
 
   final DsColors colors;
   final String? sessionId;
   final String Function() permissionLabel;
-  final bool planEnabled;
   final Future<void> Function() onPickPermission;
   final ValueChanged<bool> onPlanChanged;
 
@@ -113,12 +117,18 @@ class _PlusPanelBody extends StatefulWidget {
   /// 点「模式」行（叠一层模式选择面板）。
   final Future<void> Function()? onPickPreset;
 
+  /// 「计划模式」开关的初值（没有会话时：待应用的那个；有会话时：上次口径）。
+  final bool planOn;
+
   @override
   State<_PlusPanelBody> createState() => _PlusPanelBodyState();
 }
 
 class _PlusPanelBodyState extends State<_PlusPanelBody> {
-  late bool _plan = _planMemoValue && _planMemoSession == widget.sessionId;
+  /// 开关初值：没有会话时用上层给的待应用值（planOn）；有会话时用本会话
+  /// 最近一次发出的命令口径（_planMemoValue）。
+  late bool _plan =
+      widget.sessionId == null ? widget.planOn : _planMemoValue && _planMemoSession == widget.sessionId;
 
   @override
   Widget build(BuildContext context) {
@@ -204,7 +214,6 @@ class _PlusPanelBodyState extends State<_PlusPanelBody> {
                 colors: c,
                 title: '计划模式',
                 value: _plan,
-                enabled: widget.planEnabled,
                 onChanged: (next) {
                   setState(() {
                     _plan = next;
@@ -402,23 +411,20 @@ class _PlusSwitchRow extends StatelessWidget {
     required this.colors,
     required this.title,
     required this.value,
-    required this.enabled,
     required this.onChanged,
   });
 
   final DsColors colors;
   final String title;
   final bool value;
-  final bool enabled;
   final ValueChanged<bool> onChanged;
 
   @override
   Widget build(BuildContext context) {
     final c = colors;
-    final onChangedOrNull = enabled ? onChanged : null;
     return MergeSemantics(
       child: InkWell(
-        onTap: onChangedOrNull == null ? null : () => onChanged(!value),
+        onTap: () => onChanged(!value),
         child: ConstrainedBox(
           constraints: const BoxConstraints(
             minHeight: DsSpacing.settingsRowMinHeight,
@@ -432,14 +438,12 @@ class _PlusSwitchRow extends StatelessWidget {
                 Expanded(
                   child: Text(
                     title,
-                    style: DsTypography.base.copyWith(
-                      color: enabled ? c.labelPrimary : c.labelTertiary,
-                    ),
+                    style: DsTypography.base.copyWith(color: c.labelPrimary),
                   ),
                 ),
                 Switch(
                   value: value,
-                  onChanged: onChangedOrNull,
+                  onChanged: onChanged,
                   activeThumbColor: c.brand,
                 ),
               ],

@@ -18,7 +18,6 @@ import 'chat_queue_actions.dart';
 import 'chat_expand_state.dart';
 import 'chat_hitl_actions.dart';
 import 'chat_setup_state.dart';
-import 'chat_setup_draft.dart';
 import 'mobile_workspace.dart';
 import 'session_groups.dart';
 import 'streaming_tools.dart';
@@ -341,7 +340,7 @@ class ChatState extends ChangeNotifier
         sessionId = sid;
         _pendingSessionId = sid;
         pendingLocation = null; // 目录已定死，随会话落位。
-        await _applySetupTo(sid);
+        await applySetupTo(sid);
       } else if (sessionId == null) {
         final wsId = await ensureMobileWorkspace(_gateway, _mobileWorkspaceId);
         if (wsId != null) {
@@ -354,7 +353,7 @@ class ChatState extends ChangeNotifier
             _mobileWorkspaceId = wsId;
             sessionId = sid;
             _pendingSessionId = sid;
-            await _applySetupTo(sid);
+            await applySetupTo(sid);
           } on RequestException catch (e) {
             // 建会话失败不阻断发消息：退回 message 帧自动建（落未分组）。
             DshLog.w('ui pre-create session FAIL ${e.code}');
@@ -418,25 +417,6 @@ class ChatState extends ChangeNotifier
     }
   }
 
-  /// 建会话成功后把「先选好的配置」补应用到这个会话（问题1）。
-  ///
-  /// 协议层没有「建会话时带模型 / 权限」的帧：会话维度的模型与权限只有
-  /// `select-model` / `permission` 两帧，都要会话号。所以流程是「先选 →
-  /// 建会话 → 补应用」（见 chat_setup_draft.dart）。
-  Future<void> _applySetupTo(String sid) async {
-    if (setup.isEmpty) return;
-    await applyChatSetup(
-      _gateway,
-      sid,
-      setup,
-      onError: (message) {
-        lastError = message;
-        notifyListeners();
-      },
-    );
-    await refreshModelLabel();
-  }
-
   /// 确保当前有会话可挂（IKX5MV：斜杠命令必须带 sessionId 才能派发）。
   ///
   /// 新对话（sessionId 为空）里发 `/tunnel` 之类宿主命令时先建会话，路径与
@@ -481,7 +461,7 @@ class ChatState extends ChangeNotifier
     _gateway.subscribe(sid);
     notifyListeners();
     unawaited(loadSessions());
-    await _applySetupTo(sid);
+    await applySetupTo(sid);
     return sid;
   }
 

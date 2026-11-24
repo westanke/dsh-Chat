@@ -13,7 +13,6 @@ extension _ComposerPermission on ComposerState {
       colors: c,
       sessionId: widget.sessionId,
       permissionLabel: () => _plusPermissionValue,
-      planEnabled: (widget.sessionId ?? '').isNotEmpty,
       onPickPermission: _pickPermission,
       onPlanChanged: _setPlanMode,
       modelLabel: widget.modelLabel ?? '默认',
@@ -28,6 +27,7 @@ extension _ComposerPermission on ComposerState {
           : () async {
               widget.onPickPreset!();
             },
+      planOn: widget.pendingPlan ?? false,
     );
     if (!mounted || action == null) return;
     switch (action) {
@@ -56,8 +56,20 @@ extension _ComposerPermission on ComposerState {
   /// 本仓 ChatState 还没折叠 `plan/mode` 投影（只有 `currentPermission`），读不回
   /// 服务端当前档位，所以开关的界面口径记在面板侧（plus_panel.dart 的
   /// `_planMemoValue`）：真实结果以命令卡（✓/✗）为准。
+  ///
+  /// 还没有会话时 `/plan` 发不出去（命令帧要会话号）：这时把选择交给上层存进
+  /// 草稿，建会话后由 `applyChatSetup` 补发一次（问题1：新建会话时模式也要
+  /// 能选）。
   void _setPlanMode(bool on) {
-    if ((widget.sessionId ?? '').isEmpty) return;
+    if ((widget.sessionId ?? '').isEmpty) {
+      final onPending = widget.onPendingPlan;
+      if (onPending == null) return;
+      onPending(on);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(on ? '已开启计划模式，创建会话后生效' : '已关闭计划模式，创建会话后生效')),
+      );
+      return;
+    }
     widget.onCommand(on ? '/plan' : '/plan off');
   }
 

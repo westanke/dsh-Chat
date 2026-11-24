@@ -82,13 +82,47 @@ void main() {
     expect(commands, ['/plan', '/plan off']);
   });
 
-  testWidgets('未打开会话时计划模式开关不可点', (tester) async {
+  testWidgets('未打开会话时计划模式开关不发命令（改为存草稿，问题1）', (tester) async {
     final commands = <String>[];
     await openPanel(tester, commands: commands, sessionId: null);
 
     await tester.tap(find.byType(Switch));
     await tester.pumpAndSettle();
+    // 没有会话时 /plan 发不出去（命令帧要会话号）：不发命令。
     expect(commands, isEmpty);
+  });
+
+  testWidgets('未打开会话时计划模式开关交给上层存草稿（问题1）', (tester) async {
+    final pending = <bool>[];
+    tester.view.physicalSize = const Size(1080, 2400);
+    tester.view.devicePixelRatio = 3.0;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Composer(
+            colors: DsColors(false),
+            onSend: (_) {},
+            onSendWithImages: (_, _) {},
+            onCancel: () {},
+            onCommand: (line) {},
+            // 还没有会话（sessionId 为 null）。
+            sessionId: null,
+            pendingPlan: false,
+            onPendingPlan: (on) => pending.add(on),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.tap(find.byIcon(Icons.add));
+    await tester.pumpAndSettle();
+
+    // 开关现在可点：选择先存草稿，建会话后补发 /plan。
+    await tester.tap(find.byType(Switch));
+    await tester.pumpAndSettle();
+    expect(pending, [true]);
   });
 
   testWidgets('「文件」格走输入条既有的 @ 提及插入', (tester) async {

@@ -99,4 +99,23 @@ mixin ChatSetupState on ChangeNotifier {
       return null;
     }
   }
+
+  /// 建会话成功后把「先选好的配置」补应用到这个会话（问题1）。
+  ///
+  /// 协议层没有「建会话时带模型 / 权限」的帧：会话维度的模型与权限只有
+  /// `select-model` / `permission` 两帧，都要会话号。所以流程是「先选 →
+  /// 建会话 → 补应用」（见 chat_setup_draft.dart）。
+  Future<void> applySetupTo(String sid) async {
+    if (setup.isEmpty) return;
+    await applyChatSetup(
+      gateway,
+      sid,
+      setup,
+      onError: (message) {
+        lastError = message;
+        notifyListeners();
+      },
+    );
+    await refreshModelLabel();
+  }
 }

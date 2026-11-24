@@ -27,9 +27,18 @@ class ChatSetupDraft {
   /// 模式的展示名。
   String? agentPresetName;
 
+  /// 待应用的计划模式开关（null = 没选过）。
+  ///
+  /// `/plan` 是命令帧（要会话号），所以新建会话时只能先存着，
+  /// 建会话后由 [applyChatSetup] 补发一次 `/plan`。
+  bool? plan;
+
   /// 是否还有没落地的配置。
   bool get isEmpty =>
-      model == null && permissionValue == null && agentPresetId == null;
+      model == null &&
+      permissionValue == null &&
+      agentPresetId == null &&
+      plan == null;
 
   /// 清空草稿（已经补应用过）。
   void clear() {
@@ -38,12 +47,14 @@ class ChatSetupDraft {
     permissionLabel = null;
     agentPresetId = null;
     agentPresetName = null;
+    plan = null;
   }
 }
 
 /// 把草稿补应用到一个已经建好的会话。
 ///
-/// 会话维度只有两帧能落配置：`select-model`（模型）与 `permission`（权限档位）。
+/// 会话维度只有三帧能落配置：`select-model`（模型）、`permission`（权限档位）
+/// 与 `command-execute`（`/plan`，计划模式）。
 /// 模式（Agent 预设）**不在这里补**：它随 `session-create` 的 `agentPreset`
 /// 字段下发（bridge ws-sessions.ts:49-95），建会话那一步已经带上了；再补一次
 /// 反而会在非空白会话上撞 409 `AGENT_PRESET_LOCKED`。
@@ -57,6 +68,7 @@ Future<void> applyChatSetup(
 }) async {
   final model = draft.model;
   final permission = draft.permissionValue;
+  final plan = draft.plan;
   draft.clear();
   if (model != null) {
     try {
@@ -75,6 +87,25 @@ Future<void> applyChatSetup(
       await gateway.setPermission(sessionId, permission);
     } on RequestException catch (e) {
       onError?.call('权限档位切换失败：${e.message}');
+    }
+  }
+  if (plan != null) {
+    // 计划模式是命令帧：与输入条上的开关同一对内核命令（/plan / /plan off）。
+    try {
+      final r = await gateway.executeCommand(
+        sessionId: sessionId,
+        line: plan ? '/plan' : '/plan off',
+      );
+      final result = r['result'];
+      final kind = result is Map ? (result['kind'] ?? '') as String : '';
+      if (kind == 'error') {
+        final text = result is Map && result['text'] is String
+            ? result['text'] as String
+            : '命令执行失败';
+        onError?.call('计划模式设置失败：$text');
+      }
+    } on RequestException catch (e) {
+      onError?.call('计划模式设置失败：${e.message}');
     }
   }
 }

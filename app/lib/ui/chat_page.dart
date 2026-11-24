@@ -7,7 +7,6 @@ import 'dart:async';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 
-import '../bridge/gateway.dart';
 import '../bridge/goal.dart';
 import '../bridge/projections.dart';
 import '../design/tokens.dart';
@@ -24,6 +23,7 @@ import 'queue_dock.dart';
 import 'chat_top_bar.dart';
 import 'projection_sheets.dart';
 import 'composer.dart';
+import 'chat_page_composer.dart';
 import 'chat_setup.dart';
 import 'question_card.dart';
 import 'session_tabs_sheet.dart';
@@ -415,48 +415,34 @@ class _ChatPageState extends State<ChatPage>
                     ? DsSpacing.activityStripGap
                     : DsSpacing.blockGap,
               ),
-            Composer(
-              key: _composerKey,
-              colors: c,
-              // 上方已有活动条/任务条时，间距收到 6（dsh-go dock 与输入条之间 6），
-              // 否则保留 16 的正文间隔。
-              topGap: (activity != null || todoDock != null)
-                  ? DsSpacing.activityStripGap
-                  : DsSpacing.blockGap,
-              enabled: st.connectionState == GatewayState.ready,
-              onSend: st.send,
-              onSendWithImages: st.sendWithImages,
-              onCancel: st.cancelTurn,
-              onCommand: st.runCommand,
-              streaming: st.streaming,
-              sessionId: st.sessionId,
-              gateway: st.gateway,
-              currentPermission: st.currentPermission,
-              // @ 面板「对话」分组用抽屉同一份会话列表（工单 3）。
-              sessions: st.sessions,
-              // 单题提问挂着时，输入条文字直接作为答案（hint 同步切换）。
-              answering: st.singleOpenQuestion != null,
-              // 斜杠面板的客户端功能（/new /model /export /features）。
-              onAppCommand: _runAppCommand,
-              // 输入条上的模型 chip：显示服务端 models 帧的 current.model。
-              onPickModel: _pickModel,
-              modelLabel: st.modelLabel,
-              // 「+」面板：模式（Agent 预设）行。
-              presetLabel: st.currentAgentPresetName ?? st.setup.agentPresetName,
-              onPickPreset: () => pickSessionPreset(context, st, c),
-              // 「+」面板：没有会话时选好的权限档位先存草稿，建会话后补应用。
-              pendingPermissionLabel: st.setup.permissionLabel,
-              onPendingPermission: (option) {
-                st.setup.permissionValue = option.value;
-                st.setup.permissionLabel = option.label;
-                st.notifyUi();
-              },
+            _buildComposer(
+              context: context,
+              activity: activity,
+              todoDock: todoDock,
             ),
           ],
         ),
       ),
     );
   }
+
+  /// 输入条（从 chat_page.dart 拆出，见 chat_page_composer.dart）：
+  /// 参数多、注释多，单独成文件守 §7 行数。
+  Widget _buildComposer({
+    required BuildContext context,
+    Object? activity,
+    Object? todoDock,
+  }) =>
+      buildChatComposer(
+        context: context,
+        state: st,
+        colors: c,
+        composerKey: _composerKey,
+        activity: activity,
+        todoDock: todoDock,
+        onAppCommand: _runAppCommand,
+        onPickModel: _pickModel,
+      );
 
   /// 顶栏状态：连接态 + 生成态 + 等待审批/回答（dsh-go 的顶栏状态机）。
   ChatHeaderStatus get _headerStatus => chatHeaderStatus(

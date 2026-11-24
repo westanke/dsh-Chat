@@ -20,6 +20,7 @@ import 'plus_panel.dart';
 import 'window_class.dart';
 
 part 'composer_widgets.dart';
+part 'composer_build.dart';
 part 'composer_panels.dart';
 part 'composer_palette.dart';
 part 'composer_at_sessions.dart';
@@ -60,6 +61,8 @@ class Composer extends StatefulWidget {
     this.onPickPreset,
     this.pendingPermissionLabel,
     this.onPendingPermission,
+    this.pendingPlan,
+    this.onPendingPlan,
     this.topGap = DsSpacing.blockGap,
   });
 
@@ -117,6 +120,13 @@ class Composer extends StatefulWidget {
   /// 「+」面板「权限」行在没有会话时选了档位：交给上层存进草稿
   /// （会话维度才有 permission 帧，建会话后补应用）。
   final void Function(PermissionOption option)? onPendingPermission;
+
+  /// 「+」面板「计划模式」开关在没有会话时的待应用值（null = 没选过）。
+  final bool? pendingPlan;
+
+  /// 「+」面板「计划模式」开关在没有会话时切换：交给上层存进草稿
+  /// （`/plan` 是命令帧，要会话号，建会话后补发）。
+  final ValueChanged<bool>? onPendingPlan;
 
   @override
   State<Composer> createState() => ComposerState();
@@ -423,133 +433,5 @@ class ComposerState extends State<Composer> {
   }
 
   @override
-  Widget build(BuildContext context) {
-    final at = _atDraft;
-    final slashMatches = _slashMatches;
-    // 斜杠面板三态：候选（列表）/ 参数提示（单行）/ 不显示。
-    final slashContent = at == null ? _paletteContent : const PaletteNone();
-    return Padding(
-      padding: EdgeInsets.fromLTRB(
-        DsSpacing.composerMargin,
-        widget.topGap,
-        DsSpacing.composerMargin,
-        0,
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // 面板整体限高内滚（屏幕 42%）：会话分组 + 文件/命令面板叠起来会顶出屏幕。
-          ConstrainedBox(
-            constraints: BoxConstraints(
-              maxHeight: MediaQuery.sizeOf(context).height * 0.42,
-            ),
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (at != null && slashMatches.isEmpty) ...[
-                    if (_atSessionMatches.isNotEmpty)
-                      _AtSessionPanel(
-                        colors: c,
-                        sessions: _atSessionMatches,
-                        onPick: _applySessionEntry,
-                      ),
-                    _AtFilePanel(
-                      colors: c,
-                      entries: _atMatches,
-                      query: _atLeafQuery,
-                      rootLabel: _atRoots.isEmpty ? '' : _atRoots.first.label,
-                      loading: _atLoading,
-                      failed: _atFailed,
-                      onRetry: () {
-                        _atLoadedDir = null;
-                        _ensureAtEntries('');
-                      },
-                      highlighted: _panelHighlight,
-                      onPick: _applyAtEntry,
-                      onHighlightChanged: (i) =>
-                          setState(() => _panelHighlight = i),
-                    ),
-                  ] else if (slashContent is! PaletteNone)
-                    // 点面板外关闭 + 返回键先关面板（dsh-go TextFieldTapRegion
-                    // / PopScope 同口径），出现时淡入并轻微上浮。
-                    TextFieldTapRegion(
-                      onTapOutside: (_) => _dismissSlashPalette(),
-                      child: AnimatedSize(
-                        duration: const Duration(milliseconds: 150),
-                        alignment: Alignment.bottomCenter,
-                        // 候选 ⇄ 参数提示切换时淡入并轻微上浮（dsh-go
-                        // AnimatedSwitcher + ScaleTransition(0.96→1) 同观感）。
-                        child: AnimatedSwitcher(
-                          duration: const Duration(milliseconds: 150),
-                          switchInCurve: Curves.easeOut,
-                          transitionBuilder: (child, anim) => FadeTransition(
-                            opacity: anim,
-                            child: ScaleTransition(
-                              scale: Tween<double>(
-                                begin: 0.96,
-                                end: 1,
-                              ).animate(anim),
-                              alignment: Alignment.bottomCenter,
-                              child: child,
-                            ),
-                          ),
-                          child: _CommandPanel(
-                            colors: c,
-                            key: ValueKey<String>(
-                              slashContent.runtimeType.toString(),
-                            ),
-                            content: slashContent,
-                            highlighted: _panelHighlight,
-                            onPick: _applyCommand,
-                            onHighlightChanged: (i) =>
-                                setState(() => _panelHighlight = i),
-                          ),
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-            ),
-          ),
-          _ComposerBar(
-            colors: c,
-            controller: _controller,
-            focusNode: _focus,
-            enabled: widget.enabled,
-            onKey: _onKey,
-            onChanged: _onChanged,
-            permissionLabel: _permissionLabel,
-            permissionActive: (widget.currentPermission ?? '').isNotEmpty,
-            onPickPermission: _pickPermission,
-            pendingImageNames: [for (final i in _pendingImages) i.name],
-            onRemoveImage: (i) => setState(() => _pendingImages.removeAt(i)),
-            canPickImage: widget.enabled,
-            onPickImage: _openPlusPanel,
-            onInsertContent: () {
-              _focus.requestFocus();
-              insertAtMention(_controller, _onChanged);
-            },
-            sendState: _sendKeyState,
-            canSend: widget.enabled && (_hasText || _hasImage),
-            onSend: _send,
-            onStop: widget.onCancel,
-            answering: widget.answering,
-            gateway: widget.gateway,
-            sessionId: widget.sessionId,
-            onPickModel: widget.onPickModel,
-            modelLabel: widget.modelLabel,
-          ),
-          const SizedBox(height: DsSpacing.composerHintGap),
-          // 免责声明：流式思考中不显示（思考块已在消息流里滚动展示）。
-          if (!widget.streaming)
-            Text(
-              '回答由 AI 生成，仅供参考',
-              style: DsTypography.caption.copyWith(color: c.inputHintText),
-            ),
-          const SizedBox(height: 10),
-        ],
-      ),
-    );
-  }
+  Widget build(BuildContext context) => buildComposer(context);
 }

@@ -64,6 +64,10 @@ class _FakeGateway extends GatewayClient {
         };
       case 'permission':
         return <String, dynamic>{'kind': 'ok'};
+      case 'command-execute':
+        return <String, dynamic>{
+          'result': {'kind': 'ok', 'text': 'ok'},
+        };
       case 'sessions':
         return <String, dynamic>{'sessions': <dynamic>[], 'roots': <dynamic>[]};
       case 'history':
@@ -144,6 +148,37 @@ void main() {
       // 假网关两帧都成功：草稿清空、无错误。
       expect(state.setup.isEmpty, isTrue);
       expect(state.lastError, isNull);
+    });
+
+    test('计划模式草稿在建会话后补发一次 /plan（命令帧要会话号）', () async {
+      final gw = _FakeGateway();
+      final state = ChatState(gw);
+      state.setPendingLocation(
+        const SessionLocation(rootId: 'root-1', cwd: 'projects/dsh', label: 'dsh'),
+      );
+      state.setup.plan = true;
+
+      await state.send('你好');
+
+      final cmd = gw.requests.firstWhere((r) => r.$1 == 'command-execute');
+      expect(cmd.$2['sessionId'], 'sid-new');
+      expect(cmd.$2['line'], '/plan');
+      // 补完草稿清空：不会重复补。
+      expect(state.setup.plan, isNull);
+    });
+
+    test('计划模式关闭时补发 /plan off', () async {
+      final gw = _FakeGateway();
+      final state = ChatState(gw);
+      state.setPendingLocation(
+        const SessionLocation(rootId: 'root-1', cwd: 'projects/dsh', label: 'dsh'),
+      );
+      state.setup.plan = false;
+
+      await state.send('你好');
+
+      final cmd = gw.requests.firstWhere((r) => r.$1 == 'command-execute');
+      expect(cmd.$2['line'], '/plan off');
     });
   });
 
