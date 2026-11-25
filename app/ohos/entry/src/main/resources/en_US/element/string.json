@@ -2,15 +2,15 @@
   "string": [
     {
       "name": "module_desc",
-      "value": "module description"
+      "value": "DSH Chat HarmonyOS client"
     },
     {
       "name": "EntryAbility_desc",
-      "value": "description"
+      "value": "DSH Chat main screen"
     },
     {
       "name": "EntryAbility_label",
-      "value": "dshchat"
+      "value": "DSH Chat"
     }
   ]
 }
