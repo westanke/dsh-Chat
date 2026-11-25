@@ -89,7 +89,7 @@
 | APK | [`dsh-Chat-v1.0.2.apk`](https://gitee.com/westanke/dsh-Chat/releases/download/v1.0.2/dsh-Chat-v1.0.2.apk)<br>73,897,157 字节 · SHA-256 `70f17e56a36a68f791f1d1f995bf759ffaec7d297014365d3be9a6c5a0e558ca` |
 | APK | [`dsh-Chat-v1.0.1.apk`](https://gitee.com/westanke/dsh-Chat/releases/download/v1.0.1/dsh-Chat-v1.0.1.apk)<br>73,880,773 字节 · SHA-256 `25ad31f942451456238a25798cc0de91c14eee9049e25459ae38825610c190b5` |
 | Android | **已装机验证**（vivo V2080A 真机）：配对、自动重连、流式对话、Markdown 全家福、工具行五态与专属详情、过程组四档、轮尾行、思考预览、提问卡、抽屉、深色模式 |
-| iOS | **未在设备验证**。`ios/Runner` 平台壳已补齐 IANA 时区、私有目录、通知、TTS、分享、选图、打开文件；但未在 macOS/真机上编译运行过，安装走 App Store |
+| iOS | **未在设备验证**。`ios/Runner` 平台壳已补齐 IANA 时区、私有目录、通知、TTS、分享、选图、打开文件；GitHub Actions `macos-15` 已实跑构建出未签名 IPA（12,128,741 字节，run 45613676673），未在真机运行；安装走 App Store |
 | 鸿蒙（HarmonyOS） | **Flutter-OH 版（新，2026-11-25 起）**：`app/` 同一套 Dart 代码 + `app/ohos/` Flutter-OH 宿主工程（bundleName `com.dsh.dshchat`），三端共用一份源码。**已编译通过**（debug/release HAP 均在本机构建成功），**尚未在真机验证**（`hdc list targets` 空）。旧 ArkUI 原生版在 `harmony/`（已冻结维护、后续退役，签名材料保留） |
 | 版本 | `app/pubspec.yaml` 为 `1.0.36+37`；tag `v1.0.36`，产物见下方「下载安装」 |
 

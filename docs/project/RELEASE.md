@@ -15,7 +15,7 @@
 |---|---|---|---|---|
 | Android | `.apk` | `flutter build apk --release --target-platform android-arm64` | 能（APK 直传 Gitee Release） | **已发版**（v1.0.36），已装机验证（vivo V2080A） |
 | 鸿蒙 | `.hap`（本机 signed/unsigned）/ `.app`（上架） | `flutter build hap --release --no-codesign` + `scripts/sign-hap.sh` / `flutter build app` | 本机可出**本地签名 HAP**；AGC 上架仍需 AGC 账号与 `.app` | 已编译通过并本地验签，**未真机验证**（`hdc list targets` 空） |
-| iOS | `.ipa` | 本机 Linux **打不了** → GitHub Actions macOS（`release.yml` 已改用 Flutter-OH）打未签名 IPA | 需 Apple 开发者证书 | **未在 runner 实跑**；iOS 原生桥已补齐通知/TTS/分享/选图/打开文件，安装走 App Store |
+| iOS | `.ipa` | 本机 Linux **打不了** → GitHub Actions macOS（`release.yml` 已改用 Flutter-OH）打未签名 IPA | 需 Apple 开发者证书 | **2026-11-25 已在 `macos-15` runner 实跑成功**（未签名 IPA 12,128,741 字节，run 45613676673）；未真机；iOS 原生桥已补齐通知/TTS/分享/选图/打开文件，安装走 App Store |
 
 三端**共用一份 Dart 代码**（`app/lib/`）。平台差异全在两处：
 
