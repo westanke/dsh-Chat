@@ -86,7 +86,7 @@ if [ -z "${HOS_SDK_HOME:-}" ] && [ -z "${DEVECO_SDK_HOME:-}" ]; then
   if [ -n "${GITHUB_ENV:-}" ]; then
     echo "HOS_SDK_HOME=$HOS_STUB" >> "$GITHUB_ENV"
   fi
-  say "未检测到 HOS SDK：使用空骨架 $HOS_STUB（仅 Android/iOS；HAP 需真 SDK）"
+  say "未检测到 HOS SDK：使用空骨架 ${HOS_STUB}（仅 Android/iOS；HAP 需真 SDK）"
 fi
 
 export FLUTTER_ROOT="$ROOT"
