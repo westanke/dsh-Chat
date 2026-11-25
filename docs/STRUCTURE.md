@@ -465,7 +465,7 @@
 
 | 文件 | 用途 |
 |---|---|
-| `ohos/AppScope/app.json5` | 应用级配置：bundleName `com.dsh.dshchat`（与 Android applicationId 同名同源，§2）、vendor `dsh`、versionCode 37 / versionName 1.0.36（对齐 `app/pubspec.yaml`）、icon / label |
+| `ohos/AppScope/app.json5` | 应用级配置：bundleName `com.dsh.dshchat`（与 Android applicationId 同名同源，§2）、vendor `dsh`、versionCode 38 / versionName 1.0.37（对齐 `app/pubspec.yaml`）、icon / label |
 | `ohos/AppScope/resources/base/element/string.json` | 应用级字符串：`app_name` = `DSH Chat` |
 | `ohos/AppScope/resources/base/media/app_icon.png` | 应用级图标（1024×1024，AGC 上架审核要求） |
 | `ohos/build-profile.json5` | 工程级构建配置：products[default] 的 `compatibleSdkVersion` / `targetSdkVersion` = **26.0.0**、`runtimeOS` HarmonyOS、buildModeSet debug/profile/release；`app.signingConfigs`（签名配置，本机为空 → 构建须 `--no-codesign`） |

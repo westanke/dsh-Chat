@@ -28,6 +28,8 @@ enum DshPlatformChannels {
       switch call.method {
       case "ianaZone":
         result(TimeZone.current.identifier)
+      case "deviceName":
+        result(UIDevice.current.name)
       case "filesDir":
         // Android context.filesDir 的 iOS 等价物：Application Support 是应用私有、
         // 不暴露给 Files.app，适合放日志等运行数据；目录不存在时先建出来。

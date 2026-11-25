@@ -11,12 +11,12 @@
 </p>
 
 <p align="center">
-  <a href="https://gitee.com/westanke/dsh-Chat/releases/tag/v1.0.36"><code>下载 v1.0.36 · APK / HAP</code></a>
+  <a href="https://gitee.com/westanke/dsh-Chat/releases/tag/v1.0.37"><code>下载 v1.0.37 · APK / HAP</code></a>
 </p>
 
 <p align="center">
   <a href="./README.en.md">English</a> ·
-  <img alt="Version" src="https://img.shields.io/badge/version-1.0.36-087f8c">
+  <img alt="Version" src="https://img.shields.io/badge/version-1.0.37-087f8c">
   <img alt="License" src="https://img.shields.io/badge/license-AGPL--3.0-2da44e">
   <img alt="Platforms" src="https://img.shields.io/badge/platform-Android%20%7C%20iOS%20%7C%20HarmonyOS-586069">
   <img alt="Built with Flutter" src="https://img.shields.io/badge/built%20with-Flutter-02569B">
@@ -79,23 +79,23 @@
 
 | 平台 | 现在到哪一步 |
 |---|---|
-| **Android** | **已真机验证**：配对、自动重连、流式对话、Markdown、工具行五态与详情、过程组四档、思考预览、提问卡、抽屉、深色模式、分享。v1.0.36 APK 26.6 MB |
+| **Android** | **已真机验证**：配对、自动重连、流式对话、Markdown、工具行五态与详情、过程组四档、思考预览、提问卡、抽屉、深色模式、分享。v1.0.37 APK 26.6 MB |
 | **iOS** | 原生桥已补齐 IANA 时区、私有目录、通知、TTS、分享、选图、打开文件；CI 已构建出未签名 IPA。**未在 iPhone 真机验证**；安装/更新走 App Store |
 | **HarmonyOS** | **Flutter-OH 版已真机验证**（API 26）：配对、聊天、会话、分享、TTS、选图、通知与点击回跳均通过。正式 release HAP 需 AGC 正式签名 |
 | 旧 ArkTS 版 | 在 `harmony/`，已冻结维护、后续退役 |
 
-当前版本：`app/pubspec.yaml` 为 `1.0.36+37`，tag `v1.0.36`。
+当前版本：`app/pubspec.yaml` 为 `1.0.37+38`，tag `v1.0.37`。
 
 未验证的功能不会被写成“已完成”。真机截图是唯一验收证据。
 
 ## 下载安装
 
-最新版 **v1.0.36**（Gitee 主站；GitHub 镜像同步同一 tag）：
+最新版 **v1.0.37**（Gitee 主站；GitHub 镜像同步同一 tag）：
 
 | 产物 | 大小 | SHA-256 |
 |---|---|---|
-| [APK](https://gitee.com/westanke/dsh-Chat/releases/download/v1.0.36/dsh-Chat-v1.0.36.apk) | 26,615,566 字节 | `f91c7d37069abb12335a53f52d0f24eb697a8e29859c153b0973513a02369cd1` |
-| [HAP](https://gitee.com/westanke/dsh-Chat/releases/download/v1.0.36/dsh-Chat-v1.0.36-harmony.hap) | 34,553,311 字节 | `2576f8b8da9c34a47d047063d28cb5ca75c346a13dd023ecf02e38663a6f754e`（项目发布证书签名） |
+| [APK](https://gitee.com/westanke/dsh-Chat/releases/download/v1.0.37/dsh-Chat-v1.0.37.apk) | 26,615,566 字节 | `c87a88346d735d243a181da93226821693c666149bd17b8b3e07cbc72313b3f4` |
+| [HAP](https://gitee.com/westanke/dsh-Chat/releases/download/v1.0.37/dsh-Chat-v1.0.37-harmony.hap) | 34,552,873 字节 | `5d3bd54db03ac129ff615d5acd7e5a6f4328f2b0d980f9c37ba7e772262cdcaf`（项目发布证书签名） |
 
 - Android：直接安装 APK；部分机型会弹风险拦截页，勾选确认后继续。
 - HarmonyOS：HAP 需要设备信任的签名。开发机可用 `scripts/sign-hap.sh` 生成 debug 签名包；
@@ -123,7 +123,7 @@
 cd app
 flutter pub get             # 依赖变更后必跑
 flutter analyze             # 提交前必绿
-flutter test                # 590 例
+flutter test                # 592 例
 
 flutter build apk --release --target-platform android-arm64
 flutter build hap --release --no-codesign   # 鸿蒙 HAP（未签名）
@@ -138,7 +138,7 @@ flutter build hap --release --no-codesign   # 鸿蒙 HAP（未签名）
 
 | 工作流 | 内容 |
 |---|---|
-| [`ci.yml`](.github/workflows/ci.yml) | `docs-check` + `flutter analyze` + `flutter test`（590 例）+ 旧 `harmony/test` 的 `npm test`；用 Flutter-OH SDK |
+| [`ci.yml`](.github/workflows/ci.yml) | `docs-check` + `flutter analyze` + `flutter test`（592 例）+ 旧 `harmony/test` 的 `npm test`；用 Flutter-OH SDK |
 | [`release.yml`](.github/workflows/release.yml) | tag 触发：Ubuntu 出 APK、`macos-15` 出未签名 IPA；HAP 为可选 self-hosted job（需 `BUILD_HAP=true` 与真实鸿蒙 SDK） |
 | [`mirror-sync.yml`](.github/workflows/mirror-sync.yml) | Gitee → GitHub 镜像同步；GitHub 是从站，日常推送目标是 Gitee |
 
@@ -180,8 +180,7 @@ dsh-Chat/
   iPhone 实机确认；iOS 不允许 App 内安装，更新只提示 App Store。
 - **鸿蒙正式签名**：release HAP 用发布证书签名时，部分设备会报
   `signature verification failed due to not trusted app source`；正式分发需 AGC 证书/Profile。
-- **应用名**：v1.0.36 已发布 HAP 的桌面名仍是 `dshchat`；源码已改为 `DSH Chat`，
-  下个版本重打生效。
+- **应用名**：v1.0.36 及更早的 HAP 桌面名仍是 `dshchat`；v1.0.37 起已改为 `DSH Chat`。
 - **工具链锁定**：三端共用 Flutter-OH SDK；不要用上游 stable 替换，否则 ohos fork 依赖编译失败。
 - **更新方式**：只有 Android 支持 App 内下载安装；iOS / 鸿蒙走各自应用商店。
 

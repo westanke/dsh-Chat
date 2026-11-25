@@ -7,6 +7,7 @@ library;
 import 'package:material_ui/material_ui.dart';
 
 import '../bridge/credentials.dart';
+import '../bridge/device.dart';
 import '../bridge/gateway.dart';
 import '../bridge/host_connect.dart';
 import '../bridge/hosts.dart';
@@ -104,7 +105,7 @@ class _ConnectPageState extends State<ConnectPage> {
       await gateway.pair(
         code: code,
         newDeviceId: _deviceId,
-        name: 'DSH Chat (Flutter)',
+        name: DshDevice.displayName,
       );
       await _enterWith(gateway, host);
     } catch (e) {
@@ -140,7 +141,7 @@ class _ConnectPageState extends State<ConnectPage> {
         draft,
         code: link.code,
         deviceId: _deviceId,
-        deviceName: 'DSH Chat (Flutter)',
+        deviceName: DshDevice.displayName,
         onProgress: _onProgress,
       ).timeout(_connectBudget, onTimeout: () => throw HostConnectException(
             '连接超时：探活或配对在 2 分钟内没有结果，请检查网络后重试',

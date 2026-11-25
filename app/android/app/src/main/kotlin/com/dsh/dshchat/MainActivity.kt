@@ -9,6 +9,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Environment
 import android.provider.OpenableColumns
+import android.provider.Settings
 import android.speech.tts.TextToSpeech
 import androidx.core.content.FileProvider
 import io.flutter.embedding.android.FlutterActivity
@@ -39,6 +40,7 @@ class MainActivity : FlutterActivity() {
                     // dsh-remote-bridge src/host/bff-schedule.ts:488）；Dart timeZoneName
                     // 在 Android 返回缩写（如 CST）不合规，读原生 ID（如 Asia/Shanghai）。
                     "ianaZone" -> result.success(TimeZone.getDefault().id)
+                    "deviceName" -> result.success(deviceDisplayName())
                     else -> result.notImplemented()
                 }
             }
@@ -459,4 +461,29 @@ class MainActivity : FlutterActivity() {
         pendingSpeak = null
         super.onDestroy()
     }
+    /**
+     * 当前设备展示名：优先系统设置里的设备名（Android 7.1+），
+     * 回退「厂商 + 型号」，再回退 Android。
+     */
+    private fun deviceDisplayName(): String {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N_MR1) {
+                val configured = Settings.Global.getString(
+                    contentResolver,
+                    Settings.Global.DEVICE_NAME,
+                )
+                if (!configured.isNullOrBlank()) return configured.trim()
+            }
+        } catch (_: Exception) {
+            // 某些 ROM 不允许读该设置，继续走型号回退。
+        }
+        val manufacturer = Build.MANUFACTURER?.trim().orEmpty()
+        val model = Build.MODEL?.trim().orEmpty()
+        return when {
+            model.isBlank() -> manufacturer.ifBlank { "Android" }
+            manufacturer.isBlank() || model.startsWith(manufacturer, ignoreCase = true) -> model
+            else -> "$manufacturer $model"
+        }
+    }
+
 }

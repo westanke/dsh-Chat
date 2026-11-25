@@ -1,7 +1,7 @@
 {
   "modelVersion": "5.1.0",
   "name": "dshchat",
-  "version": "1.0.36",
+  "version": "1.0.37",
   "description": "DSH Chat HarmonyOS host (Flutter-OH).",
   "main": "",
   "author": "westanke",

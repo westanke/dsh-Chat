@@ -13,7 +13,7 @@
 
 | 平台 | 产物 | 怎么出 | 能不能上架 | 当前状态 |
 |---|---|---|---|---|
-| Android | `.apk` | `flutter build apk --release --target-platform android-arm64` | 能（APK 直传 Gitee Release） | **已发版**（v1.0.36），已装机验证（vivo V2080A） |
+| Android | `.apk` | `flutter build apk --release --target-platform android-arm64` | 能（APK 直传 Gitee Release） | **已发版**（v1.0.37），已装机验证（vivo V2080A） |
 | 鸿蒙 | `.hap`（本机 signed/unsigned）/ `.app`（上架） | `flutter build hap --release --no-codesign` + `scripts/sign-hap.sh` / `flutter build app` | 本机可出**本地签名 HAP**；AGC 上架仍需 AGC 账号与 `.app` | 已编译通过并本地验签，**未真机验证**（`hdc list targets` 空） |
 | iOS | `.ipa` | 本机 Linux **打不了** → GitHub Actions macOS（`release.yml` 已改用 Flutter-OH）打未签名 IPA | 需 Apple 开发者证书 | **2026-11-25 已在 `macos-15` runner 实跑成功**（未签名 IPA 12,128,741 字节，run 45613676673）；未真机；iOS 原生桥已补齐通知/TTS/分享/选图/打开文件，安装走 App Store |
 
@@ -61,7 +61,7 @@ cd app
 
 flutter pub get                                  # 依赖变更后必跑
 flutter analyze                                  # 提交前必绿
-flutter test                                     # 590 例
+flutter test                                     # 592 例
 
 # Android 调试包（装机验证用）
 flutter build apk --debug
@@ -98,7 +98,7 @@ cd /media/wangke/OFFICE/workspace/dsh-Chat
 source /media/wangke/OFFICE/workspace/tools/env.sh
 
 # 1) 先 bump 版本：app/pubspec.yaml 的 version: <name>+<code>
-#    versionName 1.0.35 / versionCode 36 → 1.0.36 / 37
+#    versionName 1.0.36 / versionCode 37 → 1.0.37 / 38
 #    versionCode 必须比上一个 Release 大，否则应用市场拒收
 
 # 2) 跑发版脚本（阶段 A）
@@ -137,14 +137,14 @@ export HAP_KEYSTORE_PWD=...
 export HAP_KEY_PWD=...
 bash scripts/sign-hap.sh \
   app/build/ohos/hap/entry-default-unsigned.hap \
-  artifacts/dsh-Chat-v1.0.36-harmony.hap
+  artifacts/dsh-Chat-v1.0.37-harmony.hap
 # 脚本内部用 verify-app 验签；默认 release 材料（发布证书 + 发布 p7b）
 ```
 
 阶段 A 结束后**人工**做：
 
 ```sh
-git add -A && git commit -m "release: v1.0.36+37 产物与文档"
+git add -A && git commit -m "release: v1.0.37+38 产物与文档"
 ```
 
 > 为什么要先提交：tag 必须指向「文档与产物一致」的提交，否则 tag 里是旧文档，

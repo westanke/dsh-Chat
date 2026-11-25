@@ -22,6 +22,7 @@ import 'package:web_socket_channel/status.dart' as ws_status;
 import 'package:web_socket_channel/io.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
+import 'device.dart';
 import 'endpoint_select.dart';
 import 'gateway_events.dart';
 import 'gateway_kernel.dart';
@@ -237,7 +238,14 @@ class GatewayClient {
   Future<void> connect() async {
     final t = token;
     if (t == null || t.isEmpty) throw RequestException('NO_TOKEN', '尚未配对');
-    await _connect(protocols: _subprotocols('dsh-auth.$t'), headers: const {});
+    final name = DshDevice.deviceName.trim();
+    await _connect(
+      protocols: _subprotocols('dsh-auth.$t'),
+      headers: <String, String>{
+        if (name.isNotEmpty)
+          'X-DSH-Device-Name': base64Encode(utf8.encode(DshDevice.displayName)),
+      },
+    );
   }
 
   /// 子协议清单：`dsh-mobile-v1` 必须在内（位置无关），`dshrb-v1` 是**可选增量**。

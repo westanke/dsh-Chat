@@ -11,12 +11,12 @@
 </p>
 
 <p align="center">
-  <a href="https://gitee.com/westanke/dsh-Chat/releases/tag/v1.0.36"><code>Download v1.0.36 · APK / HAP</code></a>
+  <a href="https://gitee.com/westanke/dsh-Chat/releases/tag/v1.0.37"><code>Download v1.0.37 · APK / HAP</code></a>
 </p>
 
 <p align="center">
   <a href="./README.md">中文</a> ·
-  <img alt="Version" src="https://img.shields.io/badge/version-1.0.36-087f8c">
+  <img alt="Version" src="https://img.shields.io/badge/version-1.0.37-087f8c">
   <img alt="License" src="https://img.shields.io/badge/license-AGPL--3.0-2da44e">
   <img alt="Platforms" src="https://img.shields.io/badge/platform-Android%20%7C%20iOS%20%7C%20HarmonyOS-586069">
   <img alt="Built with Flutter" src="https://img.shields.io/badge/built%20with-Flutter-02569B">
@@ -82,21 +82,21 @@ Right: settings, with connection state, device permissions, appearance and notif
 
 | Platform | Status |
 |---|---|
-| **Android** | **Verified on Android hardware**: pairing, auto-reconnect, streaming, Markdown, tool details, process groups, thinking, question cards, drawer, dark mode and sharing. v1.0.36 APK is 26.6 MB |
+| **Android** | **Verified on Android hardware**: pairing, auto-reconnect, streaming, Markdown, tool details, process groups, thinking, question cards, drawer, dark mode and sharing. v1.0.37 APK is 26.6 MB |
 | **iOS** | Native bridge covers IANA time zone, private directory, notifications, TTS, sharing, image picker and file opening. CI builds an unsigned IPA. **Not verified on an iPhone**; updates go through the App Store |
 | **HarmonyOS** | **Flutter-OH build verified on HarmonyOS hardware / API 26**: pairing, chat, sessions, sharing, TTS, picker and notifications (including tap-to-return) passed. Release distribution needs an AGC certificate/profile |
 | Old ArkTS build | In `harmony/`, frozen and being retired |
 
-Current version: `app/pubspec.yaml` is `1.0.36+37`, tag `v1.0.36`.
+Current version: `app/pubspec.yaml` is `1.0.37+38`, tag `v1.0.37`.
 
 ## Download and install
 
-Latest **v1.0.36** (Gitee primary; GitHub mirrors the same tag):
+Latest **v1.0.37** (Gitee primary; GitHub mirrors the same tag):
 
 | Artifact | Size | SHA-256 |
 |---|---|---|
-| [APK](https://gitee.com/westanke/dsh-Chat/releases/download/v1.0.36/dsh-Chat-v1.0.36.apk) | 26,615,566 bytes | `f91c7d37069abb12335a53f52d0f24eb697a8e29859c153b0973513a02369cd1` |
-| [HAP](https://gitee.com/westanke/dsh-Chat/releases/download/v1.0.36/dsh-Chat-v1.0.36-harmony.hap) | 34,553,311 bytes | `2576f8b8da9c34a47d047063d28cb5ca75c346a13dd023ecf02e38663a6f754e` (project release certificate) |
+| [APK](https://gitee.com/westanke/dsh-Chat/releases/download/v1.0.37/dsh-Chat-v1.0.37.apk) | 26,615,566 bytes | `c87a88346d735d243a181da93226821693c666149bd17b8b3e07cbc72313b3f4` |
+| [HAP](https://gitee.com/westanke/dsh-Chat/releases/download/v1.0.37/dsh-Chat-v1.0.37-harmony.hap) | 34,552,873 bytes | `5d3bd54db03ac129ff615d5acd7e5a6f4328f2b0d980f9c37ba7e772262cdcaf` (project release certificate) |
 
 - Android: install the APK directly. Some Android builds show a risk-interception page; confirm and continue.
 - HarmonyOS: the HAP must be signed by a certificate the device trusts. For development use
@@ -122,7 +122,7 @@ needs HarmonyOS SDK API 26. The SDKs are not bundled in this repository.
 cd app
 flutter pub get
 flutter analyze
-flutter test                # 590 cases
+flutter test                # 592 cases
 
 flutter build apk --release --target-platform android-arm64
 flutter build hap --release --no-codesign
@@ -168,8 +168,7 @@ dsh-Chat/
 - **HarmonyOS release signing**: a release HAP signed with the project certificate can fail with
   `signature verification failed due to not trusted app source` on some devices. Distribution needs
   an AGC certificate/profile.
-- **App label**: the published v1.0.36 HAP still shows `dshchat` on the launcher; the source now says
-  `DSH Chat` and the next build will carry it.
+- **App label**: v1.0.36 and earlier HAPs still show `dshchat` on the launcher; v1.0.37 and later use `DSH Chat`.
 - **Toolchain is pinned**: all three platforms share the Flutter-OH SDK; replacing it with upstream
   stable breaks the ohos forks.
 - **Updates**: only Android supports in-app download/install; iOS and HarmonyOS use their stores.
