@@ -391,7 +391,7 @@ class _ConnectPageState extends State<ConnectPage> {
               ],
               _Field(
                 controller: _host,
-                hint: 'bridge 地址（http://IP:3090）',
+                hint: 'bridge 地址（http://IP:3090 或 http://[IPv6]:3090）',
                 colors: c,
               ),
               const SizedBox(height: 12),

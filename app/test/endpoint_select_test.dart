@@ -31,11 +31,16 @@ void main() {
         '127.0.0.1',
         'my-box.local',
         '[fd00::1]',
+        'fd00::1',
+        '::1',
+        'fe80::1',
       ]) {
         expect(isPrivateHost(h), isTrue, reason: h);
       }
       expect(isPrivateHost('47.100.1.1'), isFalse);
       expect(isPrivateHost('172.32.0.1'), isFalse);
+      expect(isPrivateHost('2409:8a74:8884:c780::2'), isFalse);
+      expect(isPrivateHost('2001:db8::1'), isFalse);
     });
 
     test('隧道域名归 tunnel，普通公网归 other', () {
@@ -50,6 +55,10 @@ void main() {
         EndpointKind.virtualNet,
       );
       expect(classifyEndpoint('http://example.com:3090'), EndpointKind.other);
+      // Uri.host 对 IPv6 会去掉方括号；分类必须仍然认 ULA/link-local。
+      expect(classifyEndpoint('http://[fd00::1]:3090'), EndpointKind.lan);
+      expect(classifyEndpoint('http://[::1]:3090'), EndpointKind.lan);
+      expect(classifyEndpoint('http://[2409:8a74:8884:c780::2]:3090'), EndpointKind.other);
     });
   });
 

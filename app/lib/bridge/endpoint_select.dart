@@ -44,12 +44,51 @@ bool isVirtualNetHost(String host) {
       int.parse(v4.group(2)!) <= 127;
 }
 
+/// 去掉 IPv6 方括号与 zone id，供分类使用。
+/// `Uri.host` 对 IPv6 返回不带方括号的文本，但调用方/旧测试也可能传 `[fd00::1]`。
+String _bareHost(String host) {
+  var h = host.trim().toLowerCase();
+  if (h.startsWith('[') && h.endsWith(']')) {
+    h = h.substring(1, h.length - 1);
+  }
+  final zone = h.indexOf('%');
+  return zone == -1 ? h : h.substring(0, zone);
+}
+
+bool _isPrivateIPv6(String host) {
+  final h = _bareHost(host);
+  if (h == '::1' || h == '0:0:0:0:0:0:0:1') return true;
+  // IPv4-mapped：`::ffff:192.168.1.5`，也接受十六进制写法。
+  if (h.startsWith('::ffff:')) {
+    final tail = h.substring('::ffff:'.length);
+    if (tail.contains('.')) return isPrivateHost(tail);
+    final parts = tail.split(':');
+    if (parts.length == 2 &&
+        parts.every((p) => RegExp(r'^[0-9a-f]{1,4}$').hasMatch(p))) {
+      final high = int.parse(parts[0], radix: 16);
+      final low = int.parse(parts[1], radix: 16);
+      return isPrivateHost('${high >> 8}.${high & 0xff}.${low >> 8}.${low & 0xff}');
+    }
+    return false;
+  }
+  // 首段判断 fc00::/7（ULA）与 fe80::/10（link-local）。
+  final firstText = h.split(':').first;
+  final first = firstText.isEmpty ? 0 : int.tryParse(firstText, radix: 16);
+  if (first == null) return false;
+  if (first >= 0xfc00 && first <= 0xfdff) return true;
+  if (first >= 0xfe80 && first <= 0xfebf) return true;
+  return false;
+}
+
 /// 私有/虚拟网地址：10/8、172.16/12、192.168/16、100.64/10（CGNAT，
-/// 移动/校园网常见）、回环、`.local` 与 IPv6 ULA/link-local。
+/// 移动/校园网常见）、回环、`.local` 与 IPv6 ULA/link-local/loopback。
+/// IPv6 全球单播（2000::/3）算公网，交给隧道/直连探活而不是 LAN 优先。
 bool isPrivateHost(String host) {
   if (host.isEmpty) return false;
-  final h = host.toLowerCase();
+  final h = _bareHost(host);
+  if (h.isEmpty) return false;
   if (h == 'localhost' || h.endsWith('.local')) return true;
+  if (h.contains(':')) return _isPrivateIPv6(h);
   final v4 = RegExp(r'^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$').firstMatch(h);
   if (v4 != null) {
     final a = int.parse(v4.group(1)!);
@@ -59,13 +98,6 @@ bool isPrivateHost(String host) {
     if (a == 172 && b >= 16 && b <= 31) return true;
     if (a == 100 && b >= 64 && b <= 127) return true; // 100.64/10
     return false;
-  }
-  if (h.startsWith('[')) {
-    final v6 = h.substring(1, h.length - 1);
-    return v6 == '::1' ||
-        v6.startsWith('fc') ||
-        v6.startsWith('fd') ||
-        v6.startsWith('fe80');
   }
   return false;
 }

@@ -47,4 +47,13 @@ void main() {
     expect(link?.baseUrl, 'http://h:3090/p#a');
     expect(link?.code, 'AB3DE7JK');
   });
+
+  test('接受带方括号的 IPv6 地址', () {
+    final link = parsePairingLink(
+      'http://[2409:8a74:8884:c780::2]:3090#AB3DE7JK',
+    );
+    expect(link, isNotNull);
+    expect(link!.endpoints, ['http://[2409:8a74:8884:c780::2]:3090']);
+    expect(link.code, 'AB3DE7JK');
+  });
 }

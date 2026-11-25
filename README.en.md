@@ -107,9 +107,9 @@ Latest **v1.0.36** (Gitee primary; GitHub mirrors the same tag):
 
 1. Install and enable [`dsh-remote-bridge`](https://github.com/westanke/dsh-remote-bridge)
    (requires **≥ 2.10.0**, protocol v3) on the desktop, then open **Phone settings → Remote access**.
-2. On the phone, open dsh-Chat and enter the bridge URL, e.g. `http://<host>:3090`.
-   On Android you can also run `adb reverse tcp:3090 tcp:3090` and use
-   `http://127.0.0.1:3090`.
+2. On the phone, open dsh-Chat and enter the bridge URL, e.g. `http://<host>:3090`
+   (IPv6: `http://[<IPv6>]:3090`). On Android you can also run
+   `adb reverse tcp:3090 tcp:3090` and use `http://127.0.0.1:3090`.
 3. Paste the one-time pairing code and tap **Pair and connect**. Credentials are stored locally and
    the app reconnects automatically afterwards.
 

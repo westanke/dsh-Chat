@@ -111,7 +111,7 @@
 1. 在桌面端安装并启用 [`dsh-remote-bridge`](https://github.com/westanke/dsh-remote-bridge)
    （要求 **≥ 2.10.0**，协议 v3），打开「手机设置 → 远程访问」。
 2. 手机打开 dsh-Chat，进入「连接到 DSH Bridge」页，填 bridge 地址
-   （局域网形如 `http://<主机地址>:3090`；Android 也可用
+   （局域网形如 `http://<主机地址>:3090`，IPv6 写成 `http://[<IPv6>]:3090`；Android 也可用
    `adb reverse tcp:3090 tcp:3090` 后填 `http://127.0.0.1:3090`）。
 3. 粘贴桌面端生成的一次性配对码，点「配对并连接」。配对成功后凭证落本地，之后自动重连。
 
