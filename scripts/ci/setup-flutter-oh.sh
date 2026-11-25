@@ -75,6 +75,20 @@ case "$host_os/$host_arch" in
     ;;
 esac
 
+# Flutter-OH 在含 ohos/ 的项目上执行 pub get/build 时会写 ohos/local.properties，
+# 该路径要求 globals.hmosSdk 非空。Android/iOS 构建并不需要真正的 HarmonyOS SDK，
+# 这里用最小目录骨架满足探测，避免在 GitHub runner 上装约 7GB 的完整 SDK。
+# 真正构建 HAP 的 self-hosted job 必须已有 HOS_SDK_HOME/DEVECO_SDK_HOME，绝不覆盖。
+if [ -z "${HOS_SDK_HOME:-}" ] && [ -z "${DEVECO_SDK_HOME:-}" ]; then
+  HOS_STUB="$ROOT/.hos-sdk-stub"
+  mkdir -p "$HOS_STUB/hmscore" "$HOS_STUB/openharmony"
+  export HOS_SDK_HOME="$HOS_STUB"
+  if [ -n "${GITHUB_ENV:-}" ]; then
+    echo "HOS_SDK_HOME=$HOS_STUB" >> "$GITHUB_ENV"
+  fi
+  say "未检测到 HOS SDK：使用空骨架 $HOS_STUB（仅 Android/iOS；HAP 需真 SDK）"
+fi
+
 export FLUTTER_ROOT="$ROOT"
 export PATH="$ROOT/bin:$PATH"
 

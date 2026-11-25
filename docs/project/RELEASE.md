@@ -42,6 +42,12 @@ source /media/wangke/OFFICE/workspace/tools/env.sh
 | `HDC_HOME` / `DEVECO_HOME` / `DEVECO_NODE_HOME` | `tools/ohos-sdk/…` | hdc / ohpm / hvigorw / node |
 | `PUB_HOSTED_URL` / `FLUTTER_STORAGE_BASE_URL` | flutter-io.cn | 国内镜像 |
 
+> CI 的 Android / iOS job 不装完整 HarmonyOS SDK：`scripts/ci/setup-flutter-oh.sh`
+> 在 `HOS_SDK_HOME` / `DEVECO_SDK_HOME` 都未设置时，会在 Flutter-OH 根目录建
+> `.hos-sdk-stub/{hmscore,openharmony}` 空骨架，仅满足 Flutter-OH 写
+> `ohos/local.properties` 时的 SDK 探测；真正构建 HAP 的 self-hosted job
+> 必须提供完整 SDK，脚本不会覆盖已有的 `HOS_SDK_HOME` / `DEVECO_SDK_HOME`。
+
 > ⚠️ 不 source 就构建会用系统 `/usr/lib/android-sdk`，报
 > `LicenceNotAcceptedException: Failed to install the following Android SDK packages ... ndk;28.2.13676358`。
 
