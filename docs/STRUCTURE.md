@@ -172,7 +172,6 @@
 | `app/ios/Runner/DshPlatformChannels.swift` | iOS `dsh/device`（`ianaZone`、Application Support `filesDir`）+ `dsh/platform`（appVersion / AVSpeechSynthesizer TTS / UIActivityViewController 分享 / PHPickerViewController 选图并按魔数落 PNG/JPEG/GIF/WebP、HEIC 等转码、8MiB 上限 / UIDocumentInteractionController 打开文件）；`downloadApk` 返回 -1、`installApk` 返回 false（iOS 走 App Store） |
 | `app/ios/Runner/DshNotifyChannels.swift` | iOS `dsh/notify`：UNUserNotificationCenter 权限/status/requestPermission/openSettings/show/cancel/cancelAll/takeLaunchTap；点击通知回推 `tap`，冷启动存 pending |
 | `app/ios/Runner/Info.plist` | 显示名 DSH Chat + ATS 放行明文 + 本地网络用途说明 |
-| `app/ios/Podfile` | CocoaPods 集成：iOS 15.0、`flutter_ios_podfile_setup`、Runner/RunnerTests 与 Flutter 插件 pod |
 
 ## app/test/
 
