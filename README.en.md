@@ -50,9 +50,8 @@ Left: chat, with Markdown, tool calls, process groups and a “changed N files�
 Middle: the session drawer, with search, date groups, running/waiting/unread filters and the current bridge.
 Right: settings, with connection state, device permissions, appearance and notifications; the device id is redacted.
 
-> Screenshots taken on a HarmonyOS device (ICL-AL10 / API 26 / 1080×2440) on 2026-11-25.
-> Android and HarmonyOS share the same Flutter UI; iOS has the native bridge but has not gone through
-> on-device visual verification yet.
+> Screenshots taken on HarmonyOS hardware (API 26). Android and HarmonyOS share the same Flutter UI;
+> iOS has the native bridge but has not gone through on-device visual verification yet.
 
 ## Features
 
@@ -83,10 +82,10 @@ Right: settings, with connection state, device permissions, appearance and notif
 
 | Platform | Status |
 |---|---|
-| **Android** | **Verified on a vivo V2080A**: pairing, auto-reconnect, streaming, Markdown, tool details, process groups, thinking, question cards, drawer, dark mode and sharing. v1.0.36 APK is 26.6 MB |
-| **iOS** | Native bridge covers IANA time zone, private directory, notifications, TTS, sharing, image picker and file opening. GitHub Actions `macos-15` built an unsigned IPA (run `45613676673`). **Not verified on an iPhone**; updates go through the App Store |
-| **HarmonyOS** | **Flutter-OH build verified on an ICL-AL10 / API 26**: pairing, chat, sessions, sharing, TTS, picker and notifications (including tap-to-return) passed. Installed with a debug-signed HAP; release distribution needs an AGC certificate/profile |
-| Old ArkTS build | In `harmony/`, frozen and being retired; signing material is kept in `harmony/signing/` (not tracked) |
+| **Android** | **Verified on Android hardware**: pairing, auto-reconnect, streaming, Markdown, tool details, process groups, thinking, question cards, drawer, dark mode and sharing. v1.0.36 APK is 26.6 MB |
+| **iOS** | Native bridge covers IANA time zone, private directory, notifications, TTS, sharing, image picker and file opening. CI builds an unsigned IPA. **Not verified on an iPhone**; updates go through the App Store |
+| **HarmonyOS** | **Flutter-OH build verified on HarmonyOS hardware / API 26**: pairing, chat, sessions, sharing, TTS, picker and notifications (including tap-to-return) passed. Release distribution needs an AGC certificate/profile |
+| Old ArkTS build | In `harmony/`, frozen and being retired |
 
 Current version: `app/pubspec.yaml` is `1.0.36+37`, tag `v1.0.36`.
 
@@ -97,9 +96,9 @@ Latest **v1.0.36** (Gitee primary; GitHub mirrors the same tag):
 | Artifact | Size | SHA-256 |
 |---|---|---|
 | [APK](https://gitee.com/westanke/dsh-Chat/releases/download/v1.0.36/dsh-Chat-v1.0.36.apk) | 26,615,566 bytes | `f91c7d37069abb12335a53f52d0f24eb697a8e29859c153b0973513a02369cd1` |
-| [HAP](https://gitee.com/westanke/dsh-Chat/releases/download/v1.0.36/dsh-Chat-v1.0.36-harmony.hap) | 34,553,311 bytes | `2576f8b8da9c34a47d047063d28cb5ca75c346a13dd023ecf02e38663a6f754e` (local release certificate) |
+| [HAP](https://gitee.com/westanke/dsh-Chat/releases/download/v1.0.36/dsh-Chat-v1.0.36-harmony.hap) | 34,553,311 bytes | `2576f8b8da9c34a47d047063d28cb5ca75c346a13dd023ecf02e38663a6f754e` (project release certificate) |
 
-- Android: install the APK directly. Some vivo builds show a risk-interception page; confirm and continue.
+- Android: install the APK directly. Some Android builds show a risk-interception page; confirm and continue.
 - HarmonyOS: the HAP must be signed by a certificate the device trusts. For development use
   `scripts/sign-hap.sh`; for distribution use an AGC certificate and profile.
 - iOS: no App Store build yet. Build an unsigned IPA from source on macOS or in GitHub Actions.
@@ -108,20 +107,18 @@ Latest **v1.0.36** (Gitee primary; GitHub mirrors the same tag):
 
 1. Install and enable [`dsh-remote-bridge`](https://github.com/westanke/dsh-remote-bridge)
    (requires **≥ 2.10.0**, protocol v3) on the desktop, then open **Phone settings → Remote access**.
-2. On the phone, open dsh-Chat and enter the bridge URL, e.g. `http://192.168.1.126:3090`.
-   For an Android device you can also run `adb reverse tcp:3090 tcp:3090` and use
+2. On the phone, open dsh-Chat and enter the bridge URL, e.g. `http://<host>:3090`.
+   On Android you can also run `adb reverse tcp:3090 tcp:3090` and use
    `http://127.0.0.1:3090`.
 3. Paste the one-time pairing code and tap **Pair and connect**. Credentials are stored locally and
    the app reconnects automatically afterwards.
 
 ## Build from source
 
-The toolchain lives in the **workspace** `tools/` directory (`env.sh` is the single entry point;
-it is not part of this repository):
+You need Flutter-OH `3.50.0+ohos-1.3.3`, the Android SDK and JDK 17; building the HarmonyOS HAP also
+needs HarmonyOS SDK API 26. The SDKs are not bundled in this repository.
 
 ```sh
-source ../tools/env.sh
-
 cd app
 flutter pub get
 flutter analyze
@@ -131,9 +128,8 @@ flutter build apk --release --target-platform android-arm64
 flutter build hap --release --no-codesign
 ```
 
-- Use **Flutter-OH `3.50.0+ohos-1.3.3`** (`tools/flutter-oh`). Upstream stable lacks
-  `TargetPlatform.ohos`, so the material_ui/cupertino_ui ohos forks do not compile.
-- Android needs `tools/sdk` and JDK 17; HarmonyOS needs `tools/ohos-sdk` (API 26).
+- Use **Flutter-OH**. Upstream stable lacks `TargetPlatform.ohos`, so the material_ui/cupertino_ui
+  ohos forks do not compile.
 - iOS on macOS: `flutter build ios --release --no-codesign`, then zip `Runner.app/Payload` into an
   unsigned IPA. The CI `macos-15` job already does this.
 
@@ -160,7 +156,7 @@ dsh-Chat/
   app/          ← Flutter project (lib/ has only design/, bridge/, ui/)
   app/ohos/     ← Flutter-OH HarmonyOS host project (bundleName com.dsh.dshchat)
   app/vendor/   ← patched third-party packages (gpt_markdown, see README.dsh.md)
-  harmony/      ← old ArkTS HarmonyOS build (frozen, being retired; signing material kept)
+  harmony/      ← old ArkTS HarmonyOS build (frozen, being retired)
   LICENSE       ← AGPL-3.0
 ```
 
@@ -169,11 +165,11 @@ dsh-Chat/
 - **iOS is not device-verified**: the bridge is implemented and CI builds, but notification taps,
   TTS quality and photo/file permissions still need an iPhone. iOS does not allow in-app installs;
   updates point to the App Store.
-- **HarmonyOS release signing**: a release HAP signed with the local certificate can fail with
+- **HarmonyOS release signing**: a release HAP signed with the project certificate can fail with
   `signature verification failed due to not trusted app source` on some devices. Distribution needs
   an AGC certificate/profile.
-- **App label**: the published v1.0.36 HAP still shows `dshchat` on the launcher (the localized
-  resource was fixed after the release); the source now says `DSH Chat` and the next build will carry it.
+- **App label**: the published v1.0.36 HAP still shows `dshchat` on the launcher; the source now says
+  `DSH Chat` and the next build will carry it.
 - **Toolchain is pinned**: all three platforms share the Flutter-OH SDK; replacing it with upstream
   stable breaks the ohos forks.
 - **Updates**: only Android supports in-app download/install; iOS and HarmonyOS use their stores.
@@ -191,7 +187,8 @@ dsh-Chat/
 - [`dsh-remote-bridge`](https://github.com/westanke/dsh-remote-bridge) — the upstream desktop plugin
   (REST + WS + phone settings); its protocol and minimum version are authoritative (≥ 2.10.0, protocol v3).
 - [`dsh-companion`](https://github.com/westanke/dsh-companion) — the Kotlin/Compose client in the same
-  ecosystem, sharing the same bridge protocol.
+  ecosystem, sharing the same bridge protocol. **No longer maintained or updated**; kept for historical
+  reference only.
 
 ## License
 

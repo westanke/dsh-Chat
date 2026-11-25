@@ -47,8 +47,8 @@
 中：会话抽屉，搜索、日期分组、运行中/待确认/未读筛选，以及当前桥接主机。
 右：设置页，连接状态、设备权限、外观与通知入口；设备 ID 已隐去。
 
-> 截图来自 2026-11-25 鸿蒙真机（ICL-AL10 / API 26 / 1080×2440）。Android 与鸿蒙共用同一套
-> Flutter UI；iOS 已补齐原生桥、尚未做真机视觉验收。
+> 截图来自 HarmonyOS 真机（API 26）。Android 与鸿蒙共用同一套 Flutter UI；
+> iOS 已补齐原生桥、尚未做真机视觉验收。
 
 ## 它能做什么
 
@@ -79,10 +79,10 @@
 
 | 平台 | 现在到哪一步 |
 |---|---|
-| **Android** | **已真机验证**（vivo V2080A）：配对、自动重连、流式对话、Markdown、工具行五态与详情、过程组四档、思考预览、提问卡、抽屉、深色模式、分享。v1.0.36 APK 26.6 MB |
-| **iOS** | 原生桥已补齐 IANA 时区、私有目录、通知、TTS、分享、选图、打开文件；GitHub Actions `macos-15` 已实跑构建出未签名 IPA（run `45613676673`）。**未在 iPhone 真机验证**；安装/更新走 App Store |
-| **HarmonyOS** | **Flutter-OH 版已真机验证**（ICL-AL10 / API 26）：配对、聊天、会话、分享、TTS、选图、通知与点击回跳均通过。安装用 debug 签名 HAP；正式 release HAP 需 AGC 正式签名 |
-| 旧 ArkTS 版 | 在 `harmony/`，已冻结维护、后续退役；签名材料保留在 `harmony/signing/`（不入库） |
+| **Android** | **已真机验证**：配对、自动重连、流式对话、Markdown、工具行五态与详情、过程组四档、思考预览、提问卡、抽屉、深色模式、分享。v1.0.36 APK 26.6 MB |
+| **iOS** | 原生桥已补齐 IANA 时区、私有目录、通知、TTS、分享、选图、打开文件；CI 已构建出未签名 IPA。**未在 iPhone 真机验证**；安装/更新走 App Store |
+| **HarmonyOS** | **Flutter-OH 版已真机验证**（API 26）：配对、聊天、会话、分享、TTS、选图、通知与点击回跳均通过。正式 release HAP 需 AGC 正式签名 |
+| 旧 ArkTS 版 | 在 `harmony/`，已冻结维护、后续退役 |
 
 当前版本：`app/pubspec.yaml` 为 `1.0.36+37`，tag `v1.0.36`。
 
@@ -95,9 +95,9 @@
 | 产物 | 大小 | SHA-256 |
 |---|---|---|
 | [APK](https://gitee.com/westanke/dsh-Chat/releases/download/v1.0.36/dsh-Chat-v1.0.36.apk) | 26,615,566 字节 | `f91c7d37069abb12335a53f52d0f24eb697a8e29859c153b0973513a02369cd1` |
-| [HAP](https://gitee.com/westanke/dsh-Chat/releases/download/v1.0.36/dsh-Chat-v1.0.36-harmony.hap) | 34,553,311 字节 | `2576f8b8da9c34a47d047063d28cb5ca75c346a13dd023ecf02e38663a6f754e`（本地发布证书签名） |
+| [HAP](https://gitee.com/westanke/dsh-Chat/releases/download/v1.0.36/dsh-Chat-v1.0.36-harmony.hap) | 34,553,311 字节 | `2576f8b8da9c34a47d047063d28cb5ca75c346a13dd023ecf02e38663a6f754e`（项目发布证书签名） |
 
-- Android：直接安装 APK；vivo 等机型会弹风险拦截页，勾选确认后继续。
+- Android：直接安装 APK；部分机型会弹风险拦截页，勾选确认后继续。
 - HarmonyOS：HAP 需要设备信任的签名。开发机可用 `scripts/sign-hap.sh` 生成 debug 签名包；
   正式分发需 AGC 证书与 Profile。
 - iOS：暂不提供 App Store 包；可按下方“从源码构建”在 macOS / GitHub Actions 出未签名 IPA。
@@ -111,32 +111,28 @@
 1. 在桌面端安装并启用 [`dsh-remote-bridge`](https://github.com/westanke/dsh-remote-bridge)
    （要求 **≥ 2.10.0**，协议 v3），打开「手机设置 → 远程访问」。
 2. 手机打开 dsh-Chat，进入「连接到 DSH Bridge」页，填 bridge 地址
-   （局域网形如 `http://192.168.1.126:3090`；Android 真机也可先
-   `adb reverse tcp:3090 tcp:3090` 再填 `http://127.0.0.1:3090`）。
+   （局域网形如 `http://<主机地址>:3090`；Android 也可用
+   `adb reverse tcp:3090 tcp:3090` 后填 `http://127.0.0.1:3090`）。
 3. 粘贴桌面端生成的一次性配对码，点「配对并连接」。配对成功后凭证落本地，之后自动重连。
 
 ## 从源码构建
 
-工具链统一在**工作区**的 `tools/`（`env.sh` 是唯一入口；`tools/` 不在本仓内）：
+需要 Flutter-OH `3.50.0+ohos-1.3.3`、Android SDK、JDK 17；构建鸿蒙包还需要 HarmonyOS SDK API 26。仓库不附带这些 SDK。
 
 ```sh
-source ../tools/env.sh
-
 cd app
 flutter pub get             # 依赖变更后必跑
 flutter analyze             # 提交前必绿
 flutter test                # 590 例
 
 flutter build apk --release --target-platform android-arm64
-flutter build hap --release --no-codesign   # 鸿蒙 HAP（本机未签名）
+flutter build hap --release --no-codesign   # 鸿蒙 HAP（未签名）
 ```
 
-- Flutter 必须用 **Flutter-OH `3.50.0+ohos-1.3.3`**（`tools/flutter-oh`）。上游 stable 没有
-  `TargetPlatform.ohos`，material_ui/cupertino_ui 的 ohos fork 编不过。
-- Android 需要 `tools/sdk` 与 JDK 17；鸿蒙需要 `tools/ohos-sdk`（API 26）。
+- Flutter 必须用 **Flutter-OH**。上游 stable 没有 `TargetPlatform.ohos`，
+  material_ui/cupertino_ui 的 ohos fork 编不过。
 - iOS 在 macOS 上：`flutter build ios --release --no-codesign`，再把 `Runner.app/Payload`
   压成未签名 IPA；CI 的 `macos-15` job 已走通。
-- 真机安装时 vivo 会弹风险拦截页，需勾选确认后再点继续安装。
 
 ## CI 与发布
 
@@ -161,7 +157,7 @@ dsh-Chat/
   app/          ← Flutter 工程根（lib/ 下仅 design/、bridge/、ui/ 三个子目录）
   app/ohos/     ← Flutter-OH 鸿蒙宿主工程（bundleName com.dsh.dshchat）
   app/vendor/   ← 本仓打补丁的第三方包（gpt_markdown，见其 README.dsh.md）
-  harmony/      ← 旧 ArkUI 原生鸿蒙版（已冻结维护、后续退役，签名材料保留）
+  harmony/      ← 旧 ArkUI 原生鸿蒙版（已冻结维护、后续退役）
   LICENSE       ← AGPL-3.0 全文
 ```
 
@@ -182,10 +178,10 @@ dsh-Chat/
 
 - **iOS 未真机验收**：原生桥已实现、CI 构建通过，但通知点击、TTS 音质、相册/文件权限等仍需
   iPhone 实机确认；iOS 不允许 App 内安装，更新只提示 App Store。
-- **鸿蒙正式签名**：release HAP 用本地发布证书签名时，部分设备会报
+- **鸿蒙正式签名**：release HAP 用发布证书签名时，部分设备会报
   `signature verification failed due to not trusted app source`；正式分发需 AGC 证书/Profile。
-- **应用名**：v1.0.36 已发布 HAP 的桌面名仍是 `dshchat`（本地化资源在发版后修复），
-  源码已改为 `DSH Chat`，下个版本重打生效。
+- **应用名**：v1.0.36 已发布 HAP 的桌面名仍是 `dshchat`；源码已改为 `DSH Chat`，
+  下个版本重打生效。
 - **工具链锁定**：三端共用 Flutter-OH SDK；不要用上游 stable 替换，否则 ohos fork 依赖编译失败。
 - **更新方式**：只有 Android 支持 App 内下载安装；iOS / 鸿蒙走各自应用商店。
 
@@ -202,7 +198,7 @@ dsh-Chat/
 - [`dsh-remote-bridge`](https://github.com/westanke/dsh-remote-bridge) —— 本仓的上游，桌面端插件
   （REST + WS + 手机设置面板）；协议与最低版本要求以它为准（当前要求 ≥ 2.10.0 / 协议 v3）。
 - [`dsh-companion`](https://github.com/westanke/dsh-companion) —— 同生态的 Kotlin/Compose 客户端，
-  与本仓共用同一套 bridge 协议。
+  与本仓共用同一套 bridge 协议；**已停止维护更新**，仅作历史参考。
 
 ## 许可证
 
