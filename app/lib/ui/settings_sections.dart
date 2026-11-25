@@ -392,7 +392,8 @@ class _AboutSectionState extends State<_AboutSection> {
           title: '版本 ${_version ?? '…'}',
           subtitle: '自动读取构建注入的 app/pubspec.yaml version',
         ),
-        _UpdateCheckRow(colors: c),        _InfoRow(
+        _UpdateCheckRow(colors: c),
+        _InfoRow(
           colors: c,
           icon: Icons.cable_outlined,
           title: '$_subprotocol · protocol $_helloProtocol',

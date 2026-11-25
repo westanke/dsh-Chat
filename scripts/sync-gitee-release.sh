@@ -22,7 +22,8 @@ GH_TOKEN="$(printf 'protocol=https\nhost=github.com\n\n' | git credential fill |
 GE_TOKEN="$(printf 'protocol=https\nhost=gitee.com\n\n' | git credential fill | sed -n 's/^password=//p')"
 [[ -n "$GH_TOKEN" && -n "$GE_TOKEN" ]] || { echo "git credential 缺 github/gitee token" >&2; exit 1; }
 
-TMP="$(mktemp -d)"
+mkdir -p artifacts
+TMP="$(mktemp -d "artifacts/.tmp-sync-XXXXXX")"
 trap 'rm -rf "$TMP"' EXIT
 
 # 1) 下载 GitHub artifacts 并解出产物

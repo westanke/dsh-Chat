@@ -9,7 +9,6 @@
 /// 完成后自动拉起安装（与设置页同一套平台通道）。
 library;
 
-import 'package:flutter/foundation.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -42,8 +41,17 @@ bool shouldPromptUpdate({
 
 /// 启动后调用（须在 Navigator 就绪后，一般由 `addPostFrameCallback` 触发）。
 /// 静默失败：网络不通/版本读不到都不打扰启动流程。
+///
+/// 2026-11-25 三端口径：
+/// - Android：走系统 DownloadManager 下载 APK，完成后自动拉起安装；
+/// - 鸿蒙：不能自更新（应用市场审核制），只提示「去应用市场更新」，不弹下载框；
+/// - iOS：同样只能去 App Store，同样只提示。
 Future<void> checkUpdateOnLaunch(BuildContext context) async {
-  if (defaultTargetPlatform != TargetPlatform.android) return;
+  if (!DshPlatform.supportsInAppUpdate) {
+    // 非 Android：不能自更新（鸿蒙走 AppGallery、iOS 走 App Store），
+    // 不在启动时打扰——设置页「检查更新」会给出对应的提示文案。
+    return;
+  }
   final local = await DshPlatform.appVersion();
   if (local == null || local.isEmpty) return;
   final ReleaseInfo latest;

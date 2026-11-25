@@ -168,8 +168,11 @@
 | `app/android/app/src/main/kotlin/.../NotificationHelper.kt` | 系统通知（dsh-go 通知模式的原生落地）：两条通道 `done`（IMPORTANCE_LOW 静音）/`attention`（IMPORTANCE_HIGH 响铃）、`ensureChannels` 幂等建通道、`canPost`（Android 13+ 运行时权限 && 系统总开关）、`show`（NotificationCompat + key 哈希去重 + PendingIntent 带 sessionId/action SINGLE_TOP）、`cancel`/`cancelAll`、`openSettings`（APP_NOTIFICATION_SETTINGS） | |
 | `app/android/app/src/main/kotlin/.../ImagePickHelper.kt` | 选图字节处理（华为 HEIC 修复，从 MainActivity 拆出控行数）：`sniffMediaType`（与 bridge `image-handoff.ts` 同魔数表）/ `supportedMediaTypes`（内核 4 种）/ `prepare`（内核不收的格式走 `BitmapFactory` 解码 → JPEG/PNG 重编码，带 alpha 编 PNG，8MiB 上限，超大图仅降采样防 OOM）/ `cacheFileName`（不拼 DISPLAY_NAME）/ `displayName`（净化 + 真实扩展名）；对齐 dsh-companion `ImageTranscoder.kt` | |
 | `app/android/app/src/main/AndroidManifest.xml` | `INTERNET` 权限 + `REQUEST_INSTALL_PACKAGES`（应用内更新拉起安装器，第三轮反馈 2）+ `usesCleartextTraffic`（bridge 走 ws:// 明文）+ queries 包可见性（PROCESS_TEXT + apk mime 的 ACTION_VIEW） |
-| `app/ios/Runner/AppDelegate.swift` | 同款 `dsh/device#ianaZone` 通道（iOS `TimeZone.current.identifier`） |
+| `app/ios/Runner/AppDelegate.swift` | 注册三个 MethodChannel（`dsh/device`、`dsh/platform`、`dsh/notify`）+ 设置 `UNUserNotificationCenter` delegate；不再承载具体方法实现 |
+| `app/ios/Runner/DshPlatformChannels.swift` | iOS `dsh/device`（`ianaZone`、Application Support `filesDir`）+ `dsh/platform`（appVersion / AVSpeechSynthesizer TTS / UIActivityViewController 分享 / PHPickerViewController 选图并按魔数落 PNG/JPEG/GIF/WebP、HEIC 等转码、8MiB 上限 / UIDocumentInteractionController 打开文件）；`downloadApk` 返回 -1、`installApk` 返回 false（iOS 走 App Store） |
+| `app/ios/Runner/DshNotifyChannels.swift` | iOS `dsh/notify`：UNUserNotificationCenter 权限/status/requestPermission/openSettings/show/cancel/cancelAll/takeLaunchTap；点击通知回推 `tap`，冷启动存 pending |
 | `app/ios/Runner/Info.plist` | 显示名 DSH Chat + ATS 放行明文 + 本地网络用途说明 |
+| `app/ios/Podfile` | CocoaPods 集成：iOS 15.0、`flutter_ios_podfile_setup`、Runner/RunnerTests 与 Flutter 插件 pod |
 
 ## app/test/
 
@@ -438,6 +441,60 @@
 | `harmony/scripts/package.sh` | 双闸门打包：node 单测 + hvigorw assembleHap（未签名）→ dist/ + SHA256SUMS |
 | `harmony/scripts/toolchain-env.sh` | 工具链环境（ROOT 可用 `DSH_HARMONY_TOOLCHAIN_ROOT` 覆盖，缺省共享 _toolchain） |
 | `harmony/scripts/install-harmony-toolchain.sh` | 工具链国内源部署脚本（可重放，分钟级） |
+
+## app/ohos/（Flutter-OH 鸿蒙宿主工程）
+
+> Flutter 一套代码三平台的**鸿蒙宿主工程**，2026-11-25 起。SDK 是
+> **Flutter-OH `3.50.0+ohos-1.3.3`**（`tools/flutter-oh`），上游 Flutter 编不过
+> `case TargetPlatform.ohos:`（`AGENTS.md` §11）。Dart 业务代码在 `app/lib/`，
+> 本目录只有「鸿蒙侧」：工程配置 + 三个自研 MethodChannel 插件。
+> ets 源码按 `ohos/ets/` 内相对路径登记（`scripts/ci/docs-check.sh` 第 1c 条机检）。
+>
+> 旧 ArkUI 原生版在 `harmony/`（冻结维护、后续退役，签名材料保留）。
+
+### 工程配置
+
+| 文件 | 用途 |
+|---|---|
+| `ohos/AppScope/app.json5` | 应用级配置：bundleName `com.dsh.dshchat`（与 Android applicationId 同名同源，§2）、vendor `dsh`、versionCode 37 / versionName 1.0.36（对齐 `app/pubspec.yaml`）、icon / label |
+| `ohos/AppScope/resources/base/element/string.json` | 应用级字符串：`app_name` = `DSH Chat` |
+| `ohos/AppScope/resources/base/media/app_icon.png` | 应用级图标（1024×1024，AGC 上架审核要求） |
+| `ohos/build-profile.json5` | 工程级构建配置：products[default] 的 `compatibleSdkVersion` / `targetSdkVersion` = **26.0.0**、`runtimeOS` HarmonyOS、buildModeSet debug/profile/release；`app.signingConfigs`（签名配置，本机为空 → 构建须 `--no-codesign`） |
+| `ohos/oh-package.json5` | 工程级依赖（modelVersion 5.1.0 / name dshchat）；`devDependencies` 含 `@ohos/hypium`（ohosTest 用） |
+| `ohos/hvigorfile.ts` / `ohos/hvigorconfig.ts` | hvigor 构建脚本；`hvigorconfig.ts` 调 `injectNativeModules`（把 Flutter 引擎模块与插件模块挂进工程） |
+| `ohos/hvigor/hvigor-config.json5` | hvigor 工程配置（构建模式、产物输出目录） |
+| `ohos/entry/build-profile.json5` | entry 模块构建配置：targets = default + ohosTest |
+| `ohos/entry/hvigorfile.ts` | entry 模块 hvigor 脚本 |
+| `ohos/entry/oh-package.json5` | entry 模块依赖（name entry） |
+| `ohos/entry/src/main/module.json5` | entry 模块清单：deviceTypes phone/tablet/2in1、abilities[EntryAbility]、`requestPermissions`（INTERNET + 通知相关） |
+| `ohos/entry/src/main/resources/base/profile/main_pages.json` | 页面路由（`pages/Index`） |
+| `ohos/entry/src/main/resources/base/element/color.json` / `string.json` | 模块级颜色与字符串（start_window_background / module_desc / EntryAbility_label 等） |
+| `ohos/entry/src/main/resources/base/media/icon.png` | 模块级图标（**必须与 AppScope 的资源名不同**，否则覆盖应用级图标） |
+| `ohos/entry/src/main/resources/{en_US,zh_CN}/element/string.json` | 多语言文案 |
+| `ohos/entry/src/main/resources/rawfile/buildinfo.json5` | 引擎参数：`{"string":[{"name":"enable_impeller","value":"true"}]}` |
+| `ohos/entry/src/ohosTest/**` | DevEco 生成的空测试脚手架（9 个文件，未启用） |
+| `ohos/.gitignore` / `ohos/entry/.gitignore` | 忽略构建产物、`oh_modules/`、`.hvigor/`、`local.properties`、`package.json`、`flutter_assets/`、生成的 `GeneratedPluginRegistrant.ets` |
+
+### entry/src/main/ets（鸿蒙侧源码）
+
+| 文件 | 用途 |
+|---|---|
+| `ohos/ets/entryability/EntryAbility.ets` | 鸿蒙 Ability（继承 `FlutterAbility`）：`configureFlutterEngine` 里调 `GeneratedPluginRegistrant.registerWith`（自动注册 shared_preferences / url_launcher 两个 ohos 插件）**并手动 addPlugin 三个自研插件**；`onNewWant` 把通知点击的 Want 载荷交给 `DshNotifyPlugin`（冷启动与后台点击两条路径） |
+| `ohos/ets/pages/Index.ets` | 鸿蒙首页：`FlutterPage` 承载 Flutter 视图；`onBackPress` 用 `eventHub.emit('EVENT_BACK_PRESS')` 交回 Flutter 处理（返回 true 表示已消费） |
+| `ohos/ets/plugins/DshDevicePlugin.ets` | 自研通道 `dsh/device`：`ianaZone`（`i18n.getTimeZone().getID()`，回退 Intl、再回退 'UTC'）、`filesDir`（沙盒绝对路径，Dart 侧据此写日志文件；鸿蒙引擎不做 chdir，Dart 拿不到 context 路径） |
+| `ohos/ets/plugins/DshPlatformPlugin.ets` | 自研通道 `dsh/platform` 9 方法：`appVersion` / `speak` / `stopSpeak` / `share` / `pickImage` / `downloadApk` / `downloadStatus` / `installApk` / `openFile`（与 Android `MainActivity.kt` 同口径；`downloadApk`/`installApk` 鸿蒙无对应物，回 -1 / null） |
+| `ohos/ets/plugins/DshNotifyPlugin.ets` | 自研通道 `dsh/notify` 8 方法 + 1 回推：`ensureChannels` / `status` / `requestPermission` / `openSettings` / `show` / `cancel` / `cancelAll` / `takeLaunchTap`，以及原生 → Dart 的 `tap` 回推（通知点击载荷，格式对齐 Android `NotificationHelper` 的 EXTRA_* 常量） |
+| `ohos/ets/platform/Dlog.ets` | hilog 封装（domain 0xD5C0 / TAG `Dsh`），禁 `print`（§7 ArkTS 条款） |
+| `ohos/ets/platform/Tts.ets` | CoreSpeechKit 语音合成（**必须先 `setListener` 再 `speak`**；`CreateEngineParams.online` 是 0=在线 / 1=离线） |
+| `ohos/ets/platform/PhotoPick.ets` | 系统相册选图（`photoAccessHelper.PhotoViewPicker`）+ 读字节（8MiB 上限、魔数嗅探、Base64Helper） |
+| `ohos/ets/platform/Share.ets` | 系统分享（`@kit.ShareKit` 的 `systemShare.SharedRecord`；拿不到退 Want `ohos.want.action.sendData`） |
+| `ohos/ets/core/ImageMediaType.ts` | 纯逻辑层（.ts，不 import @kit）：图片类型白名单与魔数嗅探（PNG/JPEG/GIF/WEBP/BMP/HEIC/AVIF），与 Dart 侧 `image_media_type_test.dart` 同口径 |
+
+### app/vendor/
+
+| 目录 | 用途 |
+|---|---|
+| `vendor/gpt_markdown/` | 打补丁的第三方包（1.4.1）：`lib/shared_render.dart` 的穷尽 `switch (platform)` 补 `case TargetPlatform.ohos:`（否则鸿蒙端编译失败）；补丁原因与上游版本记在 `vendor/gpt_markdown/README.dsh.md` |
 
 ## bridge 协议引用
 

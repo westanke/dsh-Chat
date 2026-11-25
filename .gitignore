@@ -86,3 +86,23 @@ harmony/local.properties
 *.har
 *.hsp
 artifacts/*.ipa
+
+# ── HarmonyOS（app/ohos/，Flutter-OH 三端共用工程）────────────────────────
+# 本机绝对路径（hwsdk.dir / flutter.sdk），到别人机器上必错。
+app/ohos/local.properties
+# hvigor / ohpm / node 构建产物与依赖
+app/ohos/oh_modules/
+app/ohos/.hvigor/
+app/ohos/build/
+app/ohos/entry/build/
+app/ohos/node_modules/
+app/ohos/entry/oh_modules/
+app/ohos/entry/.hvigor/
+app/ohos/.idea/
+app/ohos/.vscode/
+# Flutter 工具自动生成（含本机路径与插件注册代码，随 pub get 重建）
+app/ohos/oh-package-lock.json5
+app/ohos/package-lock.json
+# 签名材料与配置（绝不入库）
+app/ohos/signing/
+app/ohos/entry/signing/

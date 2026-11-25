@@ -36,7 +36,7 @@ jobs:
           MIRROR_PAT: ${{ secrets.MIRROR_PAT }}
         run: |
           set -euo pipefail
-          WORK="$(mktemp -d)"
+          WORK="$(mktemp -d "${RUNNER_TEMP:?}/dsh-mirror-XXXXXX")"
           trap 'rm -rf "$WORK"' EXIT
           SRC_LABEL=""
           SRC_URL=""

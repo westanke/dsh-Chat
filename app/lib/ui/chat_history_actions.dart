@@ -70,6 +70,9 @@ int? _seqOf(Map<String, dynamic> event) {
 Future<void> reloadChatHistory(ChatState state) async {
   final id = state.sessionId;
   if (id == null || id.isEmpty) return;
+  // 同一代次只认最后一次请求：切会话/快速刷新时旧应答直接丢弃，
+  // 避免 A→B→A 时旧 A 的慢应答被当成当前 A 的历史。
+  final requestId = ++state.historyRequestId;
   try {
     // 首屏页从 200 降到 80（2026-11-23 真机：隧道模式下「打开会话很慢 / 加载历史超时」）。
     //
@@ -77,7 +80,9 @@ Future<void> reloadChatHistory(ChatState state) async {
     // 约 1/3，配上桥侧的 permessage-deflate（约 19.5%）与隧道 90s 超时，打开会话不再卡在
     // 「等一个大帧」上。往下翻仍然一次 200 条（`loadOlderMessages`），滚动体验不变。
     final page = await state.gateway.history(id, maxMessages: 80);
-    if (id != state.sessionId) return; // 过期应答：期间切了会话，整块丢弃
+    if (requestId != state.historyRequestId || id != state.sessionId) {
+      return; // 过期应答：期间切了会话或又发起了新刷新，整块丢弃
+    }
     DshLog.w('ui history id=$id items=${page.items.length} '
         'raw=${page.rawEvents.length} '
         'projections=${page.projections != null} '
@@ -109,6 +114,8 @@ Future<void> reloadChatHistory(ChatState state) async {
     }
     state.notifyUi();
   } on RequestException catch (e) {
+    // 过期失败同样不能污染新会话的错误条。
+    if (requestId != state.historyRequestId || id != state.sessionId) return;
     // 断链本身不是「加载失败」：顶栏已有连接态，重连成功会自动重拉。
     // 不写错误条，避免把一次自动可恢复的抖动报成红字（2026-11-21 工单 1）。
     if (e.code == 'NOT_CONNECTED') {
@@ -139,6 +146,7 @@ Future<void> loadOlderMessages(ChatState state) async {
   final before = oldestSeqOf(state);
   if (before == null || before <= 0) return;
   state.loadingOlder = true;
+  final requestId = ++state.historyRequestId;
   state.notifyUi();
   try {
     final page = await state.gateway.history(
@@ -148,7 +156,9 @@ Future<void> loadOlderMessages(ChatState state) async {
     );
     DshLog.w('ui history-older id=$id before=$before '
         'items=${page.items.length} hasMore=${page.hasMore}');
-    if (id != state.sessionId) return; // 翻页期间切了会话：丢弃
+    if (requestId != state.historyRequestId || id != state.sessionId) {
+      return; // 翻页期间切了会话或又刷新了：丢弃
+    }
     final known = state.messages
         .where((m) => m.seq >= 0)
         .map((m) => m.seq)
@@ -166,6 +176,7 @@ Future<void> loadOlderMessages(ChatState state) async {
     if (page.truncated) state.historyTruncated = true;
     state.notifyUi();
   } on RequestException catch (e) {
+    if (requestId != state.historyRequestId || id != state.sessionId) return;
     state.lastError = '加载更早消息失败：${e.message}';
     state.notifyUi();
   } finally {

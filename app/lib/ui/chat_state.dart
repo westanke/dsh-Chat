@@ -108,6 +108,16 @@ class ChatState extends ChangeNotifier
   @override
   String? sessionId;
   String? _pendingSessionId;
+
+  /// 历史请求代次：切会话/新建会话时递增，旧会话的慢应答回来直接丢弃。
+  /// 只靠 `id != sessionId` 不够：A→B→A 快速往返时，旧 A 应答会被误认成
+  /// 当前 A 的历史，和正在执行的会话串台。
+  int historyRequestId = 0;
+
+  /// 首屏历史正在加载：切会话时先清空 messages 防串台，但空态不能直接
+  /// 当成「新对话」——历史可能要几秒才回来，期间应显示加载态。
+  bool loadingHistory = false;
+
   @override
   List<DshSession> sessions = [];
   List<ChatMessage> messages = [];
@@ -191,7 +201,7 @@ class ChatState extends ChangeNotifier
   @override
   String? lastError;
 
-  bool get isEmpty => !streaming && messages.isEmpty;
+  bool get isEmpty => !streaming && !loadingHistory && messages.isEmpty;
 
   // ---- 对外动作 ----
 
@@ -226,6 +236,17 @@ class ChatState extends ChangeNotifier
     // （真机 2026-11-23：命令结果卡跨会话串台，只有重进会话才消失）。
     commandCards.remove(s.id);
     sessionId = s.id;
+    // 旧会话的发送回执/事件还在路上：切走后一律不认。
+    // 不这么做时，A 在执行的 delta/committed 仍会因为 _pendingSessionId
+    // 指回 A 而写进 B 页；而历史重拉又会拿 B 的 fresh 和 A 的 messages
+    // 做 merge，把 A 的旧消息当「已翻出来的更早历史」保留下来。
+    _pendingSessionId = null;
+    // 切会话必须先清 messages：reloadChatHistory 会把 previous 里 seq 更小的
+    // 消息当同会话旧页保留。B 的 fresh 首条 seq 若大于 A 的旧消息，A 的
+    // 历史就会被整段前置到 B 页（真机：执行中的会话切到别的会话，看到的是
+    // 执行中会话的历史）。
+    messages = [];
+    historyRequestId++; // 作废 A 的历史请求；下一次 reload 会拿到新代次
     // 切会话先清空原始事件/投影：防止上一会话的团队/TODO 串台
     // （reloadHistory 里 projections 缺席时会保留上一份）。
     rawEvents = [];
@@ -241,14 +262,24 @@ class ChatState extends ChangeNotifier
     // newChat() 一直有 _clearStream()，openSession 漏了。
     streaming = false;
     _clearStream();
-    // 先用清空态渲染新会话页（history 网络往返期间不显示旧会话残留）。
+    loadingHistory = true;
+    // 先用加载态渲染新会话页（history 网络往返期间不显示旧会话残留，
+    // 也不要把空列表误显示成「新对话」）。
     notifyListeners();
     _gateway.subscribe(s.id);
     // REST 兜底拉一次挂起提问（含内核 continued）：WS replay 只补本桥前台
     // 挂起表，内核 continued（限时提问）只有 REST 看得到。fire-and-forget，
     // 失败静默（打断换会话的代价大于漏一张兜底卡）。
     unawaited(_refreshPendingQuestions(s.id));
-    await reloadHistory();
+    try {
+      await reloadHistory();
+    } finally {
+      // 只有仍停在这个会话时才清掉加载态；期间又切走的话由新会话接管。
+      if (sessionId == s.id) {
+        loadingHistory = false;
+        notifyListeners();
+      }
+    }
     unawaited(loadChatQueue(this));
     // 模型 chip 的文案跟着会话走（服务端 models 帧的 current.model）。
     await refreshModelLabel();
@@ -265,6 +296,9 @@ class ChatState extends ChangeNotifier
 
   Future<void> newChat() async {
     sessionId = null;
+    _pendingSessionId = null;
+    historyRequestId++; // 作废上一会话仍在路上的历史应答
+    loadingHistory = false; // 新对话没有待加载的历史
     streaming = false; // 生成中标记属于上一会话，不清会带成新会话的空「生成中」
     messages = [];
     commandCards.clear(); // 新对话不继承上一会话的命令卡
@@ -324,6 +358,8 @@ class ChatState extends ChangeNotifier
     streaming = true;
     maxTokensNotice = false;
     notifyListeners();
+    // 发送期间用户可能切走：这个值在 try 外声明，catch 里也能判断回执属不属于当前视图。
+    String? viewSessionId = sessionId;
     try {
       DshLog.w('ui send start sid=$sessionId mode=$mode');
       // 建会话通道：选了目录走 session-create{rootId,cwd}；否则落手机工作区。
@@ -360,6 +396,9 @@ class ChatState extends ChangeNotifier
           }
         }
       }
+      // 发送期间用户可能已经切到别的会话：请求仍落在发送时那个会话，
+      // 但回执不能把当前视图抢回去，也不能把 follow 流重订到旧会话。
+      viewSessionId = sessionId;
       final sid = await _gateway.sendText(
         sessionId: sessionId,
         text: trimmed,
@@ -369,13 +408,29 @@ class ChatState extends ChangeNotifier
             : imageParts,
       );
       DshLog.w('ui send done sid=$sid');
+      if (sessionId != viewSessionId) {
+        DshLog.w('ui send reply ignored (view switched '
+            '${viewSessionId ?? "new"} -> ${sessionId ?? "new"})');
+        _pendingSessionId = null;
+        return;
+      }
       if (sessionId == null && sid != null) {
         sessionId = sid;
         _pendingSessionId = sid;
       }
+      // 回执已到，sessionId 已确定；不再需要 pending 兜底。
+      _pendingSessionId = null;
       _gateway.subscribe(sessionId);
       DshLog.w('ui subscribed sid=$sessionId');
     } on RequestException catch (e) {
+      // 用户已切走：失败不能把错误条/流式态写到新会话上。
+      if (sessionId != viewSessionId) {
+        DshLog.w('ui send FAIL ignored (view switched '
+            '${viewSessionId ?? "new"} -> ${sessionId ?? "new"})');
+        _pendingSessionId = null;
+        return;
+      }
+      _pendingSessionId = null;
       DshLog.w('ui send FAIL ${e.code} ${e.message}');
       streaming = false;
       lastError = '发送失败：${e.message}';

@@ -1,6 +1,6 @@
 import 'package:flutter/services.dart';
 
-/// 原生设备信息通道：IANA 时区名。
+/// 原生设备信息通道：IANA 时区名 + 应用私有目录。
 ///
 /// bridge 校验 clientTimeZone 必须是 "UTC" 或 IANA Area/Location
 /// （dsh-remote-bridge src/host/bff-schedule.ts:488 IANA_ZONE 正则）；
@@ -14,6 +14,13 @@ class DshDevice {
   /// 当前 IANA 时区名；通道不可用时回退 'UTC'（合法但显示时间会用零区）。
   static String ianaZone = 'UTC';
 
+  /// 应用私有目录（原生 context.filesDir）。
+  ///
+  /// 2026-11-25：鸿蒙端 Dart 拿不到沙盒绝对路径（引擎不设 cwd），
+  /// 文件日志要落在私有目录就得由原生回传；通道不可用时为 null
+  /// （调用方退回相对路径 / 静默跳过）。
+  static String? filesDir;
+
   static Future<void> init() async {
     try {
       final zone = await _channel.invokeMethod<String>('ianaZone');
@@ -22,6 +29,14 @@ class DshDevice {
       // 保留 'UTC' 回退。
     } on MissingPluginException {
       // 测试环境无插件，保留回退。
+    }
+    try {
+      final dir = await _channel.invokeMethod<String>('filesDir');
+      if (dir != null && dir.isNotEmpty) filesDir = dir;
+    } on PlatformException {
+      // 保留 null 回退。
+    } on MissingPluginException {
+      // 测试环境无插件，保留 null 回退。
     }
   }
 }

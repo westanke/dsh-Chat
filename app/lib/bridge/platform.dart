@@ -1,15 +1,39 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 /// 原生平台能力通道：系统 TTS 朗读与系统分享（真机反馈 2026-11-04）。
 ///
 /// 调用系统资源、零第三方依赖：Android 走 TextToSpeech +
 /// Intent.ACTION_SEND createChooser（MainActivity.kt 的 dsh/platform）；
-/// iOS 未实现时 invokeMethod 抛 MissingPluginException / notImplemented，
-/// 调用方 catch 后走「暂不支持」提示（与宪法 §9 未验证不写已完成一致）。
+/// iOS 走 AVSpeechSynthesizer + UIActivityViewController + PHPickerViewController
+/// （AppDelegate 注册的 DshPlatformChannels.swift）。通道不可用时调用方
+/// catch 后走「暂不支持」提示（与宪法 §9 未验证不写已完成一致）。
 class DshPlatform {
   DshPlatform._();
 
   static const MethodChannel _channel = MethodChannel('dsh/platform');
+
+  /// 能否在 App 内完成「下载新版 + 拉起安装」全流程。
+  ///
+  /// 只有 Android 走系统 DownloadManager 能做到。鸿蒙是应用市场审核制
+  /// （装 HAP / 升级都要走市场），iOS 是 App Store 分发 —— 两端都只能
+  /// 提示用户去对应商店升级（2026-11-25 三端统一口径）。
+  static bool get supportsInAppUpdate =>
+      defaultTargetPlatform == TargetPlatform.android;
+
+  /// 升级要去的应用商店名（提示文案用；Android 不需要）。
+  static String get updateStoreName {
+    switch (defaultTargetPlatform) {
+      case TargetPlatform.ohos:
+        return '华为应用市场（AppGallery）';
+      case TargetPlatform.iOS:
+        return 'App Store';
+      case TargetPlatform.android:
+        return '应用商店';
+      default:
+        return '应用商店';
+    }
+  }
 
   /// 本机安装版本（"versionName+versionCode"，如 1.0.14+15）。
   ///
@@ -34,7 +58,7 @@ class DshPlatform {
     } on PlatformException {
       // 原生侧异常：落 null 降级。
     } on MissingPluginException {
-      // iOS 未实现 / 测试环境无 handler：落 null 降级。
+      // 测试环境无 handler：落 null 降级。
     }
     return _cachedVersion;
   }

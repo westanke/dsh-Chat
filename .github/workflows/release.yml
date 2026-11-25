@@ -5,9 +5,18 @@ name: Release
 #   - 打 tag（约定 v<versionName>，如 v1.0.14；versionCode 在 pubspec.yaml 里 +1）
 #   - 或手动 workflow_dispatch（试跑/重跑）
 # 产物为 workflow artifact（私有仓库登录 GitHub 后在 Actions 页下载）：
-#   - android：arm64-v8a universal APK（build.gradle.kts 已砍 32 位与 x86_64）
-#   - ios：未签名 IPA（本机无苹果环境；侧载工具 Sideloadly/AltStore/爱思助手安装）
-#     CI 里 --no-codesign 构建，未签名不能直接 Xcode 分发，但足够侧载签名。
+#   - android：arm64-v8a APK（build.gradle.kts 已砍 32 位与 x86_64）
+#   - ios：未签名 IPA（macos-15 arm64 runner；--no-codesign，侧载工具签名后安装）
+#   - harmony：可选 job，只有配置了 self-hosted runner + vars.BUILD_HAP=true 才跑
+#     （GitHub 托管 runner 没有 7GB 的 HarmonyOS SDK；本机 HAP 走 scripts/release.sh）
+#
+# 三个 job 都必须用 Flutter-OH，不能用 subosito/flutter-action 的上游 3.50.0：
+# material_ui/cupertino_ui 是 CPF ohos fork，代码里有 TargetPlatform.ohos，
+# 上游 SDK 没有这个枚举，Android/iOS 都会在编译期失败。
+# iOS 引擎工件（engine.version 371f77202a）在 Google Flutter storage 有
+# ios/artifacts.zip 与 ios-release/artifacts.zip；macOS 宿主工件也有
+# darwin-arm64/artifacts.zip。OH-Flutter 只发 darwin-arm64 定制 Dart SDK，
+# 所以 iOS job 必须用 Apple Silicon runner（macos-15）。
 
 on:
   push:
@@ -26,12 +35,9 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      # 注意 flutter-action@v2 的参数名是 flutter-version（写 version 会被静默忽略）
-      - uses: subosito/flutter-action@v2
-        with:
-          flutter-version: 3.50.0
-          channel: stable
-          cache: true
+      - name: 引导 Flutter-OH SDK
+        working-directory: ${{ github.workspace }}
+        run: bash scripts/ci/setup-flutter-oh.sh
 
       - name: 版本号核对（发版必须升版本）
         run: |
@@ -69,7 +75,7 @@ jobs:
             echo "::warning::未配置 KEYSTORE_BASE64 等 Secrets，回落 debug 签名"
           fi
 
-      - run: flutter build apk --release
+      - run: flutter build apk --release --target-platform android-arm64
         working-directory: app
 
       - name: 重命名产物
@@ -83,15 +89,24 @@ jobs:
 
   ios:
     name: iOS IPA (unsigned)
+    # macos-15 是 Apple Silicon（arm64）；OH-Flutter 只发 darwin-arm64 定制 Dart SDK。
+    # 不要改成 macos-13 / macos-15-intel（x64 没有定制 Dart SDK，bootstrap 会报 ohosArm）。
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
 
-      - uses: subosito/flutter-action@v2
-        with:
-          flutter-version: 3.50.0
-          channel: stable
-          cache: true
+      - name: 确认 Apple Silicon runner
+        run: |
+          arch="$(uname -m)"
+          echo "runner arch=$arch"
+          if [ "$arch" != "arm64" ]; then
+            echo "::error::iOS job 需要 arm64 macOS runner（OH-Flutter 无 darwin-x64 定制 Dart SDK）"
+            exit 1
+          fi
+
+      - name: 引导 Flutter-OH SDK
+        working-directory: ${{ github.workspace }}
+        run: bash scripts/ci/setup-flutter-oh.sh
 
       - name: 版本号核对（发版必须升版本）
         run: |
@@ -109,8 +124,11 @@ jobs:
       - run: flutter pub get
         working-directory: app
 
-      # 无签名构建（无证书）；Podfile 平台版本由 flutter 生成
-      - run: flutter build ios --release --no-codesign
+      # 无签名构建（无证书）；Podfile 平台版本由 flutter 生成。
+      # 首次会从 storage.googleapis.com 拉 ios/ios-release 引擎（约 226MB），
+      # 并跑 pod install；GitHub runner 需要 CocoaPods（macos-15 镜像自带）。
+      - name: 构建 iOS（未签名）
+        run: flutter build ios --release --no-codesign
         working-directory: app
 
       - name: 打包未签名 IPA
@@ -124,4 +142,49 @@ jobs:
         with:
           name: ios-ipa
           path: dshchat-*-ios-unsigned.ipa
+          if-no-files-found: error
+
+  # 可选：只有自建 runner（已装 HarmonyOS API 26 SDK）才跑。
+  # 不配 vars.BUILD_HAP 时该 job 直接 skipped，不影响 Android/iOS 发版。
+  # 本机发版仍以 scripts/release.sh 为准（会构建 HAP + 可选签名）。
+  hap:
+    name: HarmonyOS HAP (self-hosted, optional)
+    if: ${{ vars.BUILD_HAP == 'true' }}
+    runs-on: [self-hosted, linux, harmonyos]
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 检查自建 runner 工具链
+        run: |
+          set -euo pipefail
+          : "${FLUTTER_ROOT:?self-hosted runner 需要设置 FLUTTER_ROOT（指向 tools/flutter-oh）}"
+          : "${DEVECO_SDK_HOME:?self-hosted runner 需要设置 DEVECO_SDK_HOME（API 26）}"
+          "$FLUTTER_ROOT/bin/flutter" --version
+
+      - name: 版本号核对
+        run: |
+          VER=$(grep -oP '^version: \K.*' app/pubspec.yaml)
+          echo "HAP_VERSION=$VER" >> "$GITHUB_ENV"
+
+      - name: 构建 HAP（release, unsigned）
+        run: |
+          set -euo pipefail
+          export PATH="$FLUTTER_ROOT/bin:$PATH"
+          cd app
+          flutter pub get
+          flutter build hap --release --no-codesign
+
+      - name: 收集 HAP
+        run: |
+          set -euo pipefail
+          src="app/build/ohos/hap/entry-default-unsigned.hap"
+          [ -f "$src" ] || src="app/ohos/entry/build/default/outputs/default/entry-default-unsigned.hap"
+          [ -f "$src" ] || { echo "::error::没有找到 HAP 产物"; exit 1; }
+          cp "$src" "dshchat-${HAP_VERSION/+/_}-harmony-unsigned.hap"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: harmony-hap
+          path: dshchat-*-harmony-unsigned.hap
           if-no-files-found: error

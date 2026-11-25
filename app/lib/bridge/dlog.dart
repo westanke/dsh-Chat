@@ -4,6 +4,8 @@ library;
 
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
+
 class DshLog {
   DshLog._();
 
@@ -12,6 +14,28 @@ class DshLog {
   /// 设置页「诊断日志」开关：关闭后只跳过写入，保留文件已有内容。
   /// 默认 true（保持加开关之前的行为，与 companion AppPreferences 默认一致）。
   static bool enabled = true;
+
+  /// 日志文件名（三端一致）。
+  static const String fileName = 'dsh.log';
+
+  /// 日志所在目录：Android 走 app 私有 files 目录（debug 包 `run-as` 可读）；
+  /// 其它平台（iOS / 鸿蒙）拿不到沙盒绝对路径，退回进程当前工作目录
+  /// ——鸿蒙侧 DshLog.init 失败也只静默置 null（宪法：日志绝不影响业务）。
+  ///
+  /// 2026-11-25：原先这里硬编码 `/data/data/com.dsh.dshchat/files/dsh.log`，
+  /// 鸿蒙端没有这个路径 → 文件日志在鸿蒙上一直是空的。
+  ///
+  /// 鸿蒙端由原生插件回传 `filesDir`（DshDevice.filesDir）→ 日志落在
+  /// 沙盒私有目录；拿不到时退回相对路径。
+  static String resolvePath({String? filesDir}) {
+    if (filesDir != null && filesDir.isNotEmpty) {
+      return '$filesDir/$fileName';
+    }
+    if (defaultTargetPlatform == TargetPlatform.android) {
+      return '/data/data/com.dsh.dshchat/files/$fileName';
+    }
+    return fileName;
+  }
 
   /// main() 里初始化；失败静默（日志绝不能影响业务）。
   static void init(String path) {

@@ -3,6 +3,8 @@
 
 用法：
     scripts/backfill-release.py <version> <code> <bytes> <sha256> <apkName>
+    scripts/backfill-release.py <version> <code> <bytes> <sha256> <apkName> \
+                                <hapName> <hapBytes> <hapSha>
 
 与 dsh-companion 同名脚本同源思路（回填单独成脚本，可单独跑、单独验证；
 避免 release.sh 里 heredoc 嵌套打架）。每一处替换都带明确上下文锚点，
@@ -15,18 +17,31 @@ dsh-Chat 的回填锚点（README.md）：
 3.「当前状态」版本行：同步 pubspec 版本与 tag
 4.「下载安装」小节：仅在该小节范围内更新产物行/校验行 tag/脚注版本
    —— 分段隔离，不再用会删光全局 | APK | 行的 re.subn 全局替换
+5.（2026-11-25 起）鸿蒙 HAP 产物：给了 hap 三个参数就在「当前状态」与
+   「下载安装」两处的 APK 行后面各插一行 | HAP |，版本相同时先摘旧的。
 """
 import re
 import sys
 import pathlib
 
 
-def backfill(text: str, ver: str, code: str, size: int, sha: str, apk: str) -> str:
+def backfill(text: str, ver: str, code: str, size: int, sha: str, apk: str,
+             hap=None, hap_size=None, hap_sha=None, hap_note=None) -> str:
     size_fmt = f"{size:,}"
     gitee_dl = f"https://gitee.com/westanke/dsh-Chat/releases/download/v{ver}/{apk}"
     release_row = (
         f"| APK | [`{apk}`]({gitee_dl})<br>{size_fmt} 字节 · SHA-256 `{sha}` |\n"
     )
+
+    # 鸿蒙 HAP 行：默认按文件名判断（-unsigned 本机验证；否则视为已签名）。
+    hap_row = ""
+    if hap and hap_size is not None and hap_sha is not None:
+        note = hap_note or ("未签名，本机验证用" if "-unsigned" in hap else "已签名")
+        hap_dl = f"https://gitee.com/westanke/dsh-Chat/releases/download/v{ver}/{hap}"
+        hap_row = (
+            f"| HAP | [`{hap}`]({hap_dl})<br>{hap_size:,} 字节 · SHA-256 `{hap_sha}` "
+            + (f"（{note}）" if note.startswith("未签名") else f"· {note}") + " |\n"
+        )
 
     def sub1(pattern, repl, s, *, label, flags=0):
         """命中恰好 1 处才替换，否则告警（锚点写错就宁可不动，绝不静默毁数据）。"""
@@ -52,7 +67,7 @@ def backfill(text: str, ver: str, code: str, size: int, sha: str, apk: str) -> s
     #    本版本已有的行全部摘掉再插一行，保证「一个 tag 一行」。历史版本的行、
     #    以及「下载安装」小节里那条同版本的行（步骤 5 会原地更新）都不动。
     same_ver = re.compile(
-        r"^\| APK \| \[`([^`]+)`\]\([^)]*/releases/download/v"
+        r"^\| (?:APK|HAP) \| \[`([^`]+)`\]\([^)]*/releases/download/v"
         + re.escape(ver)
         + r"/[^)]*\)<br>[^\n]*\n",
         flags=re.M,
@@ -69,7 +84,7 @@ def backfill(text: str, ver: str, code: str, size: int, sha: str, apk: str) -> s
         out = out[:state_start] + seg + out[state_end:]
     out, n = sub1(
         r"(## 当前状态\n\n\| 平台 \| 状态 \|\n\|---\|---\|\n)",
-        lambda m: m.group(1) + release_row, out,
+        lambda m: m.group(1) + release_row + hap_row, out,
         label="当前状态表表头（插入本次产物行）",
     )
     if n != 1:
@@ -102,6 +117,14 @@ def backfill(text: str, ver: str, code: str, size: int, sha: str, apk: str) -> s
         )
         if n1 != 1:
             print(f"  ⚠️ 下载安装表 APK 行未定位（命中 {n1}）", file=sys.stderr)
+        # 5a2) 鸿蒙 HAP 行（若有）：该段内紧跟 APK 行之后插一行 | HAP |
+        if hap_row:
+            seg, n2 = re.subn(
+                r"^\| APK \|.*\n", lambda m: m.group(0) + hap_row, seg,
+                count=1, flags=re.M,
+            )
+            if n2 != 1:
+                print(f"  ⚠️ 下载安装表 HAP 行未定位（命中 {n2}）", file=sys.stderr)
         # 5b) 校验行的 tag
         seg, _ = re.subn(
             r"(tag `)v[\d.]+(` 内的 `artifacts/SHA256SUMS\.txt`)",
@@ -121,6 +144,7 @@ def backfill(text: str, ver: str, code: str, size: int, sha: str, apk: str) -> s
             f"正式产物随 tag 发布（Gitee 主站）：\n\n"
             f"| 产物 | 说明 |\n|---|---|\n"
             f"{release_row}"
+            f"{hap_row}"
             f"| 校验 | `sha256sum -c` 前先比对上方 SHA-256；tag `v{ver}` 内的 "
             f"`artifacts/SHA256SUMS.txt` 为权威值 |\n\n"
             f"> 版本号以 [`app/pubspec.yaml`](app/pubspec.yaml) 的 `version` 为准"
@@ -134,17 +158,25 @@ def backfill(text: str, ver: str, code: str, size: int, sha: str, apk: str) -> s
 
 
 def main() -> None:
-    if len(sys.argv) != 6:
+    if len(sys.argv) not in (6, 9, 10):
         print(__doc__)
         sys.exit(1)
     ver, code, size, sha, apk = sys.argv[1], sys.argv[2], int(sys.argv[3]), sys.argv[4], sys.argv[5]
+    hap = hap_size = hap_sha = None
+    hap_note = None
+    if len(sys.argv) >= 9:
+        hap, hap_size, hap_sha = sys.argv[6], int(sys.argv[7]), sys.argv[8]
+    if len(sys.argv) == 10:
+        hap_note = sys.argv[9]
     readme = pathlib.Path("README.md")
     text = readme.read_text(encoding="utf-8")
-    out = backfill(text, ver, code, size, sha, apk)
+    out = backfill(text, ver, code, size, sha, apk, hap, hap_size, hap_sha, hap_note)
     if out == text:
         print("  ⚠️ 回填前后无变化（可能已回填过）")
     readme.write_text(out, encoding="utf-8")
     print(f"  ✅ README.md 已回填 v{ver}+{code} / {size:,} 字节 / {sha[:16]}…")
+    if hap:
+        print(f"  ✅ 鸿蒙 HAP 行已回填 {hap} / {hap_size:,} 字节 / {hap_sha[:16]}…")
 
 
 if __name__ == "__main__":

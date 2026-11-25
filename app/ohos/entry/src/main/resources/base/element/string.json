@@ -1,0 +1,16 @@
+{
+  "string": [
+    {
+      "name": "module_desc",
+      "value": "DSH Chat — client for dsh-remote-bridge（Android / iOS / HarmonyOS）"
+    },
+    {
+      "name": "EntryAbility_desc",
+      "value": "DSH Chat 主界面"
+    },
+    {
+      "name": "EntryAbility_label",
+      "value": "DSH Chat"
+    }
+  ]
+}

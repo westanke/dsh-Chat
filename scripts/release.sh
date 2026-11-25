@@ -11,7 +11,7 @@
 #   git add … && git commit …               # 人工提交（README 数字已填好）
 #   bash scripts/release.sh --publish       # 阶段 B：tag → 双推 → 两站 Release → 回读
 #
-# 本脚本止于阶段 B（APK + 双站 Release）。iOS IPA 与 GitHub Release 走阶段 C/D
+# 本脚本止于阶段 B（APK + HAP + 双站 Release）。iOS IPA 与 GitHub Release 走阶段 C/D
 # （两段式：GitHub Actions macOS 打 IPA → sync-gitee-release.sh 传 Gitee →
 # GitHub API 补建 Release）——完整清单见 AGENTS.md §10「发版全流程」，照做不出错。
 #
@@ -52,7 +52,22 @@ APK_NAME="dsh-Chat-${TAG}.apk"
 APK="artifacts/${APK_NAME}"
 REPO_GITEE="westanke/dsh-Chat"
 REPO_ATOMGIT="westanke163/dsh-Chat"
-FLUTTER="${FLUTTER:-/media/wangke/OFFICE/workspace/tools/flutter/bin/flutter}"
+# 三端统一用 Flutter-OH SDK（TargetPlatform.ohos 只在这个 SDK 里有，
+# 上游 Flutter 编不过 ohos fork 的 material_ui —— 见 AGENTS.md §11）。
+FLUTTER="${FLUTTER:-/media/wangke/OFFICE/workspace/tools/flutter-oh/bin/flutter}"
+# 鸿蒙 HAP 产物名（默认 unsigned；HAP_SIGN=1 出本地签名 .hap，上架另用 .app）
+HAP_NAME="dsh-Chat-${TAG}-unsigned.hap"
+HAP="artifacts/${HAP_NAME}"
+# 是否构建鸿蒙 HAP：默认构建；BUILD_HAP=0 可跳过（例如只发 Android 时）
+BUILD_HAP="${BUILD_HAP:-1}"
+# 是否对 HAP 做本地签名：默认 0（出 unsigned，便于无证书本机验证）。
+# HAP_SIGN=1 时调 scripts/sign-hap.sh，口令从 HAP_KEYSTORE_PWD/HAP_KEY_PWD 读。
+HAP_SIGN="${HAP_SIGN:-0}"
+if [ "$HAP_SIGN" = "1" ]; then
+  HAP_NOTE="${HAP_NOTE:-已签名（本地证书）}"
+else
+  HAP_NOTE="${HAP_NOTE:-未签名，本机验证用}"
+fi
 
 [ -n "$VER" ] && [ -n "$CODE" ] || { bad "没能从 $PUBSPEC 解析 version"; exit 1; }
 
@@ -101,14 +116,67 @@ if [ "$MODE" = "prepare" ]; then
   fi
   say ""
 
+  # 2b) 鸿蒙 HAP（Flutter-OH 三端统一 SDK；AOT release 产物 ≈34MB）
+  #     本机没有 AGC 账号 → 一律 --no-codesign，产物是 unsigned，上架要走
+  #     DevEco 签名 + `flutter build app` 出 .app（AGENTS.md §11）。
+  HAP_SIZE=0; HAP_SHA=""
+  if [ "$BUILD_HAP" = "1" ]; then
+    say "2b) 打包 flutter build hap --release（鸿蒙，AOT，unsigned）"
+    (cd app && run "$FLUTTER" build hap --release --no-codesign)
+    # 产物路径随 Flutter-OH 版本而变：模块级 build/default/outputs/default/
+    # 或工程级 build/ohos/hap/，两个都找一遍（见 flutter_tools project.dart
+    # OhosProject.getSignedFile）。
+    HSRC=""
+    for cand in \
+      "app/ohos/entry/build/default/outputs/default/entry-default-unsigned.hap" \
+      "app/build/ohos/hap/entry-default-unsigned.hap" \
+      "app/ohos/build/outputs/default/ohos-default-unsigned.app" \
+      "app/build/ohos/app/ohos-default-unsigned.app"; do
+      [ -f "$cand" ] && { HSRC="$cand"; break; }
+    done
+    if [ "$DRY_RUN" != "1" ]; then
+      [ -n "$HSRC" ] || { bad "没找到鸿蒙 HAP 产物（找过模块级/工程级四个候选路径）"; exit 1; }
+      cp "$HSRC" "$HAP"
+      HAP_SIZE=$(stat -c%s "$HAP")
+      HAP_SHA=$(sha256sum "$HAP" | cut -d' ' -f1)
+      ok "产物 $HAP_NAME（源 $HSRC）"
+      ok "体积 $HAP_SIZE 字节"
+      ok "SHA-256 $HAP_SHA"
+
+      if [ "$HAP_SIGN" = "1" ]; then
+        say "2b-1) 对 HAP 做本地签名（hap-sign-tool）"
+        SIGNED_NAME="dsh-Chat-${TAG}-harmony.hap"
+        SIGNED="artifacts/${SIGNED_NAME}"
+        run bash scripts/sign-hap.sh "$HAP" "$SIGNED"
+        HAP_NAME="$SIGNED_NAME"
+        HAP="$SIGNED"
+        HAP_SIZE=$(stat -c%s "$HAP")
+        HAP_SHA=$(sha256sum "$HAP" | cut -d' ' -f1)
+        HAP_NOTE="已签名（本地证书）"
+        ok "签名产物 $HAP_NAME"
+      fi
+    else
+      say "  [dry] 复制并计算指纹"
+    fi
+  else
+    say "2b) 鸿蒙 HAP —— 已按 BUILD_HAP=0 跳过"
+  fi
+  say ""
+
   say "3) 回填真实数据（README + SHA256SUMS）"
   if [ "$DRY_RUN" = "1" ]; then
     say "  [dry] 跳过回填"
   else
-    python3 scripts/backfill-release.py "$VER" "$CODE" "$SIZE" "$SHA" "$APK_NAME"
+    if [ "$BUILD_HAP" = "1" ]; then
+      python3 scripts/backfill-release.py "$VER" "$CODE" "$SIZE" "$SHA" "$APK_NAME" \
+        "$HAP_NAME" "$HAP_SIZE" "$HAP_SHA" "$HAP_NOTE"
+    else
+      python3 scripts/backfill-release.py "$VER" "$CODE" "$SIZE" "$SHA" "$APK_NAME"
+    fi
     {
       echo "# dsh-Chat 产物校验（${TAG}）"
       echo "$SHA  $APK_NAME"
+      if [ "$BUILD_HAP" = "1" ]; then echo "$HAP_SHA  $HAP_NAME"; fi
     } > artifacts/SHA256SUMS.txt
     ok "已写 artifacts/SHA256SUMS.txt"
 
@@ -129,6 +197,20 @@ fi
 say "═══ 阶段 B · 发布 ${TAG} ═══"
 say ""
 
+# 阶段 A 可能对 HAP 做了本地签名；阶段 B 是新进程，从 README 的最终产物名
+# 恢复（README 已回填并提交），避免又去拿 unsigned 包。
+if [ "$BUILD_HAP" = "1" ]; then
+  HAP_IN_README=$(grep -oE "dsh-Chat-${TAG}-(harmony|unsigned)\.hap" README.md | head -1 || true)
+  if [ -n "$HAP_IN_README" ]; then
+    HAP_NAME="$HAP_IN_README"
+    HAP="artifacts/${HAP_NAME}"
+    case "$HAP_NAME" in
+      *-unsigned.hap) HAP_NOTE="未签名，本机验证用" ;;
+      *) HAP_NOTE="已签名（本地证书）" ;;
+    esac
+  fi
+fi
+
 say "0) 前置检查"
 if [ -n "$(git status --porcelain)" ]; then
   bad "工作区有未提交改动 —— 先提交，否则 tag 会指向一个文档还没更新的提交"
@@ -138,7 +220,14 @@ fi
 [ -f "$APK" ] || { bad "没有产物 $APK —— 先跑阶段 A"; exit 1; }
 SIZE=$(stat -c%s "$APK")
 SHA=$(sha256sum "$APK" | cut -d' ' -f1)
-ok "工作区干净、产物存在（$SIZE 字节）"
+ok "工作区干净、APK 存在（$SIZE 字节）"
+
+if [ "$BUILD_HAP" = "1" ]; then
+  [ -f "$HAP" ] || { bad "没有鸿蒙产物 $HAP —— 先跑阶段 A（或 BUILD_HAP=0 只发 Android）"; exit 1; }
+  HAP_SIZE=$(stat -c%s "$HAP")
+  HAP_SHA=$(sha256sum "$HAP" | cut -d' ' -f1)
+  ok "HAP 存在（$HAP_SIZE 字节，$HAP_NOTE）"
+fi
 
 # 产物指纹必须与 README 一致，否则就是「文档描述另一个包」。
 if grep -q "$SHA" README.md; then
@@ -202,18 +291,28 @@ except Exception: print('')" 2>/dev/null || true)
     say "  创建 Gitee Release $TAG…"
     [ "$DRY_RUN" = "1" ] && return 0
     local payload
-    payload=$(VER="$VER" TAG="$TAG" APK_NAME="$APK_NAME" SIZE="$SIZE" SHA="$SHA" python3 -c '
+    payload=$(VER="$VER" TAG="$TAG" APK_NAME="$APK_NAME" SIZE="$SIZE" SHA="$SHA" \
+             HAP_NAME="$HAP_NAME" HAP_SIZE="${HAP_SIZE:-0}" HAP_SHA="${HAP_SHA:-}" \
+             HAP_NOTE="$HAP_NOTE" BUILD_HAP="$BUILD_HAP" python3 -c '
 import json, os
 tag = os.environ["TAG"]; apk = os.environ["APK_NAME"]
 size = int(os.environ["SIZE"]); sha = os.environ["SHA"]
-body = "\n".join([
+lines = [
     "## " + tag, "",
-    "- 产物：`" + apk + "`，**{:,} 字节**".format(size),
-    "- SHA-256：`" + sha + "`", "",
+    "- Android 产物：`" + apk + "`，**{:,} 字节**".format(size),
+    "- SHA-256：`" + sha + "`",
+]
+if os.environ.get("BUILD_HAP") == "1" and os.environ.get("HAP_NAME"):
+    lines += [
+        "- 鸿蒙产物：`" + os.environ["HAP_NAME"] + "`，**" + format(int(os.environ["HAP_SIZE"]), ",") + " 字节**（" + os.environ.get("HAP_NOTE", "未签名，本机验证用") + "）",
+        "- SHA-256：`" + os.environ["HAP_SHA"] + "`",
+    ]
+lines += [
+    "",
     "变更详情见仓库提交记录；协议要求 dsh-remote-bridge ≥ 2.10.0（hello.protocol=3）。",
-])
+]
 print(json.dumps({"tag_name": tag, "name": os.environ["VER"],
-                  "body": body, "target_commitish": "main"}))
+                  "body": "\n".join(lines), "target_commitish": "main"}))
 ')
     # access_token 必须挂 query 不进 JSON body（companion v2.2.47 踩过 40001）。
     id=$(curl -s -X POST "https://gitee.com/api/v5/repos/$REPO_GITEE/releases?access_token=$GT" \
@@ -230,8 +329,9 @@ except Exception: print('')")
         | python3 -c "import json,sys
 try: print(' '.join(a['name'] for a in json.load(sys.stdin).get('assets',[])))
 except Exception: print('')" 2>/dev/null || true)
-  for f in "$APK" artifacts/SHA256SUMS.txt; do
-    [ -f "$f" ] || continue
+  for f in "$APK" "$HAP" artifacts/SHA256SUMS.txt; do
+    if [ "$f" = "$HAP" ] && [ "$BUILD_HAP" != "1" ]; then continue; fi
+    [ -f "$f" ] || { bad "缺少 Release 附件：$f"; return 1; }
     local base; base=$(basename "$f")
     if echo " $have " | grep -qF " $base "; then
       ok "Gitee 已有 $base"
@@ -264,24 +364,35 @@ except Exception:
   else
     [ "$DRY_RUN" = "1" ] && { say "  [dry] 创建 AtomGit Release $TAG"; return 0; }
     local payload
-    payload=$(VER="$VER" TAG="$TAG" APK_NAME="$APK_NAME" SIZE="$SIZE" SHA="$SHA" python3 -c '
+    payload=$(VER="$VER" TAG="$TAG" APK_NAME="$APK_NAME" SIZE="$SIZE" SHA="$SHA" \
+             HAP_NAME="$HAP_NAME" HAP_SIZE="${HAP_SIZE:-0}" HAP_SHA="${HAP_SHA:-}" \
+             HAP_NOTE="$HAP_NOTE" BUILD_HAP="$BUILD_HAP" python3 -c '
 import json, os
 tag = os.environ["TAG"]; apk = os.environ["APK_NAME"]
 size = int(os.environ["SIZE"]); sha = os.environ["SHA"]
-body = "\n".join([
+base = "https://gitee.com/westanke/dsh-Chat/releases/download/" + tag + "/"
+lines = [
     "## " + tag, "",
-    "- 产物：`" + apk + "`，**{:,} 字节**".format(size),
-    "- SHA-256：`" + sha + "`", "",
-    "下载：https://gitee.com/westanke/dsh-Chat/releases/download/" + tag + "/" + apk,
-])
+    "- Android 产物：`" + apk + "`，**{:,} 字节**".format(size),
+    "- SHA-256：`" + sha + "`",
+    "- 下载：" + base + apk,
+]
+if os.environ.get("BUILD_HAP") == "1" and os.environ.get("HAP_NAME"):
+    hap = os.environ["HAP_NAME"]
+    lines += [
+        "- 鸿蒙产物：`" + hap + "`，**" + format(int(os.environ["HAP_SIZE"]), ",") + " 字节**（" + os.environ.get("HAP_NOTE", "未签名，本机验证用") + "）",
+        "- SHA-256：`" + os.environ["HAP_SHA"] + "`",
+        "- 下载：" + base + hap,
+    ]
+lines += [""]
 print(json.dumps({"tag_name": tag, "name": os.environ["VER"],
-                  "body": body, "target_commitish": "main"}))
+                  "body": "\n".join(lines), "target_commitish": "main"}))
 ')
     curl -s -X POST "https://atomgit.com/api/v5/repos/$REPO_ATOMGIT/releases" \
       -H "Authorization: Bearer $AT" -H 'Content-Type: application/json' -d "$payload" >/dev/null
     ok "AtomGit Release 已建（正文含 Gitee 下载链接）"
   fi
-  warn "AtomGit 不支持附件上传（API 不存在），APK 以 Gitee 为准"
+  warn "AtomGit 不支持附件上传（API 不存在），产物以 Gitee 为准"
 }
 
 gitee_release
@@ -298,6 +409,14 @@ ENC=$(python3 -c "import urllib.parse,sys;print(urllib.parse.quote(sys.argv[1]))
 code=$(curl -sL -o /dev/null -w '%{http_code}' --max-time 180 \
   "https://gitee.com/${REPO_GITEE}/releases/download/${TAG}/${ENC}")
 [ "$code" = "200" ] && ok "Gitee: APK 可下载（200）" || { bad "Gitee: APK 返回 $code"; rc=1; }
+
+# 鸿蒙 HAP 同口径回读（构建了才查）
+if [ "$BUILD_HAP" = "1" ]; then
+  HENC=$(python3 -c "import urllib.parse,sys;print(urllib.parse.quote(sys.argv[1]))" "$HAP_NAME")
+  hcode=$(curl -sL -o /dev/null -w '%{http_code}' --max-time 300 \
+    "https://gitee.com/${REPO_GITEE}/releases/download/${TAG}/${HENC}")
+  [ "$hcode" = "200" ] && ok "Gitee: HAP 可下载（200）" || { bad "Gitee: HAP 返回 $hcode"; rc=1; }
+fi
 
 for r in gitee atomgit; do
   if [ -n "$(git ls-remote --tags "$r" "refs/tags/$TAG" 2>/dev/null)" ]; then
@@ -322,7 +441,11 @@ fi
 
 say ""
 if [ "$rc" -eq 0 ]; then
-  ok "═══ 发版完成：双站 tag + 两站 Release + APK 全部就位 ═══"
+  if [ "$BUILD_HAP" = "1" ]; then
+    ok "═══ 发版完成：双站 tag + 两站 Release + APK + HAP 全部就位 ═══"
+  else
+    ok "═══ 发版完成：双站 tag + 两站 Release + APK 全部就位 ═══"
+  fi
   say "GitHub 从站由 mirror-sync workflow 自动对齐。"
 else
   bad "═══ 有渠道未就位，见上方 ❌ ═══"

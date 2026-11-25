@@ -1,6 +1,7 @@
 /// 系统通知通道（对齐 dsh-go 的通知模式：两条通道 + 点击回会话）。
 ///
-/// 原生侧在 `dsh/notify`（android/.../MainActivity.kt + NotificationHelper.kt）：
+/// 原生侧在 `dsh/notify`（Android MainActivity.kt + NotificationHelper.kt；
+/// iOS Runner/DshNotifyChannels.swift）：
 /// - 通道 `done`：一轮回答结束（低打扰）；
 /// - 通道 `attention`：需要你确认/回答（审批、提问，带声音）。
 /// 通知只在使用者「看不到该会话」时发（后台，或前台但停在别的会话），
@@ -26,7 +27,7 @@ class NotifyStatus {
   /// 能真正弹出通知（三者同时成立）。
   bool get canPost => native && permission && enabled;
 
-  /// 测试环境 / iOS 未实现：通道不存在。
+  /// 测试环境 / 通道不可用：视为不存在。
   static const unavailable = NotifyStatus(
     native: false,
     permission: false,

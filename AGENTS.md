@@ -3,8 +3,10 @@
 > 本文件是每次会话**必然读到**的那份约定。本工程由 AI 自主开发，规矩写在前面，
 > 谁（包括未来的 AI 会话）动手前先读完这条。与 `dsh-remote-bridge` / `dsh-companion`
 > 的宪法同源同制度，按客户端特色裁剪——**各边职责不同，不要互相照抄**。
-> 本仓现含双客户端：`app/`（Flutter，Android+iOS，Android 已发版）与
-> `harmony/`（ArkUI 原生鸿蒙版，2026-11-15 起步，规程见 `harmony/docs/PORT-MAP.md`）。
+> 本仓现含三个客户端：`app/`（Flutter 一套代码，Android + iOS + **鸿蒙**，Android 已发版）、
+> `app/ohos/`（Flutter-OH 鸿蒙宿主工程，2026-11-25 起步）与
+> `harmony/`（旧 ArkUI 原生鸿蒙版，2026-11-15 起步，**已冻结维护、后续退役**，
+> 签名材料仍保留，规程见 `harmony/docs/PORT-MAP.md`）。
 
 ---
 
@@ -30,8 +32,10 @@
 
 1. **产物标识符零 DeepSeek**：applicationId / bundle id / bundleName / 类名 / 资源名 /
    应用显示名 / About 文案，一律不含 `deepseek`（不区分大小写）。当前注册名：
-   `com.dsh.dshchat`，显示名 `DSH Chat`（Android applicationId 与鸿蒙 bundleName 同名同源，
-   改包名两平台一起改，先改本条再动 `app/android`、`harmony/AppScope/app.json5`）。
+   `com.dsh.dshchat`，显示名 `DSH Chat`（Android applicationId、鸿蒙 bundleName
+   —— `app/ohos/AppScope/app.json5` 与 `harmony/AppScope/app.json5` —— 同名同源，
+   改包名两平台一起改，先改本条再动 `app/android`、`app/ohos/AppScope/app.json5`、
+   `harmony/AppScope/app.json5`）。
 2. **不复用官方资产**：官方 APK 里的图标、字体、so、混淆资源一个都不拷贝；
    图标自绘或用开源图标集（Material Symbols / 自绘 path）。
 3. **仿界面不冒品牌**：布局、间距、配色对齐官方是工程要求；但启动页 logo、
@@ -48,7 +52,7 @@ dsh-Chat/
   AGENTS.md            ← 本文件（工程根 = 宪法所在）
   docs/                ← design-tokens.md / STRUCTURE.md（平铺，不加子目录）
   ref/                 ← 官方基准材料（css/apk/截图），只读，不参与构建
-  app/                 ← flutter 工程根（Android+iOS，Android 已发版）
+  app/                 ← flutter 工程根（Android+iOS+鸿蒙，Android 已发版）
     lib/
       design/          ← tokens.dart（设计 token 单一来源）
       bridge/          ← gateway.dart（WS）/ models.dart（协议模型）/ credentials.dart / device.dart / dlog.dart
@@ -56,7 +60,13 @@ dsh-Chat/
                          md_code_block / md_table / message_actions / process_group /
                          sessions_drawer / brand_mark
     android/ ios/      ← 平台壳（改动要在提交说明里点名）
-  harmony/             ← 鸿蒙工程根（ArkUI 原生，与 app/ 平级互不引用）
+    ohos/              ← 鸿蒙宿主工程（Flutter-OH 生成，2026-11-25 起）
+      AppScope/        ← 应用级配置 app.json5（bundleName=com.dsh.dshchat）
+      entry/src/main/  ← ets 插件源码（entryability/pages/plugins）+ module.json5 + 资源
+      hvigor/          ← hvigor 工程配置（json5/ts）
+    vendor/            ← 本仓打补丁的第三方包（gpt_markdown，见 README.dsh.md）
+  harmony/             ← 旧鸿蒙工程根（ArkUI 原生，**冻结维护**，后续退役；
+                        签名材料保留在 harmony/signing/ 与 harmony/docs/RELEASE.md）
     AppScope/          ← 应用级配置 app.json5 + 分层图标（bundleName=com.dsh.dshchat）
     entry/src/main/    ← ets 业务代码（ability/pages/components）+ module.json5 + 资源
       core/            ← 纯逻辑层（协议/模型，.ts，node 直测，不 import 任何 ets；
@@ -72,6 +82,8 @@ dsh-Chat/
 - **平台豁免（用户已批，2026-11-15）**：`harmony/` 的 ArkTS 工程结构
   （`AppScope/`、`entry/src/main/`、`hvigor/` 等）由 DevEco/hvigor 约定死，豁免嵌套限制；
   `harmony/entry/src/main/ets/core/`、`harmony/test/`、`harmony/docs/`、`harmony/scripts/` 照旧严格执行。
+- **平台豁免（用户已批，2026-11-25）**：`app/ohos/` 的 ArkTS 工程结构与 `harmony/` 同等豁免
+  （`AppScope/`、`entry/src/main/ets/{entryability,pages,plugins,platform}`、`hvigor/`）。
 - 严禁 `/tmp`（用户长期规矩）；临时文件进 `app/build/`、`harmony/build/` 或用户家目录。
 - `ref/` 只进参考材料，**绝不**被 `app/` 的 Dart/gradle 或 `harmony/` 的 ets/hvigor 引用。
 
@@ -96,12 +108,17 @@ dsh-Chat/
 ## 6. 命令（本地唯一可信口径）
 
 ```sh
-export PUB_HOSTED_URL=https://pub.flutter-io.cn FLUTTER_STORAGE_BASE_URL=https://storage.flutter-io.cn
+# 工具链一次性引入（2026-11-25 起，tools/ 统一口径）
+source /media/wangke/OFFICE/workspace/tools/env.sh
+
 cd app
 flutter pub get          # 依赖变更后必跑
 flutter analyze          # 提交前必绿
 flutter test             # 有测试后提交前必绿
-flutter build apk --debug  # 真机验证前
+flutter build apk --debug          # Android 真机验证前
+flutter build hap --debug --no-codesign   # 鸿蒙 HAP（本机无签名，走 unsigned）
+flutter build apk --release --target-platform android-arm64   # 发版 APK（只 arm64）
+flutter build hap --release --no-codesign  # 发版 HAP（AOT；需先补 product 版 patched SDK，见 §11）
 ```
 
 文档与 Git 门禁（仓库根执行）：
@@ -112,30 +129,41 @@ bash scripts/setup-remotes.sh   # 配三远端（幂等）
 bash scripts/push-all.sh        # 推 Gitee 主 + AtomGit 备（**须用户同意**，见 §10）
 ```
 
-- Android 工具链：`/media/wangke/OFFICE/workspace/android-toolchain/`（jdk17、sdk）。
-  gradle 依赖走国内镜像（腾讯 gradle wrapper 镜像），pub 走 flutter-io.cn。
-  ⚠️ 2026-11-03 实测该目录与 `~/flutter` **在本机均不存在**，`flutter`/`dart`/`java`
-  也不在 PATH —— 需要构建时先补齐工具链，别照抄命令硬跑。
+- **工具链根目录（2026-11-25 起，AGENTS.md §7 用户要求「正式使用的非源码类工具统一放 tools/」）**：
+  `/media/wangke/OFFICE/workspace/tools/`
+  - `env.sh` —— 唯一入口，先 `source` 它再跑任何构建命令。里面设了
+    `FLUTTER_ROOT=$DSH_TOOLS/flutter-oh`（**Flutter-OH 3.50.0+ohos-1.3.3，三端统一 SDK**）、
+    `JAVA_HOME=$DSH_TOOLS/jdk17`、`ANDROID_HOME=$DSH_TOOLS/sdk`、
+    `GRADLE_USER_HOME=$DSH_TOOLS/gradle-home`、`DEVECO_SDK_HOME=$DSH_TOOLS/ohos-sdk/sdk`、
+    `HOS_SDK_HOME`、`HDC_HOME`、`DEVECO_HOME`、`DEVECO_NODE_HOME`、
+    `FLUTTER_OHOS_STORAGE_BASE_URL=https://flutter-ohos.obs.cn-south-1.myhuaweicloud.com`，
+    并把 ohos-sdk 的 bin/ohpm/hvigor/tool/node 与 hdc 加进 PATH。
+  - `flutter-oh/` —— Flutter-OH SDK（atomgit.com/oh-flutter/flutter_flutter，tag `3.50.0+ohos-1.3.3`）。
+    **只能用这一个 SDK 跑三端**：material_ui/cupertino_ui 已切 CPF ohos fork（§11 `material_ui 穷尽 switch`），
+    上游 Flutter 编译不过 `case TargetPlatform.ohos:`。
+  - `ohos-sdk/` —— HarmonyOS SDK **API 26**（26.0.0.105）。**API 18 不够**，OH-Flutter 1.3.3 要求 26。
+  - `sdk/`（Android）、`jdk17/`、`gradle-home/`、`npm-cache/`、`dsh-home/`。
+  - gradle 依赖走国内镜像（腾讯 gradle wrapper 镜像），pub 走 flutter-io.cn。
+  - ⚠️ **不 source `tools/env.sh` 就构建会踩**：用系统 `/usr/lib/android-sdk` 报
+    `LicenceNotAcceptedException: Failed to install the following Android SDK packages ... ndk;28.2.13676358`。
 - 真机：vivo V2080A（serial 9540718532001JR），`adb` 在
-  `…/android-toolchain/sdk/platform-tools/adb`。vivo 装机拦截页需勾风险确认再点继续安装。
+  `…/tools/sdk/platform-tools/adb`。vivo 装机拦截页需勾风险确认再点继续安装。
 
-**鸿蒙（`harmony/`，2026-11-15 起口径，全部实跑验证过）**：
+**鸿蒙（`app/ohos/`，2026-11-25 起口径，全部实跑验证过）**：
 
 ```sh
-# 工具链一次性引入（hvigorw/ohpm/hdc 都是工具链可执行文件，不在工程内）
-source /media/wangke/OFFICE/TRae_work/_toolchain/env.sh   # 或 bash harmony/scripts/toolchain-env.sh
-cd harmony
-npm --prefix test install      # 依赖变更后（test/，npmmirror）
-npm --prefix test test         # 纯逻辑单测，提交前必绿（CI 同口径）
-hvigorw assembleHap --no-daemon   # 构建未签名 hap（产物 entry/build/*.hap，不入库）
-bash scripts/package.sh           # 双闸门（测试+构建）一键发版前检查，详见 harmony/docs/RELEASE.md
+source /media/wangke/OFFICE/workspace/tools/env.sh   # 含 hvigorw/ohpm/hdc/node
+cd app
+flutter build hap --debug --no-codesign    # 产物 app/build/ohos/hap/entry-default-unsigned.hap（不入库）
 ```
 
-- 鸿蒙工具链根：`/media/wangke/OFFICE/TRae_work/_toolchain/`（command-line-tools 5.1.0.840 +
-  SDK API18 + JDK17 + Node20；`install-harmony-toolchain.sh` 可重放安装；
-  `DSH_HARMONY_TOOLCHAIN_ROOT` 可覆盖路径）。签名与 AGC 上架材料清单见 `harmony/docs/RELEASE.md`。
-- 真机：HarmonyOS 6.0 手机（`hdc list targets`），装机/调试 Profile 用
-  `harmony/signing/` 下的材料（**绝不入库**，.gitignore 已拉黑）。
+- 旧鸿蒙工程 `harmony/`（ArkUI 原生）**冻结维护，后续退役**；签名与 AGC 上架材料仍保留在
+  `harmony/signing/`（**绝不入库**，.gitignore 已拉黑）与 `harmony/docs/RELEASE.md`。
+- `app/ohos/local.properties` 由本机路径生成（hwsdk.dir / flutter.sdk），**不入库**；
+  换机器要重跑 `flutter create --platforms ohos` 或手改这两行。
+- 真机：HarmonyOS 6.0 手机（`hdc list targets`）。**本轮尚未在真机验证过**（`hdc list targets` 空）。
+- 旧 `harmony/` 口径（2026-11-15 起，仅供冻结目录参考）：`hvigorw assembleHap --no-daemon`、
+  `npm --prefix test install` / `npm --prefix test test`（纯逻辑 node:test，CI 跑这里）。
 
 ## 7. 代码纪律
 
@@ -223,13 +251,13 @@ bash scripts/package.sh           # 双闸门（测试+构建）一键发版前�
 
 | 闸门 | 命令 | 说明 |
 |---|---|---|
-| 文档 | `bash scripts/ci/docs-check.sh` | STRUCTURE.md 覆盖全部 lib/ 与 harmony ets/ts 文件、无死链、无旧仓名 |
-| 代码（Android/iOS） | `flutter analyze` → `flutter test` | 在 `app/` 下跑；跟 stable 通道的 Flutter |
-| 代码（鸿蒙） | `npm ci && npm test`（`harmony/test`） | 纯逻辑 node:test，无鸿蒙 SDK 依赖，ubuntu runner 直跑 |
+| 文档 | `bash scripts/ci/docs-check.sh` | STRUCTURE.md 覆盖全部 lib/、harmony ets/ts、**app/ohos ets/ts** 文件、无死链、无旧仓名 |
+| 代码（Android/iOS/鸿蒙） | `flutter analyze` → `flutter test` | 在 `app/` 下跑；**用 Flutter-OH SDK**（`3.50.0+ohos-1.3.3`，CI 里 clone 自 atomgit + 改 `dart-sdk-url.ohos` 指向 CPF 的 linux-x64 定制 Dart SDK）。**不能用上游 stable**：material_ui/cupertino_ui 的 ohos fork 里 `TargetPlatform.ohos` 有 89 处引用，上游 SDK 直接报 `undefined_enum_constant` |
+| 代码（鸿蒙旧版纯逻辑） | `npm ci && npm test`（`harmony/test`） | 纯逻辑 node:test，无鸿蒙 SDK 依赖，ubuntu runner 直跑（冻结目录，仍保留闸门） |
 
 刻意不跑 `flutter build apk` 与 `hvigorw assembleHap`：产物不入库，验收在本机真机，
 CI 构建没人用（理由见 ci.yml 头注释）；鸿蒙构建需 DevEco 工具链，runner 上没有
-（发版口径见 `harmony/docs/RELEASE.md`）。
+（发版口径见 `docs/project/RELEASE.md`）。
 
 **发版全流程（两段式，v1.0.17 实测定稿，照做不出错）**：
 
@@ -243,13 +271,16 @@ CI 构建没人用（理由见 ci.yml 头注释）；鸿蒙构建需 DevEco 工�
   1. API 触发镜像立即同步（别等 3h cron）：
      `POST https://api.github.com/repos/westanke/dsh-Chat/actions/workflows/mirror-sync.yml/dispatches -d '{"ref":"main"}'`
   2. 等 main 就位（约 45s；GitHub main HEAD == 本地 HEAD 才继续）→ tag 随 mirror 上去后
-     release.yml（on: push tags v*）自动跑：macos-15 打未签名 IPA + ubuntu 打 APK → workflow artifact。
+     release.yml（on: push tags v*）自动跑：ubuntu 用 `scripts/ci/setup-flutter-oh.sh` 装
+     Flutter-OH 后打 APK；macos-15（arm64）用同一脚本打未签名 IPA；HAP 是可选 job
+     （`vars.BUILD_HAP=true` + self-hosted `[linux, harmonyos]` runner）→ workflow artifact。
   3. `bash scripts/sync-gitee-release.sh v<ver> <run-id> ios-ipa` 把 IPA 传上 Gitee Release。
   4. ⚠️ 该脚本会删 Gitee release 旧附件再传——APK/SHA256SUMS 会被删，须用
      `POST /repos/westanke/dsh-Chat/releases/<id>/attach_files -F file=@…` 重传。
 - 阶段 D（GitHub Release + CI 绿检查）：GitHub Release 对象**不随 mirror**，必须 API 补建：
   `POST /releases -d '{"tag_name":"v<ver>",…}'`；附件 APK/SHA 从 artifacts/ 上传、IPA 从 Gitee
-  Release 下载后上传（uploads.github.com）。最后查 Actions 全绿（ci.yml 门禁 + release.yml 双 job）。
+  Release 下载后上传（uploads.github.com）。最后查 Actions 全绿（ci.yml 门禁 +
+  release.yml 的 Android / iOS job；HAP job 启用时也要绿）。
   release.yml Android job 曾因 runner 走阿里云 maven 镜像超时失败——gradle 仓库段已改为
   `CI=true`（GitHub Actions 自动注入）时跳过国内镜像直连官方源（settings.gradle.kts / build.gradle.kts）。
 - token 口径：GitHub API 用 `~/.git-credentials` 里的 token（`tokens.conf` 的 github 行已 401 失效勿用）；
@@ -276,7 +307,7 @@ CI 构建没人用（理由见 ci.yml 头注释）；鸿蒙构建需 DevEco 工�
 
 **鸿蒙坑位（详表见 `harmony/docs/PORT-MAP.md`，此处只留触发词）**：
 
-- `hvigorw 不在工程内` —— hvigorw/ohpm/hdc 是工具链可执行文件：先 `source /media/wangke/OFFICE/TRae_work/_toolchain/env.sh`，别找工程内 wrapper。
+- `hvigorw 不在工程内` —— hvigorw/ohpm/hdc 是工具链可执行文件：先 `source /media/wangke/OFFICE/workspace/tools/env.sh`，别找工程内 wrapper。
 - `hvigor 拒明文口令` —— 签名口令不能写在 build-profile.json5，走环境变量或手动 hap-sign-tool（见 harmony/docs/RELEASE.md）。
 - `分层图标覆盖` —— AppScope 与 entry 的图标资源名必须不同，否则后者覆盖前者。
 - `AGC 图标 1024` —— AGC 上架审核拒收非 1024×1024 应用图标（姊妹仓实踩）。
@@ -357,3 +388,33 @@ CI 构建没人用（理由见 ci.yml 头注释）；鸿蒙构建需 DevEco 工�
   `applicationInfo.appQuickFix` 段是 `versionCode: 0` / `versionName: ""` / `bundleName: ""`（不是真实值），
   真正的版本在后面的 bundle 段（`versionCode: 1000000` / `versionName: "1.0.0"`）。别据此判「版本读不到」；
   `bundleManager.getBundleInfoForSelf(GET_BUNDLE_INFO_WITH_APPLICATION)` 本身是好的。
+
+**Flutter-OH 构建坑位（`app/ohos/`，2026-11-25 实跑踩出，全部已修）**：
+
+- `ohos SDK 必须 API 26` —— API 18 编不过；本机装 `tools/ohos-sdk`（HarmonyOS 26.0.0.105）。
+  社区包布局是 `ohos-sdk/{bin,ohpm,hvigor,tool/node,sdk}`，**不是**官方文档写的 `tools/ohpm/bin`。
+- `OH-Flutter 没有 linux-x64 定制 Dart SDK` —— `bin/internal/dart-sdk-url.ohos` 只发 darwin-arm64 /
+  windows-x64 / linux-arm64；官方 Release 上 `dart-sdk-linux-x64-ohos.zip` 全 404。本机 x86_64 Linux 的
+  解法：把该文件里 `dart-sdk-linux-x64.zip` 条目改指 CPF engine 路径
+  `https://flutter-ohos.obs.cn-south-1.myhuaweicloud.com/flutter_infra_release/flutter/d55dc4bdf08dd31de6cb88fd8e56c8bccea7656b/dart-sdk-linux-x64.zip`
+  （含 `Abi.ohosArm*`，否则编译 flutter_tools 报 `Error: Member not found: 'ohosArm'`）。
+- `cp -a 进已存在目录会嵌套` —— 换 dart-sdk 前先 `rm -rf`，否则变成 `dart-sdk/dart-sdk`，bootstrap 仍报
+  `Member not found: 'ohosArm'`。
+- `dart-sdk-ohos 是 macOS 二进制` —— `bin/cache/dart-sdk-ohos/bin/dartaotruntime` 是 Mach-O arm64，
+  在 Linux 上当脚本执行报 `Syntax error: Unterminated quoted string` → `Target kernel_snapshot_program failed`。
+  解法：把 `bin/cache/dart-sdk/bin/dartaotruntime`（Linux x64 ELF）拷过去覆盖。
+  `bin/cache/dart-sdk-ohos/bin/snapshots/frontend_server_aot.dart.snapshot` 同理（macOS 版报
+  `Architecture mismatch`），也要从 `bin/cache/dart-sdk/bin/snapshots/` 拷 Linux 版。
+- `release 要补 product 版 patched SDK` —— AOT 构建要 `artifacts/engine/common/flutter_patched_sdk_product/`
+  （含 `platform_strong.dill`），缺了报一串次生错（`dart:async is not available`、`Type 'Color' not found`）。
+  下载 URL **不带 `common/` 这一层**（带 404、不带 206）。
+- `HAP 构建默认要签名` —— 本机没有 AGC 账号，`flutter build hap` 会卡在「Auto-signing: AGC login required」。
+  本机验证一律加 `--no-codesign`（产物 unsigned，不上架）。要本地签名用
+  `scripts/sign-hap.sh`（release/debug 材料都在 `harmony/signing/`）；上架仍走 AGC。
+- `上架用 .app 不是 .hap` —— `flutter build` 顶层有 `app` 子命令（Build an Ohos App file），上架用那个。
+- `上游 Flutter 编不过 ohos fork` —— `TargetPlatform.ohos` 只在 Flutter-OH SDK 里有；
+  用上游 SDK 编 material_ui 的 ohos fork 会挂在 `case TargetPlatform.ohos:` → **三端必须统一用 `tools/flutter-oh`**。
+- `material_ui 穷尽 switch` —— pub.dev 的 material_ui 1.11.1 / cupertino_ui 1.1.7 有 62/90 处穷尽
+  `switch (platform)` 缺 `TargetPlatform.ohos` → 鸿蒙端编译失败。已切 CPF ohos fork
+  （`gitcode.com/CPF-Flutter/flutter_packages.git` ref `oh-3.47.7-dev`，走 `dependency_overrides`）。
+  gpt_markdown 也有一处穷尽 switch，已 vendor 打补丁（`app/vendor/gpt_markdown/README.dsh.md` 记了原因）。

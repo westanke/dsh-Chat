@@ -2,14 +2,14 @@
 
 <p align="center">
   <strong>DSH Chat — Flutter client for dsh-remote-bridge</strong><br>
-  一套 Flutter 代码（Android + iOS），把本机 <a href="https://github.com/westanke/dsh-remote-bridge">dsh-remote-bridge</a>
+  一套 Flutter 代码（Android + iOS + 鸿蒙），把本机 <a href="https://github.com/westanke/dsh-remote-bridge">dsh-remote-bridge</a>
   的对话流渲染成原生聊天界面。对话、会话、历史全部留在你自己的机器上。
 </p>
 
 <p align="center">
-  <img alt="Version" src="https://img.shields.io/badge/version-1.0.35-087f8c">
+  <img alt="Version" src="https://img.shields.io/badge/version-1.0.36-087f8c">
   <img alt="License" src="https://img.shields.io/badge/license-AGPL--3.0-2da44e">
-  <img alt="Platforms" src="https://img.shields.io/badge/platform-Android%20%7C%20iOS-586069">
+  <img alt="Platforms" src="https://img.shields.io/badge/platform-Android%20%7C%20iOS%20%7C%20HarmonyOS-586069">
   <img alt="Built with Flutter" src="https://img.shields.io/badge/built%20with-Flutter-02569B">
   <a href="https://github.com/westanke/dsh-Chat/actions/workflows/ci.yml"><img
      alt="CI" src="https://github.com/westanke/dsh-Chat/actions/workflows/ci.yml/badge.svg"></a>
@@ -61,7 +61,10 @@
 
 | 平台 | 状态 |
 |---|---|
-| APK | [`dsh-Chat-v1.0.35.apk`](https://gitee.com/westanke/dsh-Chat/releases/download/v1.0.35/dsh-Chat-v1.0.35.apk)<br>26,614,572 字节 · SHA-256 `81c4b500393c1af6aa83c724ed71a30e8c9d83b06e9c98e1b64e60c3213247cd` |
+| APK | [`dsh-Chat-v1.0.36.apk`](https://gitee.com/westanke/dsh-Chat/releases/download/v1.0.36/dsh-Chat-v1.0.36.apk)<br>26,615,566 字节 · SHA-256 `f91c7d37069abb12335a53f52d0f24eb697a8e29859c153b0973513a02369cd1` |
+| HAP | [`dsh-Chat-v1.0.36-harmony.hap`](https://gitee.com/westanke/dsh-Chat/releases/download/v1.0.36/dsh-Chat-v1.0.36-harmony.hap)<br>34,553,311 字节 · SHA-256 `2576f8b8da9c34a47d047063d28cb5ca75c346a13dd023ecf02e38663a6f754e` · 已签名（本地证书） |
+| APK | [`dsh-Chat-v1.0.35.apk`](https://gitee.com/westanke/dsh-Chat/releases/download/v1.0.35/dsh-Chat-v1.0.35.apk)<br>26,615,562 字节 · SHA-256 `ddda1f0736ec251b3fc15b346bb392114fc2564624d7f861e7f27b5cde5bfcd3` |
+| HAP | [`dsh-Chat-v1.0.35-harmony.hap`](https://gitee.com/westanke/dsh-Chat/releases/download/v1.0.35/dsh-Chat-v1.0.35-harmony.hap)<br>34,553,310 字节 · SHA-256 `39677a4bea87d9f7b0664c0d6d97d263d699255cf54a6604742fed82f5650a88` · 已签名（本地证书） |
 | APK | [`dsh-Chat-v1.0.34.apk`](https://gitee.com/westanke/dsh-Chat/releases/download/v1.0.34/dsh-Chat-v1.0.34.apk)<br>26,614,572 字节 · SHA-256 `94ab89c4bad791840c8251891ec9a94165a62501b3612d691d85a689b91127e3` |
 | APK | [`dsh-Chat-v1.0.31.apk`](https://gitee.com/westanke/dsh-Chat/releases/download/v1.0.31/dsh-Chat-v1.0.31.apk)<br>26,614,580 字节 · SHA-256 `acdd2c841c79c5c5f68514358c9bd5ac1f1d113bdea50561856e0ce27cf828f6` |
 | APK | [`dsh-Chat-v1.0.28.apk`](https://gitee.com/westanke/dsh-Chat/releases/download/v1.0.28/dsh-Chat-v1.0.28.apk)<br>26,614,572 字节 · SHA-256 `ecac81ebb8016ac68b9e20145b76618ac1fc61096df57ef7118fc2e939f7f286` |
@@ -78,7 +81,6 @@
 | APK | [`dsh-Chat-v1.0.10.apk`](https://gitee.com/westanke/dsh-Chat/releases/download/v1.0.10/dsh-Chat-v1.0.10.apk)<br>26,574,196 字节 · SHA-256 `06efd026d3dd70e1a3c0f1a6b52ee37a00c691477c10045a0b6ceb9689faa68f` |
 | APK | [`dsh-Chat-v1.0.9.apk`](https://gitee.com/westanke/dsh-Chat/releases/download/v1.0.9/dsh-Chat-v1.0.9.apk)<br>26,574,196 字节 · SHA-256 `a669ad8bde5a017a2a3d954a4f572dc1b716c9baf8c10cae4d75312b237d2918` |
 | APK | [`dsh-Chat-v1.0.8.apk`](https://gitee.com/westanke/dsh-Chat/releases/download/v1.0.8/dsh-Chat-v1.0.8.apk)<br>26,574,196 字节 · SHA-256 `a8b3d0554aadee068606516852e7ebeb73e69c95928df430c1ccdc6decf23b2e` |
-| APK | [`dsh-Chat-v1.0.8.apk`](https://gitee.com/westanke/dsh-Chat/releases/download/v1.0.8/dsh-Chat-v1.0.8.apk)<br>26,574,196 字节 · SHA-256 `a8b3d0554aadee068606516852e7ebeb73e69c95928df430c1ccdc6decf23b2e` |
 | APK | [`dsh-Chat-v1.0.7.apk`](https://gitee.com/westanke/dsh-Chat/releases/download/v1.0.7/dsh-Chat-v1.0.7.apk)<br>26,574,196 字节 · SHA-256 `e469f1e1845fd6f7146195dfbd6594af08132f753cdfc9b1d49082aac1c013e4` |
 | APK | [`dsh-Chat-v1.0.6.apk`](https://gitee.com/westanke/dsh-Chat/releases/download/v1.0.6/dsh-Chat-v1.0.6.apk)<br>26,573,644 字节 · SHA-256 `1afefe0e5b47f3a86ac3f02a3dc766dead92f0244aabba78870f2469a21e8430` |
 | APK | [`dsh-Chat-v1.0.5.apk`](https://gitee.com/westanke/dsh-Chat/releases/download/v1.0.5/dsh-Chat-v1.0.5.apk)<br>26,505,619 字节 · SHA-256 `f7a1c0dd7e734cc4dfa4f3fc1b91d7cc06700715b0a4b52070a330483953ead0` |
@@ -87,9 +89,9 @@
 | APK | [`dsh-Chat-v1.0.2.apk`](https://gitee.com/westanke/dsh-Chat/releases/download/v1.0.2/dsh-Chat-v1.0.2.apk)<br>73,897,157 字节 · SHA-256 `70f17e56a36a68f791f1d1f995bf759ffaec7d297014365d3be9a6c5a0e558ca` |
 | APK | [`dsh-Chat-v1.0.1.apk`](https://gitee.com/westanke/dsh-Chat/releases/download/v1.0.1/dsh-Chat-v1.0.1.apk)<br>73,880,773 字节 · SHA-256 `25ad31f942451456238a25798cc0de91c14eee9049e25459ae38825610c190b5` |
 | Android | **已装机验证**（vivo V2080A 真机）：配对、自动重连、流式对话、Markdown 全家福、工具行五态与专属详情、过程组四档、轮尾行、思考预览、提问卡、抽屉、深色模式 |
-| iOS | **未验证**。`ios/Runner` 平台壳（IANA 时区通道、显示名、ATS 放行）已就位，但未在 iOS 设备或模拟器上构建运行过 |
-| 鸿蒙（HarmonyOS） | `harmony/` 是同一套协议的 ArkTS 客户端（bundleName `com.dsh.dshchat`，独立版本线 1.0.0）。**已装机验证**（鸿蒙真机 3AX0225103005398）：配对、会话、工具行五态、过程组、轮尾行、思考预览、设置页。**未发版**——签名材料目前只有绑定单台设备 UDID 的调试 Profile，公开发布需先补 AGC 发布证书与发布 Profile（口径见 `harmony/docs/RELEASE.md`） |
-| 版本 | `app/pubspec.yaml` 为 `1.0.35+36`；tag `v1.0.35`，产物见下方「下载安装」 |
+| iOS | **未在设备验证**。`ios/Runner` 平台壳已补齐 IANA 时区、私有目录、通知、TTS、分享、选图、打开文件；但未在 macOS/真机上编译运行过，安装走 App Store |
+| 鸿蒙（HarmonyOS） | **Flutter-OH 版（新，2026-11-25 起）**：`app/` 同一套 Dart 代码 + `app/ohos/` Flutter-OH 宿主工程（bundleName `com.dsh.dshchat`），三端共用一份源码。**已编译通过**（debug/release HAP 均在本机构建成功），**尚未在真机验证**（`hdc list targets` 空）。旧 ArkUI 原生版在 `harmony/`（已冻结维护、后续退役，签名材料保留） |
+| 版本 | `app/pubspec.yaml` 为 `1.0.36+37`；tag `v1.0.36`，产物见下方「下载安装」 |
 
 未验证的功能不会被写成「已完成」。真机截图是唯一验收证据。
 
@@ -99,20 +101,24 @@
 
 | 产物 | 说明 |
 |---|---|
-| APK | [`dsh-Chat-v1.0.35.apk`](https://gitee.com/westanke/dsh-Chat/releases/download/v1.0.35/dsh-Chat-v1.0.35.apk)<br>26,614,572 字节 · SHA-256 `81c4b500393c1af6aa83c724ed71a30e8c9d83b06e9c98e1b64e60c3213247cd` |
-| 校验 | `sha256sum -c` 前先比对上方 SHA-256；tag `v1.0.35` 内的 `artifacts/SHA256SUMS.txt` 为权威值 |
+| APK | [`dsh-Chat-v1.0.36.apk`](https://gitee.com/westanke/dsh-Chat/releases/download/v1.0.36/dsh-Chat-v1.0.36.apk)<br>26,615,566 字节 · SHA-256 `f91c7d37069abb12335a53f52d0f24eb697a8e29859c153b0973513a02369cd1` |
+| HAP | [`dsh-Chat-v1.0.36-harmony.hap`](https://gitee.com/westanke/dsh-Chat/releases/download/v1.0.36/dsh-Chat-v1.0.36-harmony.hap)<br>34,553,311 字节 · SHA-256 `2576f8b8da9c34a47d047063d28cb5ca75c346a13dd023ecf02e38663a6f754e` · 已签名（本地证书） |
+| HAP | [`dsh-Chat-v1.0.35-harmony.hap`](https://gitee.com/westanke/dsh-Chat/releases/download/v1.0.35/dsh-Chat-v1.0.35-harmony.hap)<br>34,553,310 字节 · SHA-256 `39677a4bea87d9f7b0664c0d6d97d263d699255cf54a6604742fed82f5650a88` · 已签名（本地证书） |
+| 校验 | `sha256sum -c` 前先比对上方 SHA-256；tag `v1.0.36` 内的 `artifacts/SHA256SUMS.txt` 为权威值 |
 
-> 版本号以 [`app/pubspec.yaml`](app/pubspec.yaml) 的 `version` 为准（当前 `1.0.35+36`）。
+> 版本号以 [`app/pubspec.yaml`](app/pubspec.yaml) 的 `version` 为准（当前 `1.0.36+37`）。
 
 ## 怎么跑
 
 ```sh
-export PUB_HOSTED_URL=https://pub.flutter-io.cn FLUTTER_STORAGE_BASE_URL=https://storage.flutter-io.cn
+source /media/wangke/OFFICE/workspace/tools/env.sh   # 工具链唯一入口（Flutter-OH + Android SDK + HarmonyOS SDK API 26）
+
 cd app
 flutter pub get             # 依赖变更后必跑
 flutter analyze             # 提交前必绿
-flutter test                # 24 例
-flutter build apk --debug   # 真机验证前
+flutter test                # 590 例
+flutter build apk --debug   # Android 真机验证前
+flutter build hap --debug --no-codesign   # 鸿蒙 HAP（本机无签名，走 unsigned）
 ```
 
 首次启动进「连接到 DSH Bridge」页：填 bridge 地址（如 `http://192.168.1.126:3090`；
@@ -120,23 +126,33 @@ flutter build apk --debug   # 真机验证前
 加上桌面端「手机设置 → 远程访问」生成的一次性配对码。配对成功后凭证落本地，
 之后自动连接。
 
-Android 工具链在 `/media/wangke/OFFICE/workspace/android-toolchain/`（jdk17 + sdk），
+工具链统一在 `/media/wangke/OFFICE/workspace/tools/`（`env.sh` 是唯一入口）：
+
+| 工具 | 路径 | 说明 |
+|---|---|---|
+| Flutter | `tools/flutter-oh` | **Flutter-OH `3.50.0+ohos-1.3.3`**，Android / iOS / 鸿蒙三端统一用这一个（`TargetPlatform.ohos` 只在它里面有） |
+| Android SDK | `tools/sdk` | adb 在 `tools/sdk/platform-tools/adb` |
+| JDK | `tools/jdk17` | Android 构建用 |
+| HarmonyOS SDK | `tools/ohos-sdk` | **API 26**（26.0.0.105）；含 ohpm / hvigorw / node / hdc |
+
 真机安装时 vivo 会弹风险拦截页，需勾选确认后再点继续安装。
 
-> ⚠️ 2026-11-03 实测：该工具链目录与 `~/flutter` 在开发机上**均不存在**，
-> `flutter`/`dart`/`java` 也不在 PATH。上面的命令需先补齐工具链才能跑；
-> 当前 `flutter analyze` 与 `flutter test` 由 CI（GitHub Actions）代为执行。
+> ⚠️ 2026-11-25 起：不 `source tools/env.sh` 直接跑构建会踩系统 Android SDK 的
+> `LicenceNotAcceptedException`（缺 ndk;28.2.13676358）。CI 不装这些工具链，
+> 由 GitHub Actions 代跑 analyze/test。
 
 ## CI
 
-`.github/workflows/ci.yml` 两道闸门，每次推送都跑：
+`.github/workflows/ci.yml` 三道闸门，每次推送都跑：
 
 | 闸门 | 内容 |
 |---|---|
-| `docs-check` | `bash scripts/ci/docs-check.sh`：`app/lib/` 全部文件已登记进 `docs/STRUCTURE.md`、无死链、无旧仓名残留 |
-| `analyze + test` | `flutter pub get` → `flutter analyze` → `flutter test`（100 例），stable 通道 |
+| `docs-check` | `bash scripts/ci/docs-check.sh`：`app/lib/` 与 `app/ohos/` 全部文件已登记进 `docs/STRUCTURE.md`、无死链、无旧仓名残留 |
+| `analyze + test` | `flutter pub get` → `flutter analyze` → `flutter test`（590 例），用 **Flutter-OH SDK**（`3.50.0+ohos-1.3.3`，CI 里 clone 自 atomgit）。不能用上游 stable：material_ui/cupertino_ui 的 ohos fork 引用了 `TargetPlatform.ohos`，上游 SDK 编不过 |
+| `harmony-test` | `npm ci && npm test`（`harmony/test`，node:test 纯逻辑），无鸿蒙 SDK 依赖 |
 
-刻意**不**跑 `flutter build apk`：产物不入库，验收在本机真机（见 `ci.yml` 头注释）。
+刻意**不**跑 `flutter build apk` / `flutter build hap`：产物不入库，验收在本机真机
+（见 `ci.yml` 头注释），且 CI runner 没有鸿蒙 SDK。
 GitHub 是本仓的镜像从站，日常推送目标在 Gitee（见 [AGENTS.md §10](AGENTS.md)）。
 
 ## 仓库结构
@@ -147,6 +163,9 @@ dsh-Chat/
   docs/         ← STRUCTURE.md（文件清单）/ design-tokens.md（设计基准）/ project/（文档索引）
   ref/          ← 官方界面基准截图、样式表与抓包记录，只读，不参与构建、不被 app/ 引用
   app/          ← Flutter 工程根（lib/ 下仅 design/、bridge/、ui/ 三个子目录）
+  app/ohos/     ← Flutter-OH 鸿蒙宿主工程（bundleName com.dsh.dshchat，2026-11-25 起）
+  app/vendor/   ← 本仓打补丁的第三方包（gpt_markdown，见其 README.dsh.md）
+  harmony/      ← 旧 ArkUI 原生鸿蒙版（已冻结维护、后续退役，签名材料保留）
   LICENSE       ← AGPL-3.0 全文
 ```
 

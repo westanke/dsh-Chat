@@ -366,18 +366,29 @@ class _ChatPageState extends State<ChatPage>
               onDecide: st.decideApproval,
             ),
             Expanded(
-              child: st.isEmpty
-                  ? EmptyGreeting(
-                      colors: c,
-                      state: st,
-                      onPickSuggestion: (text) =>
-                          _composerKey.currentState?.fillDraft(text),
+              child: st.loadingHistory && st.messages.isEmpty
+                  ? const Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          CircularProgressIndicator(strokeWidth: 2),
+                          SizedBox(height: 12),
+                          Text('正在加载会话…'),
+                        ],
+                      ),
                     )
-                  : ChatList(
-                      state: st,
-                      colors: c,
-                      onToggleTurn: (turn) => toggleTurn(st, turn),
-                    ),
+                  : st.isEmpty
+                      ? EmptyGreeting(
+                          colors: c,
+                          state: st,
+                          onPickSuggestion: (text) =>
+                              _composerKey.currentState?.fillDraft(text),
+                        )
+                      : ChatList(
+                          state: st,
+                          colors: c,
+                          onToggleTurn: (turn) => toggleTurn(st, turn),
+                        ),
             ),
           ],
         ),

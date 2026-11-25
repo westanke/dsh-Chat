@@ -32,8 +32,13 @@ import 'ui/notify_watcher.dart';
 import 'ui/update_prompt.dart';
 import 'ui/settings_page.dart';
 
-void main() {
-  DshLog.init('/data/data/com.dsh.dshchat/files/dsh.log');
+Future<void> main() async {
+  // MethodChannel 依赖 ServicesBinding；必须先初始化绑定再读设备信息。
+  WidgetsFlutterBinding.ensureInitialized();
+  // 先读原生设备信息（时区 + 沙盒私有目录）：文件日志要落在 app 私有目录，
+  // 鸿蒙端只有原生能给出绝对路径（DshDevice.filesDir）。
+  await DshDevice.init();
+  DshLog.init(DshLog.resolvePath(filesDir: DshDevice.filesDir));
   // 偏好异步加载（失败保留默认，绝不让聊天页起不来）；load() 末尾 notifyListeners
   // 会触发这里的监听，把持久化的「诊断日志」开关同步给 DshLog.enabled。
   appSettings.addListener(_syncDiagLog);
@@ -141,8 +146,10 @@ class _AppRootState extends State<_AppRoot> {
   }
 
   /// 启动即读原生时区 + 恢复凭证；有 token 就直连（一次配对，此后自动连接）。
+  ///
+  /// 原生设备信息（时区 / 沙盒目录）在 main() 里已读过一次，这里不再重复
+  /// 调通道（省一次 MethodChannel 往返）。
   Future<void> _autoConnect() async {
-    await DshDevice.init();
     await DshCredentials.load();
     final base = DshCredentials.baseUrl;
     final token = DshCredentials.token;

@@ -188,5 +188,39 @@ void main() {
       state.dispose();
       gw.dispose();
     });
+
+    test('A 会话的历史消息不会带到 B 会话', () async {
+      final gw = GatewayClient(baseUrl: 'http://127.0.0.1:1'); // 不连接
+      final state = ChatState(gw);
+      state.sessionId = 'a';
+      state.messages = <ChatMessage>[
+        ChatMessage(role: 'user', text: 'A 的历史'),
+        ChatMessage(role: 'assistant', text: 'A 的回答'),
+      ];
+      await state.openSession(
+        const DshSession(
+          id: 'b',
+          rootId: 'b',
+          updatedAt: 0,
+          running: false,
+          blank: false,
+        ),
+      );
+      expect(state.sessionId, 'b');
+      expect(state.messages, isEmpty);
+      state.dispose();
+      gw.dispose();
+    });
+
+    test('首屏历史加载期间不算空态', () {
+      final gw = GatewayClient(baseUrl: 'http://127.0.0.1:1'); // 不连接
+      final state = ChatState(gw);
+      state.loadingHistory = true;
+      expect(state.isEmpty, isFalse);
+      state.loadingHistory = false;
+      expect(state.isEmpty, isTrue);
+      state.dispose();
+      gw.dispose();
+    });
   });
 }

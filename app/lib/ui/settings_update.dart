@@ -101,7 +101,15 @@ class _UpdateCheckRowState extends State<_UpdateCheckRow> {
 
   /// 下载新版 APK（系统下载器）+ 轮询进度 + 完成自动拉起安装
   /// （第二轮反馈 C：之前只回「已加入下载」，无进度、装不装成功无从判断）。
+  ///
+  /// 2026-11-25 三端口径：只有 Android 能自更新。鸿蒙（应用市场审核制）
+  /// 与 iOS（App Store）只能提示用户去对应商店升级 —— 在这里明确说清，
+  /// 不做「点了没反应」的黑洞。
   Future<void> _download(ReleaseInfo rel) async {
+    if (!DshPlatform.supportsInAppUpdate) {
+      setState(() => _result = '请到${DshPlatform.updateStoreName}搜索「DSH Chat」升级');
+      return;
+    }
     final id = await DshPlatform.downloadApk(rel.apkUrl, rel.apkName);
     if (!mounted) return;
     if (id <= 0) {
@@ -152,6 +160,11 @@ class _UpdateCheckRowState extends State<_UpdateCheckRow> {
     final result = _result;
     final hasNew = result != null && result.startsWith('发现新版本');
     final latest = _latest;
+    // 鸿蒙/iOS 不能自更新：标题不写「点此下载」（点了也只能提示去商店）。
+    final canDownload = DshPlatform.supportsInAppUpdate;
+    final title = hasNew
+        ? (canDownload ? result : '$result（请到${DshPlatform.updateStoreName}升级）')
+        : '检查更新';
     return _ActionRow(
       colors: c,
       icon: _checking
@@ -159,7 +172,7 @@ class _UpdateCheckRowState extends State<_UpdateCheckRow> {
           : hasNew
           ? Icons.system_update_alt
           : Icons.update_outlined,
-      title: hasNew ? result : '检查更新',
+      title: title,
       subtitle: _checking
           ? '正在检查（Gitee → GitHub）…'
           : result ?? '当前 ${_version ?? '…'} · 国内走 Gitee、国外走 GitHub',

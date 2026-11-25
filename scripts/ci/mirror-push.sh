@@ -27,7 +27,8 @@ SOURCES=(
 # gitee.com 的 HTTPS 被拦，自动落到 AtomGit —— 所以 gitee 与 atomgit 必须同批
 # 推送；只推主站会让镜像拿不到新提交。
 
-WORK="$(mktemp -d)"
+mkdir -p artifacts
+WORK="$(mktemp -d "artifacts/.tmp-mirror-XXXXXX")"
 trap 'rm -rf "$WORK"' EXIT
 
 src_label=""

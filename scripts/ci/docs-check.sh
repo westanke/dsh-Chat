@@ -11,7 +11,10 @@
 #   2) docs/STRUCTURE.md 里点名的 lib 文件必须真实存在（防改名后留死链）；
 #   3) 不得残留旧仓库名（改名遗留）。检查时排除本脚本自身与 ref/ 历史快照；
 #   4) harmony/entry/src/main/ets 下每个 .ets/.ts 文件也必须登记进 STRUCTURE.md
-#      （按 ets/ 内相对路径，写 `entryability/EntryAbility.ets` 这种形式；鸿蒙版 AGENTS.md §3）。
+#      （按 ets/ 内相对路径，写 `entryability/EntryAbility.ets` 这种形式；鸿蒙版 AGENTS.md §3）；
+#   5) app/ohos/entry/src/main/ets 下每个 .ets/.ts 文件也必须登记进 STRUCTURE.md
+#      （按 ohos/ets 内相对路径，写 `ohos/ets/plugins/DshDevicePlugin.ets` 这种形式；
+#      Flutter-OH 鸿蒙宿主工程，2026-11-25 起）。
 #
 # 用法：bash scripts/ci/docs-check.sh     退出码 0 = 通过
 set -uo pipefail
@@ -21,6 +24,7 @@ cd "$(dirname "$0")/../.." || exit 1   # 定位到仓库根，CI 与本地行为
 STRUCT="docs/STRUCTURE.md"
 LIB="app/lib"
 HARMONY_ETS="harmony/entry/src/main/ets"   # 鸿蒙 ArkTS 源码根（登记为 ets/ 内相对路径）
+OHOS_ETS="app/ohos/entry/src/main/ets"    # Flutter-OH 鸿蒙宿主工程 ArkTS 源码根（登记为 ohos/ets/ 内相对路径）
 OLD_NAME="dsh-flutter-deepseek"        # 变量化：避免本文件自身被第 3 条检查命中
 fail=0
 
@@ -56,6 +60,23 @@ if [ -d "$HARMONY_ETS" ]; then
   [ "$hmiss" -eq 0 ] && say "  ✅ 全部已登记"
 fi
 
+# ── 1c) app/ohos/ ArkTS 每个文件都被 STRUCTURE.md 收录（Flutter-OH 宿主工程）──
+if [ -d "$OHOS_ETS" ]; then
+  say "检查 $OHOS_ETS/ 全部文件是否已登记进 $STRUCT …"
+  omiss=0
+  while IFS= read -r f; do
+    rel="${f#"$OHOS_ETS"/}"          # ets/plugins/DshDevicePlugin.ets → plugins/DshDevicePlugin.ets
+    # GeneratedPluginRegistrant.ets 是 flutter 工具每次构建自动生成的
+    # （app/ohos/entry/.gitignore 已拉黑），不入库也不登记。
+    case "$rel" in *GeneratedPluginRegistrant.ets) continue ;; esac
+    if ! grep -qF "\`ohos/ets/$rel\`" "$STRUCT"; then
+      bad "未登记：app/ohos/$rel  →  请在 $STRUCT 的「## app/ohos/」表里补一行（写 \`ohos/ets/$rel\`）"
+      omiss=$((omiss + 1))
+    fi
+  done < <(find "$OHOS_ETS" \( -name '*.ets' -o -name '*.ts' \) -type f | sort)
+  [ "$omiss" -eq 0 ] && say "  ✅ 全部已登记"
+fi
+
 # ── 2) STRUCTURE.md 里点名的 dart 文件必须真实存在 ───────────────────────
 # 表里同时登记 lib/（写 lib 内相对路径）、test/（写裸文件名）、tool/（写 tool/ 前缀）
 # 三种写法，所以按「app/ 下同名文件是否存在」判定，避免误报。
@@ -82,6 +103,19 @@ if [ -d "$HARMONY_ETS" ]; then
     fi
   done < <(grep -oE '`ets/[A-Za-z0-9_/.]+\.(ets|ts)`' "$STRUCT" | tr -d '`' | sed 's|^ets/||' | sort -u)
   [ "$hghost" -eq 0 ] && say "  ✅ harmony 无死链"
+fi
+
+# 死链检查（app/ohos 侧）：STRUCTURE.md 里 \`ohos/ets/…\` 引用必须真实存在
+if [ -d "$OHOS_ETS" ]; then
+  say "检查 $STRUCT 中登记的 app/ohos ArkTS 文件是否仍存在 …"
+  oghost=0
+  while IFS= read -r rel; do
+    if [ ! -f "$OHOS_ETS/$rel" ]; then
+      bad "死链：ohos/ets/$rel  →  文件已不存在，请更新 $STRUCT"
+      oghost=$((oghost + 1))
+    fi
+  done < <(grep -oE '`ohos/ets/[A-Za-z0-9_/.]+\.(ets|ts)`' "$STRUCT" | tr -d '`' | sed 's|^ohos/ets/||' | sort -u)
+  [ "$oghost" -eq 0 ] && say "  ✅ app/ohos 无死链"
 fi
 
 # ── 3) 旧仓库名残留 ────────────────────────────────────────────────────
