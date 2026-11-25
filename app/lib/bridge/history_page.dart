@@ -54,6 +54,65 @@ class DeliverableFile {
   String get name => path.split('/').last;
 }
 
+/// 模型重试信息（内核 `llm/retry` 事件）。
+///
+/// 桌面端 WebUI 把它渲染成一行可展开的「已重试模型请求（1/5）· 1s」，
+/// 展开后是「重试延迟：536毫秒 / 失败原因：…」
+/// （内核 dsh-client-ui-chat/lib/client.js 的 RetryItem，文案见其 locale
+/// 键 message.retry.*）。手机端原先**整条丢弃**（装配器不认 `llm/retry`），
+/// 于是上游 504 触发内核自动重试时，用户在 App 里看不到任何提示。
+class ModelRetryInfo {
+  ModelRetryInfo({
+    required this.retryId,
+    required this.retry,
+    this.maxRetries,
+    this.delayMs,
+    this.failureCode,
+    this.failureMessage,
+  });
+
+  /// 同一次重试链的关联 id（内核按它把 scheduled → started 串起来）。
+  final String retryId;
+
+  /// 第几次重试（从 1 开始）。
+  final int retry;
+
+  /// 最大重试次数（内核 normal 模式给；always 模式不给）。
+  final int? maxRetries;
+
+  /// 内核给出的退避延迟（毫秒）。
+  final int? delayMs;
+
+  /// 触发重试的失败码（如 SERVER / TIMEOUT / RATE_LIMIT）。
+  final String? failureCode;
+
+  /// 触发重试的失败原因原文（可能是上游 HTML，如 504 Gateway Time-out）。
+  final String? failureMessage;
+
+  /// 已进入重试（内核发了 `llm/retry-started`）。
+  bool started = false;
+
+  /// 重试被取消（所属轮/步已关闭但始终没 started）。
+  bool cancelled = false;
+
+  /// 状态标签（对应内核 message.retry.* 的 label 选词）。
+  String get label {
+    if (started) return '已重试模型请求';
+    if (cancelled) return '模型请求重试已取消';
+    return '正在重试模型请求';
+  }
+
+  /// 分母：内核给了最大次数就用，否则用当前次数（always 模式无上限）。
+  int get maximum => maxRetries ?? retry;
+
+  /// 摘要里的秒数：退避延迟向上取整。
+  int get seconds {
+    final d = delayMs;
+    if (d == null || d <= 0) return 0;
+    return (d / 1000).ceil();
+  }
+}
+
 /// 聊天 UI 消息（由历史事件或实时流装配）。
 class ChatMessage {
   ChatMessage({
@@ -69,9 +128,10 @@ class ChatMessage {
     this.processRows = const [],
     this.startedAt,
     this.finishedAt,
+    this.retryInfo,
   });
 
-  final String role; // 'user' | 'assistant' | 'process' | 'error' | 'files' | 'command'
+  final String role; // 'user' | 'assistant' | 'process' | 'error' | 'files' | 'command' | 'retry'
   String text;
   String reasoning;
 
@@ -102,6 +162,9 @@ class ChatMessage {
   final int? startedAt;
   final int? finishedAt;
 
+  /// role == 'retry' 时：本条模型重试的明细（内核 `llm/retry` 事件）。
+  final ModelRetryInfo? retryInfo;
+
   /// 轮的真实起止（epoch ms，装配层从 user/message（或 turn/start）与
   /// turn/end 事件带下来）。只在该轮的**最后一条**消息上填；轮尾行优先用
   /// 它算「用时」（问题 4：过程组首尾漏掉工具之间的模型思考时间）。
@@ -111,6 +174,7 @@ class ChatMessage {
   bool get isUser => role == 'user';
   bool get isProcess => role == 'process';
   bool get isError => role == 'error';
+  bool get isRetry => role == 'retry';
 
   /// 组头耗时（毫秒）；两端齐全且为正才算，否则 null（时钟倒退/同毫秒不算）。
   int? get durationMs {
@@ -430,6 +494,60 @@ class HistoryPage {
           groupCalls[idx] = info;
           groupEnd = event.time;
 
+        case 'llm/retry':
+        case 'llm/retry-started':
+          // 模型重试（内核 dsh-llm-retry 插件）。桌面端 WebUI 渲染成
+          // 「已重试模型请求（1/5）· 1s」折叠行；手机端原先不认这两个事件，
+          // 整条丢弃 —— 上游 504/限流触发内核自动重试时用户毫无提示
+          // （2026-11-25 真机反馈）。
+          //
+          // `llm/retry` 事件体带完整明细（retry/maxRetries/delayMs/failure）；
+          // `llm/retry-started` 只有 retryId + retry（表示这一跳真的开始了）。
+          // 内核同一 retryId（一条重试链）会按跳数发多条 `llm/retry`
+          // （retry 递增），所以定位键是 **(retryId, retry)** 两级 ——
+          // 只按 retryId 会把第二跳并进第一跳，展开后只看得见一次。
+          final retryId = (event.data['retryId'] ?? '') as String;
+          if (retryId.isEmpty) break;
+          final retryNo = (event.data['retry'] ?? 0) as int;
+          ModelRetryInfo? info;
+          for (final m in items) {
+            final r = m.retryInfo;
+            if (r != null && r.retryId == retryId && r.retry == retryNo) {
+              info = r;
+              break;
+            }
+          }
+          if (info == null) {
+            final failure = event.data['failure'];
+            final failureMap = failure is Map ? failure : const {};
+            info = ModelRetryInfo(
+              retryId: retryId,
+              retry: retryNo,
+              maxRetries: event.data['maxRetries'] is int
+                  ? event.data['maxRetries'] as int
+                  : null,
+              delayMs: event.data['delayMs'] is int
+                  ? event.data['delayMs'] as int
+                  : null,
+              failureCode: failureMap['code'] is String
+                  ? failureMap['code'] as String
+                  : null,
+              failureMessage: failureMap['message'] is String
+                  ? failureMap['message'] as String
+                  : null,
+            );
+            items.add(
+              ChatMessage(
+                role: 'retry',
+                text: '',
+                seq: event.seq,
+                startedAt: event.time,
+                retryInfo: info,
+              ),
+            );
+          }
+          if (event.type == 'llm/retry-started') info.started = true;
+
         case 'deliverables/presented':
           // 文件卡（第四轮反馈 6）：内核 present 工具交付的文件。
           // files 原样透传 [{path, description}]；连续多个事件不合并，
@@ -483,6 +601,20 @@ class HistoryPage {
             final last = items.last;
             last.turnStartedAt = turnStartedAt;
             last.turnFinishedAt = turnEndTime;
+          }
+          // 轮结束时还挂着的重试 = 排上了但没真跑起来（内核的 cancelled 态）：
+          // 轮/步已关闭，退避没走完。对齐内核 RetryItem 的 cancelled 标签。
+          // 只有**每一跳链里最后一次**未 started 的重试算取消；同一 retryId
+          // 下更早的跳已经被内核后续跳取代（内核 client.js 也是这个判据）。
+          final byChain = <String, ModelRetryInfo>{};
+          for (final m in items) {
+            final r = m.retryInfo;
+            if (r == null) continue;
+            final prev = byChain[r.retryId];
+            if (prev == null || r.retry >= prev.retry) byChain[r.retryId] = r;
+          }
+          for (final r in byChain.values) {
+            if (!r.started) r.cancelled = true;
           }
       }
     }

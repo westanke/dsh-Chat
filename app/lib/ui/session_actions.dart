@@ -7,6 +7,7 @@ import '../bridge/gateway.dart';
 import '../bridge/models.dart';
 import '../design/tokens.dart';
 import 'chat_state.dart';
+import 'composer_drafts.dart';
 
 /// 长按会话：重命名 / 归档（对照 dsh-go 会话长按菜单的常用两项）。
 /// 归档/改名失败只在当前页 SnackBar 说明，不改本地列表——真值以服务端应答为准，
@@ -122,6 +123,8 @@ Future<void> openSessionMenu(
   if (ok != true || !context.mounted) return;
   try {
     await state.gateway.archiveSession(session.id);
+    // 会话没了，它那份输入草稿也一并清掉（草稿只在内存里，留着只会占位）。
+    composerDrafts.clearDraft(session.id);
     if (state.sessionId == session.id) await state.newChat();
     await state.loadSessions();
   } on RequestException catch (e) {

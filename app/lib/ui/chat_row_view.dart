@@ -21,6 +21,7 @@ import 'chat_thinking.dart';
 import 'md_view.dart';
 import 'process_group.dart';
 import 'turn_process_row.dart';
+import 'waiting_dots.dart';
 import 'work_steps.dart';
 
 /// 行 → 控件。
@@ -65,6 +66,8 @@ Widget chatRowView(
         index: r.index,
         state: state,
       );
+    case final RetryRow r:
+      return _RetryNotice(info: r.message.retryInfo, colors: colors);
     case final FilesRow r:
       return MessageItem(
         message: r.message,
@@ -264,9 +267,17 @@ class _StreamingText extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final waiting = state.streamReasoning.isEmpty && state.streamText.isEmpty;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        // 模型已接收请求、但还没有任何输出：显示三个跳动的点（官方
+        // chat-demo 的 `.waiting`）。此前这段完全空白，用户以为消息没发出去。
+        if (waiting)
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: WaitingDots(colors: colors),
+          ),
         if (state.streamReasoning.isNotEmpty)
           ThinkingRow(
             text: state.streamReasoning,
@@ -281,6 +292,91 @@ class _StreamingText extends StatelessWidget {
           streaming: true,
         ),
       ],
+    );
+  }
+}
+
+/// 「模型重试」提示行（内核 `llm/retry`）。
+///
+/// 对齐桌面端 WebUI 的 RetryItem（dsh-client-ui-chat/lib/client.js）：
+/// 折叠头是「已重试模型请求（1/5）· 1s」，展开后是「重试延迟：536毫秒」
+/// 与「失败原因：…」两行。手机端原先整条丢弃该事件（真机反馈
+/// 2026-11-25），上游 504 触发内核自动重试时用户看不到任何提示。
+class _RetryNotice extends StatefulWidget {
+  const _RetryNotice({required this.info, required this.colors});
+
+  final ModelRetryInfo? info;
+  final DsColors colors;
+
+  @override
+  State<_RetryNotice> createState() => _RetryNoticeState();
+}
+
+class _RetryNoticeState extends State<_RetryNotice> {
+  bool _expanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final info = widget.info;
+    final c = widget.colors;
+    if (info == null) return const SizedBox.shrink();
+    final accent = info.cancelled ? c.danger : c.labelSecondary;
+    final delay = info.delayMs;
+    final failure = info.failureMessage;
+    return Container(
+      padding: const EdgeInsets.fromLTRB(
+        DsSpacing.thinkHMargin,
+        DsSpacing.liGap,
+        DsSpacing.thinkHMargin,
+        DsSpacing.liGap,
+      ),
+      decoration: BoxDecoration(
+        color: c.settingsWarnBg,
+        borderRadius: BorderRadius.circular(DsSpacing.settingsCardRadius),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () => setState(() => _expanded = !_expanded),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  _expanded ? Icons.expand_less : Icons.expand_more,
+                  size: 16,
+                  color: accent,
+                ),
+                const SizedBox(width: 4),
+                Flexible(
+                  child: Text(
+                    '${info.label}（${info.retry}/${info.maximum}）'
+                    '· ${info.seconds}s',
+                    style: DsTypography.small.copyWith(color: accent),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (_expanded) ...[
+            const SizedBox(height: DsSpacing.liGap),
+            if (delay != null)
+              Text(
+                '重试延迟：$delay毫秒',
+                style: DsTypography.small.copyWith(color: c.labelTertiary),
+              ),
+            if (failure != null && failure.isNotEmpty) ...[
+              const SizedBox(height: 2),
+              Text(
+                '失败原因：$failure',
+                style: DsTypography.small.copyWith(color: c.labelTertiary),
+              ),
+            ],
+          ],
+        ],
+      ),
     );
   }
 }

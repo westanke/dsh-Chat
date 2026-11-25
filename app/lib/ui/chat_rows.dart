@@ -90,6 +90,18 @@ final class ErrorRow extends ChatRow {
   String get key => 'e${message.seq}';
 }
 
+/// 模型重试行（内核 `llm/retry`）：可展开的「已重试模型请求（1/5）· 1s」。
+final class RetryRow extends ChatRow {
+  const RetryRow(this.message, {required this.index});
+
+  final ChatMessage message;
+  @override
+  final int index;
+
+  @override
+  String get key => 'rt${message.retryInfo?.retryId ?? message.seq}';
+}
+
 /// 交付文件卡。
 final class FilesRow extends ChatRow {
   const FilesRow(this.message, {required this.index});
@@ -318,6 +330,7 @@ ChatRow _rowFor(ChatMessage message, int index) {
   if (message.isUser) return UserRow(message, index: index);
   if (message.isProcess) return ProcessRow(message, index: index);
   if (message.isError) return ErrorRow(message, index: index);
+  if (message.isRetry) return RetryRow(message, index: index);
   if (message.role == 'files') return FilesRow(message, index: index);
   if (message.role == 'command') return CommandRow(message, index: index);
   return AssistantRow(message, index: index);

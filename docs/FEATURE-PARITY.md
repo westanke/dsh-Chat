@@ -17,7 +17,7 @@
 | 会话抽屉分组 | 文件夹分组 + 运行点 + 待确认/未读（`ui/shell/sessions_drawer.dart`） | 今天/昨天/更早 + 待回答/待审批角标 | ◐ 无文件夹/置顶/未读 |
 | 会话长按菜单 | 置顶/重命名/移动/分享/多选/归档/删除（`sessions_drawer.dart:535`） | **✅ 重命名 + 归档（2026-11-21）**；无置顶/移动/分享/多选 | ◐ |
 | 会话正文搜索 | 标题本地匹配 + 服务端正文命中（`session_search_page.dart`） | ✅ kernel-call `session/search`，老桥降级 | ✅ |
-| 空态建议卡 | 一组建议 prompt 卡（`empty_state.dart`） | 只有问候 + 目录 chip（`chat_page.dart:411`） | ❌ |
+| 空态建议卡 | 一组建议 prompt 卡（`empty_state.dart`） | **✅ 2026-11-25**：`empty_suggestions.dart` + `EmptyGreeting` 已接入（此前表格记错为 ❌） | ✅ |
 | 新对话选项 | 文件夹/预设/权限预先挂起（`new_chat_options.dart`） | 只有工作目录（`session_location_sheet.dart`） | ◐ |
 | 消息列表锚定 | center 锚点两段 sliver，上翻不抢滚动（`ui/chat/chat_list.dart`） | 贴底跟随 + FAB（`scroll_follow.dart`） | ◐ |
 | 用户气泡 | 软气泡 + 附件缩略 + 发送状态标签（`user_bubble.dart`） | 气泡 + 历史图 + **本轮新增「排队中」提示** | ◐ |
@@ -56,7 +56,9 @@
 | 引用追问 | 引文片拼 Markdown 引用块（`quote_chip.dart`） | 无 | ❌ |
 | 附件面板 | 相册/拍照/文件/生成 + 权限/计划（`plus_panel.dart`） | ✅ 相册多图（最多 6） | ◐ 无拍照/文件选择 |
 | 语音听写 | 云识别 → 引擎 → 系统三级回退（`voice_controller.dart`） | 无（hint「按住说话」名不副实） | ❌ |
-| 草稿按会话保存 | 每会话一份文本+附件（`draft_store.dart`） | 无 | ❌ |
+| 草稿按会话保存 | 每会话一份文本+附件（`draft_store.dart`） | **✅ 2026-11-25**：`ui/composer_drafts.dart` 按 sessionId 存文本+图片（null 键 = 新对话），切会话自动存/取，发送成功清草稿 | ✅ |
+| 模型重试提示 | 内核 `llm/retry` → 桌面端折叠行「已重试模型请求（1/5）· 1s」（`client.js` RetryItem） | **✅ 2026-11-25**：装配 `llm/retry`/`llm/retry-started` → `RetryRow` + 折叠明细（重试延迟/失败原因），此前整条丢弃 | ✅ |
+| 流式等待指示 | 三个跳动的点（chat-demo `.waiting`/`.waitingDot`） | **✅ 2026-11-25**：`ui/waiting_dots.dart`（6px、错峰 0.1/0.2s、0.3→1） | ✅ |
 | 断线/同步恢复 | syncing 横幅 + 超时降级「需要同步」（`chat_state.dart:726`） | 连接态 + 自动重连；无 syncing 横幅 | ◐ |
 | 只读子会话 | 输入条换只读玻璃条（`read_only_bar.dart`） | ✅ 子会话历史页无输入条（`subagent_history_page.dart`） | ✅ |
 
@@ -64,6 +66,10 @@
 
 1. **目标（goal）整条链路**：`bridge/goal.dart`（投影模型 + 口径）→ `gateway_api` 的 `fetchGoal/editGoal/pauseGoal/resumeGoal/clearGoal`（`goal` / `goal-edit` / `goal-pause` / `goal-resume` / `goal-clear` 帧，CAS `ref:{id,revision}`）→ `ui/goal_dock.dart`（目标条 + 操作面板 + 编辑对话框 + 清除确认 + 错误翻译）→ `chat_page.dart` 输入条上方接入；投影来自 history 首屏 `projections.values.goal`，动作成功后 `reloadHistory()` 追平。
 2. **排队可见性**：运行中以排队模式再发时，用户气泡上方显示「排队中 · 本轮结束后发送」（UI 派生：`isUser && seq<0 && streaming && busySendMode==queue`），落库即消失。
+3. **2026-11-25 本批（对照 `.dsh-mobile/chat-demo/` 官方 demo）**：
+   - **按会话保存草稿**：`ui/composer_drafts.dart`（`ComposerDraftStore`，键 = sessionId，null = 新对话）；输入文字与待发送图片都随会话存草稿，切会话自动存旧取新，发送成功后清掉该会话草稿；测试 `test/composer_drafts_test.dart`。
+   - **模型重试提示**：内核 `llm/retry` / `llm/retry-started` 事件原先被装配器整条丢弃（桌面端有「已重试模型请求（1/5）· 1s」，手机端无任何提示）。现在 `bridge/history_page.dart` 装配出 `role='retry'` 消息（`ModelRetryInfo`：retryId/retry/maxRetries/delayMs/failure/started/cancelled），`ui/chat_rows.dart` 派生 `RetryRow`，`ui/chat_row_view.dart` 渲染可折叠的「已重试模型请求（n/m）· Xs」+「重试延迟：N毫秒 / 失败原因：…」。测试 `test/model_retry_test.dart`。
+   - **流式等待指示**：模型已接收请求但还没有任何输出时显示三个跳动的点（官方 `.waiting`/`.waitingDot`：6px、错峰 0.1/0.2s、透明度 0.3→1）；此前这段完全空白。`ui/waiting_dots.dart`。
 
 ## 三、下一批候选（按价值/成本）
 

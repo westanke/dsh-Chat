@@ -91,7 +91,10 @@ extension _ComposerPermission on ComposerState {
       );
       return;
     }
-    _refresh(() => _pendingImages.add(img));
+    _refresh(() {
+      _pendingImages.add(img);
+      _syncImageDraft();
+    });
   }
 
   /// 拉取权限档位清单并弹出选择菜单（服务端是权威；失败给明确提示）。

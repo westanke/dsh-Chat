@@ -16,6 +16,7 @@ import '../bridge/platform.dart';
 import '../bridge/slash_commands.dart';
 import '../design/tokens.dart';
 import 'composer_status.dart';
+import 'composer_drafts.dart';
 import 'plus_panel.dart';
 import 'window_class.dart';
 
@@ -29,12 +30,8 @@ part 'composer_permission.dart';
 part 'composer_slash.dart';
 
 /// 待发送图片：选图后暂存，随下一条消息一起发（2026-11-21 起支持多张）。
-typedef _PendingImage = ({
-  String path,
-  String name,
-  String mediaType,
-  String base64,
-});
+/// 字段与草稿模型 [ComposerDraftImage] 同构（见 composer_drafts.dart）。
+typedef _PendingImage = ComposerDraftImage;
 
 /// 发送键三态（对照 companion 的 ComposerSendPolicy）。
 enum _SendKeyState { send, stop, disabled }
@@ -145,11 +142,13 @@ class ComposerState extends State<Composer> {
   /// 把一段文字填进输入框并聚焦（空态建议卡点一下就走这条路）。
   ///
   /// 只填不发：dsh-go 的建议卡也是把 prompt 放进输入框，用户还能改。
+  /// 填完同步存进当前会话草稿，切会话时不会丢。
   void fillDraft(String text) {
     _controller.value = TextEditingValue(
       text: text,
       selection: TextSelection.collapsed(offset: text.length),
     );
+    composerDrafts.setDraftText(widget.sessionId, text);
     _focus.requestFocus();
     notifyUiChanged();
   }
@@ -239,6 +238,9 @@ class ComposerState extends State<Composer> {
   ///（m04149：失败不落缓存，下次输入自动重试）。
   void _onChanged(String _) {
     setState(() {});
+    // 输入变化即存草稿（chat-demo setDraftText 口径：随输入增量更新，
+    // 切会话时拿到的就是最新文字）。
+    composerDrafts.setDraftText(widget.sessionId, _controller.text);
     _resetSlashDismissal();
     if (parseSlashInput(_controller.text) != null) _ensureCommands();
     final at = _atDraft;
@@ -374,6 +376,14 @@ class ComposerState extends State<Composer> {
     setState(() {});
   }
 
+  /// 待发送图片变化后同步进当前会话草稿（切会话不丢图）。
+  void _syncImageDraft() {
+    composerDrafts.setDraftImages(
+      widget.sessionId,
+      List<_PendingImage>.of(_pendingImages),
+    );
+  }
+
   /// 发送键三态（对照 companion ComposerSendPolicy.resolve）。
   _SendKeyState get _sendKeyState {
     if (_hasText || _hasImage) return _SendKeyState.send;
@@ -414,6 +424,9 @@ class ComposerState extends State<Composer> {
     setState(() {
       _controller.clear();
       _pendingImages.clear();
+      // 发送成功即清草稿（chat-demo clearSentDraft 口径；命令分支不清编辑器，
+      // 草稿也随之保留，草稿始终与编辑器内容一致）。
+      composerDrafts.clearSentDraft(widget.sessionId);
     });
   }
 
@@ -423,11 +436,34 @@ class ComposerState extends State<Composer> {
   /// 解析逻辑在 composer_widgets.dart 的 resolvePickedImage（同库顶层函数）。
   /// 会话从「新对话」变成有 id 后，命令面板要换一份带宿主命令的清单
   /// （IKX5MV：新对话里 `/tunnel` 派发完会话才建出来）。
+  ///
+  /// 切会话时先把当前输入存进旧会话草稿，再载入新会话草稿
+  /// （对照 chat-demo drafts.ts：草稿按会话各自保留，不串台）。
   @override
   void didUpdateWidget(covariant Composer oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.sessionId != widget.sessionId &&
-        parseSlashInput(_controller.text) != null) {
+    final oldSid = oldWidget.sessionId;
+    if (oldSid != widget.sessionId) {
+      // null 也要存：新对话的草稿同样保留（chat-demo 的 null 键口径）。
+      composerDrafts.setDraftText(oldSid, _controller.text);
+      composerDrafts.setDraftImages(
+        oldSid,
+        List<_PendingImage>.of(_pendingImages),
+      );
+      final draft = composerDrafts.draftOf(widget.sessionId);
+      _controller.value = TextEditingValue(
+        text: draft.text,
+        selection: TextSelection.collapsed(offset: draft.text.length),
+      );
+      _pendingImages
+        ..clear()
+        ..addAll(draft.images);
+      // 会话变了命令清单也要换（IKX5MV），且载入草稿后若仍是斜杠命令
+      // 需要立刻刷新面板数据源。
+      if (parseSlashInput(_controller.text) != null) {
+        _ensureCommands();
+      }
+    } else if (parseSlashInput(_controller.text) != null) {
       _ensureCommands();
     }
   }

@@ -104,7 +104,10 @@ extension _ComposerBuild on ComposerState {
             permissionActive: (widget.currentPermission ?? '').isNotEmpty,
             onPickPermission: _pickPermission,
             pendingImageNames: [for (final i in _pendingImages) i.name],
-            onRemoveImage: (i) => _refresh(() => _pendingImages.removeAt(i)),
+            onRemoveImage: (i) => _refresh(() {
+              _pendingImages.removeAt(i);
+              _syncImageDraft();
+            }),
             canPickImage: widget.enabled,
             onPickImage: _openPlusPanel,
             onInsertContent: () {
