@@ -2,6 +2,16 @@
 
 > 宪法 §8 要求：lib/ 下文件增删与结构变更，**同提交**更新本表。
 
+## 根目录
+
+| 路径 | 用途 |
+|---|---|
+| `README.md` | 中文 README：hero、实际效果、平台状态、下载、构建、CI、文档与已知限制 |
+| `README.en.md` | 英文 README，与中文版同步维护 |
+| `assets/promo-16x9.png` / `assets/promo-16x9.en.png` | README hero 图（中文 / 英文） |
+| `assets/screenshots/{chat,sessions,settings}.jpg` | 实际效果截图（2026-11-25 鸿蒙真机，设备 ID 已隐去） |
+| `screenshots.json` | README/市场取图清单 |
+
 ## docs/（平铺）
 
 | 文件 | 用途 |
