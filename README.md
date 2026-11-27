@@ -7,7 +7,7 @@
 </p>
 
 <p align="center">
-  <img src="assets/promo-16x9.png" alt="dsh-Chat：聊天页、会话抽屉与连接设置（Android / iOS / HarmonyOS）" width="100%">
+  <img src="assets/promo-16x9.png" alt="dsh-Chat：新会话、会话抽屉与设置（Android / iOS / HarmonyOS）" width="100%">
 </p>
 
 <p align="center">
@@ -38,14 +38,14 @@
 ## 实际效果
 
 <p align="center">
-  <a href="assets/screenshots/chat.jpg"><img src="assets/screenshots/chat.jpg" width="280" alt="聊天页：Markdown、工具调用与改动卡片"></a>
-  <a href="assets/screenshots/sessions.jpg"><img src="assets/screenshots/sessions.jpg" width="280" alt="会话抽屉：搜索、分组、运行中与当前主机"></a>
-  <a href="assets/screenshots/settings.jpg"><img src="assets/screenshots/settings.jpg" width="280" alt="设置页：连接状态、设备权限与外观"></a>
+  <a href="assets/screenshots/chat.png"><img src="assets/screenshots/chat.png" width="270" alt="新会话：工作目录、建议卡片与输入条"></a>
+  <a href="assets/screenshots/sessions.png"><img src="assets/screenshots/sessions.png" width="270" alt="会话抽屉：搜索、分组、运行中/待确认/未读筛选与已归档开关"></a>
+  <a href="assets/screenshots/settings.png"><img src="assets/screenshots/settings.png" width="270" alt="设置页：外观、字号与工作步骤展示"></a>
 </p>
 
-左：聊天页，Markdown、工具调用、过程组与「改动了 N 个文件」卡片都在同一条时间线里。
-中：会话抽屉，搜索、日期分组、运行中/待确认/未读筛选，以及当前桥接主机。
-右：设置页，连接状态、设备权限、外观与通知入口；设备 ID 已隐去。
+左：新会话页，工作目录、四张建议卡片与输入条；顶部胶囊点一下能看这一轮的信息与统计。
+中：会话抽屉，搜索、日期分组、运行中/待确认/未读筛选，以及「显示已归档」开关。
+右：设置页，界面风格、应用内字号缩放与工作步骤展示。三张均为整屏等比缩放，未裁切。
 
 > 截图来自 HarmonyOS 真机（API 26）。Android 与鸿蒙共用同一套 Flutter UI；
 > iOS 已补齐原生桥、尚未做真机视觉验收。

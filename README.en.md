@@ -7,7 +7,7 @@
 </p>
 
 <p align="center">
-  <img src="assets/promo-16x9.en.png" alt="dsh-Chat: chat, session drawer and connection settings on Android, iOS and HarmonyOS" width="100%">
+  <img src="assets/promo-16x9.en.png" alt="dsh-Chat: new chat, session drawer and settings on Android, iOS and HarmonyOS" width="100%">
 </p>
 
 <p align="center">
@@ -41,9 +41,9 @@ bundle id — belongs to this project.
 ## What it looks like
 
 <p align="center">
-  <a href="assets/screenshots/chat.jpg"><img src="assets/screenshots/chat.jpg" width="280" alt="Chat: Markdown, tool calls and a changed-files card"></a>
-  <a href="assets/screenshots/sessions.jpg"><img src="assets/screenshots/sessions.jpg" width="280" alt="Session drawer: search, groups, running and current host"></a>
-  <a href="assets/screenshots/settings.jpg"><img src="assets/screenshots/settings.jpg" width="280" alt="Settings: connection, device permissions and appearance"></a>
+  <a href="assets/screenshots/chat.png"><img src="assets/screenshots/chat.png" width="270" alt="New chat: working directory, suggestion cards and the composer"></a>
+  <a href="assets/screenshots/sessions.png"><img src="assets/screenshots/sessions.png" width="270" alt="Session drawer: search, groups, running / pending / unread filters and the archived toggle"></a>
+  <a href="assets/screenshots/settings.png"><img src="assets/screenshots/settings.png" width="270" alt="Settings: appearance, font scale and work-step detail"></a>
 </p>
 
 Left: chat, with Markdown, tool calls, process groups and a “changed N files” card on one timeline.
