@@ -11,12 +11,12 @@
 </p>
 
 <p align="center">
-  <a href="https://gitee.com/westanke/dsh-Chat/releases/tag/v1.0.37"><code>下载 v1.0.37 · APK / HAP</code></a>
+  <a href="https://gitee.com/westanke/dsh-Chat/releases/tag/v1.0.38"><code>下载 v1.0.38 · APK / HAP</code></a>
 </p>
 
 <p align="center">
   <a href="./README.en.md">English</a> ·
-  <img alt="Version" src="https://img.shields.io/badge/version-1.0.37-087f8c">
+  <img alt="Version" src="https://img.shields.io/badge/version-1.0.38-087f8c">
   <img alt="License" src="https://img.shields.io/badge/license-AGPL--3.0-2da44e">
   <img alt="Platforms" src="https://img.shields.io/badge/platform-Android%20%7C%20iOS%20%7C%20HarmonyOS-586069">
   <img alt="Built with Flutter" src="https://img.shields.io/badge/built%20with-Flutter-02569B">
@@ -82,22 +82,22 @@
 
 | 平台 | 现在到哪一步 |
 |---|---|
-| **Android** | **已真机验证**：配对、自动重连、流式对话、Markdown、工具行五态与详情、过程组四档、思考预览、提问卡、抽屉、深色模式、分享。v1.0.37 APK 26.6 MB |
+| **Android** | **已真机验证**：配对、自动重连、流式对话、Markdown、工具行五态与详情、过程组四档、思考预览、提问卡、抽屉、深色模式、分享。v1.0.38 APK 26.8 MB |
 | **iOS** | 原生桥已补齐 IANA 时区、私有目录、通知、TTS、分享、选图、打开文件；CI 已构建出未签名 IPA。**未在 iPhone 真机验证**；安装/更新走 App Store |
 | **HarmonyOS** | **Flutter-OH 版已真机验证**（API 26）：配对、聊天、会话、分享、TTS、选图、通知与点击回跳均通过。正式 release HAP 需 AGC 正式签名 |
 
-当前版本：`app/pubspec.yaml` 为 `1.0.37+38`，tag `v1.0.37`。
+当前版本：`app/pubspec.yaml` 为 `1.0.38+39`，tag `v1.0.38`。
 
 未验证的功能不会被写成“已完成”。真机截图是唯一验收证据。
 
 ## 下载安装
 
-最新版 **v1.0.37**（Gitee 主站；GitHub 镜像同步同一 tag）：
+最新版 **v1.0.38**（Gitee 主站；GitHub 镜像同步同一 tag）：
 
 | 产物 | 大小 | SHA-256 |
 |---|---|---|
-| [APK](https://gitee.com/westanke/dsh-Chat/releases/download/v1.0.37/dsh-Chat-v1.0.37.apk) | 26,615,566 字节 | `c87a88346d735d243a181da93226821693c666149bd17b8b3e07cbc72313b3f4` |
-| [HAP](https://gitee.com/westanke/dsh-Chat/releases/download/v1.0.37/dsh-Chat-v1.0.37-harmony.hap) | 34,552,873 字节 | `5d3bd54db03ac129ff615d5acd7e5a6f4328f2b0d980f9c37ba7e772262cdcaf`（项目发布证书签名） |
+| [APK](https://gitee.com/westanke/dsh-Chat/releases/download/v1.0.38/dsh-Chat-v1.0.38.apk) | 26,812,418 字节 | `0c7239ad242f4c70bcef9926f808241f5a9e27c05ab1a80bc0d46eb1e01b1f18` |
+| [HAP](https://gitee.com/westanke/dsh-Chat/releases/download/v1.0.38/dsh-Chat-v1.0.38-harmony.hap) | 34,716,698 字节 | `17002d782648b9416fc0028e1bc57942d5f8af550cf8dc33df4a24be05aa2166`（本地发布证书签名） |
 
 - Android：直接安装 APK；部分机型会弹风险拦截页，勾选确认后继续。
 - HarmonyOS：HAP 需要设备信任的签名。开发机可用 `scripts/sign-hap.sh` 生成 debug 签名包；
