@@ -222,3 +222,27 @@ jobs:
             curl -fsS -X PUT -H @/tmp/headers.txt --data-binary @"$f" "$url"
             echo "已上传：$name"
           done
+
+      - name: 回报 Issue #1
+        if: ${{ always() }}
+        env:
+          TOKEN: ${{ secrets.ATOMGIT_TOKEN }}
+        run: |
+          set -u
+          T="${TOKEN:-${ATOMGIT_TOKEN:-}}"
+          [ -n "$T" ] || { echo "无令牌，跳过回报"; exit 0; }
+          TAG="${{ steps.ver.outputs.tag }}"
+          TESTONLY="${{ steps.ver.outputs.testonly }}"
+          STATUS="${{ job.status }}"
+          REPO="${ATOMGIT_REPOSITORY}"
+          BODY=$(cat <<EOF
+          AtomGit Actions 流水线收尾：\`${TAG}\`（试跑=${TESTONLY:-?}，状态=${STATUS:-unknown}）。
+
+          产物在 Actions 页面的制品区；正式 tag（不以 -ci 结尾）会自动建 Release 并上传 APK 与 SHA256SUMS.txt。
+          EOF
+          )
+          export BODY
+          python3 -c "import json,os;print(json.dumps({'body':os.environ['BODY']},ensure_ascii=False))" > /tmp/comment.json
+          curl -fsS -X POST -H "Authorization: Bearer $T" -H "Content-Type: application/json" \
+            --data-binary @/tmp/comment.json "https://atomgit.com/api/v5/repos/${REPO}/issues/1/comments" \
+            > /dev/null && echo "已回报 Issue #1"
