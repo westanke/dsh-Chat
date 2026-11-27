@@ -10,6 +10,7 @@ import '../bridge/dlog.dart';
 import '../bridge/gateway.dart'; // RequestException / HistoryPage
 import '../bridge/models.dart';
 import 'chat_state.dart';
+import 'history_snapshot_cache.dart';
 
 /// 已加载的最小 seq（下一页 beforeSeq）；-1 = 流式中的临时消息，跳过。
 /// （自 chat_state.dart 挪来：只有翻页用。）
@@ -61,6 +62,58 @@ List<Map<String, dynamic>> mergeRefreshedRawEvents(
   return older.isEmpty ? fresh : [...older, ...fresh];
 }
 
+
+/// 一次历史请求，遇到「只是宿主这会儿没回话」的错误自动重试。
+///
+/// 桥侧已把内核 `rpc/timeout` 归一成可重试的 `TIMEOUT`（2026-11-27）；
+/// 客户端这里补两次短退避：真机上这类超时多半是宿主机在忙（大会话、
+/// 长回合、慢盘），一秒后再问通常就回了 —— 表现为红条还是自动恢复，
+/// 差别全在这两次重试。
+Future<HistoryPage> _historyWithRetry(
+  ChatState state,
+  String id, {
+  int maxMessages = 80,
+  int? beforeSeq,
+}) async {
+  for (var attempt = 0; ; attempt++) {
+    try {
+      return await state.gateway.history(
+        id,
+        maxMessages: maxMessages,
+        beforeSeq: beforeSeq,
+      );
+    } on RequestException catch (e) {
+      final transient = e.code == 'TIMEOUT' || e.retryable;
+      if (!transient || attempt >= 2) rethrow;
+      await Future<void>.delayed(Duration(milliseconds: 600 * (attempt + 1)));
+    }
+  }
+}
+
+/// 这一页里有没有「人话」：user 正文，或带正文的 assistant 回复。
+///
+/// 工具调用密集的会话经常出现「整页都是 tool/result 过程事件」：过程组在
+/// 历史里默认折叠，页面上就只剩一排折叠条，看起来像「历史没加载出来」。
+/// 判定不通过时继续向前取页，直到看到正文（或真的翻不动了）。
+bool _hasHumanContent(Iterable<ChatMessage> items) => items.any(
+  (m) => m.role == 'user' || (m.role == 'assistant' && m.text.trim().isNotEmpty),
+);
+
+/// 记住当前最后一屏，供下次 openSession 先上屏。
+void _rememberSnapshot(ChatState state, String id) {
+  HistorySnapshotCache.instance.put(
+    id,
+    HistorySnapshot(
+      messages: List<ChatMessage>.of(state.messages),
+      rawEvents: List<Map<String, dynamic>>.of(state.rawEvents),
+      hasMore: state.historyHasMore,
+      truncated: state.historyTruncated,
+      projections: state.projections,
+      capturedAt: DateTime.now(),
+    ),
+  );
+}
+
 int? _seqOf(Map<String, dynamic> event) {
   final v = event['seq'];
   return v is int ? v : null;
@@ -79,10 +132,42 @@ Future<void> reloadChatHistory(ChatState state) async {
     // 200 条消息序列化后是 602 KB 级的大帧，过 quick tunnel 要好几秒；80 条把首屏压到
     // 约 1/3，配上桥侧的 permessage-deflate（约 19.5%）与隧道 90s 超时，打开会话不再卡在
     // 「等一个大帧」上。往下翻仍然一次 200 条（`loadOlderMessages`），滚动体验不变。
-    final page = await state.gateway.history(id, maxMessages: 80);
+    var page = await _historyWithRetry(state, id, maxMessages: 80);
     if (requestId != state.historyRequestId || id != state.sessionId) {
       return; // 过期应答：期间切了会话或又发起了新刷新，整块丢弃
     }
+    // 最后一页全是过程事件时继续向前取（最多 2 页）：用户要读的是正文，
+    // 不能让「工具调用条树」占满整屏（2026-11-27 真机反馈）。
+    var items = page.items;
+    var rawEvents = page.rawEvents;
+    var hasMore = page.hasMore;
+    var truncated = page.truncated;
+    var backfilled = 0;
+    while (!_hasHumanContent(items) && hasMore && backfilled < 2) {
+      final before = items.where((m) => m.seq >= 0).isEmpty
+          ? null
+          : items.firstWhere((m) => m.seq >= 0).seq;
+      if (before == null || before <= 0) break;
+      final older = await _historyWithRetry(
+        state,
+        id,
+        maxMessages: 200,
+        beforeSeq: before,
+      );
+      if (requestId != state.historyRequestId || id != state.sessionId) return;
+      items = [...older.items, ...items];
+      rawEvents = [...older.rawEvents, ...rawEvents];
+      hasMore = older.hasMore;
+      truncated = truncated || older.truncated;
+      backfilled++;
+    }
+    page = HistoryPage(
+      items: items,
+      rawEvents: rawEvents,
+      hasMore: hasMore,
+      truncated: truncated,
+      projections: page.projections,
+    );
     DshLog.w('ui history id=$id items=${page.items.length} '
         'raw=${page.rawEvents.length} '
         'projections=${page.projections != null} '
@@ -112,6 +197,7 @@ Future<void> reloadChatHistory(ChatState state) async {
     if (state.lastError?.startsWith('加载历史失败') ?? false) {
       state.lastError = null;
     }
+    _rememberSnapshot(state, id);
     state.notifyUi();
   } on RequestException catch (e) {
     // 过期失败同样不能污染新会话的错误条。
@@ -153,7 +239,8 @@ Future<void> loadOlderMessages(ChatState state) async {
   final requestId = ++state.historyRequestId;
   state.notifyUi();
   try {
-    final page = await state.gateway.history(
+    var page = await _historyWithRetry(
+      state,
       id,
       maxMessages: 200,
       beforeSeq: before,
@@ -162,6 +249,29 @@ Future<void> loadOlderMessages(ChatState state) async {
         'items=${page.items.length} hasMore=${page.hasMore}');
     if (requestId != state.historyRequestId || id != state.sessionId) {
       return; // 翻页期间切了会话或又刷新了：丢弃
+    }
+    // 这一页仍是纯过程事件时继续向前取，避免「翻页翻到的全是工具条树」。
+    var backfilled = 0;
+    while (!_hasHumanContent(page.items) && page.hasMore && backfilled < 2) {
+      final earliest = page.items.where((m) => m.seq >= 0).isEmpty
+          ? null
+          : page.items.firstWhere((m) => m.seq >= 0).seq;
+      if (earliest == null || earliest <= 0) break;
+      final older = await _historyWithRetry(
+        state,
+        id,
+        maxMessages: 200,
+        beforeSeq: earliest,
+      );
+      if (requestId != state.historyRequestId || id != state.sessionId) return;
+      page = HistoryPage(
+        items: [...older.items, ...page.items],
+        rawEvents: [...older.rawEvents, ...page.rawEvents],
+        hasMore: older.hasMore,
+        truncated: page.truncated || older.truncated,
+        projections: page.projections,
+      );
+      backfilled++;
     }
     final known = state.messages
         .where((m) => m.seq >= 0)
@@ -178,6 +288,7 @@ Future<void> loadOlderMessages(ChatState state) async {
     state.historyHasMore = page.hasMore;
     // 翻页也应答 truncated（从最旧端丢）：合并进同一个提示位，不覆盖。
     if (page.truncated) state.historyTruncated = true;
+    _rememberSnapshot(state, id);
     state.notifyUi();
   } on RequestException catch (e) {
     if (requestId != state.historyRequestId || id != state.sessionId) return;

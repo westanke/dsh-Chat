@@ -17,6 +17,7 @@ import 'chat_history_actions.dart';
 import 'chat_queue_actions.dart';
 import 'chat_expand_state.dart';
 import 'chat_hitl_actions.dart';
+import 'history_snapshot_cache.dart';
 import 'chat_setup_state.dart';
 import 'mobile_workspace.dart';
 import 'session_groups.dart';
@@ -253,12 +254,13 @@ class ChatState extends ChangeNotifier
 
   Future<void> loadSessions() async {
     try {
-      sessions = await _gateway.sessions();
+      sessions = await _retryTransient(() => _gateway.sessions());
       // 归档区只控制「看不看得见」：开关开着就跟着刷新，别让归档动作后的
       // 旧条目一直留在抽屉里。
       if (showArchived) {
         try {
-          archivedSessions = await _gateway.sessions(archived: true);
+          archivedSessions =
+              await _retryTransient(() => _gateway.sessions(archived: true));
         } on RequestException catch (e) {
           reportError('加载已归档会话失败', e,
               retry: () => loadArchivedSessions());
@@ -325,6 +327,10 @@ class ChatState extends ChangeNotifier
     // 消息当同会话旧页保留。B 的 fresh 首条 seq 若大于 A 的旧消息，A 的
     // 历史就会被整段前置到 B 页（真机：执行中的会话切到别的会话，看到的是
     // 执行中会话的历史）。
+    // 上一屏快照：先上屏再刷新（stale-while-revalidate）。大会话的 history
+    // 往返是打开慢的主因（2026-11-27 真机：从抽屉点大会话要等 1–4 秒），
+    // 而用户刚看过的最后一屏就在手边，没有理由再等一次网络。
+    final snapshot = HistorySnapshotCache.instance.take(s.id);
     messages = [];
     historyRequestId++; // 作废 A 的历史请求；下一次 reload 会拿到新代次
     // 切会话先清空原始事件/投影：防止上一会话的团队/TODO 串台
@@ -342,7 +348,15 @@ class ChatState extends ChangeNotifier
     // newChat() 一直有 _clearStream()，openSession 漏了。
     streaming = false;
     _clearStream();
-    loadingHistory = true;
+    if (snapshot != null) {
+      // 快照里的消息是同一会话的最后一屏；直接铺上，后台 reload 再对齐增量。
+      messages = snapshot.messages;
+      rawEvents = snapshot.rawEvents;
+      historyHasMore = snapshot.hasMore;
+      historyTruncated = snapshot.truncated;
+      projections = snapshot.projections;
+    }
+    loadingHistory = snapshot == null;
     // 先用加载态渲染新会话页（history 网络往返期间不显示旧会话残留，
     // 也不要把空列表误显示成「新对话」）。
     notifyListeners();
@@ -362,7 +376,8 @@ class ChatState extends ChangeNotifier
     }
     unawaited(loadChatQueue(this));
     // 模型 chip 的文案跟着会话走（服务端 models 帧的 current.model）。
-    await refreshModelLabel();
+    // 不 await：它只是 chip 文案，别挡在「已经能读历史」之后。
+    unawaited(refreshModelLabel());
   }
 
   /// REST 拉会话挂起提问并合流进 hitl 表（见 GatewayApi.fetchQuestions）。
@@ -752,5 +767,22 @@ class ChatState extends ChangeNotifier
     _stateSub?.cancel();
     appSettings.removeListener(notifyUi);
     super.dispose();
+  }
+}
+
+/// 对「宿主暂时没回话」类错误重试两次（600/1200 ms 退避）。
+///
+/// 桥侧已把内核 `rpc/timeout` 归一成可重试的 `TIMEOUT`（2026-11-27）：慢盘、
+/// 长回合、上百会话时 `sessions.list` 偶尔会顶到上限，一秒后再问通常就回了。
+/// 只在 TIMEOUT/retryable 上重试，鉴权/参数错误不重试。
+Future<T> _retryTransient<T>(Future<T> Function() run, {int attempts = 2}) async {
+  for (var i = 0; ; i++) {
+    try {
+      return await run();
+    } on RequestException catch (e) {
+      final transient = e.code == 'TIMEOUT' || e.retryable;
+      if (!transient || i >= attempts) rethrow;
+      await Future<void>.delayed(Duration(milliseconds: 600 * (i + 1)));
+    }
   }
 }
