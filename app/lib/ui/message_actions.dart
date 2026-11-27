@@ -21,6 +21,7 @@ class DsMessageActions extends StatefulWidget {
     required this.text,
     this.sentAt,
     this.onRegenerate,
+    this.onFork,
   });
 
   final DsColors colors;
@@ -30,6 +31,10 @@ class DsMessageActions extends StatefulWidget {
   /// 让分享出去的内容带时间戳。null 不加。
   final int? sentAt;
   final VoidCallback? onRegenerate;
+
+  /// 「从此消息分叉」：仅已落库消息（seq>=0）传入；流式消息没有
+  /// 服务端序号，构造层传 null，这一项就不出现。
+  final VoidCallback? onFork;
 
   @override
   State<DsMessageActions> createState() => _DsMessageActionsState();
@@ -111,6 +116,13 @@ class _DsMessageActionsState extends State<DsMessageActions> {
             tooltip: '分享',
             onTap: () => _share(context),
           ),
+          if (widget.onFork != null)
+            _ActionIcon(
+              icon: Icons.call_split,
+              color: c.labelTertiary,
+              tooltip: '从此消息分叉',
+              onTap: widget.onFork,
+            ),
           const Spacer(),
           _ActionIcon(
             icon: Icons.refresh,

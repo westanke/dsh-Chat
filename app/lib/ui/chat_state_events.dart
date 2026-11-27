@@ -72,6 +72,17 @@ void _onGatewayEvent(ChatState state, GatewayEvent event) {
       state._clearStream();
       state.lastError = message;
       state._notify();
+    case GatewayErrorEvent(:final error):
+      // 没有 requestId / requestType 可归属的错误帧：retryable 与 details
+      // 之前在这一层就丢了，UI 既不知道能不能重试，也不知道限流要等多久。
+      state.reportError(
+        error.rateLimited ? '请求过于频繁' : '请求失败',
+        error,
+        retry: error.retryable && !error.rateLimited
+            ? () => state.retryLast()
+            : null,
+      );
+      state._notify();
     case SessionStatusEvent(:final sessionId, :final running):
       // 兜底：turn/end 走跟随流，丢了就永远「生成中」（桥 v2.16.1 已修根因，
       // 老桥仍可能丢）。chat.session.status 走 host 流，不依赖那次跟随。
@@ -133,13 +144,16 @@ void _onGatewayEvent(ChatState state, GatewayEvent event) {
       state.hitl.onApprovalResolved(approvalId);
     case LinkClosedEvent(:final code, :final reason):
       // 语义化 close（协议对齐）：4001 = 设备吊销/鉴权失败（重连无意义），
-      // 1009 = 单帧超过 1 MiB。旧实现只当普通掉线，用户看到「已断开」却
-      // 不知道要重新配对还是等它自己好（companion 坑「掉线不分因」）。
+      // 1009 = 单帧超过 hello 下发的 maxFrameBytes，1013 = 服务端连接数满。
+      // 上限不再硬编码 1 MiB：用事件里带的本次连接实际上限（老桥才回退默认值）。
       DshLog.w('ui link closed code=$code reason=$reason');
       if (event.revoked) {
         state.lastError = '设备已被吊销（close 4001），请重新配对';
       } else if (event.frameTooLarge) {
-        state.lastError = '请求内容超过 1 MiB，连接已重置';
+        final limit = event.limitBytes ?? state.gateway.frameLimitBytes;
+        state.lastError = '${frameLimitHint(limit)}；连接已重置';
+      } else if (event.serverBusy) {
+        state.lastError = '服务端连接数已满，请稍后再试';
       }
       state._notify();
     case QueueUpdatedEvent(:final sessionId, :final queue):

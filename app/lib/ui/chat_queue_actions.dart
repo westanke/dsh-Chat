@@ -71,7 +71,11 @@ Future<void> _queueWrite(
     }
   } on RequestException catch (e) {
     // QUEUE_TOO_LATE / TURN_ENDED 原样透传（桥 IKX2AE）。
-    state.lastError = '队列操作失败：${e.message}';
+    state.reportError(
+      '队列操作失败',
+      e,
+      retry: () => _queueWrite(state, inboxId, action, text: text),
+    );
     state.notifyUi();
   }
 }

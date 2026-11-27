@@ -6,6 +6,8 @@
 // 结构参照 dsh-go（app/lib/ui/chat/chat_rows.dart），只借结构：
 // 视觉、措辞、组件仍用本仓的 token 与既有 widget。
 
+import 'package:flutter/foundation.dart';
+
 import 'package:dshchat/bridge/models.dart';
 import 'package:dshchat/design/app_settings.dart';
 import 'package:dshchat/ui/chat_expand_state.dart';
@@ -227,12 +229,15 @@ final class MaxTokensRow extends ChatRow {
 
 /// 链路错误提示。
 final class LinkErrorRow extends ChatRow {
-  const LinkErrorRow(this.message);
+  const LinkErrorRow(this.message, {this.onRetry});
 
   final String message;
 
+  /// 可重试错误（bridge error.retryable）才给「重试」。
+  final VoidCallback? onRetry;
+
   @override
-  String get key => 'le${message.hashCode}';
+  String get key => 'le${message.hashCode}${onRetry != null ? 'r' : ''}';
 }
 
 /// 派生行序列所需的输入。
@@ -246,6 +251,7 @@ class ChatRowsInput {
     required this.streamingProcess,
     required this.maxTokensNotice,
     required this.linkError,
+    this.errorRetry,
   });
 
   final List<ChatMessage> messages;
@@ -256,6 +262,9 @@ class ChatRowsInput {
   final ChatMessage? streamingProcess;
   final bool maxTokensNotice;
   final String? linkError;
+
+  /// 错误条上的「重试」动作（仅 lastErrorRetryable 时传）。
+  final VoidCallback? errorRetry;
 
   /// 派生结果的输入指纹：变了才重算。
   Object get signature => (
@@ -269,6 +278,7 @@ class ChatRowsInput {
     streamingProcess == null ? 0 : identityHashCode(streamingProcess),
     maxTokensNotice,
     linkError,
+    errorRetry != null,
   );
 }
 
@@ -320,7 +330,7 @@ List<ChatRow> deriveRows(ChatRowsInput input) {
   if (input.streaming) rows.add(const StreamingTextRow());
   if (input.maxTokensNotice) rows.add(const MaxTokensRow());
   final error = input.linkError;
-  if (error != null) rows.add(LinkErrorRow(error));
+  if (error != null) rows.add(LinkErrorRow(error, onRetry: input.errorRetry));
 
   return rows;
 }

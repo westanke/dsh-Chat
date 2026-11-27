@@ -20,7 +20,11 @@ Future<void> submitChatAnswer(
   try {
     await state.hitl.answerQuestion(state.gateway, question, answers);
   } on RequestException catch (e) {
-    state.lastError = '提交回答失败：${e.message}';
+    state.reportError(
+      '提交回答失败',
+      e,
+      retry: () => submitChatAnswer(state, question, answers),
+    );
   }
   state.notifyUi();
 }
@@ -31,7 +35,11 @@ Future<void> skipChatQuestion(ChatState state, PendingQuestion question) async {
   try {
     await state.hitl.cancelQuestion(state.gateway, question);
   } on RequestException catch (e) {
-    state.lastError = '无法跳过该提问：${e.message}';
+    state.reportError(
+      '无法跳过该提问',
+      e,
+      retry: () => skipChatQuestion(state, question),
+    );
   }
   state.notifyUi();
 }
@@ -46,7 +54,11 @@ Future<void> decideChatApproval(
   try {
     await state.hitl.decideApproval(state.gateway, approval, allow);
   } on RequestException catch (e) {
-    state.lastError = '审批操作失败：${e.message}';
+    state.reportError(
+      '审批操作失败',
+      e,
+      retry: () => decideChatApproval(state, approval, allow),
+    );
   }
   state.notifyUi();
 }

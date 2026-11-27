@@ -122,7 +122,11 @@ Future<void> reloadChatHistory(ChatState state) async {
       DshLog.w('ui history deferred (disconnected): ${e.message}');
       return;
     }
-    state.lastError = '加载历史失败：${e.message}';
+    state.reportError(
+      '加载历史失败',
+      e,
+      retry: () => reloadChatHistory(state),
+    );
     state.notifyUi();
   }
 }
@@ -177,7 +181,11 @@ Future<void> loadOlderMessages(ChatState state) async {
     state.notifyUi();
   } on RequestException catch (e) {
     if (requestId != state.historyRequestId || id != state.sessionId) return;
-    state.lastError = '加载更早消息失败：${e.message}';
+    state.reportError(
+      '加载更早消息失败',
+      e,
+      retry: () => loadOlderMessages(state),
+    );
     state.notifyUi();
   } finally {
     state.loadingOlder = false;

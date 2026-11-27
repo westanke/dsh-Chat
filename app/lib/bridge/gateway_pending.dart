@@ -44,14 +44,34 @@ class PendingRegistry {
     return _map.remove(requestId);
   }
 
-  /// 按帧类型失败所有同类型在途请求。
-  void failOfType(String type, String code, String message) {
+  /// 按帧类型失败所有同类型在途请求；返回结算条数（0 = 没人认领，
+  /// 调用方据此把错误上抛成事件）。
+  int failOfType(
+    String type,
+    String code,
+    String message, {
+    bool retryable = false,
+    int? statusCode,
+    Map<String, dynamic>? details,
+  }) {
+    var failed = 0;
     for (final key in List.of(_map.keys)) {
       final p = _map[key];
       if (p == null || p.type != type) continue;
       _map.remove(key);
-      fail(p, RequestException(code, message));
+      fail(
+        p,
+        RequestException(
+          code,
+          message,
+          retryable: retryable,
+          statusCode: statusCode,
+          details: details,
+        ),
+      );
+      failed++;
     }
+    return failed;
   }
 
   /// 全部失败（掉线 / 关闭）。

@@ -7,6 +7,7 @@ library;
 import 'package:material_ui/material_ui.dart';
 
 import '../bridge/gateway.dart';
+import '../bridge/models.dart';
 import '../design/tokens.dart';
 import 'chat_state.dart';
 import 'drawer_filter_bar.dart';
@@ -95,6 +96,7 @@ class SessionsDrawerState extends State<SessionsDrawer> {
     // 官方抽屉：顶部搜索框（圆角胶囊灰底）→ 日期分组标题 → 会话条目 → 底部账号栏。
     final groups = state.sessionGroups;
     final q = _search.text.trim().toLowerCase();
+    final archived = state.showArchived ? _archivedFor(q) : const <DshSession>[];
 
     // 内容搜索（正文命中）只在桥提供 dshrb-v1 + 内核装了 session/search 时才有。
     // 不支持时整段不出现，列表照旧按标题本地过滤 —— 这就是「降级」。
@@ -173,8 +175,43 @@ class SessionsDrawerState extends State<SessionsDrawer> {
               scopeLabel: _scope ?? '全部对话',
               onScopeTap: () => _pickScope(context, c),
             ),
+            // 归档会话开关：桥只提供 `sessions{archived:true}`（只列归档，
+            // 没有恢复接口），所以这里只做「显示/不显示」，不伪造恢复动作。
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                DsSpacing.drawerItemPadH,
+                0,
+                DsSpacing.drawerItemPadH,
+                0,
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.archive_outlined,
+                    size: 18,
+                    color: c.drawerGroupLabel,
+                  ),
+                  const SizedBox(width: DsSpacing.drawerSearchIconGap),
+                  Expanded(
+                    child: Text(
+                      '显示已归档',
+                      style: DsTypography.small.copyWith(
+                        color: c.labelSecondary,
+                      ),
+                    ),
+                  ),
+                  Switch(
+                    value: state.showArchived,
+                    onChanged: (v) {
+                      state.setShowArchived(v);
+                      setState(() {});
+                    },
+                  ),
+                ],
+              ),
+            ),
             Expanded(
-              child: groups.isEmpty
+              child: groups.isEmpty && archived.isEmpty && !state.showArchived && !showContent
                   ? Center(
                       child: Text(
                         '暂无会话',
@@ -198,6 +235,7 @@ class SessionsDrawerState extends State<SessionsDrawer> {
                         // 时间分组（今天/昨天/更早），桶内按工作区聚簇；
                         // 渲染拆进 _sectionWidgets（宪法 500 行拆分）。
                         for (final g in groups) ..._sectionWidgets(g, q, c, state),
+                        if (state.showArchived) ..._archivedSection(c, state, q),
                       ],
                     ),
             ),
@@ -283,6 +321,92 @@ class SessionsDrawerState extends State<SessionsDrawer> {
             onLongPress: () => openSessionMenu(context, state, r.session, c),
           ),
         ],
+    ];
+  }
+
+  /// 归档会话按当前搜索/范围/筛选在本地过滤（桥一次只给全量归档列表）。
+  List<DshSession> _archivedFor(String q) {
+    return widget.state.archivedSessions.where((s) {
+      if (_scope != null && (s.workspaceTitle ?? '') != _scope) return false;
+      if (q.isNotEmpty && !s.displayTitle.toLowerCase().contains(q)) {
+        return false;
+      }
+      return switch (_filter) {
+        DrawerFilter.all => true,
+        DrawerFilter.running => s.running,
+        DrawerFilter.pending => _pendingIds.contains(s.id),
+        DrawerFilter.unread => false,
+      };
+    }).toList();
+  }
+
+  /// 「已归档」区：单独一段放在时间分组之后。桥不支持恢复，条目只可打开。
+  List<Widget> _archivedSection(DsColors c, ChatState state, String q) {
+    final archived = _archivedFor(q);
+    return [
+      Padding(
+        padding: const EdgeInsets.fromLTRB(
+          DsSpacing.drawerGroupPadH,
+          DsSpacing.drawerGroupPadV,
+          DsSpacing.drawerGroupPadH,
+          DsSpacing.drawerGroupGap,
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                '已归档',
+                style: DsTypography.small.copyWith(color: c.drawerGroupLabel),
+              ),
+            ),
+            Text(
+              '${archived.length} 条',
+              style: DsTypography.caption.copyWith(color: c.labelTertiary),
+            ),
+          ],
+        ),
+      ),
+      if (state.loadingArchived)
+        Padding(
+          padding: const EdgeInsets.symmetric(
+            vertical: DsSpacing.drawerItemPadV,
+          ),
+          child: Center(
+            child: SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: c.brand,
+              ),
+            ),
+          ),
+        )
+      else if (archived.isEmpty)
+        Padding(
+          padding: const EdgeInsets.fromLTRB(
+            DsSpacing.drawerItemPadH,
+            DsSpacing.drawerItemPadV,
+            DsSpacing.drawerItemPadH,
+            DsSpacing.drawerItemPadV,
+          ),
+          child: Text(
+            '暂无已归档会话',
+            style: DsTypography.small.copyWith(color: c.drawerGroupLabel),
+          ),
+        )
+      else
+        for (final s in archived)
+          SessionsDrawerItem(
+            session: s,
+            selected: s.id == state.sessionId,
+            running: s.running,
+            colors: c,
+            onTap: () {
+              widget.onClose();
+              state.openSession(s);
+            },
+          ),
     ];
   }
 

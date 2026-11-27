@@ -80,6 +80,15 @@ String gatewayDownMessage(int? code, String? reason) {
   return '连接被服务端关闭${code == null ? '' : '（close $code）'}';
 }
 
+/// 老桥（2026-11-23 之前）hello 不带 maxFrameBytes 时的回退值：
+/// bridge docs/project/API.md「maxFrameBytes ... 老桥不发，客户端回退 1 MiB」。
+/// 新桥一律以 hello 实际值为准，禁止再用这个常量硬判。
+const int defaultMaxFrameBytes = 1024 * 1024;
+
+/// 解析 hello.data.maxFrameBytes（正整数才认；其它形状回 null 走回退值）。
+int? parseMaxFrameBytes(Object? raw) =>
+    raw is int && raw > 0 ? raw : null;
+
 class GatewayClient {
   GatewayClient({
     required this.baseUrl,
@@ -166,6 +175,18 @@ class GatewayClient {
 
   /// hello.data.port：LAN 直连与隧道数据端口不同，诊断页用它说清接入通道。
   int? listenerPort;
+
+  /// hello.data.maxFrameBytes：本连接**入站单帧上限**（UTF-8 字节）。桥从
+  /// 2.17.3 起下发（ws-handler.ts:735），老桥缺席时按 [defaultMaxFrameBytes]
+  /// 回退。发送前据此预检，超限直接给「走附件」提示而不是等 close 1009。
+  int? maxFrameBytes;
+
+  /// 本次连接实际生效的单帧上限（字节）。
+  int get frameLimitBytes => maxFrameBytes ?? defaultMaxFrameBytes;
+
+  /// 最近一次发送是否因超限被本地拦下（[requestWithTimeout] 用来区分
+  /// 「没连接」与「帧太大」，两者都不该报 NOT_CONNECTED）。
+  bool _lastSendTooLarge = false;
 
   int _requestSeq = 0;
   final PendingRegistry _pending = PendingRegistry();
@@ -349,6 +370,8 @@ class GatewayClient {
               if (c is String) c,
         ];
         listenerPort = data['port'] is int ? data['port'] as int : null;
+        // 单帧上限跟着 hello 走：重连后桥可能换了配置，不能沿用上一轮的值。
+        maxFrameBytes = parseMaxFrameBytes(data['maxFrameBytes']);
         // 目录跟着 hello 作废：重连后桥可能换了内核版本、或这次没协商上
         // dshrb-v1。留着上一轮的目录会让 UI 以为端点还在，点了才报端点不存在。
         _catalog.value = const [];
@@ -397,17 +420,42 @@ class GatewayClient {
         final code = (data['code'] ?? 'ERROR') as String;
         final message = (data['message'] ?? '') as String;
         final requestType = data['requestType'] as String?;
-        DshLog.w('gw error code=$code msg=$message type=$requestType rid=$requestId');
+        final retryable = data['retryable'] == true;
+        final statusCode =
+            data['statusCode'] is int ? data['statusCode'] as int : null;
+        final details = data['details'] is Map
+            ? Map<String, dynamic>.from(data['details'] as Map)
+            : null;
+        DshLog.w('gw error code=$code msg=$message type=$requestType '
+            'retryable=$retryable rid=$requestId');
+        final error = RequestException(
+          code,
+          message,
+          retryable: retryable,
+          statusCode: statusCode,
+          details: details,
+        );
         final pending = _pending.take(requestId);
         if (pending != null) {
-          PendingRegistry.fail(pending, RequestException(code, message));
+          PendingRegistry.fail(pending, error);
           break;
         }
         // 分发前被拒（UNKNOWN_TYPE / INVALID_FRAME / MISSING_TYPE）只回
         // requestType、不回 requestId（ws-protocol.ts），不兜底就干挂 30s。
-        if (requestType != null) {
-          _pending.failOfType(requestType, code, message);
+        if (requestType != null &&
+            _pending.failOfType(
+                  requestType,
+                  code,
+                  message,
+                  retryable: retryable,
+                  statusCode: statusCode,
+                  details: details,
+                ) >
+                0) {
+          break;
         }
+        // 谁都没认领：上抛给 UI，别让服务端主动错误静默消失。
+        _eventCtrl.add(GatewayErrorEvent(requestType, error));
       default:
         // 应答帧：requestId 回显关联（协议统一规则）。排除表见 bridge
         // REQUEST_ID_ECHO_EXCLUDED_KINDS：subscribed / event /
@@ -563,7 +611,9 @@ class GatewayClient {
     // 晚到的结果帧按协议静默丢弃。
     _kernelCalls.failAll('连接已断开${code == null ? '' : '（close $code）'}');
     if (code != null && code != 1000 && code != 1005) {
-      _eventCtrl.add(LinkClosedEvent(code, reason));
+      _eventCtrl.add(
+        LinkClosedEvent(code, reason, limitBytes: frameLimitBytes),
+      );
     }
     _teardown().then((_) {
       if (_disposed) {
@@ -648,13 +698,28 @@ class GatewayClient {
   }
 
   bool _sendRaw(Map<String, dynamic> frame) {
+    _lastSendTooLarge = false;
     final ws = _ws;
     if (ws == null) return false;
     // 半死连接**不由客户端判死**：对端静默只是「没东西可推」，写进去的帧照样会到
     // （桥重启时由 onDone/onError 收口，服务端心跳也会主动断）。这里若抢先收口，
     // 会把活连接打成「每 ~50s 一次无谓重连」的循环。
+    String encoded;
     try {
-      ws.sink.add(jsonEncode(frame));
+      encoded = jsonEncode(frame);
+    } catch (_) {
+      return false;
+    }
+    // 协议上限按 UTF-8 字节算（桥 transport 也是按字节收）。本地先拦：
+    // 超限帧发出去只会换来 close 1009，提示还不如「图片/大文件走附件」直接。
+    final bytes = utf8.encode(encoded).length;
+    if (bytes > frameLimitBytes) {
+      _lastSendTooLarge = true;
+      DshLog.w('gw frame too large bytes=$bytes limit=$frameLimitBytes');
+      return false;
+    }
+    try {
+      ws.sink.add(encoded);
       return true;
     } catch (_) {
       return false;
@@ -678,13 +743,19 @@ class GatewayClient {
     DshLog.w('gw -> $type rid=$requestId sent=$sent');
     if (!sent) {
       _pending.take(requestId);
+      if (_lastSendTooLarge) {
+        throw RequestException(
+          'PAYLOAD_TOO_LARGE',
+          frameLimitHint(frameLimitBytes),
+        );
+      }
       throw RequestException('NOT_CONNECTED', '连接未建立，发送失败');
     }
     return completer.future.timeout(
       timeout,
       onTimeout: () {
         _pending.take(requestId);
-        throw RequestException('TIMEOUT', '请求 $type 超时');
+        throw RequestException('TIMEOUT', '请求 $type 超时', retryable: true);
       },
     );
   }

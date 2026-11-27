@@ -69,18 +69,41 @@ class ResyncEvent extends GatewayEvent {
 /// 连接被服务端关闭（非 1000/1005 的正常收尾）。桥的语义化关闭码：
 /// - 4001 鉴权失败/设备已吊销（ws-handler `close(4001,'Device revoked')`）——
 ///   重连无意义，收口到 [GatewayState.authFailed]，用户须重新配对；
-/// - 1009 单帧超过 1 MiB（桥的帧上限）——客户端发了过大请求；
+/// - 1009 单帧超过 hello 下发的 maxFrameBytes（老桥缺省 1 MiB）——客户端发了过大请求；
 /// - 1013 服务端忙（连接数上限，HTTP 层伴随 429 + Retry-After: 5）。
 /// 老实现不读 close code，把三类全当普通掉线（companion 坑位「WS 半死/掉线
 /// 不分因」），用户只看到「已断开」，不知道该重新配对还是等。
 class LinkClosedEvent extends GatewayEvent {
-  LinkClosedEvent(this.code, this.reason);
+  LinkClosedEvent(this.code, this.reason, {this.limitBytes});
   final int? code;
   final String? reason;
 
+  /// 这次连接 hello 下发的单帧上限（字节）；仅 1009 提示文案用。
+  final int? limitBytes;
+
   bool get revoked => code == 4001;
   bool get frameTooLarge => code == 1009;
+
+  /// 1013 = 服务端连接数满（HTTP 层伴随 429 + Retry-After）。
+  bool get serverBusy => code == 1013;
 }
+
+/// 没有 requestId / requestType 可归属的错误帧（服务端主动推送的错误）。
+///
+/// 普通请求错误由 `RequestException` 直接结算给调用方；这条事件只补
+/// 「谁都认领不了」的错误，让 UI 也能看到 retryable/details。
+class GatewayErrorEvent extends GatewayEvent {
+  GatewayErrorEvent(this.requestType, this.error);
+  final String? requestType;
+  final RequestException error;
+}
+
+/// 单帧上限的人话单位（协议字段是字节，UI 一律按 KiB 展示）。
+String frameLimitText(int bytes) => '${(bytes / 1024).ceil()} KiB';
+
+/// 超限提示：图片/大文件走附件，而不是让用户猜为什么发不出去。
+String frameLimitHint(int bytes) =>
+    '请求内容超过连接上限 ${frameLimitText(bytes)}，图片/大文件请走附件';
 
 class SessionEventReceived extends GatewayEvent {
   SessionEventReceived(this.sessionId, this.eventType);
@@ -146,10 +169,41 @@ class QueueUpdatedEvent extends GatewayEvent {
 }
 
 /// WS 请求 / REST 通道共用的错误（code 是稳定的错误名，如 HTTP_404/TIMEOUT）。
+///
+/// bridge 的 error 帧带 retryable（仅上游/内部错误为 true）、statusCode 与
+/// details（如 RATE_LIMITED 的 retryAfterMs）。以前只取 code/message，UI 无法
+/// 判断「重试有没有意义、要等多久」；字段一路带到 [ChatState.reportError]。
 class RequestException implements Exception {
-  RequestException(this.code, this.message);
+  RequestException(
+    this.code,
+    this.message, {
+    this.retryable = false,
+    this.statusCode,
+    this.details,
+  });
   final String code;
   final String message;
+  final bool retryable;
+  final int? statusCode;
+  final Map<String, dynamic>? details;
+
+  /// 服务端限流。
+  bool get rateLimited => code == 'RATE_LIMITED' || statusCode == 429;
+
+  /// RATE_LIMITED 的 details.retryAfterMs（缺省/形状不对为 null）。
+  int? get retryAfterMs {
+    final raw = details?['retryAfterMs'];
+    if (raw is int) return raw >= 0 ? raw : null;
+    if (raw is num) return raw >= 0 ? raw.toInt() : null;
+    return null;
+  }
+
+  /// 等待秒数（向上取整，UI 显示「约 N 秒后再试」）。
+  int? get retryAfterSeconds {
+    final ms = retryAfterMs;
+    return ms == null ? null : (ms / 1000).ceil();
+  }
+
   @override
   String toString() => 'RequestException($code): $message';
 }

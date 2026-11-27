@@ -11,6 +11,11 @@ import 'goal.dart';
 import 'models.dart';
 import 'queue.dart';
 
+/// sessions 帧参数。桥只认 `archived:true`（列出归档），**没有**
+/// includeArchived；默认空帧即活动会话，老桥行为不变。
+Map<String, Object?> sessionsFrame({bool archived = false}) =>
+    archived ? const {'archived': true} : const {};
+
 extension GatewayApi on GatewayClient {
   /// 授权根下的工作区清单（workspaces 帧，ws-basic.ts:73-76）。
   Future<List<DshWorkspace>> workspaces() async {
@@ -22,8 +27,12 @@ extension GatewayApi on GatewayClient {
   }
 
   /// 会话清单（sessions 帧；bridge 已过滤 origin=='subagent'）。
-  Future<List<DshSession>> sessions() async {
-    final r = await request('sessions', const {});
+  ///
+  /// [archived] = true 时按桥的 `sessions{archived:true}` 语义**只列已归档**
+  /// （ws-basic.ts:79-84；协议没有 includeArchived 字段）。默认仍发空帧，
+  /// 老桥/默认视图行为不变。
+  Future<List<DshSession>> sessions({bool archived = false}) async {
+    final r = await request('sessions', sessionsFrame(archived: archived));
     final list = r['sessions'] as List? ?? const [];
     return list
         .map((e) => DshSession.fromJson(Map<String, dynamic>.from(e as Map)))

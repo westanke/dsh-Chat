@@ -120,6 +120,13 @@ class ChatState extends ChangeNotifier
 
   @override
   List<DshSession> sessions = [];
+
+  /// 「显示已归档」开关打开后拉到的归档会话（bridge `sessions{archived:true}`
+  /// 只列归档，不混在 [sessions] 里；恢复能力桥暂不提供，只能查看/打开）。
+  List<DshSession> archivedSessions = const [];
+  bool showArchived = false;
+  bool loadingArchived = false;
+
   List<ChatMessage> messages = [];
 
   /// 命令卡（role=='command'，seq=-1）**按会话归属**保存：服务端历史里没有这类
@@ -198,8 +205,47 @@ class ChatState extends ChangeNotifier
   String streamText = '';
   String streamReasoning = '';
   bool streaming = false;
+
+  /// 错误条文案。用 setter 而不是裸字段：任何直接赋值（包括置 null）都要
+  /// 清掉上一次的「重试」动作，避免错误内容换了、按钮还挂着旧回调。
+  String? _lastError;
   @override
-  String? lastError;
+  String? get lastError => _lastError;
+  @override
+  set lastError(String? value) {
+    _lastError = value;
+    lastErrorRetryable = false;
+    lastErrorRetry = null;
+    lastErrorRetryAfterMs = null;
+  }
+
+  /// 最近一次错误是否可重试（bridge error.retryable 透传）。
+  bool lastErrorRetryable = false;
+
+  /// 错误条上的「重试」动作；仅 [lastErrorRetryable] 为 true 时非空。
+  VoidCallback? lastErrorRetry;
+
+  /// 429 的 details.retryAfterMs（UI 提示「约 N 秒后再试」）。
+  int? lastErrorRetryAfterMs;
+
+  /// 统一错误上报：把 RequestException 的 retryable/details/statusCode 带到
+  /// UI，并决定给不给「重试」。429 只给等待提示（立即重试只会再撞限流）。
+  void reportError(String prefix, RequestException e, {VoidCallback? retry}) {
+    if (e.rateLimited) {
+      final seconds = e.retryAfterSeconds;
+      _lastError = seconds == null
+          ? '$prefix：${e.message}（请稍后再试）'
+          : '$prefix：${e.message}（约 $seconds 秒后再试）';
+      lastErrorRetryable = false;
+      lastErrorRetry = null;
+      lastErrorRetryAfterMs = e.retryAfterMs;
+      return;
+    }
+    _lastError = '$prefix：${e.message}';
+    lastErrorRetryable = e.retryable;
+    lastErrorRetry = e.retryable ? retry : null;
+    lastErrorRetryAfterMs = e.retryAfterMs;
+  }
 
   bool get isEmpty => !streaming && !loadingHistory && messages.isEmpty;
 
@@ -208,9 +254,43 @@ class ChatState extends ChangeNotifier
   Future<void> loadSessions() async {
     try {
       sessions = await _gateway.sessions();
+      // 归档区只控制「看不看得见」：开关开着就跟着刷新，别让归档动作后的
+      // 旧条目一直留在抽屉里。
+      if (showArchived) {
+        try {
+          archivedSessions = await _gateway.sessions(archived: true);
+        } on RequestException catch (e) {
+          reportError('加载已归档会话失败', e,
+              retry: () => loadArchivedSessions());
+        }
+      }
       notifyListeners();
     } on RequestException catch (e) {
-      lastError = '加载会话失败：${e.message}';
+      reportError('加载会话失败', e, retry: () => loadSessions());
+      notifyListeners();
+    }
+  }
+
+  /// 抽屉「显示已归档」开关：打开时懒加载归档清单（桥只给归档列表，
+  /// 且没有恢复接口——这里不做假的「恢复」按钮）。
+  Future<void> setShowArchived(bool value) async {
+    if (showArchived == value) return;
+    showArchived = value;
+    notifyListeners();
+    if (value) await loadArchivedSessions();
+  }
+
+  Future<void> loadArchivedSessions() async {
+    if (loadingArchived) return;
+    loadingArchived = true;
+    notifyListeners();
+    try {
+      archivedSessions = await _gateway.sessions(archived: true);
+    } on RequestException catch (e) {
+      reportError('加载已归档会话失败', e,
+          retry: () => loadArchivedSessions());
+    } finally {
+      loadingArchived = false;
       notifyListeners();
     }
   }
@@ -433,7 +513,11 @@ class ChatState extends ChangeNotifier
       _pendingSessionId = null;
       DshLog.w('ui send FAIL ${e.code} ${e.message}');
       streaming = false;
-      lastError = '发送失败：${e.message}';
+      reportError(
+        '发送失败',
+        e,
+        retry: () => send(text, imageParts: imageParts),
+      );
       notifyListeners();
     }
   }
@@ -449,7 +533,11 @@ class ChatState extends ChangeNotifier
         QuestionAnswerItem(id: question.questions.single.id, custom: text),
       ]);
     } on RequestException catch (e) {
-      lastError = '提交回答失败：${e.message}';
+      reportError(
+        '提交回答失败',
+        e,
+        retry: () => _answerSingleQuestion(question, text),
+      );
     }
     notifyListeners();
   }
@@ -467,7 +555,7 @@ class ChatState extends ChangeNotifier
       await _gateway.cancelTurn(id);
       await reloadHistory();
     } on RequestException catch (e) {
-      lastError = '停止失败：${e.message}';
+      reportError('停止失败', e, retry: () => cancelTurn());
       notifyListeners();
     }
   }
@@ -506,7 +594,7 @@ class ChatState extends ChangeNotifier
       }
     } on RequestException catch (e) {
       DshLog.w('ui ensure-session FAIL ${e.code}');
-      lastError = '建立会话失败：${e.message}';
+      reportError('建立会话失败', e, retry: () => ensureSessionOpen());
       notifyListeners();
       return null;
     }
@@ -527,6 +615,27 @@ class ChatState extends ChangeNotifier
   Future<void> regenerateAt(int index) => regenerateChatAt(this, index);
 
   Future<void> retryLast() => retryChatLast(this);
+
+  /// 「从此消息分叉」：调用 `fork{atSeq}`（bridge ws-sessions.ts handleFork），
+  /// 新会话建好后切过去。seq 是消息落库序号；流式临时消息（seq<0）没有
+  /// 可定位的服务端位置，UI 不提供入口，这里也直接拒绝。
+  Future<void> forkAt(int seq) async {
+    final id = sessionId;
+    if (id == null || id.isEmpty || seq < 0) {
+      DshLog.w('ui fork skipped sid=$id atSeq=$seq');
+      return;
+    }
+    lastError = null;
+    try {
+      final forked = await _gateway.forkSession(id, atSeq: seq);
+      DshLog.w('ui fork sid=$id atSeq=$seq -> $forked');
+      await loadSessions();
+      await openSessionById(forked);
+    } on RequestException catch (e) {
+      reportError('分叉失败', e, retry: () => forkAt(seq));
+      notifyListeners();
+    }
+  }
 
   /// 工具调用实时缓冲（桥 fdb85da 工具帧 → preparing/running/结果三态；
   /// committed 后由 reloadHistory 的持久化过程组覆盖，_clearStream 清空）。

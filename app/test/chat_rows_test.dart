@@ -28,6 +28,7 @@ ChatRowsInput _input(
   ChatMessage? streamingProcess,
   bool maxTokensNotice = false,
   String? linkError,
+  void Function()? errorRetry,
 }) => ChatRowsInput(
   messages: messages,
   folded: folded,
@@ -37,6 +38,7 @@ ChatRowsInput _input(
   streamingProcess: streamingProcess,
   maxTokensNotice: maxTokensNotice,
   linkError: linkError,
+  errorRetry: errorRetry,
 );
 
 void main() {
@@ -88,7 +90,8 @@ void main() {
       final rows = deriveRows(
         _input([
           _user('问', 1),
-        ], streaming: true, streamingProcess: group, maxTokensNotice: true, linkError: '断了'),
+        ], streaming: true, streamingProcess: group, maxTokensNotice: true,
+        linkError: '断了', errorRetry: () {}),
       );
       expect(rows.map((r) => r.runtimeType).toList(), [
         UserRow,
@@ -98,6 +101,7 @@ void main() {
         LinkErrorRow,
       ]);
       expect((rows.last as LinkErrorRow).message, '断了');
+      expect((rows.last as LinkErrorRow).onRetry, isNotNull);
     });
   });
 

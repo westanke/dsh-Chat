@@ -19,4 +19,11 @@ void main() {
         contains('name=sha256%3Aab%20c.png'));
     expect(imageHandoffPath('a.png', 's 1'), contains('sessionId=s%201'));
   });
+
+  test('sessionsFrame：默认空帧；归档开关发 archived:true（桥没有 includeArchived）', () {
+    expect(sessionsFrame(), isEmpty);
+    expect(sessionsFrame(archived: false), isEmpty);
+    expect(sessionsFrame(archived: true), {'archived': true});
+    expect(sessionsFrame(archived: true).containsKey('includeArchived'), isFalse);
+  });
 }

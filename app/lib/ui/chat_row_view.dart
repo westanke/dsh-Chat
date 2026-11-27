@@ -120,9 +120,28 @@ Widget chatRowView(
       return _MaxTokensNotice(colors: colors);
     case final LinkErrorRow r:
       // 行间距由列表行框统一给，这里不再自带顶距。
-      return Text(
-        r.message,
-        style: DsTypography.small.copyWith(color: colors.labelTertiary),
+      if (r.onRetry == null) {
+        return Text(
+          r.message,
+          style: DsTypography.small.copyWith(color: colors.labelTertiary),
+        );
+      }
+      return Row(
+        children: [
+          Expanded(
+            child: Text(
+              r.message,
+              style: DsTypography.small.copyWith(color: colors.labelTertiary),
+            ),
+          ),
+          TextButton(
+            onPressed: r.onRetry,
+            child: Text(
+              '重试',
+              style: DsTypography.small.copyWith(color: colors.brand),
+            ),
+          ),
+        ],
       );
   }
 }

@@ -329,6 +329,10 @@ class MessageItem extends StatelessWidget {
                 text: message.text,
                 sentAt: message.startedAt,
                 onRegenerate: () => state.regenerateAt(index),
+                // 只有已落库的消息才有服务端 seq；流式消息 seq=-1 不给入口。
+                onFork: message.seq >= 0
+                    ? () => state.forkAt(message.seq)
+                    : null,
               ),
             ],
           );

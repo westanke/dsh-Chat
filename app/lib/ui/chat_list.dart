@@ -268,6 +268,9 @@ class _ChatListState extends State<ChatList> {
       streamingProcess: state.streamingProcess,
       maxTokensNotice: state.maxTokensNotice,
       linkError: state.lastError,
+      // B：仅 bridge 明确 retryable 的错误给动作；429 已由 reportError 转成
+      // 等待提示，不会挂可点的「重试」。
+      errorRetry: state.lastErrorRetryable ? state.lastErrorRetry : null,
     );
     final signature = input.signature;
     if (signature == _rowsSignature) return;

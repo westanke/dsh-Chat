@@ -19,6 +19,9 @@ class _FakeGateway extends GatewayClient {
   final _states = StreamController<GatewayState>.broadcast();
   final List<Map<String, Object?>> frames = <Map<String, Object?>>[];
 
+  /// 记录 request 帧（type + payload），用于验证协议字段。
+  final List<({String type, Map<String, dynamic> payload})> requests = [];
+
   @override
   Stream<GatewayEvent> get events => _events.stream;
 
@@ -36,7 +39,19 @@ class _FakeGateway extends GatewayClient {
     String type,
     Map<String, dynamic> payload,
   ) async {
+    requests.add((type: type, payload: Map<String, dynamic>.from(payload)));
     switch (type) {
+      case 'sessions':
+        if (payload['archived'] == true) {
+          return {
+            'sessions': [
+              {'id': 'arch1', 'title': '旧会话'},
+            ],
+          };
+        }
+        return {'sessions': <dynamic>[]};
+      case 'fork':
+        return {'sessionId': 'forked-s2'};
       case 'history':
         return {'events': <dynamic>[], 'hasMore': false};
       default:
@@ -163,5 +178,95 @@ void main() {
     expect(sent.map((p) => p.title).toList(), ['回答已完成']);
     watcher.dispose();
     state.dispose();
+  });
+
+  group('协议卫生：maxFrameBytes / retryable / atSeq / 归档', () {
+    test('1009 用本次连接上限（hello.maxFrameBytes）而不是硬编码 1 MiB', () async {
+      final gw = _FakeGateway();
+      final state = ChatState(gw);
+      gw.push(
+        LinkClosedEvent(1009, 'too large', limitBytes: 512 * 1024),
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      expect(state.lastError, contains('512 KiB'));
+      expect(state.lastError, contains('附件'));
+      expect(state.lastError, isNot(contains('1 MiB')));
+      state.dispose();
+    });
+
+    test('可重试错误带「重试」动作；429 只给等待提示', () async {
+      final gw = _FakeGateway();
+      final state = ChatState(gw);
+
+      gw.push(
+        GatewayErrorEvent(
+          'send',
+          RequestException('UPSTREAM_UNAVAILABLE', '上游暂不可用', retryable: true),
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+      expect(state.lastError, contains('上游暂不可用'));
+      expect(state.lastErrorRetryable, isTrue);
+      expect(state.lastErrorRetry, isNotNull);
+
+      gw.push(
+        GatewayErrorEvent(
+          'send',
+          RequestException(
+            'RATE_LIMITED',
+            '请求过于频繁',
+            retryable: true,
+            statusCode: 429,
+            details: {'retryAfterMs': 2500},
+          ),
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+      expect(state.lastError, contains('约 3 秒后再试'));
+      expect(state.lastErrorRetryable, isFalse);
+      expect(state.lastErrorRetry, isNull);
+      expect(state.lastErrorRetryAfterMs, 2500);
+      state.dispose();
+    });
+
+    test('forkAt 把消息 seq 作为 atSeq 发出并切到新会话', () async {
+      final gw = _FakeGateway();
+      final state = ChatState(gw);
+      state.sessionId = 's1';
+
+      await state.forkAt(42);
+
+      final fork = gw.requests.firstWhere((r) => r.type == 'fork');
+      expect(fork.payload['sessionId'], 's1');
+      expect(fork.payload['atSeq'], 42);
+      expect(state.sessionId, 'forked-s2');
+      state.dispose();
+    });
+
+    test('流式消息 seq=-1 不伪造分叉请求', () async {
+      final gw = _FakeGateway();
+      final state = ChatState(gw);
+      state.sessionId = 's1';
+
+      await state.forkAt(-1);
+
+      expect(gw.requests.where((r) => r.type == 'fork'), isEmpty);
+      state.dispose();
+    });
+
+    test('显示已归档：拉 sessions{archived:true} 并放进归档区', () async {
+      final gw = _FakeGateway();
+      final state = ChatState(gw);
+
+      await state.setShowArchived(true);
+
+      expect(state.showArchived, isTrue);
+      expect(state.archivedSessions.map((s) => s.id), ['arch1']);
+      final sessionsCall =
+          gw.requests.lastWhere((r) => r.type == 'sessions');
+      expect(sessionsCall.payload, {'archived': true});
+      state.dispose();
+    });
   });
 }
