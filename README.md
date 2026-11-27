@@ -85,7 +85,6 @@
 | **Android** | **已真机验证**：配对、自动重连、流式对话、Markdown、工具行五态与详情、过程组四档、思考预览、提问卡、抽屉、深色模式、分享。v1.0.37 APK 26.6 MB |
 | **iOS** | 原生桥已补齐 IANA 时区、私有目录、通知、TTS、分享、选图、打开文件；CI 已构建出未签名 IPA。**未在 iPhone 真机验证**；安装/更新走 App Store |
 | **HarmonyOS** | **Flutter-OH 版已真机验证**（API 26）：配对、聊天、会话、分享、TTS、选图、通知与点击回跳均通过。正式 release HAP 需 AGC 正式签名 |
-| 旧 ArkTS 版 | 在 `harmony/`，已冻结维护、后续退役 |
 
 当前版本：`app/pubspec.yaml` 为 `1.0.37+38`，tag `v1.0.37`。
 
@@ -212,7 +211,7 @@
 cd app
 flutter pub get             # 依赖变更后必跑
 flutter analyze             # 提交前必绿
-flutter test                # 592 例
+flutter test                # 616 例
 
 flutter build apk --release --target-platform android-arm64
 flutter build hap --release --no-codesign   # 鸿蒙 HAP（未签名）
@@ -227,7 +226,7 @@ flutter build hap --release --no-codesign   # 鸿蒙 HAP（未签名）
 
 | 工作流 | 内容 |
 |---|---|
-| [`ci.yml`](.github/workflows/ci.yml) | `docs-check` + `flutter analyze` + `flutter test`（592 例）+ 旧 `harmony/test` 的 `npm test`；用 Flutter-OH SDK |
+| [`ci.yml`](.github/workflows/ci.yml) | `docs-check` + `flutter analyze` + `flutter test`（616 例）；用 Flutter-OH SDK |
 | [`release.yml`](.github/workflows/release.yml) | tag 触发：Ubuntu 出 APK、`macos-15` 出未签名 IPA；HAP 为可选 self-hosted job（需 `BUILD_HAP=true` 与真实鸿蒙 SDK） |
 | [`mirror-sync.yml`](.github/workflows/mirror-sync.yml) | Gitee → GitHub 镜像同步；GitHub 是从站，日常推送目标是 Gitee |
 
@@ -246,7 +245,6 @@ dsh-Chat/
   app/          ← Flutter 工程根（lib/ 下仅 design/、bridge/、ui/ 三个子目录）
   app/ohos/     ← Flutter-OH 鸿蒙宿主工程（bundleName com.dsh.dshchat）
   app/vendor/   ← 本仓打补丁的第三方包（gpt_markdown，见其 README.dsh.md）
-  harmony/      ← 旧 ArkUI 原生鸿蒙版（已冻结维护、后续退役）
   LICENSE       ← AGPL-3.0 全文
 ```
 

@@ -67,17 +67,10 @@ ref/dsh1-*.txt
 scripts/__pycache__/
 tools/dsh-home/
 
-# ── HarmonyOS（harmony/）─────────────────────────────────────────────────
-# 签名材料绝不进版本库（密钥口令等同密码，泄露即证书作废；同姊妹仓制度）
+# ── HarmonyOS 签名材料 ───────────────────────────────────────────────────
+# 旧 ArkTS 原生工程（harmony/）已于 2026-11-27 移除，仅在本机保留签名材料；
+# 密钥口令等同密码，泄露即证书作废，绝不进版本库（同姊妹仓制度）。
 harmony/signing/
-# hvigor / ohpm / node 构建产物与依赖
-harmony/oh_modules/
-harmony/.hvigor/
-harmony/build/
-harmony/entry/build/
-harmony/node_modules/
-harmony/test/node_modules/
-harmony/dist/
 harmony/.idea/
 harmony/.vscode/
 harmony/local.properties

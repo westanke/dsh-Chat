@@ -224,7 +224,7 @@ curl -X POST https://api.github.com/repos/westanke/dsh-Chat/releases \
 本机**已有** release/debug 的 p12、证书与 p7b（`harmony/signing/`，**绝不入库**，
 `.gitignore` 已拉黑）；`scripts/sign-hap.sh` 已实测能签 HAP 并 `verify-app` 通过。
 上架仍缺的是：**AGC 账号/AGC 项目**，以及上架用的 `.app`（`.hap` 是安装包，不是上架包）。
-签名材料与旧版规程见 `harmony/docs/RELEASE.md`。
+签名材料只保留在本机 `harmony/signing/`；旧的 `harmony/docs/RELEASE.md` 已随 ArkTS 工程一并移除（历史见 git）。
 
 上架流程要点：
 
@@ -253,4 +253,4 @@ curl -X POST https://api.github.com/repos/westanke/dsh-Chat/releases \
 | AtomGit Release 明明发了却查不到 | 该接口按创建时间**升序**返回，别取首项 |
 | Gitee 附件传不上去 | `attach_files` 用 `-F file=@<路径>`，不是 `-F file=<base64>` |
 
-更多坑见 `AGENTS.md` §11；鸿蒙侧另见 `harmony/docs/PORT-MAP.md`。
+更多坑见 `AGENTS.md` §11。

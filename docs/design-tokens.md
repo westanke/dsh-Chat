@@ -2,6 +2,9 @@
 
 > 来源：`ref/main.pretty.css`（官方 Web 权威 token）+ `ref/md-shot-*.png`（vivo V2080A 1080x2400 density 3.0 实测取色）。
 > App 与 Web 数值一致处直接采用；不一致处以 App 实测优先（我们复刻的是 App）。
+>
+> 注：文中标注 `harmony/...` 的落点属于已移除的 ArkTS 原生版（2026-11-27 移除），
+> 仅作历史记录；Flutter 三端（Android/iOS/鸿蒙）当前落点见 `app/lib/design/`。
 
 ## 1. 色彩
 
@@ -76,45 +79,6 @@
 
 App 实测墨迹高（density 3.0）：H1 71px、H2 61px、H3 57px、正文 45px —— 与上表完全吻合（24/22/20/16 sp）。
 
-### 2.1 鸿蒙行高落位（`harmony/entry/src/main/ets/ui/theme.ets`）
-
-安卓 `DsTypography` 每个 TextStyle 自带 `height`；鸿蒙原先的 `Font` 结构没有行高字段（ArkTS 严格类型，
-不能给内置 `Font` 加第三字段），故 theme.ets 用自定义 `DsFont { size, weight, lineHeight }` 承载，
-由 UI 落点显式 `.lineHeight(f.lineHeight)` 施加（**`Span` 没有 lineHeight 属性，行高必须落在宿主 `Text` 上**）。
-既有 `DsTypography.x.size` / `.weight` 用法不受影响。字号仍受鸿蒙 R023 阶梯约束（{8,9,10,12,14,16,18,20,22,24,28,30,36,38,46,48,56}），**行高不受该阶梯约束**（vp 数值自由）。
-
-| 鸿蒙 token | size (fp) | lineHeight (vp) | 安卓对应（size/height） | 偏差说明 |
-|---|---|---|---|---|
-| h1 | 24 | 34 | md-h1 24/34 | 一致 |
-| h2 | 22 | 32 | md-h2 22/32 | 一致 |
-| h3 | 20 | 30 | md-h3 20/30 | 一致 |
-| h4 | 16 | 28 | md-h4 16/28 | 一致 |
-| base | 16 | 28 | md-base 16/28 | 一致 |
-| baseStrong | 16 | 28 | md-base strong 16/28 | 一致 |
-| small | 14 | 24 | md-small 14/24 | 一致 |
-| smallStrong | 14 | 24 | md-small strong 14/24 | 一致 |
-| inlineCode | 14 | 22 | md-code 14/22 | 一致 |
-| codeBlock | 12 | 22 | md-code-block 13/22 | 13 不在 R023 阶梯 → 落 12 |
-| codeBlockLabel | 12 | 20 | banner 语言标签 13/20 | 同上落 12 |
-| table | 16 | 26 | md-table 15/25 | 15 不在 R023 阶梯 → 落 16，行高等比 +1 |
-| tableHead | 16 | 26 | md-table head 15/25 | 同上 |
-| caption | 12 | 18 | 11–12sp，无显式行高 | 取 1.5× 字号 |
-| greeting | 18 | 26 | 18sp，无显式行高 | 取 ≈1.44× 字号 |
-| pageTitle | 16 | 24 | 16sp，无显式行高 | 取 1.5× 字号 |
-| inputPlaceholder | 16 | 24 | 16sp，无显式行高 | 取 1.5× 字号 |
-
-落点（真正 `.lineHeight()` 的地方）：`harmony/entry/src/main/ets/components/md/MdView.ets`（标题 / 正文宿主 Text / 列表圆点与序号 / 链接）、
-`harmony/entry/src/main/ets/components/md/MdTable.ets`（单元格）、`harmony/entry/src/main/ets/components/md/MdCodeBlock.ets`（代码行）、
-`harmony/entry/src/main/ets/components/MessageCards.ets`、`harmony/entry/src/main/ets/components/ToolBlockDetail.ets`（明细正文 / 代码行 / 问答）。
-
-**有意不加行高的地方**：
-
-- `ProcessGroup.ets` / `ToolBlock.ets` / `TurnProcessRow.ets` 的单行折叠条：`maxLines(1)` + 固定高度
-  `DsSpacing.processRowHeight = 28` / 33vp，单行文本行高在这类行里没有可见收益；而 `TurnProcessRow`
-  的内容盒只有 33−2−8 = 23vp，小于 `small.lineHeight = 24`，加行高会被裁切，故整排保持「高度驱动」。
-- `components/md/MdLatex.ets` 是自绘符号流（分式靠 `minHeight` + 1vp 横线叠出、根式靠上边框），
-  加行高会让上下标与根号线错位，inline 公式随宿主行高即可。
-
 ## 3. Markdown 布局（Web 权威）
 - h1-h3 margin: 32px 0 16px；思考流内 h* margin 12px 0。
 - p 段落 margin：默认 0（.ds-markdown-paragraph 自身无 margin，块间距由 line-height + 相邻 margin 决定）；li:not(:first-child) margin-top 6px；li>ul/ol margin-top 4px；li::marker color label-secondary。
@@ -147,31 +111,6 @@ App 实测墨迹高（density 3.0）：H1 71px、H2 61px、H3 57px、正文 45px
 | 表格 banner | 左上「表格」+ 右侧 复制/下载/展开 三图标 | — | 灰 #7d7f85，底色 #fafafa |
 
 > 表格 banner 与表头之间也有一条 1px #dcdcdc 分隔线；官方任务列表**无圆点**（勾选框与无序列表同起点 x=68–74，文字 x≈99–112）。
-
-### 3.2 鸿蒙表格列宽（`harmony/entry/src/main/ets/components/md/MdTable.ets`）
-
-官方 Web 的表格列宽由浏览器按内容自动分配；安卓走 `gpt_markdown` 的 `TableStyle`（`defaultColumnWidth`
-统一算列宽）。鸿蒙早期实现是每格 `layoutWeight(1)` —— 那是**在每行内部**等分，行长短不同、
-单元格文本长短不同时同一列在不同行落在不同 x 位置，视觉上就是「表格对齐不准确」（2026-11-17 用户反馈）。
-
-现口径（全表统一列宽 + 超宽横向滚动）：
-1. `columns()` 取全表最大列数（表头缺列的行按空串补位，补位格子不画边框，避免右侧多一条悬空竖线）。
-2. 逐列取各单元格「估算文本宽 + 2×`cellPadH`(16)」的最大值；估算 = 中日韩/全角字符 `字号×1.0`、
-   ASCII `字号×0.55`（**估算值，真机再校**）。表头行用 `tableHead.size`、其余用 `table.size`。
-3. 夹在 [`cellMinWidth` 100, `tableColMaxWidth` 240]（安卓 max-width `min(30vw,320px)` 在手机宽度下约 240dp，
-   故 token 取 240vp）。
-4. 自然总宽 < 外框实测宽（`onAreaChange` 量的 `frameWidth`）→ 各列等比放大铺满；否则保持自然宽，
-   外层 `Scroll(scrollable: Horizontal)` 横向滚动。
-5. 所有行共用同一组绝对 vp 宽度 → 列边界必然对齐；列宽按 `rows` 内容算一次并缓存。
-
-不用百分比的原因：表格体在横向 `Scroll` 里，Scroll 的子节点宽度由内容决定，百分比没有确定的参照宽度，
-会把多列表格压扁而不是横向滚动。
-
-**行宽必须写数值 `colTotalWidth()`，不能写 `'100%'`**（2026-11-17 真机踩坑）：写百分比时该行被解析成
-Scroll 视口宽（1080px 屏上 = 956px），但列宽总和比它大，各格 `Text` 被 flexShrink 压缩 ——
-真机 `dumpLayout` 实测第 3 列从 100vp 挤到 52vp，「山东烟台」只露出「山东」两字；同时 Scroll 的内容宽
-== 外框宽，横向滚不动，被裁的列永远看不到。改数值宽后实测三列稳定 100/156/100vp、内容宽 1114px
-超出外框 956px，横向拖动可完整看到第 3 列。
 
 ## 4. 聊天页 App 实测布局（1080x2400 / 3.0x → dp = px/3）
 - 顶栏：侧边栏按钮 x24dp y52dp 高 44dp；标题居中 16sp；右侧自动朗读 + 新对话。
@@ -256,9 +195,6 @@ Scroll 视口宽（1080px 屏上 = 956px），但列宽总和比它大，各格 
 | 行最小高度 | 52dp（仿官方 56dp 触控行） | `settingsRowMinHeight` |
 | 图标-文字 / 药丸间距 | 14dp / 7dp | `settingsIconGap` / `settingsChipGap` |
 | 药丸内边距 / 圆角 | 左右 10、上下 6 / 16dp | `settingsChipPadH` / `settingsChipPadV` / `settingsChipRadius` |
-| **鸿蒙偏差**：根外边距 | 左右 22 / 上下 26（ArkUI 触屏边缘余量略大于安卓 20/28 的上下、左右各 +2；`harmony/.../ui/theme.ets`） | `DsSpacing.settingsPadH=22` / `settingsPadV=26` |
-| **鸿蒙偏差**：内容列宽 | 与安卓同一条尺：`core/Breakpoints.readableColumnWidth(实测宽)`（≤720 用满、更宽按 0.9 缓增，见 §4.16）；原「MD 档 720 / LG 档 840」的 `contentMaxWidth(bp)` 已删 | `harmony/entry/src/main/ets/core/Breakpoints.ts` |
-| **鸿蒙偏差**：信息行 label 固定宽 | 72vp：鸿蒙 `infoRow` 是 label/value 左右两列（安卓 `_InfoRow` 是上下两行），不给 label 定宽时长 value（设备 UUID）会把「设备」挤成竖排 | `DsSpacing.settingsLabelWidth=72` |
 
 字号 / 主题 / 发送模式等行为偏好见 `lib/design/app_settings.dart`（对照 companion `AppPreferences`）：`normalizeFontScale` 夹 0.8–1.5 且 NaN/Inf→1.0，`effectiveFontScale` 与系统字号相乘（对齐 `AppFontScale.kt` 的 `base.fontScale * appScale`，Flutter 侧用自定义 `TextScaler` 包装 `MediaQuery` 平台 scaler，不覆盖系统无障碍字号）。
 
@@ -288,9 +224,9 @@ Scroll 视口宽（1080px 屏上 = 956px），但列宽总和比它大，各格 
 | 实测对比度（修后） | **6.95:1** —— 圆内填充 `#EDEEF2`、箭头 `#4F5054` |
 | 可用态对照 | 品牌蓝底 + 白箭头，4.74:1（未改动） |
 
-**关键机制（踩坑记录）**：ArkUI 对 `.enabled(false)` 的组件会**整层叠加大约 0.4 的透明度**，把 token 颜色与背景一起混白（`0.4×#EBEEF2 + 0.6×#FFFFFF = #F7F8FA`、`0.4×#61666B + 0.6×#FFFFFF = #C0C2C4`，与实测吻合）。因此**在 `.enabled(false)` 下无论把前景灰调多深都到不了 WCAG AA 4.5:1 —— 纯黑混白后是 `#999999`，在 `#F7F8FA` 底上上限也只有 2.6:1**。
+**关键机制（历史记录，ArkUI 原生版）**：ArkUI 对 `.enabled(false)` 的组件会整层叠加大约 0.4 的透明度，把 token 颜色与背景一起混白 —— 这也是当初把禁用态前景调深的由来；Flutter 侧无此叠层，禁用色仍沿用下表 token。
 
-所以鸿蒙侧禁用发送键：**不写 `.enabled(false)`**，改为保持可点、在 `onClick` 里判 `if (this.sendEnabled())` 决定是否执行，禁用视觉完全由 `.backgroundColor` / `.fontColor` 两个 token 决定（`harmony/entry/src/main/ets/components/Composer.ets` 发送键分支有注释锚点）。同理，其它需要精确控制禁用对比度的图标按钮不要走 `.enabled(false)`，需要弱化时自行用 `.opacity()` 显式指定。
+
 
 
 ## 4.6 跳转最新 FAB 与滚动跟随（本工程自定义，新增布局/动效 token）
@@ -610,33 +546,6 @@ readableColumnWidth(可用宽)
 > **二级页为什么也用同一条尺**：设置、Markdown、子会话历史、目录浏览都从会话页
 > 推出去，翻进翻出若横向跳宽，观感像两个 App。同一个函数各页各算，得到的是同一个数。
 
-### 4.16.1 鸿蒙端（`harmony/`）同一条尺
-
-鸿蒙版原先按断点取固定上限：`contentMaxWidth(bp)` → MD 档 720、LG 档 840（SM 不约束），
-平板横屏再宽也停在 840。2026-11-21 跟随安卓改成同一条尺：
-
-```text
-readableColumnWidth(可用宽)   = 可用宽                         （≤ 720）
-                              = min(可用宽, 可用宽 × 0.9)        （> 720，无第二道上限）
-floatingColumnWidth(可用宽)   = 列有富余 ? 列 − 2×14 : 可用宽     （顶栏 / 输入条）
-```
-
-- 纯函数在 `harmony/entry/src/main/ets/core/Breakpoints.ts`（`READABLE_BASE_WIDTH=720`、
-  `READABLE_SCALE=0.9`、`FLOAT_INSET=14`），与安卓 `readableBaseWidth/readableScale/chatFloatInset` 同值；
-  原 `contentMaxWidth` / `sheetMaxWidth` 已删，`sheetMaxWidth` 本来就无调用。
-- 可用宽实测：`ChatView.chatScaffold()` 的根 Column 与 `SettingsView` 的根 Column 各挂
-  `.onAreaChange`，`Area.width` 用 `typeof` 收窄成 vp 数值（ArkTS 不许 number↔string 强转），
-  差值 ≥1 才写 `@State columnWidth`；未量到（0）时约束退回 `'100%'`，首帧不会闪窄列。
-- 落到哪：`MessageList`（正文列）、`ChatView.topBar()` 与 `Composer`（浮层列）、`HitlPanel`
-  （与正文同轴，`maxHeight:'50%'` 保持）、`SettingsView`（二级页）。都是
-  `.constraintSize({ maxWidth })`，父 Column 默认居中。
-- 与安卓的差异：①紧凑档抽屉仍是整页 `translate` 推挤（medium/expanded 已改 `padding.left`
-  缩窄页面，列宽按缩窄后的可用宽算，与安卓 `pageInsetFor` 同口径）；
-  ②`bindSheet` 内容已套 `constraintSize({maxWidth: readableColumnWidth(窗宽)})`（窄窗 100%），
-  等价于安卓 `modalSheetConstraints`；③手机档列宽 = 屏宽，外观与改动前逐字相同。
-- 单测：`harmony/test/cases/breakpoints.test.ts`（360→360、720→720、861→774.9、1181→1062.9、
-  1600→1440、2000 继续长、0/负数→0、单调不减且 ≤ 可用宽；floating 738→692、1181→1034.9）。
-
 ## 4.17 本轮改动卡 · 生成文件卡 · 查看改动（2026-11-21 task-12）
 
 会话页轮尾在「已完成，用时 N 秒」之后追加两类卡（正在跑的一轮不出卡，计数会跳）：
@@ -728,9 +637,7 @@ turnChangesOf(messages, turn)
 | 空态内边距 | `paletteEmptyPadTop/Left/Right` | 14 / 14 / 18 | 「没有匹配的指令，按普通消息发送」 |
 
 第二行文案口径（dsh-go `activitySlash*`）：`命令 · 执行` / `命令 · 填入` / `技能 · 填入`，
-再拼 ` · <description>`；参数提示态写 `<description> · 输入参数后发送`。鸿蒙端
-（`harmony/entry/.../ui/theme.ets` 的 `paletteRowHighlight` + `ComposerPanels.ets`）
-同一套数值，行高与圆角逐值相同。
+再拼 ` · <description>`；参数提示态写 `<description> · 输入参数后发送`。
 
 **历史加载错误条（工单 1）**：断链（`NOT_CONNECTED`）不再写成「加载历史失败」红条
 （顶栏已有连接态，重连成功会自动重拉）；重拉成功后会把残留的「加载历史失败」清掉。

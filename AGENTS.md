@@ -3,10 +3,9 @@
 > 本文件是每次会话**必然读到**的那份约定。本工程由 AI 自主开发，规矩写在前面，
 > 谁（包括未来的 AI 会话）动手前先读完这条。与 `dsh-remote-bridge` / `dsh-companion`
 > 的宪法同源同制度，按客户端特色裁剪——**各边职责不同，不要互相照抄**。
-> 本仓现含三个客户端：`app/`（Flutter 一套代码，Android + iOS + **鸿蒙**，Android 已发版）、
-> `app/ohos/`（Flutter-OH 鸿蒙宿主工程，2026-11-25 起步）与
-> `harmony/`（旧 ArkUI 原生鸿蒙版，2026-11-15 起步，**已冻结维护、后续退役**，
-> 签名材料仍保留，规程见 `harmony/docs/PORT-MAP.md`）。
+> 本仓现含两个客户端形态：`app/`（Flutter 一套代码，Android + iOS + **鸿蒙**，Android 已发版）
+> 与 `app/ohos/`（Flutter-OH 鸿蒙宿主工程，2026-11-25 起步）。
+> 旧 ArkUI 原生版 `harmony/` 已于 2026-11-27 移除，只保留本机签名材料 `harmony/signing/`（不入库）。
 
 ---
 
@@ -22,8 +21,8 @@
 
 ## 1. 本项目是什么（边界）
 
-- **一句话**：本仓承载 DSH Chat 双客户端——`app/`（Flutter 一套代码，Android + iOS）
-  与 `harmony/`（ArkUI 原生鸿蒙版），各自复刻官方 DeepSeek App 的**界面**，
+- **一句话**：本仓承载 DSH Chat 客户端——`app/`（Flutter 一套代码，Android + iOS + 鸿蒙），
+  复刻官方 DeepSeek App 的**界面**，
   对话内容由本机的 `dsh-remote-bridge`（REST `/api/v1` + WS `/ws/mobile`）提供。
 - **上游依赖**：`dsh-remote-bridge` ≥ 2.10.0（协议 v3）。本仓**只消费协议**，不改协议。
 - **不是什么**：不是官方客户端的分支；不接官方服务器；不逆向官方 APK 的代码/资源。
@@ -33,9 +32,8 @@
 1. **产物标识符零 DeepSeek**：applicationId / bundle id / bundleName / 类名 / 资源名 /
    应用显示名 / About 文案，一律不含 `deepseek`（不区分大小写）。当前注册名：
    `com.dsh.dshchat`，显示名 `DSH Chat`（Android applicationId、鸿蒙 bundleName
-   —— `app/ohos/AppScope/app.json5` 与 `harmony/AppScope/app.json5` —— 同名同源，
-   改包名两平台一起改，先改本条再动 `app/android`、`app/ohos/AppScope/app.json5`、
-   `harmony/AppScope/app.json5`）。
+   —— `app/android` 与 `app/ohos/AppScope/app.json5` —— 同名同源，改包名两平台一起改，
+   先改本条再动 `app/android`、`app/ohos/AppScope/app.json5` 与 `app/ios`）。
 2. **不复用官方资产**：官方 APK 里的图标、字体、so、混淆资源一个都不拷贝；
    图标自绘或用开源图标集（Material Symbols / 自绘 path）。
 3. **仿界面不冒品牌**：布局、间距、配色对齐官方是工程要求；但启动页 logo、
@@ -65,27 +63,15 @@ dsh-Chat/
       entry/src/main/  ← ets 插件源码（entryability/pages/plugins）+ module.json5 + 资源
       hvigor/          ← hvigor 工程配置（json5/ts）
     vendor/            ← 本仓打补丁的第三方包（gpt_markdown，见 README.dsh.md）
-  harmony/             ← 旧鸿蒙工程根（ArkUI 原生，**冻结维护**，后续退役；
-                        签名材料保留在 harmony/signing/ 与 harmony/docs/RELEASE.md）
-    AppScope/          ← 应用级配置 app.json5 + 分层图标（bundleName=com.dsh.dshchat）
-    entry/src/main/    ← ets 业务代码（ability/pages/components）+ module.json5 + 资源
-      core/            ← 纯逻辑层（协议/模型，.ts，node 直测，不 import 任何 ets；
-                           在 entry 模块内，ArkTS 禁跨模块相对 import，见 §7 分层铁律）
-    test/              ← node:test + tsx 纯逻辑测试（CI 跑这里，无鸿蒙 SDK 依赖）
-    docs/              ← PORT-MAP.md（移植对照）/ RELEASE.md（签名发版）/ STATUS.md（进度台账）
-    scripts/           ← package.sh（构建发版）/ toolchain-env.sh（工具链 env）
+  harmony/signing/     ← 仅本机保留的鸿蒙签名材料（.gitignore 已拉黑，不入库；2026-11-27 起）
 ```
 
 铁律：
-- **目录嵌套 ≤ 3 层**（用户长期规矩）；`lib/` 下子目录只许 `design/`、`bridge/`、`ui/` 三个；
-  `harmony/entry/src/main/ets/` 下同口径（`pages/`、`components/` 等按功能平铺，不叠壳）。
-- **平台豁免（用户已批，2026-11-15）**：`harmony/` 的 ArkTS 工程结构
-  （`AppScope/`、`entry/src/main/`、`hvigor/` 等）由 DevEco/hvigor 约定死，豁免嵌套限制；
-  `harmony/entry/src/main/ets/core/`、`harmony/test/`、`harmony/docs/`、`harmony/scripts/` 照旧严格执行。
-- **平台豁免（用户已批，2026-11-25）**：`app/ohos/` 的 ArkTS 工程结构与 `harmony/` 同等豁免
+- **目录嵌套 ≤ 3 层**（用户长期规矩）；`lib/` 下子目录只许 `design/`、`bridge/`、`ui/` 三个。
+- **平台豁免（用户已批，2026-11-25）**：`app/ohos/` 的 ArkTS 工程结构由 DevEco/hvigor 约定死，豁免嵌套限制
   （`AppScope/`、`entry/src/main/ets/{entryability,pages,plugins,platform}`、`hvigor/`）。
-- 严禁 `/tmp`（用户长期规矩）；临时文件进 `app/build/`、`harmony/build/` 或用户家目录。
-- `ref/` 只进参考材料，**绝不**被 `app/` 的 Dart/gradle 或 `harmony/` 的 ets/hvigor 引用。
+- 严禁 `/tmp`（用户长期规矩）；临时文件进 `app/build/` 或用户家目录。
+- `ref/` 只进参考材料，**绝不**被 `app/` 的 Dart/gradle 或 `app/ohos/` 的 ets/hvigor 引用。
 
 ## 4. 设计 token 纪律（「严格对称」怎么落地）
 
@@ -157,15 +143,13 @@ cd app
 flutter build hap --debug --no-codesign    # 产物 app/build/ohos/hap/entry-default-unsigned.hap（不入库）
 ```
 
-- 旧鸿蒙工程 `harmony/`（ArkUI 原生）**冻结维护，后续退役**；签名与 AGC 上架材料仍保留在
-  `harmony/signing/`（**绝不入库**，.gitignore 已拉黑）与 `harmony/docs/RELEASE.md`。
+- 鸿蒙签名与 AGC 上架材料保留在本机 `harmony/signing/`（**绝不入库**，.gitignore 已拉黑）；
+  旧的 `harmony/docs/RELEASE.md` 已随 ArkTS 工程移除，签名步骤见 `docs/project/RELEASE.md`。
 - `app/ohos/local.properties` 由本机路径生成（hwsdk.dir / flutter.sdk），**不入库**；
   换机器要重跑 `flutter create --platforms ohos` 或手改这两行。
 - 真机：HarmonyOS 6.0 手机（API 26）。2026-11-25 起步时 `hdc list targets` 为空、尚未装机；
   之后 Flutter-OH 版已完成真机验证（配对、聊天、会话、分享、TTS、选图、通知与点击回跳，
   截图见 README「实际效果」）。release HAP 仍需 AGC 正式签名。
-- 旧 `harmony/` 口径（2026-11-15 起，仅供冻结目录参考）：`hvigorw assembleHap --no-daemon`、
-  `npm --prefix test install` / `npm --prefix test test`（纯逻辑 node:test，CI 跑这里）。
 
 ## 7. 代码纪律
 
@@ -175,29 +159,18 @@ flutter build hap --debug --no-codesign    # 产物 app/build/ohos/hap/entry-def
 - 样式值必须有 token 依据（§4）；新 UI 元素先在 `design-tokens.md` 登记。
 - `flutter analyze` 的 warning 不许积压；info 级要注释理由才能留着。
 
-**ArkTS（`harmony/`）追加条目**：
+**ArkTS（`app/ohos/` 插件）追加条目**：
 
-- **分层铁律**：`harmony/entry/src/main/ets/core/` 只写纯逻辑（协议/模型/状态机，.ts 文件），
-  **不 import 任何 `@kit`/ets/UI**，保证 `harmony/test/` 用 node 直测（CI 无鸿蒙 SDK 也能跑）。
-  UI 层（entry/src/main/ets 非 core 部分）只做渲染与事件转发，业务逻辑下沉 core。
-  core 必须在 entry 模块**内部**：ArkTS 禁跨模块相对 import（Error00309001 实证），
-  放工程根 harmony/core/ 的方案已否决（2026-11-15）。
-- ArkTS 不是 TypeScript：禁 `any`/`unknown` 满天飞、禁结构化破坏性赋值、禁运行时修改对象
-  shape、禁「对象 interface 联合 type」判别联合（→ 扁平类 + type 字段分派）、禁可选捕获组的
-  `m[n] === undefined`（拆必组正则）；动态键值映射用 `Map<string,T>`（姊妹仓无
-  `Record<string,类>` 先例）；import 不带 `type` 修饰符。协议模型显式定义 class + `fromJson`，
-  同 Dart 口径（§5 round-trip 测试同样适用）。
-- 单文件 ≤ 500 行对 ets/.ts 同样生效；禁 `print`（鸿蒙用 `hilog`，封装在
-  `harmony/entry/src/main/ets/platform/Dlog.ets`——core 层禁 import @kit，实现只在 platform）。
-- 鸿蒙工程配置（build-profile.json5 / hvigorfile.ts / module.json5）改动要在提交说明里点名；
-  `compatibleSdkVersion` 升级需在 `harmony/docs/PORT-MAP.md` 记录原因。
+- 单文件 ≤ 500 行；禁 `any`/`unknown` 满天飞，协议与通道数据结构显式定义 class + `fromJson`。
+- ArkTS 不是 TypeScript：禁结构化破坏性赋值、禁运行时改对象 shape、禁对象 interface 联合 type 判别；
+  import 不带 `type` 修饰符。
+- 日志统一走插件里的 Dlog/AppLog 封装，不直调 `hilog`；插件只做通道转发，业务状态机放 `app/lib/`。
 
 ## 8. 文档同步（同提交）
 
 | 改动 | 同一提交内必须同步 |
 |---|---|
 | 新增/移动/删除 `lib/` 下文件 | `docs/STRUCTURE.md` 的清单表 |
-| 新增/移动/删除 `harmony/` 下 ets/ts 文件 | `docs/STRUCTURE.md` 的 harmony 清单表（docs-check 机检） |
 | 新增/修改设计 token | `docs/design-tokens.md` + `lib/design/tokens.dart` 一起 |
 | 协议用法变更（新增帧/字段） | 在 `docs/STRUCTURE.md` 的 bridge 章节登记引用的协议版本 |
 | 依赖变更 | pubspec 注释说明用途；新增重量级依赖（>10 传递依赖）先在本文件登记 |
@@ -253,9 +226,8 @@ flutter build hap --debug --no-codesign    # 产物 app/build/ohos/hap/entry-def
 
 | 闸门 | 命令 | 说明 |
 |---|---|---|
-| 文档 | `bash scripts/ci/docs-check.sh` | STRUCTURE.md 覆盖全部 lib/、harmony ets/ts、**app/ohos ets/ts** 文件、无死链、无旧仓名 |
+| 文档 | `bash scripts/ci/docs-check.sh` | STRUCTURE.md 覆盖全部 lib/、app/ohos ets/ts 文件、无死链、无旧仓名 |
 | 代码（Android/iOS/鸿蒙） | `flutter analyze` → `flutter test` | 在 `app/` 下跑；**用 Flutter-OH SDK**（`3.50.0+ohos-1.3.3`，CI 里 clone 自 atomgit + 改 `dart-sdk-url.ohos` 指向 CPF 的 linux-x64 定制 Dart SDK）。**不能用上游 stable**：material_ui/cupertino_ui 的 ohos fork 里 `TargetPlatform.ohos` 有 89 处引用，上游 SDK 直接报 `undefined_enum_constant` |
-| 代码（鸿蒙旧版纯逻辑） | `npm ci && npm test`（`harmony/test`） | 纯逻辑 node:test，无鸿蒙 SDK 依赖，ubuntu runner 直跑（冻结目录，仍保留闸门） |
 
 刻意不跑 `flutter build apk` 与 `hvigorw assembleHap`：产物不入库，验收在本机真机，
 CI 构建没人用（理由见 ci.yml 头注释）；鸿蒙构建需 DevEco 工具链，runner 上没有
@@ -306,90 +278,6 @@ CI 构建没人用（理由见 ci.yml 头注释）；鸿蒙构建需 DevEco 工�
 - `gpt_markdown 任务列表溢出` —— 1.4.0 把 Material Checkbox 塞进 WidgetSpan，中文行高算出 ~10 万像素宽 → RenderFlex 溢出（debug 红底黄黑斜纹）：必须传 `checkboxBuilder` 自绘。
 - `gpt_markdown 任务列表圆点` —— 源码 `- [x] foo` 会先被 listMarker 吃掉成无序列表项：渲染前用 `normalizeTaskLists()` 去掉列表符号。
 - `外部写入不刷新` —— bridge 只在 `chat.session.event` 推 eventType（无事件体），且 `committed role=user` 分支容易漏：所有 session event 都要防抖重拉 history。
-
-**鸿蒙坑位（详表见 `harmony/docs/PORT-MAP.md`，此处只留触发词）**：
-
-- `hvigorw 不在工程内` —— hvigorw/ohpm/hdc 是工具链可执行文件：先 `source /media/wangke/OFFICE/workspace/tools/env.sh`，别找工程内 wrapper。
-- `hvigor 拒明文口令` —— 签名口令不能写在 build-profile.json5，走环境变量或手动 hap-sign-tool（见 harmony/docs/RELEASE.md）。
-- `分层图标覆盖` —— AppScope 与 entry 的图标资源名必须不同，否则后者覆盖前者。
-- `AGC 图标 1024` —— AGC 上架审核拒收非 1024×1024 应用图标（姊妹仓实踩）。
-- `npm ci 无 lock` —— harmony/test 要提交 package-lock.json，否则 CI `npm ci` 直接失败。
-- `ArkUI getter 崩进程` —— `@Builder`/`ForEach` 里 `private get c()` 取到 undefined → TypeError → AMS 杀进程；一律用普通方法 `private c()`。
-- `@Prop 无 @Watch 不重渲染` —— ArkUI 只认 build 期间读到的 @State/@Prop；store 派生值必须在 setNotify 里抄进 @State，@Prop version 配 @Watch。
-- `hilog 抓 JS 崩溃栈` —— 先 `hilog -G 16M`（上限 16M）再 `hilog -r` 复现，`grep -iE 'JsError|Stacktrace|TypeError'` 才能拿到 .ets:行:列。
-- `hilog 读应用日志要带域` —— 应用日志 TAG 是 `Dsh`、domain `0xD5C0`，必须 `hdc shell "hilog -x | grep 'A0D5C0'"` 才取得到；`hilog -T Dsh` 与裸 `hilog` 都不可用（后者数千行易超时）。前提是代码里先有 `Dlog` 打点（连接状态机走 `GatewayDeps.trace?` 的 applyState/onDown/scheduleReconnect 三处 + `WsTransport` 的 `[ws]` 四条）；另可配 mock bridge 抓帧 / REST 直查。注意 `webSocket` 的 error 回调 `err.message` 实测为 undefined，只能靠状态序列判断。
-- `node WebSocket 无 header` —— 探针要打 Authorization 头必须 require ws 包，内置全局 WebSocket 不认 headers。
-- `uitest inputText 是追加` —— 不清空会双拼（DSH1 报「配置文本无法识别」）。
-- `设备上无 sed -i` —— 报 `sed: no temp file`；改设备文件用 `hdc file send` + `hdc shell cp`。
-- `bindContentCover 与 bindSheet 同节点失效` —— 两个弹层修饰器挂同一节点时后者不弹；改用 Stack 内联 `if (open)` overlay + 遮罩。
-- `getRouter().back() 退应用` —— 本项目用 `@State route` 切页不是 Router 栈，back() 会退出应用；返回一律传回调给父组件。
-- `私有方法只定义没调用` —— ArkTS 不报未使用告警，`load()`/`ensureCommands()` 漏调用会静默卡「加载中…」/无补全；新组件挂载点自查 `aboutToAppear`。
-- `切权限不刷投影` —— permission 帧只改服务端投影、不产生 chat 事件，成功后必须 `reloadHistory()` 才能更新 chip。
-- `子组件普通成员收数组` —— `HitlPanel` 的 `questions/approvals` 写成普通成员，父层 @State 换新数组不重建子组件（提问卡提交后不消失、审批卡不出现）；接收父层数组一律 `@Prop`。
-- `键盘遮输入框` —— 默认 OFFSET 避让会整页上移压住 composer；`onWindowStageCreate` 的 `loadContent` 回调里 `getMainWindowSync().getUIContext().setKeyboardAvoidMode(KeyboardAvoidMode.RESIZE)`。
-- `连接历史不落盘` —— `enterWith` 只存 credentials 不存 hosts，`reloadHosts()` 永远空；按安卓口径补 `host.id = stableId(baseUrl)` + `persistHosts(upsertHost(...))`。
-- `权限显示英文档位` —— 投影 `currentValue` 是 `workspace-write` 这类 ASCII 名，界面必须过 `permissionLabelOf()` 转中文（仅可查看/工作区读写/完全权限/自动审查）。
-- `纯文本模型发图气泡` —— bridge 把图片写成两个 text 块（原文 + 给模型看的「🖼️ 图片 1「x.png」…[Image: source: …]」说明），没有 image 块；气泡要剥掉说明行（逐行滤，别贪婪正则）并靠 `handoffRefOf(rawText)` 渲染缩略图。
-- `覆盖式抽屉漏边` —— 官方抽屉是推挤式（聊天页整体右移一抽屉宽），覆盖式会在抽屉右缘漏出输入框；`translate({x: open ? '80%' : '0%'})` 用百分比别用像素。
-- `@ 面板/命令面板不刷新` —— `ComposerPanels.ets` 的 `commands`/`entries`/`loading` 写成普通成员 → 父层 @State 换新值不重建子组件（实测 @ 面板永远卡「正在加载目录…」）；一律 `@Prop`。
-- `@ 下钻整面板报错` —— 多根并发 `Promise.all` 里某根 404 会拖垮整张面板；逐根 `.catch(() => [])` 容错，全部为空才判失败。
-- `新建会话没目录选项` —— 安卓空态有「工作目录」chip（默认手机会话，可换授权根下目录）；鸿蒙要 `store.pendingLocation` + 首条消息走 `session-create{rootId,cwd}`（core/SessionLocation.ts + components/SessionLocationSheet.ets）。
-- `目录浏览显示空根` —— 首个授权根常是空的 `default-workspace`；REST 必须显式给 rootId，浏览时自动跳到下一个有子目录的根。
-- `切界面风格不生效` —— 设置页只 `AppStorage.setOrCreate('dshThemeMode')` + `PrefsStore.putString`，但没人监听：`applyTheme` 只在 mediaquery 变化时被调。修法：Index 加 `@StorageProp('dshThemeMode') @Watch('onThemeModeChange')` + 缓存 `sysDark`，回调里 `applyTheme(this.sysDark)`；启动时异步读偏好回来再重算（`PrefsStore.getString` 返 Promise，`?? 'system'` 会编译成 `string | Promise<string>` 报 10505001）。
-- `重连链提前终止` —— `GatewayClient.onDown` 原写 `!wasReady → CLOSED` + 重连 catch 里 `state=CLOSED`，掉线后第一次重连失败就永久 CLOSED（得重启 App）；安卓 `_onDone` 是无条件继续退避。改成 `reconnecting` 标志 + `scheduleReconnect()`，只有 `isFatal`（NO_TOKEN/PROTOCOL/DISPOSED）才收口；初连失败仍不自动重连（安卓同口径）。真机实测 1→2→4→8→16→30→30 且能自动连回。
-- `一次掉线排两次退避` —— `@ohos webSocket` 一次掉线连发 `error` + `close` 两个回调，两个都 `onDown` → 1s 档被 2s 档顶掉。`WsTransport` 用 `claimDown()` 去重 + `GatewayClient.downAttempt` 二次防线。
-- `历史分页没入口` —— `ChatStore.loadOlder()` 早有实现和单测，但 `pages/`+`components/` 里 grep `loadOlder` 零命中：UI 从未调用，用户无从触发（安卓 `chat_message_list.dart:196-215` 列表头「加载更早消息」）。入口在 `components/MessageList.ets` 的 `List` 首项，`hasMore` 由 `syncVersion()` 从 `st.historyHasMore` 抄；翻页 prepend 必须 `consumeHistoryPageJustLoaded()` 跳过贴底。**单测绿 ≠ 功能可达**，冒烟要按「用户能不能点」验，不是按核心类有没有方法验。
-- `ui.sh dump 读旧快照` —— `harmony/build/ui.sh` 的 dump 分支直接 `hdc file recv`，命令失败时留下上一轮 `ui.json`，看起来「滑动完全没生效」；已改成先 `rm -f` + `stat -c%s > 100` 校验 + 重试 3 次。真机滑动验证前先确认这次 dump 是新鲜的。
-- `hasMore=false 是正常` —— 会话事件数 < 200 时桥就返 `hasMore:false`，列表头本就不该出「加载更早消息」；查按钮不出现先用 `/home/wangke/probe-history.cjs <sessionId>` 直连 WS 看该会话首屏 `hasMore`，别一上来怀疑 UI 绑定。
-- `翻页后跳底/跳顶` —— 点「加载更早消息」时 `ChatHistory.loadOlderIn` 会 `changed()` **两次**（开头置 `loadingOlder=true`、结尾 `.finally` 清），只有中间那次带 `historyPageJustLoaded`。若只在带标志那次做补偿、其余仍走「新消息贴底」分支，30ms 后 `jumpToBottom` 就把视口拉走（真机现象：跳到最新或跳到最顶）。修法：`syncVersion()` 里翻页期间（`loadingOlder || anchorIdx >= 0`）一律 return，补偿用 `scrollToIndex(target, false, ScrollAlign.START)` 并推迟 60ms（0ms 时 List 还没按新数据排完，索引会被夹到首尾）。
-- `ForEach key 不能含 index` —— `` `${m.seq}-${idx}-${m.text.length}` `` 里带 idx，翻页把旧消息 prepend 到数组前部时 index 全体后移、key 全变，ArkUI 判定整列重建 → 滚动位置重置。key 只用稳定业务字段（`m.role + m.seq + 文本长度`）。
-- `应用更新走市场` —— 鸿蒙应用只能 AppGallery 分发、不允许自更新；不要照搬安卓 Gitee/GitHub Release 检查，改 `@kit.AppGalleryKit` 的 `updateManager.checkAppUpdate(ctx)`（`updateAvailable===1` 有新版）/ `showUpdateDialog(ctx)`（系统弹官方更新框）。错误码 1009400001~7 见 `core/AppUpdate.ts`。
-- `会话列表时间优先` —— 用户口径（2026-11-16）：先按时间（今天/昨天/更早）分桶、桶内再按工作区聚合，超过 2 天收进可折叠「更早」；安卓同口径（`app/lib/ui/session_groups.dart` 的 `groupSessionsByTime`，a91c1d9），两端一致。纯函数在 `core/SessionGroups.ts`。
-- `TTS 必须先 setListener` —— CoreSpeechKit 不先 `setListener` 就 `speak`，onStart/onComplete/onError 全部收不到（引擎照读但无回调、无法判断结束）；`CreateEngineParams.online` 是 **0=在线 / 1=离线**，别当布尔用；引擎是进程级单例，Ability `onDestroy` 要 `shutdownTts()` 释放音频焦点。
-- `分享要先 ShareKit` —— 只用 Want `action:ohos.want.action.sendData` 不一定弹系统分享面板；首选 `@kit.ShareKit` 的 `systemShare.SharedData`（UTD `general.plain-text` + content）→ `ShareController(data).show(context, {selectionMode: SINGLE, previewMode: DEFAULT})`，拿不到再退 Want。
-- `发送键白底看不见` —— 禁用态不能用 `inputFill`（浅色主题等于白底白箭头），走 `sendDisabledBg/sendDisabledFg` 浅灰底 + 中灰箭头。
-- `挂起提问只有 REST 有` —— 桥的 `chat.userQuestions/requested` 只在提问发生当时推送；WS 重连后 `replayPendingInteractions` 只补 **open** 的，`state:'continued'`（已续跑还没终答）的卡片**只有** `GET /chat/sessions/{sid}/questions` 拉得到。所以进会话必须 REST 兜底合流：`ChatStore.openSession` → `refreshPendingQuestions` → `HitlStore.mergeQuestions`（按 callId upsert，REST 侧 rpcId 空时保留 WS 侧旧值，空 callId 跳过），合流有变再 `changed()`。寿命口径：桌面端 delegate 未决 → 永不给卡片设超时；只有 delegate 拒绝才起 10 分钟自愈（服务端逻辑，客户端不持任何超时常量）。
-- `REST 合流别用 JsonAccess.arr` —— `core/JsonAccess.ts` 的 `arr` 返 `Object[]`（拿不到字段），要 `objArr` 才是 `JsonMap[]`；`fetchQuestions` 就踩过这个。
-- `会话列表待回答标记靠 REST` —— bridge 的 sessions 列表只下发 `pendingInteraction:'approval'`（挂起审批），**挂起提问不发**；非当前会话的 HITL 帧也不补推。标记必须靠 `GET /chat/sessions/{sid}/questions` + `/approvals` 逐会话探测，结果抄进 `@State` 数组（Map 不触发 ArkUI）。
-- `GatewayApi 忘注入 HTTP transport` —— `new GatewayApi(gateway, null)` 会让所有 REST 功能（附件/图片交接/根列表/文件全文/挂起项）报 `NO_TRANSPORT`；两条连接路径（ConnectView 与 Index.autoConnect）都必须传 `new HttpTransportImpl()`。
-- `bindContentCover 不含安全区` —— 全屏模态的内容从屏幕顶起算，顶栏会压在状态栏下（返回键只剩 16px 高）；`aboutToAppear` 里取 `win.getWindowAvoidArea(AvoidAreaType.TYPE_SYSTEM).topRect.height` 转 `px2vp` 存 `@State topInset`，根容器加 `.padding({ top: this.topInset })`。
-- `image-handoff 缺 sessionId` —— bridge `attachmentsAndImage()` 强制要求 `name` 与 `sessionId` 两个 query 参数，缺一即 400 `BODY_INVALID`；`fetchImageHandoff(name)` 必须加 sessionId 实参（安卓 `gateway_api.dart:140` 漏传，同款潜在缺陷）。
-- `createImageSource 要 ArrayBuffer` —— 传 `Uint8Array` 类型不符返回 undefined，随后 `createPixelMap` 抛 `Cannot read property 'createPixelMap' of undefined` 崩进程；先 `bytes.buffer as ArrayBuffer` 再建源并判空。
-- `TTS 建引擎要探测参数` —— 真机 `{language:'zh-CN',person:0,online:0}` 报 `1002300005 create engine error`，加 `extraParams:{style,locate,name}` 报 `202 this is not systemCap`（未声明的 key 全校验失败）；按 `probeParams()` 依次试 `(online,person)` 组合，首个成功即缓存引擎。
-- `命令卡被 reloadHistory 冲掉` —— 本地注入的 `role='command'、seq=-1` 消息不在服务端历史里，`reloadHistory` 整体替换 messages 会把它冲掉；替换前要收集 seq<0 的命令卡再拼回尾部（安卓 chat_history_actions.dart:36-40 同口径）。
-- `字号/间距只能用官方刻度` —— 鸿蒙开发台（harmony_check review）的 R023 允许字号集 = `{8,9,10,12,14,16,18,20,22,24,28,30,36,38,46,48,56}`，R003 允许间距与圆角集 = `{0,2,4,6,8,10,12,14,16,18,20,22,24,26,32,36,40,56,64}`（圆角也不认 0，最小合法档 2）；13/15/11/17/7/3/1 这些「看着挺合理」的值全部算违规。写死在 `ui/theme.ets` 的 token 一旦越界，会连带报一串，先修 token 再修引用处。
-- `hilog 只在 Dlog.ets` —— `entryability/EntryAbility.ets` 曾直调 7 处 `hilog.`（DOMAIN `0x0000`/TAG `DshChat`），与 `platform/Dlog.ets` 的 `0xD5C0`/`Dsh` 不一致 → 真机 `hilog -x | grep A0D5C0` 抓不到 Ability 生命周期日志；统一走 `Dlog.info/warn/error`。
-- `剪段拆文件会静默带走别的方法` —— 按行号区间把 ChatStore 的历史段剪成 ChatHistory 时，夹在区间里的 `setPermission` 被一起带走，单测报 `TypeError: ctx.store.setPermission is not a function`。剪完必须 grep 原有公开方法名是否齐全；边界行先 `print(repr(line))` 核对，插入点用「唯一锚点字符串 + assert in」而不是行号。
-- `拆帧模块漏 hello 分支` —— 把 `onFrame` 拆到 `core/GatewayRequests.ts` 时只搬了 event/error/ping/pong 分支、漏了 `kind==='hello'` → 连接永远不 READY，所有客户端用例挂满 300s 报 `Promise resolution is still pending but the event loop has already resolved`。拆这种 if 链函数要用「原分支数 == 新分支数」核对。
-- `触控热区 ≥40vp` —— `harmony_check a11y` 的 R009 只认 `.height()/.width()` ≥40；加载指示器
-  写成 `width(20)`/`width(32)` 也算「小热区」被拦（`ImageTile`、`MdDocViewer` 实踩）。
-  纯装饰性图标可给 `.accessibilityGroup(true)` 或直接放大到 40；输入框高度 36 同样违规（`HitlPanel` 实踩 → 40）。
-- `脚本拼 head+tail 会坏括号` —— 拆 GatewayApi 时尾部多出一个 `}`（`Unexpected "}"`），剪出的段又少一个方法闭合 `}`（`Expected identifier but found end of file`）。剪接脚本必须 assert 首尾行内容。
-- `清 R005 用 Repeat 不是 LazyForEach` —— 鸿蒙开发台 R005（「ForEach 全量渲染」）在任何父容器下都报；
-  `LazyForEach` 只能放 `List`/`ListItemGroup`/`Grid`/`Swiper`/`WaterFlow`，放 `Column` 里编译直接报
-  `10905236 ERROR: UI component 'Column' cannot be used in this place`。**`Repeat<T>(list).each((item: RepeatItem<T>) => ...).key(...)`
-  不受父容器限制**，是 Column/Scroll/Flex 内列表的唯一解；无稳定 id 的列表（Markdown 片段）key 要带
-  index 参数：`.key((entry, index) => index.toString() + '-' + entry.text.length)`。
-- `R006「LazyForEach 缺 keyGenerator」是误报` —— 第三参明明传了也报，触发条件是 itemBuilder 内是多行
-  if/else 组件链。把帧内容抽成 `@Builder xxx(item)`、帧里只留 `ListItem(){ this.xxx(m) }` 即 pass。
-- `R007 只认 matchMediaSync 调用` —— 文件里出现 `this.getUIContext().getMediaQuery().matchMediaSync('(width>=600vp)')`
-  才 pass；只读 `@StorageProp('dshBreakpoint')`、或写成 `constraintSize({maxWidth: bp==='sm' ? '100%' : 720})`、
-  或 `.onAreaChange(...)` 都**不算**断点分支（探针实测）。统一 helper 形态见 `core/Breakpoints.ts`。
-- `往类里插方法要用类成员区锚点` —— 把 helper 插在 `aboutToAppear(): void {` 之后会插进函数体内部，
-  连锁报 185 条 `10905236 UI component cannot be used in this place` + 大量 `10505001`；插在 import
-  之后又可能插到文件首行之前（`arkts-no-misplaced-imports`）。锚点必须选「另一个方法签名之后」。
-- `Repeat/@Builder 别插错 struct` —— 一个 .ets 里有多个 `export struct` 时，按行号插入很容易把
-  `@Builder` 插到隔壁 struct，报 `Property 'xxx' does not exist on type 'TeamSheet'`。按 `export struct`
-  边界精确定位，插在目标 struct 的 `build()` 之前。
-- `带参 @Builder 不随 @State 刷新` —— ArkUI 的 `@Builder xxx(a, b)` 只要**带参数**（哪怕参数是稳定
-  字符串 id、值全程不变），父组件重跑也不会重跑 builder，builder 内部读 `this.<@State>` 一律拿不到新值。
-  真机实证两轮：①先按值传 `glyph/color/label` 不刷新；②改成只传稳定 id + builder 里 `this.glyphOf(id)`
-  仍不刷新。**修法：显示值随状态变的部分一律内联到 `build()` 里**（`Text(this.speaking ? '⏹' : '🔊')`），
-  或改成**无参** @Builder。症状特征：父层提示文案（如「正在朗读」）已出现、按钮图标/颜色纹丝不动。
-- `bm dump 的版本段看错地方` —— `hdc shell "bm dump -n <bundle>"` 开头
-  `applicationInfo.appQuickFix` 段是 `versionCode: 0` / `versionName: ""` / `bundleName: ""`（不是真实值），
-  真正的版本在后面的 bundle 段（`versionCode: 1000000` / `versionName: "1.0.0"`）。别据此判「版本读不到」；
-  `bundleManager.getBundleInfoForSelf(GET_BUNDLE_INFO_WITH_APPLICATION)` 本身是好的。
 
 **Flutter-OH 构建坑位（`app/ohos/`，2026-11-25 实跑踩出，全部已修）**：
 

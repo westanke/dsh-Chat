@@ -1,6 +1,6 @@
 /// 会话抽屉分组 —— 真机反馈 2026-11-16：列表**先按时间、再按工作区**排序，
 /// 超过 2 天的会话收进可折叠的「更早」分组。
-/// 与鸿蒙 `harmony/entry/src/main/ets/core/SessionGroups.ts` 同语义
+/// 分组口径（原 ArkTS 版 `SessionGroups.ts` 已于 2026-11-27 随 harmony/ 移除）
 /// （PORT-MAP 已记两端差异）；旧版「工作区优先、组内再分日期」实现见 git 历史。
 /// 从 chat_state.dart 拆出（宪法 §7 单文件 ≤500 行）：纯函数、无状态。
 library;

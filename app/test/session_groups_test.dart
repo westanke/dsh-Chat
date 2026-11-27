@@ -1,6 +1,6 @@
 /// 会话抽屉分组测试 —— 真机反馈 2026-11-16：**先按时间（今天/昨天/更早）
 /// 分桶、桶内按工作区聚合，超过 2 天收进可折叠「更早」**。
-/// 用例与鸿蒙 `harmony/test/cases/session-groups.test.ts` 对齐（同语义两实现）。
+/// 分组口径（原 ArkTS 版的同语义用例已随 harmony/ 移除，2026-11-27）。
 library;
 
 import 'package:flutter_test/flutter_test.dart';
@@ -8,7 +8,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:dshchat/bridge/models.dart';
 import 'package:dshchat/ui/session_groups.dart';
 
-/// 固定基准时间（与 harmony 用例同一天），避免「今天」漂移。
+/// 固定基准时间，避免「今天」漂移。
 final DateTime now = DateTime(2026, 11, 16, 12, 0);
 
 /// 距 [now] [daysAgo] 天、当日 [hour] 点的毫秒时间戳。

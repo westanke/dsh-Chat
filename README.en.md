@@ -88,7 +88,6 @@ Right: settings, with connection state, device permissions, appearance and notif
 | **Android** | **Verified on Android hardware**: pairing, auto-reconnect, streaming, Markdown, tool details, process groups, thinking, question cards, drawer, dark mode and sharing. v1.0.37 APK is 26.6 MB |
 | **iOS** | Native bridge covers IANA time zone, private directory, notifications, TTS, sharing, image picker and file opening. CI builds an unsigned IPA. **Not verified on an iPhone**; updates go through the App Store |
 | **HarmonyOS** | **Flutter-OH build verified on HarmonyOS hardware / API 26**: pairing, chat, sessions, sharing, TTS, picker and notifications (including tap-to-return) passed. Release distribution needs an AGC certificate/profile |
-| Old ArkTS build | In `harmony/`, frozen and being retired |
 
 Current version: `app/pubspec.yaml` is `1.0.37+38`, tag `v1.0.37`.
 
@@ -217,7 +216,7 @@ needs HarmonyOS SDK API 26. The SDKs are not bundled in this repository.
 cd app
 flutter pub get
 flutter analyze
-flutter test                # 592 cases
+flutter test                # 616 cases
 
 flutter build apk --release --target-platform android-arm64
 flutter build hap --release --no-codesign
@@ -232,7 +231,7 @@ flutter build hap --release --no-codesign
 
 | Workflow | What it does |
 |---|---|
-| [`ci.yml`](.github/workflows/ci.yml) | `docs-check` + `flutter analyze` + `flutter test` (592) + legacy `harmony/test` `npm test`; uses the Flutter-OH SDK |
+| [`ci.yml`](.github/workflows/ci.yml) | `docs-check` + `flutter analyze` + `flutter test` (616); uses the Flutter-OH SDK |
 | [`release.yml`](.github/workflows/release.yml) | On a tag: Ubuntu builds the APK, `macos-15` builds an unsigned IPA; HAP is an optional self-hosted job (`BUILD_HAP=true` plus a real HarmonyOS SDK) |
 | [`mirror-sync.yml`](.github/workflows/mirror-sync.yml) | Gitee → GitHub mirror; GitHub is a read-only mirror, day-to-day pushes go to Gitee |
 
@@ -251,7 +250,6 @@ dsh-Chat/
   app/          ← Flutter project (lib/ has only design/, bridge/, ui/)
   app/ohos/     ← Flutter-OH HarmonyOS host project (bundleName com.dsh.dshchat)
   app/vendor/   ← patched third-party packages (gpt_markdown, see README.dsh.md)
-  harmony/      ← old ArkTS HarmonyOS build (frozen, being retired)
   LICENSE       ← AGPL-3.0
 ```
 

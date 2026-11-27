@@ -1,2 +1,0 @@
-# arkts 混淆规则（暂不启用，见 entry/build-profile.json5 注释）
--keep-global-name

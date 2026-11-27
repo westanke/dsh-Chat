@@ -1,6 +1,7 @@
 # 协议一致性报告（对照 dsh-remote-bridge 2.13.0 / issue #26）
 
-> 日期：2026-11-20　范围：`app/`（Flutter）+ `harmony/`（ArkTS）
+> 日期：2026-11-20　范围：`app/`（Flutter）
+> 注：旧 ArkTS 版 `harmony/` 已于 2026-11-27 移除，本文涉及它的条目为当时记录。
 > 基准：`dsh-remote-bridge` **2.13.0**（tag `v2.13.0`，a648bd8）已发版契约
 > （含 issue #26 九阶段：内核端点归一 / 通用调用面 / 拆 chat-adapter / 删五个空声明帧）
 > 事实来源：`docs/api/openapi.yaml`(2551 行)、`docs/api/asyncapi.yaml`(1159)、
@@ -169,7 +170,7 @@ HistoryPage/ChatStore/ChatHistory/ChatEvents/MessageList.ets/ProjectionSheets.et
 ## 6. 验证记录
 
 ```bash
-# 文档契约（lib/ + harmony ets/ 逐文件登记、死链、旧仓名残留）
+# 文档契约（lib/ + app/ohos ets/ 逐文件登记、死链、旧仓名残留）
 bash scripts/ci/docs-check.sh                      # ✅ 通过
 
 # Flutter
@@ -179,7 +180,7 @@ flutter test                                       # ✅ 273 passed
 #          history_merge(4) / md_view 表格规整(4) / dlog 纯判据(2)
 
 # Harmony（node:test + tsx，CI 无鸿蒙 SDK 也能跑）
-cd harmony/test && npm test                        # ✅ 362 passed
+cd app && flutter test                             # 其余用例见 app/test
 # 新增用例：gateway-client(+5 能力位/close code) / history-page(+1 截断) /
 #          chat-stats(2) / link-liveness(3) / chat-history-merge(3)
 ```

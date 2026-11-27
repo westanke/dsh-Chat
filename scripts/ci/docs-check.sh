@@ -10,9 +10,7 @@
 #      即表格里写 `ui/chat_page.dart` 这种形式）；
 #   2) docs/STRUCTURE.md 里点名的 lib 文件必须真实存在（防改名后留死链）；
 #   3) 不得残留旧仓库名（改名遗留）。检查时排除本脚本自身与 ref/ 历史快照；
-#   4) harmony/entry/src/main/ets 下每个 .ets/.ts 文件也必须登记进 STRUCTURE.md
-#      （按 ets/ 内相对路径，写 `entryability/EntryAbility.ets` 这种形式；鸿蒙版 AGENTS.md §3）；
-#   5) app/ohos/entry/src/main/ets 下每个 .ets/.ts 文件也必须登记进 STRUCTURE.md
+#   4) app/ohos/entry/src/main/ets 下每个 .ets/.ts 文件也必须登记进 STRUCTURE.md
 #      （按 ohos/ets 内相对路径，写 `ohos/ets/plugins/DshDevicePlugin.ets` 这种形式；
 #      Flutter-OH 鸿蒙宿主工程，2026-11-25 起）。
 #
@@ -23,7 +21,6 @@ cd "$(dirname "$0")/../.." || exit 1   # 定位到仓库根，CI 与本地行为
 
 STRUCT="docs/STRUCTURE.md"
 LIB="app/lib"
-HARMONY_ETS="harmony/entry/src/main/ets"   # 鸿蒙 ArkTS 源码根（登记为 ets/ 内相对路径）
 OHOS_ETS="app/ohos/entry/src/main/ets"    # Flutter-OH 鸿蒙宿主工程 ArkTS 源码根（登记为 ohos/ets/ 内相对路径）
 OLD_NAME="dsh-flutter-deepseek"        # 变量化：避免本文件自身被第 3 条检查命中
 fail=0
@@ -46,21 +43,7 @@ while IFS= read -r f; do
 done < <(find "$LIB" -name '*.dart' -type f | sort)
 [ "$missing" -eq 0 ] && say "  ✅ 全部已登记"
 
-# ── 1b) harmony/ ArkTS 每个文件都被 STRUCTURE.md 收录（同第 1 条口径）─────────
-if [ -d "$HARMONY_ETS" ]; then
-  say "检查 $HARMONY_ETS/ 全部文件是否已登记进 $STRUCT …"
-  hmiss=0
-  while IFS= read -r f; do
-    rel="${f#"$HARMONY_ETS"/}"          # ets/entryability/EntryAbility.ets → entryability/EntryAbility.ets
-    if ! grep -qF "\`ets/$rel\`" "$STRUCT"; then
-      bad "未登记：harmony/$rel  →  请在 $STRUCT 的「## harmony/」表里补一行（写 \`ets/$rel\`）"
-      hmiss=$((hmiss + 1))
-    fi
-  done < <(find "$HARMONY_ETS" \( -name '*.ets' -o -name '*.ts' \) -type f | sort)
-  [ "$hmiss" -eq 0 ] && say "  ✅ 全部已登记"
-fi
-
-# ── 1c) app/ohos/ ArkTS 每个文件都被 STRUCTURE.md 收录（Flutter-OH 宿主工程）──
+# ── 1b) app/ohos/ ArkTS 每个文件都被 STRUCTURE.md 收录（Flutter-OH 宿主工程）──
 if [ -d "$OHOS_ETS" ]; then
   say "检查 $OHOS_ETS/ 全部文件是否已登记进 $STRUCT …"
   omiss=0
@@ -91,19 +74,6 @@ while IFS= read -r rel; do
   ghost=$((ghost + 1))
 done < <(grep -oE '`[A-Za-z0-9_/]+\.dart`' "$STRUCT" | tr -d '`' | sort -u)
 [ "$ghost" -eq 0 ] && say "  ✅ 无死链"
-
-# 死链检查（鸿蒙侧）：STRUCTURE.md 里 \`ets/…\` 引用必须真实存在
-if [ -d "$HARMONY_ETS" ]; then
-  say "检查 $STRUCT 中登记的 ArkTS 文件是否仍存在 …"
-  hghost=0
-  while IFS= read -r rel; do
-    if [ ! -f "$HARMONY_ETS/$rel" ]; then
-      bad "死链：ets/$rel  →  文件已不存在，请更新 $STRUCT"
-      hghost=$((hghost + 1))
-    fi
-  done < <(grep -oE '`ets/[A-Za-z0-9_/.]+\.(ets|ts)`' "$STRUCT" | tr -d '`' | sed 's|^ets/||' | sort -u)
-  [ "$hghost" -eq 0 ] && say "  ✅ harmony 无死链"
-fi
 
 # 死链检查（app/ohos 侧）：STRUCTURE.md 里 \`ohos/ets/…\` 引用必须真实存在
 if [ -d "$OHOS_ETS" ]; then

@@ -1,6 +1,7 @@
 # dsh-Chat × dsh-companion 坑位迁移对照审计报告
 
 > **审计对象**：`dsh-Chat`（双客户端：`app/` Flutter + `harmony/` ArkTS）
+> **注**：旧 ArkTS 版 `harmony/` 已于 2026-11-27 移除；文中 `harmony/...` 引用为当时审计记录。
 > **基线**：HEAD `d15df30 chore(release): bump 1.0.18+19 并回填发版数据` ＋ 工作树未提交改动（审计起点 52 条，收尾 53 条已跟踪改动 + 9 个未跟踪新文件；审计期间一直有并发写者在改 `app/lib/bridge/*` 与 `harmony/.../core/*`，见 §5.4 / §5.5）
 > **对照源**：`dsh-companion/docs/project/PITFALLS.md` 全文 1598 行、其 `AGENTS.md` §7「坑位索引」
 > **审计时间**：2026-11-19 23:43–23:55（+08:00）
