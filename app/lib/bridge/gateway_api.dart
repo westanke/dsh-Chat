@@ -197,23 +197,35 @@ extension GatewayApi on GatewayClient {
         '?sessionId=${Uri.encodeComponent(sessionId)}',
       );
 
-  /// 会话挂起提问清单（REST GET /api/v1/chat/sessions/{id}/questions，
-  /// routes/chat.ts:381-392）：本桥前台挂起 + 内核 continued 合流，挂起的
-  /// 排前面。WS replay 只补本桥前台那批，内核 continued 只有这里能拉到
-  /// —— 打开会话时兜底拉一次，合流进 HitlState（chat_state._refreshPendingQuestions）。
+  /// 会话挂起提问清单：本桥前台挂起 + 内核 continued 合流，挂起的排前面。
+  /// WS replay 只补本桥前台那批，内核 continued 只有这条清单能拉到 ——
+  /// 打开会话时兜底拉一次，合流进 HitlState（chat_state._refreshPendingQuestions）。
   /// 需要 chat.read scope（设备默认 scope 含它）。
+  ///
+  /// 优先走 WS `questions` 帧（桥 2.17.x 起，ws-hitl.ts handleQuestions）：重连后
+  /// 一次往返就能补齐两半，不必再依赖 3.0.0 要删的 REST。老桥没有这一帧、回
+  /// `UNKNOWN_TYPE`，此时退回 REST `GET /api/v1/chat/sessions/{id}/questions`
+  /// （routes/chat.ts:381-392）——两条路径共用同一适配层方法，items 同形。
   Future<List<PendingQuestion>> fetchQuestions(String sessionId) async {
+    try {
+      final r = await request('questions', {'sessionId': sessionId});
+      return _pendingQuestionsFrom(sessionId, r['items']);
+    } on RequestException catch (e) {
+      if (e.code != 'UNKNOWN_TYPE' && e.code != 'NOT_IMPLEMENTED') rethrow;
+    }
     final r = await gatewayHttpJson(
       this,
       '/api/v1/chat/sessions/${Uri.encodeComponent(sessionId)}/questions',
     );
-    final items = r['items'] as List? ?? const [];
-    return [
-      for (final e in items)
-        if (e is Map)
-          PendingQuestion.from(sessionId, Map<String, dynamic>.from(e)),
-    ];
+    return _pendingQuestionsFrom(sessionId, r['items']);
   }
+
+  /// 归一化 `questions` 应答 / REST items：两条通道同形，但都要防非 Map 元素。
+  List<PendingQuestion> _pendingQuestionsFrom(String sessionId, Object? raw) => [
+    for (final e in raw is List ? raw : const [])
+      if (e is Map)
+        PendingQuestion.from(sessionId, Map<String, dynamic>.from(e)),
+  ];
 
   /// 取图片交接产物（REST GET /api/v1/image-handoff，openapi.yaml:314-344）：
   /// 纯文本模型发图时 bridge 把图交接成工作区 `.dsh-images/<sha256>.<ext>`，
