@@ -1,0 +1,224 @@
+# AtomGit 站自动构建 Android APK 并建 Release（对应 Issue #1）。
+#
+# 触发：
+#   - push tag `v*`：发版时由 release.sh --publish 推 tag 自动跑；
+#   - workflow_dispatch：手动补跑（可传 tag，留空则按 app/pubspec.yaml 的版本推断）。
+#
+# 产物与 Gitee/GitHub 主站保持同一命名：artifacts/dsh-Chat-<tag>.apk + SHA256SUMS.txt。
+# 附件上传走 AtomGit「获取 Release 附件上传地址」接口（tag 维度，不是 id 维度）：
+#   GET  /api/v5/repos/{owner}/{repo}/releases/{tag}/upload_url?access_token=…&file_name=…
+#   PUT  <返回的 url>（带返回的 headers）
+#
+# 说明：
+# - 托管 Runner 预装 Java 11/17/21，但不带 Android SDK，因此这里用腾讯云镜像手动铺
+#   platform-tools / platforms;android-36 / build-tools;36.0.0 / cmdline-tools；
+#   纯 Dart+Java 插件不依赖 NDK，所以不装 NDK（约省 700MB）。
+# - Flutter 用 Flutter-OH 定制 SDK（material_ui 的 TargetPlatform.ohos 只在该 fork 里），
+#   与 GitHub CI 共用 scripts/ci/setup-flutter-oh.sh。
+# - 权限：优先用 secrets.ATOMGIT_TOKEN（用户令牌，仓库读写）；未配置时回落到
+#   Actions 自动注入的 ATOMGIT_TOKEN（需要 permissions.repository: write）。
+name: release-android
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "要发布的 tag（如 v1.0.38）；留空则按 pubspec 版本推断"
+        required: false
+        type: string
+
+permissions:
+  repository: write
+  pr: read
+
+env:
+  PUB_CACHE: ~/.pub-cache
+  GRADLE_USER_HOME: ~/.gradle
+  # 国内可达的 Android SDK 镜像（与 dl.google.com/android/repository 同布局）
+  SDK_MIRROR: https://mirrors.cloud.tencent.com/AndroidSDK
+
+jobs:
+  apk:
+    name: 构建 Android APK 并发布
+    runs-on: [ubuntu-latest, x64, medium]
+    timeout-minutes: 90
+    steps:
+      - name: 检出代码
+        uses: checkout
+
+      - name: 解析版本
+        id: ver
+        run: |
+          set -euo pipefail
+          TAG="${{ inputs.tag }}"
+          if [ -z "$TAG" ] && [ "${ATOMGIT_EVENT_NAME:-}" = "push" ]; then
+            TAG="${ATOMGIT_REF#refs/tags/}"
+          fi
+          VER=$(grep -oP '^version: \K[0-9]+\.[0-9]+\.[0-9]+' app/pubspec.yaml | head -1)
+          CODE=$(grep -oP '^version: [0-9.]+\+\K[0-9]+' app/pubspec.yaml | head -1)
+          [ -n "$TAG" ] || TAG="v${VER}"
+          # 试跑：tag 以 -ci 结尾只构建、不建 Release（用于演练流水线本身）
+          TESTONLY=0
+          case "$TAG" in *-ci) TESTONLY=1; CHECK_TAG="${TAG%-ci}" ;; *) CHECK_TAG="$TAG" ;; esac
+          [ "${CHECK_TAG#v}" = "$VER" ] || { echo "tag ${CHECK_TAG} 与 pubspec 版本 ${VER} 不一致"; exit 1; }
+          echo "tag=$TAG" >> "$ATOMGIT_OUTPUT"
+          echo "version=$VER" >> "$ATOMGIT_OUTPUT"
+          echo "code=$CODE" >> "$ATOMGIT_OUTPUT"
+          echo "testonly=$TESTONLY" >> "$ATOMGIT_OUTPUT"
+          echo "本次构建 ${TAG}（versionCode ${CODE}，试跑=${TESTONLY}）"
+
+      - name: 缓存 Android SDK
+        uses: cache
+        with:
+          path: ~/android-sdk
+          key: android-sdk-36-v1
+
+      - name: 安装 Android SDK（腾讯云镜像）
+        run: |
+          set -euo pipefail
+          SDK="$HOME/android-sdk"
+          M="$SDK_MIRROR"
+
+          fetch() { # $1=url $2=目标目录（解压后的顶层目录）
+            local url="$1" dest="$2" tmp top
+            tmp=$(mktemp -d)
+            echo "下载 $(basename "$url")"
+            curl -fsSL --retry 3 --retry-delay 3 -o "$tmp/pkg.zip" "$url"
+            unzip -q "$tmp/pkg.zip" -d "$tmp/x"
+            top=$(find "$tmp/x" -mindepth 1 -maxdepth 1 -type d | head -1)
+            rm -rf "$dest"; mkdir -p "$(dirname "$dest")"
+            mv "$top" "$dest"
+            rm -rf "$tmp"
+          }
+
+          if [ ! -d "$SDK/platform-tools" ]; then
+            fetch "$M/platform-tools_r37.0.3-linux.zip" "$SDK/platform-tools"
+          fi
+          if [ ! -d "$SDK/platforms/android-36" ]; then
+            fetch "$M/platform-36_r02.zip" "$SDK/platforms/android-36"
+          fi
+          if [ ! -d "$SDK/build-tools/36.0.0" ]; then
+            fetch "$M/build-tools_r36_linux.zip" "$SDK/build-tools/36.0.0"
+          fi
+          if [ ! -d "$SDK/cmdline-tools/latest" ]; then
+            fetch "$M/commandlinetools-linux-16111833_latest.zip" "$SDK/cmdline-tools/latest"
+          fi
+
+          # 许可证：手动铺包后写哈希文件，等价于 sdkmanager --licenses
+          mkdir -p "$SDK/licenses"
+          cat > "$SDK/licenses/android-sdk-license" <<'LIC'
+          24333f8a63b6825ea9c5514f83c2829b004d1fee
+          8933bad161af4178b1185d1a37fbf41ea5269c55
+          d56f5187479451eabf01fb78af6dfcb131a6481e
+          LIC
+          cat > "$SDK/licenses/android-sdk-preview-license" <<'LIC'
+          84831b9409646a918e30573bab4c9c91346d8abd
+          LIC
+
+          {
+            echo "ANDROID_HOME=$SDK"
+            echo "ANDROID_SDK_ROOT=$SDK"
+            echo "$SDK/cmdline-tools/latest/bin" >> "$ATOMGIT_PATH"
+          } >> "$ATOMGIT_ENV"
+          echo "Android SDK 就绪：$(ls "$SDK/platforms") / $(ls "$SDK/build-tools")"
+
+      - name: 缓存 Flutter-OH SDK
+        uses: cache
+        with:
+          path: ~/flutter-oh
+          key: flutter-oh-3.50.0-ohos-1.3.3
+
+      - name: 引导 Flutter-OH SDK
+        run: bash scripts/ci/setup-flutter-oh.sh
+
+      - name: 缓存 Gradle 与 pub
+        uses: cache
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+            ~/.pub-cache
+          key: gradle-${{ hashFiles('app/android/**/*.gradle*', 'app/android/gradle/wrapper/gradle-wrapper.properties', 'app/pubspec.yaml', 'app/pubspec.lock') }}
+          restore-keys: |
+            gradle-
+
+      - name: 构建 APK
+        working-directory: app
+        run: |
+          set -euo pipefail
+          flutter --version
+          flutter pub get
+          flutter build apk --release --target-platform android-arm64
+
+      - name: 归档产物与校验和
+        run: |
+          set -euo pipefail
+          TAG="${{ steps.ver.outputs.tag }}"
+          mkdir -p artifacts
+          cp app/build/app/outputs/flutter-apk/app-release.apk "artifacts/dsh-Chat-${TAG}.apk"
+          ( cd artifacts && sha256sum "dsh-Chat-${TAG}.apk" > SHA256SUMS.txt )
+          cat artifacts/SHA256SUMS.txt
+
+      - name: 上传制品
+        uses: upload-artifact
+        with:
+          name: dsh-chat-android-${{ steps.ver.outputs.tag }}
+          path: artifacts/
+
+      - name: 建 Release 并上传附件
+        if: ${{ steps.ver.outputs.testonly != '1' }}
+        env:
+          TOKEN: ${{ secrets.ATOMGIT_TOKEN }}
+        run: |
+          set -euo pipefail
+          TAG="${{ steps.ver.outputs.tag }}"
+          VER="${{ steps.ver.outputs.version }}"
+          REPO="${ATOMGIT_REPOSITORY}"
+          API="https://atomgit.com/api/v5/repos/${REPO}"
+          T="${TOKEN:-${ATOMGIT_TOKEN:-}}"
+          [ -n "$T" ] || { echo "缺少令牌：请配置 secrets.ATOMGIT_TOKEN"; exit 1; }
+
+          if curl -fsS -H "Authorization: Bearer $T" "$API/releases/tags/$TAG" -o /tmp/release.json 2>/dev/null; then
+            echo "Release $TAG 已存在，只补缺失附件"
+          else
+            python3 - "$TAG" "$VER" <<'PY' > /tmp/newrelease.json
+          import json
+          import sys
+
+          tag, ver = sys.argv[1], sys.argv[2]
+          body = "\n".join([
+              f"## v{ver}",
+              "",
+              f"- Android 产物：`dsh-Chat-{tag}.apk`（AtomGit Actions 构建）",
+              "- 校验和见附件 `SHA256SUMS.txt`",
+              "",
+              "> 由 .gitcode/workflows/release-android.yml 自动构建并上传。",
+          ])
+          print(json.dumps({"tag_name": tag, "name": ver, "body": body, "prerelease": False},
+                           ensure_ascii=False))
+          PY
+            curl -fsS -X POST -H "Authorization: Bearer $T" \
+              -H "Content-Type: application/json" \
+              --data-binary @/tmp/newrelease.json "$API/releases" > /dev/null
+            echo "已创建 Release $TAG"
+          fi
+
+          python3 -c "import json;print('\n'.join(a['name'] for a in json.load(open('/tmp/release.json'))['assets']))"             > /tmp/assets.txt 2>/dev/null || true
+
+          for f in artifacts/*; do
+            name=$(basename "$f")
+            if grep -qx "$name" /tmp/assets.txt 2>/dev/null; then
+              echo "附件已存在，跳过：$name"
+              continue
+            fi
+            curl -fsS -H "Authorization: Bearer $T" \
+              "$API/releases/$TAG/upload_url?access_token=$T&file_name=$name" -o /tmp/up.json
+            url=$(python3 -c "import json;print(json.load(open('/tmp/up.json'))['url'])")
+            python3 -c "import json;[print(k+': '+v) for k,v in json.load(open('/tmp/up.json'))['headers'].items()]" \
+              > /tmp/headers.txt
+            curl -fsS -X PUT -H @/tmp/headers.txt --data-binary @"$f" "$url"
+            echo "已上传：$name"
+          done

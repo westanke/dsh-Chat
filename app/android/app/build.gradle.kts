@@ -18,7 +18,7 @@ val hasReleaseKeystore = keystoreProperties.getProperty("storeFile") != null
 android {
     namespace = "com.dsh.dshchat"
     compileSdk = flutter.compileSdkVersion
-    ndkVersion = flutter.ndkVersion
+    // NDK 仅在本工程出现 native 源码时才需要；纯 Dart/Java 插件不依赖，CI 因此不装 NDK。
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17

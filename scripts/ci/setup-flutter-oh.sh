@@ -100,9 +100,9 @@ if [ -z "${HOS_SDK_HOME:-}" ] && [ -z "${DEVECO_SDK_HOME:-}" ]; then
   HOS_STUB="$ROOT/.hos-sdk-stub"
   mkdir -p "$HOS_STUB/hmscore" "$HOS_STUB/openharmony"
   export HOS_SDK_HOME="$HOS_STUB"
-  if [ -n "${GITHUB_ENV:-}" ]; then
-    echo "HOS_SDK_HOME=$HOS_STUB" >> "$GITHUB_ENV"
-  fi
+  for envfile in "${GITHUB_ENV:-}" "${ATOMGIT_ENV:-}"; do
+    [ -n "$envfile" ] && echo "HOS_SDK_HOME=$HOS_STUB" >> "$envfile"
+  done
   say "未检测到 HOS SDK：使用空骨架 ${HOS_STUB}（仅 Android/iOS；HAP 需真 SDK）"
 fi
 
@@ -110,12 +110,12 @@ export FLUTTER_ROOT="$ROOT"
 export PATH="$ROOT/bin:$PATH"
 
 # GitHub Actions：让后续 step 直接拿到 flutter/dart。
-if [ -n "${GITHUB_ENV:-}" ]; then
-  echo "FLUTTER_ROOT=$ROOT" >> "$GITHUB_ENV"
-fi
-if [ -n "${GITHUB_PATH:-}" ]; then
-  echo "$ROOT/bin" >> "$GITHUB_PATH"
-fi
+for envfile in "${GITHUB_ENV:-}" "${ATOMGIT_ENV:-}"; do
+  [ -n "$envfile" ] && echo "FLUTTER_ROOT=$ROOT" >> "$envfile"
+done
+for pathfile in "${GITHUB_PATH:-}" "${ATOMGIT_PATH:-}"; do
+  [ -n "$pathfile" ] && echo "$ROOT/bin" >> "$pathfile"
+done
 
 say "SDK：$("$ROOT/bin/flutter" --version 2>/dev/null | head -1 || echo 'flutter --version 失败')"
 say "Dart：$(dart --version 2>&1 | head -1 || true)"

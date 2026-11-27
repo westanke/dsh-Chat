@@ -11,9 +11,9 @@ pluginManagement {
     includeBuild("$flutterSdkPath/packages/flutter_tools/gradle")
 
     repositories {
-        // 本机走国内镜像（下载快）；GitHub Actions（CI=true，海外 runner）直连官方源——
-        // v1.0.17 实测 runner 访问阿里云镜像全部超时导致 assembleRelease 失败。
-        if (System.getenv("CI") != "true") {
+        // 本机与 AtomGit Actions（国内 runner）走阿里云镜像；GitHub Actions（海外 runner）
+        // 直连官方源——v1.0.17 实测 runner 访问阿里云镜像全部超时导致 assembleRelease 失败。
+        if (System.getenv("GITHUB_ACTIONS") != "true") {
             maven { url = uri("https://maven.aliyun.com/repository/gradle-plugin") }
             maven { url = uri("https://maven.aliyun.com/repository/google") }
             maven { url = uri("https://maven.aliyun.com/repository/public") }
