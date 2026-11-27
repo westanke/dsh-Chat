@@ -4,8 +4,11 @@ library;
 
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math' as math;
+import 'dart:ui' as ui;
 
 import 'package:material_ui/material_ui.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 
 import '../bridge/gateway.dart';
@@ -26,6 +29,8 @@ part 'composer_panels.dart';
 part 'composer_palette.dart';
 part 'composer_at_sessions.dart';
 part 'composer_bar.dart';
+part 'composer_rows.dart';
+part 'composer_editor.dart';
 part 'composer_permission.dart';
 part 'composer_slash.dart';
 

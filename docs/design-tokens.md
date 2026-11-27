@@ -803,6 +803,32 @@ dsh-Go 的「拍照」（本仓原生通道无相机 Intent）、「生成」「
 | 会话面板 TAB | 胶囊等宽 78、间距 8；两端各留半屏 padding，选中项滚到正中（偏移 = i×(78+8)） | `session_tabs_sheet.dart` |
 | 贴底判定容差 | 24 | `kAtBottomTolerance`：离底 ≤24 算贴底（跟随/圆钮显隐同口径） |
 
+## 4.21 输入条开合 · 超长编辑（2026-11-27）
+
+对照 dsh-Go `app/lib/ui/chat/composer.dart`（`_ComposerRows` / `_RenderComposerRows` /
+`Composer.linesFor`）重做本仓输入条，**内容驱动**而不是焦点驱动：
+
+- **两态**：空输入（无文字、无待发图）单行——`+` / 文字 / 上下文环 + 发送键；有文字或
+  待发图 → 280ms `easeInOutCubic` 展开第二行，文字跨整行，第二行放模型 chip / 图片 chip /
+  「展开编辑」，尾部仍是环 + 发送键；清空文字并删光图后自动收回。圆角随之 28 → 20
+  （`composerRadius` / `composerRadiusOpen`，见 §4.20）。
+- **几何**：`composer_rows.dart` 的 `_ComposerRows` 是自定义 RenderObject（children 顺序
+  `[text, leading, footer, trailing]`），单行文字宽 = 总宽 −（leading + 8）− 8 − trailing，
+  展开时插值到 总宽 − 2×`composerTextInset`；键行始终贴底，`footer` 在开合进度 ≤ 0.5 时不
+  接命中与语义（`_footerLive`）。
+- **可见行数**：`_maxLines = clamp(可用高 × 0.4 / (15 × 1.45), 2, 6)`，可用高 = 屏高 −
+  键盘 inset，与 dsh-Go `Composer.linesFor` 同式；超出时 `TextField` 内部滚动。
+- **超长处理**：`TextPainter` 估算行数 > `_maxLines` 时，第二行尾部出现「展开编辑」圆钮
+  （`Icons.open_in_full`，tooltip「展开编辑」），点开 90% 屏高底部弹层
+  `showComposerLongEditor`（`composer_editor.dart`）：头部「编辑消息 · N 字 · 完成」，
+  正文 `TextField(expands: true)`，`完成` 把文字写回输入条 controller 并同步草稿
+  （`composerDrafts`），再把焦点交还输入条。
+- **动效 token**：`DsMotion.composerExpand = 280ms`、`composerExpandCurve =
+  Curves.easeInOutCubic`（对齐 dsh-Go `AppMotion.collapse` / `collapseCurve`）。
+- **测试**：`test/composer_expand_test.dart`（空输入单行 / 有文字展开 / 清空收回 / 8 行出现
+  展开钮并走完弹层写回 / 短文本无展开钮）。注意 `AnimationController.forward()` 后第一帧
+  只对齐 ticker 起始时间，测试要 `pump()` 再 `pump(400ms)`。
+
 ## 5. 截图资产（ref/）
 - official-login-page.png 登录页（+86 152 1388 0002 / 验证码输入 / 发送验证码按钮）
 - official-welcome.png 欢迎引导页（开启对话主按钮）

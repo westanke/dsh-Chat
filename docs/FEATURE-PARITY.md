@@ -41,7 +41,7 @@
 | 分叉 / 编辑重发 | 一律开新会话（`session/fork`）；残留队列清掉 | 会话长按「分叉到新会话」已接 `fork` 帧并自动打开；「重新生成」仍是重发最后一条 | ◐ 编辑重发缺 |
 | 分享面板 | 范围 + 隐私项 → 链接/图片/文件/文本（`share_panel.dart`） | 单条消息系统分享 | ◐ |
 | 对话回放 | `.dshgo` 只读回放（`replay_page.dart`） | 无 | ❌ |
-| 玻璃输入条 | 1–6 行、Enter 发送 / Esc 打断（`ui/chat/composer.dart`） | ✅ 1–5 行、发送/停止三态（`composer_bar.dart`） | ✅ 无 Esc（移动端） |
+| 玻璃输入条 | 1–6 行、Enter 发送 / Esc 打断（`ui/chat/composer.dart`） | **✅ 2026-11-27**：空输入单行收起、有文字/待发图 280ms 展开双行（`composer_rows.dart`）；可见 2–6 行按键盘上方高度算（`_maxLines`），超出行数出现「展开编辑」全屏弹层（`composer_editor.dart`）；发送/停止三态 | ✅ 无 Esc（移动端） |
 | 运行中发送语义 | 默认**插话**，长按选「插话/停止后排队/排队」（`chat_state.dart:1313`） | 设置里二选一排队/插话，默认排队（`settings_sections.dart:274`） | ◐ |
 | 排队气泡 + 动作 | 七种状态标签；`inboxId` 到手后可编辑/立即发送/改插话/撤回（`chat_list.dart:1130`、`session/updateQueue`） | **✅ 2026-11-21 真管理**：队列条 + 面板撤回/改插话/改写（`session-queues`/`queue-update`/`queue-item-updated`，mobile-queue-v1）；本地「排队中」标签保留 | ✅ |
 | 停止本轮 | `session/cancel`；停后把 inbox 末条放回唤醒（`chat_state.dart:1700`） | ✅ `session-cancel` + 清流式 | ◐ 无「放回唤醒」 |

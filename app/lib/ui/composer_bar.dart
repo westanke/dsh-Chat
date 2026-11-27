@@ -60,9 +60,14 @@ class _PermissionSheet extends StatelessWidget {
   }
 }
 
-/// 输入容器（白浮层卡）：输入框（键盘事件外抛）+ 权限 chip / 图片 chip /
-/// 加图与发送圆钮。纯展示 + 回调上行，状态都在 ComposerState。
-class _ComposerBar extends StatelessWidget {
+/// 输入容器（白浮层卡）：单行收起（没有输入）⇄ 双行展开（有文字/待发图）。
+///
+/// 几何交给 [_ComposerRows] 补间（对照 dsh-go `Composer`）：收起态是
+/// `(+) 文字 … (环)(↑)` 的一行胶囊，展开后文字独占第一行，`+`、模型 chip、
+/// 图片 chip、上下文环、发送键落到第二行。纯展示 + 回调上行，状态都在
+/// ComposerState；开合只看内容（`controller.text` / `pendingImageNames`），
+/// 不看焦点——用户要求「无输入默认收缩单行」。
+class _ComposerBar extends StatefulWidget {
   const _ComposerBar({
     required this.colors,
     required this.controller,
@@ -127,20 +132,81 @@ class _ComposerBar extends StatelessWidget {
   /// 点模型 chip：上层打开模型选择（null = 不显示 chip）。
   final VoidCallback? onPickModel;
 
-  /// 输入框里的文字是否已经折到第二行。
-  ///
-  /// dsh-go `composer.dart:651` 按 `open` 在 28 → 20 之间补间（单行圆润、
-  /// 多行收窄）。本仓是常驻双行布局，没有单行↔双行的切换，所以改按
-  /// 「文字是否多行」来驱动同一段补间：一行时 28，多行时收敛到 20。
-  bool _multiline(BuildContext context) {
-    final text = controller.text;
-    if (text.isEmpty) return false;
-    final width =
-        MediaQuery.sizeOf(context).width -
-        2 * DsSpacing.screenPad -
+  @override
+  State<_ComposerBar> createState() => _ComposerBarState();
+}
+
+class _ComposerBarState extends State<_ComposerBar>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _expand = AnimationController(
+    vsync: this,
+    duration: DsMotion.composerExpand,
+  );
+
+  late final Animation<double> _open = CurvedAnimation(
+    parent: _expand,
+    curve: DsMotion.composerExpandCurve,
+  );
+
+  /// 展开态：有文字或有待发图片。空输入一律单行收起。
+  bool get _expanded =>
+      widget.controller.text.trim().isNotEmpty ||
+      widget.pendingImageNames.isNotEmpty;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.controller.addListener(_syncOpen);
+    _expand.value = _expanded ? 1 : 0;
+  }
+
+  @override
+  void didUpdateWidget(covariant _ComposerBar oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.controller != widget.controller) {
+      oldWidget.controller.removeListener(_syncOpen);
+      widget.controller.addListener(_syncOpen);
+    }
+    _syncOpen();
+  }
+
+  @override
+  void dispose() {
+    widget.controller.removeListener(_syncOpen);
+    _expand.dispose();
+    super.dispose();
+  }
+
+  /// 内容一变就把开合动画推向目标态；动画未结束时再次触发也只是改方向。
+  void _syncOpen() {
+    if (!mounted) return;
+    if (_expanded) {
+      _expand.forward();
+    } else {
+      _expand.reverse();
+    }
+  }
+
+  /// 输入框可见行数上限：最多 6 行，且不超过键盘上方可用高度的 2/5
+  /// （对照 dsh-go `Composer.linesFor`）。
+  int _maxLines(BuildContext context) {
+    final media = MediaQuery.of(context);
+    final available = media.size.height - media.viewInsets.bottom;
+    final line = media.textScaler.scale(DsSpacing.composerFontSize) *
+        DsSpacing.composerLineHeight;
+    if (line <= 0 || available <= 0) return 2;
+    return (available * 0.4 / line).floor().clamp(2, 6);
+  }
+
+  /// 文字排到展开态整行宽度时的行数（只用来判断要不要「展开编辑」）。
+  int _lineCount(BuildContext context) {
+    final text = widget.controller.text;
+    if (text.isEmpty) return 0;
+    final width = MediaQuery.sizeOf(context).width -
+        2 * DsSpacing.composerMargin -
         2 * DsSpacing.composerKeyGap -
         2 * DsSpacing.composerTextInset;
-    if (width <= 0) return false;
+    if (width <= 0) return 0;
     final painter = TextPainter(
       text: TextSpan(
         text: text,
@@ -149,192 +215,249 @@ class _ComposerBar extends StatelessWidget {
           height: DsSpacing.composerLineHeight,
         ),
       ),
-      maxLines: 5,
-      textDirection: TextDirection.ltr,
+      textScaler: MediaQuery.textScalerOf(context),
+      textDirection: Directionality.of(context),
     )..layout(maxWidth: width);
-    return painter.computeLineMetrics().length > 1;
+    return painter.computeLineMetrics().length;
+  }
+
+  Widget _field(DsColors c, int maxLines) {
+    return Focus(
+      onKeyEvent: widget.onKey,
+      child: TextField(
+        controller: widget.controller,
+        focusNode: widget.focusNode,
+        enabled: widget.enabled,
+        minLines: 1,
+        maxLines: maxLines,
+        keyboardType: TextInputType.multiline,
+        textInputAction: TextInputAction.newline,
+        // dsh-go：字号 15、行高 1.45。
+        style: DsTypography.base.copyWith(
+          fontSize: DsSpacing.composerFontSize,
+          height: DsSpacing.composerLineHeight,
+          color: c.labelPrimary,
+        ),
+        cursorColor: c.brand,
+        decoration: InputDecoration(
+          // dsh-go 文案：空闲「给 DSH 发消息…」，生成中「生成中 · 可直接插话」。
+          hintText: !widget.enabled
+              ? '未连接到 bridge'
+              : widget.answering
+              ? '直接回答上面的提问…'
+              : widget.onStop != null
+              ? '生成中 · 可直接插话'
+              : '给 DSH 发消息…',
+          hintStyle: DsTypography.inputPlaceholder.copyWith(
+            color: c.inputHintText,
+          ),
+          border: InputBorder.none,
+          isDense: true,
+          contentPadding: EdgeInsets.zero,
+        ),
+        onChanged: widget.onChanged,
+      ),
+    );
+  }
+
+  /// 展开后的第二行：模型 chip / 待发图片 / 「展开编辑」。
+  ///
+  /// 收起态由 [_ComposerRows] 整行隐藏；`Spacer` 保证没有左侧内容时右侧键
+  /// 仍贴边。图片区用 `Expanded + 横向滚动`，多图/长文件名不会撑破输入条。
+  Widget _footer(DsColors c, bool overflows) {
+    return Row(
+      children: [
+        // 模型 chip：固定上限宽度，绝不参与 flex 分配——否则多图和窄屏时
+        // 会挤走右侧按钮（工单 2 回归）。
+        if (widget.onPickModel != null)
+          ConstrainedBox(
+            constraints: const BoxConstraints(
+              maxWidth: DsSpacing.composerModelChipMaxWidth,
+            ),
+            child: ComposerModelChip(
+              colors: c,
+              modelLabel: widget.modelLabel,
+              enabled: widget.enabled,
+              onTap: widget.onPickModel!,
+            ),
+          ),
+        // 待发送图片（真机反馈 2026-11-17 / 11-21 多图）：从左往右排，
+        // 超出可横滑，单个 chip 单行省略。
+        if (widget.pendingImageNames.isEmpty)
+          const Spacer()
+        else
+          Expanded(
+            child: Align(
+              alignment: Alignment.centerRight,
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                reverse: true,
+                child: Row(
+                  children: [
+                    for (var i = 0; i < widget.pendingImageNames.length; i++)
+                      Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(
+                            maxWidth: DsSpacing.composerImageChipMaxWidth,
+                          ),
+                          child: Chip(
+                            avatar: Icon(
+                              Icons.image_outlined,
+                              size: DsSpacing.chipIconSize,
+                              color: c.chipSelectedFg,
+                            ),
+                            label: Text(
+                              widget.pendingImageNames[i],
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: DsTypography.caption.copyWith(
+                                color: c.chipSelectedFg,
+                              ),
+                            ),
+                            onDeleted: () => widget.onRemoveImage(i),
+                            backgroundColor: c.chipSelectedBg,
+                            side: BorderSide.none,
+                            visualDensity: VisualDensity.compact,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        // 输入超过可见行数：给一个明确出口，长文可以进全屏编辑。
+        if (overflows)
+          Padding(
+            padding: const EdgeInsets.only(right: 2),
+            child: Tooltip(
+              message: '展开编辑',
+              child: _RoundIconButton(
+                colors: c,
+                filled: false,
+                quietFill: true,
+                icon: Icons.open_in_full,
+                iconSize: 18,
+                onPressed: _openLongEditor,
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  /// 收起态在左侧的「+」键。
+  Widget _leading(DsColors c) {
+    return _RoundIconButton(
+      colors: c,
+      filled: false,
+      quietFill: true,
+      icon: Icons.add,
+      iconSize: 22,
+      onPressed: widget.canPickImage ? widget.onPickImage : null,
+    );
+  }
+
+  /// 上下文环 + 发送/停止键（两态都贴最右）。
+  Widget _trailing(DsColors c) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        ComposerUsageRing(
+          colors: c,
+          gateway: widget.gateway,
+          sessionId: widget.sessionId,
+        ),
+        const SizedBox(width: DsSpacing.composerButtonGap),
+        switch (widget.sendState) {
+          _SendKeyState.send ||
+          _SendKeyState.disabled => _RoundIconButton(
+            colors: c,
+            filled: widget.sendState == _SendKeyState.send,
+            quietFill: widget.sendState != _SendKeyState.send,
+            icon: widget.sendState == _SendKeyState.send
+                ? Icons.arrow_upward
+                : Icons.graphic_eq,
+            iconSize: widget.sendState == _SendKeyState.send ? 20 : 22,
+            onPressed: widget.canSend ? widget.onSend : null,
+          ),
+          _SendKeyState.stop => _RoundIconButton(
+            colors: c,
+            filled: true,
+            icon: Icons.stop,
+            iconSize: 18,
+            onPressed: widget.enabled ? widget.onStop : null,
+          ),
+        },
+      ],
+    );
+  }
+
+  /// 打开全屏长文编辑，回来把文字写回同一个 controller（继续走草稿保存）。
+  Future<void> _openLongEditor() async {
+    final text = await showComposerLongEditor(
+      context,
+      initial: widget.controller.text,
+      colors: widget.colors,
+    );
+    if (!mounted || text == null) return;
+    if (text != widget.controller.text) {
+      widget.controller.value = TextEditingValue(
+        text: text,
+        selection: TextSelection.collapsed(offset: text.length),
+      );
+      widget.onChanged(text);
+    }
+    widget.focusNode.requestFocus();
   }
 
   @override
   Widget build(BuildContext context) {
-    final c = colors;
-    final radius = _multiline(context)
-        ? DsSpacing.composerRadiusOpen
-        : DsSpacing.composerRadius;
-    return AnimatedContainer(
-      // dsh-go AppMotion.quick = 160ms：圆角在两个档之间滑过去，不跳。
-      duration: const Duration(milliseconds: 160),
-      curve: Curves.easeOut,
-      decoration: BoxDecoration(
-        color: c.inputFill,
-        borderRadius: BorderRadius.circular(radius),
-        boxShadow: [
-          BoxShadow(
-            color: c.shadow,
-            blurRadius: 12,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      // dsh-go composer.dart:601-604：左 18（无 leading 时）/6，上右下各 6。
-      padding: const EdgeInsets.fromLTRB(
-        DsSpacing.composerKeyGap,
-        DsSpacing.composerKeyGap,
-        DsSpacing.composerKeyGap,
-        DsSpacing.composerKeyGap,
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: DsSpacing.composerTextInset,
+    final c = widget.colors;
+    final overflows = _lineCount(context) > _maxLines(context);
+    return AnimatedBuilder(
+      animation: _open,
+      builder: (context, child) {
+        final t = _open.value;
+        return DecoratedBox(
+          decoration: BoxDecoration(
+            color: c.inputFill,
+            // dsh-go：单行 28（胶囊）/ 展开 20，开合时补间过去。
+            borderRadius: BorderRadius.circular(
+              ui.lerpDouble(
+                DsSpacing.composerRadius,
+                DsSpacing.composerRadiusOpen,
+                t,
+              )!,
             ),
-            // 键盘上下/回车驱动候选面板（外接键盘 / 物理键盘）。
-            child: Focus(
-              onKeyEvent: onKey,
-              child: TextField(
-                controller: controller,
-                focusNode: focusNode,
-                enabled: enabled,
-                minLines: 1,
-                maxLines: 5,
-                // dsh-go：字号 15、行高 1.45。
-                style: DsTypography.base.copyWith(
-                  fontSize: DsSpacing.composerFontSize,
-                  height: DsSpacing.composerLineHeight,
-                  color: c.labelPrimary,
-                ),
-                cursorColor: c.brand,
-                decoration: InputDecoration(
-                  // dsh-go 文案：空闲「给 DSH 发消息…」，生成中「生成中 · 可直接插话」。
-                  hintText: !enabled
-                      ? '未连接到 bridge'
-                      : answering
-                      ? '直接回答上面的提问…'
-                      : onStop != null
-                      ? '生成中 · 可直接插话'
-                      : '给 DSH 发消息…',
-                  hintStyle: DsTypography.inputPlaceholder.copyWith(
-                    color: c.inputHintText,
-                  ),
-                  border: InputBorder.none,
-                  isDense: true,
-                  contentPadding: EdgeInsets.zero,
-                ),
-                onChanged: onChanged,
+            boxShadow: [
+              BoxShadow(
+                color: c.shadow,
+                blurRadius: 12,
+                offset: const Offset(0, 2),
               ),
-            ),
-          ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              // 权限档位 chip 2026-11-22 移出输入条（dsh-go 的输入条只有
-              // `+` / 文本框 / 模型 chip / 环 / 发送；权限在「+」面板的
-              // 『本对话』第一行，同一个 `_pickPermission` 入口）。
-              // 模型 chip：固定上限宽度，绝不参与 Row 的 flex 分配——
-              // 否则多图和窄屏时会挤走右侧按钮（工单 2 回归）。
-              if (onPickModel != null)
-                ConstrainedBox(
-                  constraints: const BoxConstraints(
-                    maxWidth: DsSpacing.composerModelChipMaxWidth,
-                  ),
-                  child: ComposerModelChip(
-                    colors: c,
-                    modelLabel: modelLabel,
-                    enabled: enabled,
-                    onTap: onPickModel!,
-                  ),
-                ),
-              // 待发送图片（真机反馈 2026-11-17 / 11-21 多图）：
-              // 文件名过长时 Chip 无界变宽，会把 Spacer 吃掉、把右侧按钮挤出
-              // Row。有图时用 Expanded + 横向滚动 + 单行省略号，多个 chip 从左
-              // 往右排，超出可横滑，永远不撑破输入条。
-              if (pendingImageNames.isEmpty)
-                const Spacer()
-              else
-                Expanded(
-                  child: Align(
-                    alignment: Alignment.centerRight,
-                    child: SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      reverse: true,
-                      child: Row(
-                        children: [
-                          for (var i = 0; i < pendingImageNames.length; i++)
-                            Padding(
-                              padding: const EdgeInsets.only(right: 8),
-                              child: ConstrainedBox(
-                                constraints: const BoxConstraints(
-                                  maxWidth: DsSpacing.composerImageChipMaxWidth,
-                                ),
-                                child: Chip(
-                                  avatar: Icon(
-                                    Icons.image_outlined,
-                                    size: DsSpacing.chipIconSize,
-                                    color: c.chipSelectedFg,
-                                  ),
-                                  label: Text(
-                                    pendingImageNames[i],
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: DsTypography.caption.copyWith(
-                                      color: c.chipSelectedFg,
-                                    ),
-                                  ),
-                                  onDeleted: () => onRemoveImage(i),
-                                  backgroundColor: c.chipSelectedBg,
-                                  side: BorderSide.none,
-                                  visualDensity: VisualDensity.compact,
-                                ),
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              // 加图 / @ 引用两个圆钮常驻：不可用时置灰而不是消失
-              // （2026-11-21 工单 5：运行中空输入时整排按钮消失）。
-              _RoundIconButton(
-                colors: c,
-                filled: false,
-                quietFill: true,
-                icon: Icons.add,
-                iconSize: 22,
-                onPressed: canPickImage ? onPickImage : null,
-              ),
-              // 「@ 引用」圆钮 2026-11-22 移除：dsh-go 输入条只有 `+`，@ 引用
-              // 挂在「+」面板的『文件』格（plus_panel → insertAtMention）。
-              ComposerUsageRing(
-                colors: c,
-                gateway: gateway,
-                sessionId: sessionId,
-              ),
-              const SizedBox(width: DsSpacing.composerButtonGap),
-              switch (sendState) {
-                _SendKeyState.send ||
-                _SendKeyState.disabled => _RoundIconButton(
-                  colors: c,
-                  filled: sendState == _SendKeyState.send,
-                  quietFill: sendState != _SendKeyState.send,
-                  icon: sendState == _SendKeyState.send
-                      ? Icons.arrow_upward
-                      : Icons.graphic_eq,
-                  iconSize: sendState == _SendKeyState.send ? 20 : 22,
-                  onPressed: canSend ? onSend : null,
-                ),
-                _SendKeyState.stop => _RoundIconButton(
-                  colors: c,
-                  filled: true,
-                  icon: Icons.stop,
-                  iconSize: 18,
-                  onPressed: enabled ? onStop : null,
-                ),
-              },
             ],
           ),
-        ],
+          child: child,
+        );
+      },
+      child: Padding(
+        // dsh-go composer.dart:601-604：左 18（无 leading 时）/6，上右下各 6。
+        padding: const EdgeInsets.all(DsSpacing.composerKeyGap),
+        child: _ComposerRows(
+          open: _open,
+          children: [
+            _field(c, _maxLines(context)),
+            _leading(c),
+            // 收起态整行隐藏；展开过半才淡入（Interval 与 dsh-go 一致）。
+            FadeTransition(
+              opacity: _open.drive(CurveTween(curve: const Interval(0.45, 1))),
+              child: _footer(c, overflows),
+            ),
+            _trailing(c),
+          ],
+        ),
       ),
     );
   }

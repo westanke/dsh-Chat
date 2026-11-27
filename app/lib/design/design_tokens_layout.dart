@@ -593,4 +593,10 @@ class DsMotion {
 
   /// 呼吸光点环的周期。
   static const Duration thinkingBreath = Duration(milliseconds: 2400);
+
+  /// 输入条「单行收起 ⇄ 双行展开」的时长（对照 dsh-go AppMotion.collapse）。
+  static const Duration composerExpand = Duration(milliseconds: 280);
+
+  /// 输入条开合的缓动（对照 dsh-go AppMotion.collapseCurve）。
+  static const Curve composerExpandCurve = Curves.easeInOutCubic;
 }
