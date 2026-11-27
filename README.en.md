@@ -72,6 +72,9 @@ Right: settings, with connection state, device permissions, appearance and notif
   a persistent task strip, and per-session drafts that survive session switching.
 - **Visible waiting and retries**: typing dots before the first token; an expandable
   “retried model request (1/5)” row when the kernel retries after 504/rate limiting.
+- **Endpoint probing on reconnect**: LAN, virtual networks (Tailscale etc.), Cloudflare tunnel and
+  direct IPv6 (`http://[<IPv6>]:3090`) can all be candidates; the app probes them and picks the
+  fastest reachable one, with the failure reason shown inline. Global-unicast IPv6 counts as public.
 - **Device capabilities**: local notifications (done / failed / waiting for approval / waiting for an
   answer), TTS, system sharing, photo picker, file opening and a private app directory. Android also
   supports in-app download/install; iOS and HarmonyOS update through their stores.
@@ -113,6 +116,98 @@ Latest **v1.0.37** (Gitee primary; GitHub mirrors the same tag):
 3. Paste the one-time pairing code and tap **Pair and connect**. Credentials are stored locally and
    the app reconnects automatically afterwards.
 
+## Remote access over IPv6 (optional)
+
+Away from your LAN there are two ways to reach the bridge: the Cloudflare tunnel built into
+`dsh-remote-bridge`, or a **direct IPv6 connection**. Most Chinese home broadband has CGNAT-only
+IPv4 (no public address), but carriers do hand out IPv6 prefixes; direct is third-party-free and
+lower latency.
+
+> The steps below were verified on a China Mobile home line with a Huawei OptiXstar V175 (ONT doing
+> PPPoE). Menu names vary by vendor/firmware — see the table. **Only open TCP 3090 and keep the
+> ONT's IPv6 firewall enabled**; disabling it exposes every device and port behind the ONT.
+
+### 1. Check that IPv6 works
+
+- Computer: `ip -6 addr show scope global` shows a global address (`2409:`, `2408:`, `240e:`…), and
+  `curl -6 -s https://ifconfig.co` echoes it.
+- Bridge: change the listen address from the default `0.0.0.0` to `::` (dual-stack on Linux) or to
+  the computer's concrete IPv6 address — `0.0.0.0` listens on IPv4 only. The port stays 3090.
+- ONT: the INTERNET WAN connection must be **IPv4/IPv6 dual stack**; some regions provision IPv4 only.
+- Phone on cellular (Wi-Fi off): `http://[<computer IPv6>]:3090` returning `401 Unauthorized` means
+  the path works and only pairing is left; a timeout sends you back to step 2. With only TCP opened,
+  `ping6` failing is expected.
+
+### 2. Open one port on the ONT
+
+Log in as **super admin** (usually `http://192.168.1.1`) and:
+
+1. keep the **IPv6 firewall enabled**;
+2. add an **IPv6 virtual server / port mapping**: internal host = the computer's IPv6, protocol TCP,
+   port 3090 (same inside and out), attached to the PPPoE WAN.
+
+Most ONT UPnP implementations are IGD v1 only and do not affect IPv6 inbound — do not count on it
+to open the port for you.
+
+| Vendor (examples) | Menu path | Notes |
+|---|---|---|
+| Huawei HN8145XR / V173 / OptiXstar V175 | Security → Firewall → IPv6 firewall; Application → Advanced NAT → IPv6 virtual server | keep the firewall on; map TCP 3090 to the host |
+| ZTE F7607P / G7615 / G7615AV5 | Security → Firewall (IPv6 has its own switch); Application → Port mapping / virtual host | some firmware has no IPv6 mapping page; telnet `ip6tables` (reverts on reboot) |
+| FiberHome HG3142f / HG6145D2 | Security → Port filter → Access control (WAN-LAN) | whitelist the destination port; some firmware ranges are imprecise and also affect IPv4 — verify from outside |
+| Nokia Bell / TEWA / Youhua | usually no separate IPv6 firewall switch | IPv6 inbound is blocked by default; telnet `ip6tables` or ask your ISP; may revert on reboot |
+
+### 3. Pin the computer's IPv6 address
+
+DHCPv6 hands out addresses in pool order and SLAAC privacy addresses rotate, so the host suffix
+drifts (`::2`, `::3`, `::100` were all observed) and the mapping breaks.
+
+- ONT: DHCPv6 static allocation, binding the NIC MAC to a fixed suffix (e.g. `::200`).
+- Host (recommended belt-and-braces): add a static address so a reboot does not leave
+  NetworkManager without a fresh lease:
+
+  ```sh
+  nmcli connection modify "Wired connection 1" +ipv6.addresses '<prefix>::200/64'
+  nmcli connection up "Wired connection 1"
+  ```
+
+  Take the `/64` from the ONT; the address should show `forever` in `ip -6 addr`.
+
+> If the ISP changes the `/64` prefix (re-dial or central-office change), update both the ONT
+> mapping and the host address; the `::200` suffix stays.
+
+### 4. Connect the app
+
+Enter `http://[<computer IPv6>]:3090` (brackets required) and paste the desktop pairing code.
+Global-unicast IPv6 counts as a direct endpoint, so it joins the LAN / virtual-net / tunnel
+candidates in the probe-and-pick before reconnecting.
+
+### ONT accounts
+
+- `useradmin` on the label has limited rights; IPv6 firewall and port mapping need the **super admin**.
+- Common factory super admins seen online (region/firmware dependent, not guaranteed):
+
+  | Carrier | Account | Common factory password |
+  |---|---|---|
+  | China Mobile | `CMCCAdmin` | `aDm8H%MdA`, `Cmcc10086#` |
+  | China Telecom | `telecomadmin` | `nE7jA%5m` |
+  | China Unicom | `CUAdmin` | `CUAdmin` / `cuadmin` |
+
+  On some FiberHome models the web super admin is `rootadmin` (model dependent).
+- The carrier's ACS may already have changed the factory password (sometimes on every reboot); the
+  label or the installation sheet is authoritative. **If you cannot get in, or the change does not
+  take effect, contact your local broadband maintenance staff** and ask them to map one TCP port over
+  IPv6 — much safer than blindly editing `telnet` settings, which can take the line down or reset
+  the ONT.
+- This README records no real addresses, accounts or passwords.
+
+### Security notes
+
+- Only TCP 3090 is mapped; an unpaired bridge always answers 401, and pairing credentials stay on
+  the phone.
+- Do not disable the ONT's IPv6 firewall and do not put the computer in the DMZ.
+- For stronger isolation, put an HTTPS reverse proxy or a VPN (WireGuard / Tailscale) in front and
+  expose only that.
+
 ## Build from source
 
 You need Flutter-OH `3.50.0+ohos-1.3.3`, the Android SDK and JDK 17; building the HarmonyOS HAP also
@@ -137,7 +232,7 @@ flutter build hap --release --no-codesign
 
 | Workflow | What it does |
 |---|---|
-| [`ci.yml`](.github/workflows/ci.yml) | `docs-check` + `flutter analyze` + `flutter test` (590) + legacy `harmony/test` `npm test`; uses the Flutter-OH SDK |
+| [`ci.yml`](.github/workflows/ci.yml) | `docs-check` + `flutter analyze` + `flutter test` (592) + legacy `harmony/test` `npm test`; uses the Flutter-OH SDK |
 | [`release.yml`](.github/workflows/release.yml) | On a tag: Ubuntu builds the APK, `macos-15` builds an unsigned IPA; HAP is an optional self-hosted job (`BUILD_HAP=true` plus a real HarmonyOS SDK) |
 | [`mirror-sync.yml`](.github/workflows/mirror-sync.yml) | Gitee → GitHub mirror; GitHub is a read-only mirror, day-to-day pushes go to Gitee |
 

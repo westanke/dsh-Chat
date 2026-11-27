@@ -161,7 +161,9 @@ flutter build hap --debug --no-codesign    # 产物 app/build/ohos/hap/entry-def
   `harmony/signing/`（**绝不入库**，.gitignore 已拉黑）与 `harmony/docs/RELEASE.md`。
 - `app/ohos/local.properties` 由本机路径生成（hwsdk.dir / flutter.sdk），**不入库**；
   换机器要重跑 `flutter create --platforms ohos` 或手改这两行。
-- 真机：HarmonyOS 6.0 手机（`hdc list targets`）。**本轮尚未在真机验证过**（`hdc list targets` 空）。
+- 真机：HarmonyOS 6.0 手机（API 26）。2026-11-25 起步时 `hdc list targets` 为空、尚未装机；
+  之后 Flutter-OH 版已完成真机验证（配对、聊天、会话、分享、TTS、选图、通知与点击回跳，
+  截图见 README「实际效果」）。release HAP 仍需 AGC 正式签名。
 - 旧 `harmony/` 口径（2026-11-15 起，仅供冻结目录参考）：`hvigorw assembleHap --no-daemon`、
   `npm --prefix test install` / `npm --prefix test test`（纯逻辑 node:test，CI 跑这里）。
 
