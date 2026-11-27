@@ -3,7 +3,6 @@
 library;
 
 import 'dart:async';
-
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 
@@ -347,6 +346,7 @@ class _ChatPageState extends State<ChatPage>
           colors: c,
           title: st.sessionTitle,
           status: _headerStatus,
+          state: st,
           onMenu: _openDrawer,
           onNewChat: () => st.newChat(),
           // 成员圆钮（dsh-go chat_header 同位置）：复用「更多」菜单里的团队面板。

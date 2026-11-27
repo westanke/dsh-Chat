@@ -10,6 +10,8 @@ import 'package:material_ui/material_ui.dart';
 import '../design/tokens.dart';
 import 'window_class.dart';
 import 'chat_header_status.dart';
+import 'chat_state.dart';
+import 'schedule_sheet.dart';
 
 /// 顶栏：左菜单 + 会话名 + 新对话 + 右侧溢出菜单，下面一行状态。
 class ChatTopBar extends StatelessWidget {
@@ -21,6 +23,7 @@ class ChatTopBar extends StatelessWidget {
     required this.onMenu,
     required this.onNewChat,
     this.onOpenTeam,
+    this.state,
     required this.trailing,
   });
 
@@ -34,12 +37,20 @@ class ChatTopBar extends StatelessWidget {
   /// 传 null 时不渲染（老调用点/离屏测试不受影响）。
   final VoidCallback? onOpenTeam;
 
+  /// 会话状态：定时任务入口要靠它读 gateway 能力位与当前会话 id。
+  /// 传 null 时时钟入口同样不渲染（离屏测试/旧调用点）。
+  final ChatState? state;
+
   /// 右侧溢出菜单（由会话页提供，避免这里依赖各面板）。
   final Widget trailing;
 
   @override
   Widget build(BuildContext context) {
     final c = colors;
+    final st = state;
+    final openSchedule = st != null && scheduleEntryVisible(st)
+        ? () => showScheduleSheet(context, st, c)
+        : null;
     return ColoredBox(
       color: c.bgBase,
       child: SafeArea(
@@ -69,6 +80,7 @@ class ChatTopBar extends StatelessWidget {
                           colors: c,
                           title: title,
                           status: status,
+                          onOpenSchedule: openSchedule,
                         ),
                       ),
                       const SizedBox(width: 8),
@@ -102,68 +114,117 @@ class _TitleCapsule extends StatelessWidget {
     required this.colors,
     required this.title,
     required this.status,
+    this.onOpenSchedule,
   });
 
   final DsColors colors;
   final String title;
   final ChatHeaderStatus status;
+  final VoidCallback? onOpenSchedule;
 
   @override
   Widget build(BuildContext context) {
     final c = colors;
-    return Semantics(
-      label: '$title，${status.spokenLabel}',
-      excludeSemantics: true,
-      // 高度按内容撑、下限 44（dsh-go pillHeightOf = max(44, 15*1.3 + 11*1.25 + 8)）。
-      // 之前写死 44 且沿用 16 号/行高 1.75 的标题体，两行合计 53 会溢到胶囊外。
-      child: Container(
-        constraints: const BoxConstraints(
-          minHeight: DsSpacing.topBarCapsuleHeight,
-        ),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-        decoration: BoxDecoration(
-          color: c.chipSelectedBg,
-          borderRadius: BorderRadius.circular(DsSpacing.topBarCapsuleRadius),
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              title,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              // dsh-go titleSmall：15 / 1.3。
-              style: DsTypography.baseStrong.copyWith(
-                fontSize: 15,
-                height: 1.3,
-                color: c.labelPrimary,
-              ),
-            ),
-            Row(
-              children: [
-                ChatStatusDot(
-                  color: statusDotColor(c, status.tone),
-                  pulsing: status.tone == ChatStatusTone.busy,
-                ),
-                const SizedBox(width: DsSpacing.chatStatusDotGap),
-                Expanded(
-                  child: Text(
-                    status.spokenLabel,
+    return Container(
+      constraints: const BoxConstraints(
+        minHeight: DsSpacing.topBarCapsuleHeight,
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+      decoration: BoxDecoration(
+        color: c.chipSelectedBg,
+        borderRadius: BorderRadius.circular(DsSpacing.topBarCapsuleRadius),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Semantics(
+              label: '$title，${status.spokenLabel}',
+              excludeSemantics: true,
+              // 高度按内容撑、下限 44（dsh-go pillHeightOf = max(44, 15*1.3 + 11*1.25 + 8)）。
+              // 之前写死 44 且沿用 16 号/行高 1.75 的标题体，两行合计 53 会溢到胶囊外。
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    title,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    // dsh-go labelSmall：11 / 1.25，紧贴标题不额外留白。
-                    style: DsTypography.caption.copyWith(
-                      fontSize: 11,
-                      height: 1.25,
-                      color: c.labelTertiary,
+                    // dsh-go titleSmall：15 / 1.3。
+                    style: DsTypography.baseStrong.copyWith(
+                      fontSize: 15,
+                      height: 1.3,
+                      color: c.labelPrimary,
                     ),
                   ),
-                ),
-              ],
+                  Row(
+                    children: [
+                      ChatStatusDot(
+                        color: statusDotColor(c, status.tone),
+                        pulsing: status.tone == ChatStatusTone.busy,
+                      ),
+                      const SizedBox(width: DsSpacing.chatStatusDotGap),
+                      Expanded(
+                        child: Text(
+                          status.spokenLabel,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          // dsh-go labelSmall：11 / 1.25，紧贴标题不额外留白。
+                          style: DsTypography.caption.copyWith(
+                            fontSize: 11,
+                            height: 1.25,
+                            color: c.labelTertiary,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
+          ),
+          if (onOpenSchedule != null) ...[
+            const SizedBox(width: 6),
+            _ScheduleAction(colors: c, onTap: onOpenSchedule!),
           ],
+        ],
+      ),
+    );
+  }
+}
+
+/// 标题胶囊尾端的定时任务入口（dsh-go HeaderScheduleCap 同位置）。
+class _ScheduleAction extends StatelessWidget {
+  const _ScheduleAction({required this.colors, required this.onTap});
+
+  final DsColors colors;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = colors;
+    return Tooltip(
+      message: '定时任务',
+      child: Semantics(
+        button: true,
+        label: '定时任务',
+        child: Material(
+          color: Colors.transparent,
+          shape: const CircleBorder(),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: onTap,
+            child: SizedBox(
+              width: DsSpacing.topBarNewChatSize,
+              height: DsSpacing.topBarNewChatSize,
+              child: Icon(
+                Icons.schedule,
+                size: 18,
+                color: c.labelSecondary,
+              ),
+            ),
+          ),
         ),
       ),
     );
