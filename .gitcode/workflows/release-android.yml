@@ -134,6 +134,32 @@ jobs:
       - name: 引导 Flutter-OH SDK
         run: bash scripts/ci/setup-flutter-oh.sh
 
+      - name: 安装 Node.js/npm（Flutter-OH hvigor 插件需要）
+        run: |
+          set -euo pipefail
+          if command -v npm >/dev/null 2>&1; then
+            echo "npm 已存在：$(npm --version)"
+            exit 0
+          fi
+          NODE_VER=v20.18.1
+          ARCH=linux-x64
+          for url in \
+            "https://mirrors.cloud.tencent.com/nodejs-release/${NODE_VER}/node-${NODE_VER}-${ARCH}.tar.xz" \
+            "https://npmmirror.com/mirrors/node/${NODE_VER}/node-${NODE_VER}-${ARCH}.tar.xz" \
+            "https://nodejs.org/dist/${NODE_VER}/node-${NODE_VER}-${ARCH}.tar.xz"; do
+            echo "试 $url"
+            if curl -fsSL --retry 2 "$url" -o /tmp/node.tar.xz; then
+              echo "下载成功"
+              break
+            fi
+          done
+          [ -s /tmp/node.tar.xz ] || { echo "node 下载失败"; exit 1; }
+          tar -xJf /tmp/node.tar.xz -C "$HOME"
+          BIN="$HOME/node-${NODE_VER}-${ARCH}/bin"
+          echo "$BIN" >> "$ATOMGIT_PATH"
+          export PATH="$BIN:$PATH"
+          echo "node=$(node --version) npm=$(npm --version)"
+
       - name: 缓存 Gradle 与 pub
         uses: cache
         with:
