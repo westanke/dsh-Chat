@@ -32,8 +32,25 @@ say() { printf '\033[36m[flutter-oh]\033[0m %s\n' "$*"; }
 die() { printf '\033[31m[flutter-oh] %s\033[0m\n' "$*" >&2; exit 1; }
 
 if [ ! -d "$ROOT/.git" ]; then
+  # actions/cache 只缓存 `~/flutter-oh/bin/cache`。缓存命中时 restore 会先造出
+  # `$ROOT`（里面只有 bin/cache，没有 .git），直接 clone 会因「目录非空」失败
+  # （见 GitHub Actions run 46018485205）。先把缓存目录挪开，clone 完再把
+  # bin/cache 放回去，既修掉失败又不浪费缓存里的引擎工件。
+  restored=""
+  if [ -e "$ROOT" ]; then
+    restored="${ROOT}.dsh-restored"
+    rm -rf "$restored"
+    say "$ROOT 已存在但缺少 .git（缓存还原残留），先挪到 $restored"
+    mv "$ROOT" "$restored"
+  fi
   say "clone $TAG -> $ROOT"
   git clone --depth 1 --branch "$TAG" "$REPO" "$ROOT"
+  if [ -n "$restored" ] && [ -d "$restored/bin/cache" ]; then
+    rm -rf "$ROOT/bin/cache"
+    mv "$restored/bin/cache" "$ROOT/bin/cache"
+    say "已复用缓存还原的 bin/cache"
+  fi
+  [ -z "$restored" ] || rm -rf "$restored"
 else
   current="$(git -C "$ROOT" describe --tags --exact-match 2>/dev/null || true)"
   [ "$current" = "$TAG" ] || die "$ROOT 已存在但不是 $TAG（当前 ${current:-unknown}）；请删除后重跑"
