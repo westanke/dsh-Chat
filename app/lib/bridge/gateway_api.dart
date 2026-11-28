@@ -376,7 +376,10 @@ extension GatewayApi on GatewayClient {
 
   /// 发消息。sessionId 省略则服务端自动建会话（响应携带新 sessionId）。
   /// contentParts 为空时发纯文本；带图时传 PromptPart.image（base64 裸串，
-  /// mediaType 白名单 png/jpeg/webp/gif，REST 请求体上限 12 MiB）。
+  /// mediaType 白名单 png/jpeg/webp/gif）。
+  ///
+  /// 大图不走这里：整帧超 hello.maxFrameBytes 时 chat_state.send() 改走 REST
+  /// `gateway_rest.gatewaySendMessage`（12 MB body），判据 `messageFrameBytes`。
   Future<String?> sendText({
     String? sessionId,
     required String text,
@@ -387,12 +390,15 @@ extension GatewayApi on GatewayClient {
       if (text.isNotEmpty) PromptPart.text(text),
       ...?contentParts,
     ];
-    final r = await request('message', {
-      'sessionId': ?sessionId,
-      'mode': mode,
-      'content': parts.map((p) => p.toJson()).toList(),
-      'clientTimeZone': DshDevice.ianaZone,
-    });
+    final r = await request(
+      'message',
+      messageFrameBody(
+        parts: parts,
+        mode: mode,
+        clientTimeZone: DshDevice.ianaZone,
+        sessionId: sessionId,
+      ),
+    );
     return r['sessionId'] as String? ?? sessionId;
   }
 

@@ -34,7 +34,7 @@
 | `X-DSH-Device-ID` 必填、`X-DSH-Device-Name` 为 Base64(UTF-8) | 两端均已带，name 走 base64 |
 | `hello` 每连接推一次、能力位每次现算 | 本轮在 `_onFrame`/`onFrame` 里解析并存档，不做「连上时缓存成常量」 |
 | close `4001` = 鉴权失败/设备吊销，**不可重连** | 4001 → `AUTH_FAILED` + 提示「设备已被吊销，请重新配对」，且**不排退避**（此前会无限重连） |
-| close `1009` = 单帧超 1 MiB | 提示「请求内容超过 1 MiB，连接已重置」，仍按退避重连 |
+| close `1009` = 单帧超 1 MiB | 提示「请求内容超过 1 MiB，连接已重置」，仍按退避重连。**2026-11-28**：发送侧不再靠它兜底——`content.messageFrameBytes()` 在发之前估整帧，超 `hello.maxFrameBytes` 的消息改走 REST `POST /chat/sessions/{id}/messages`（`gateway_rest.gatewaySendMessage`，12 MB body，字段与 WS `message` 帧同形），1009 只剩「估算偏小/桥端限额更小」的极小概率 |
 | 连接上限 32 / 超限 HTTP 429 + Retry-After | 429 仍落到「连接失败」，退避重连兜住（未做专项提示，记 §5 遗留） |
 | 服务端 30s ping、缺 2 个 pong 断 | 客户端 25s 主动 ping 保持不变 |
 

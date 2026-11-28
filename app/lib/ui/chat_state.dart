@@ -6,6 +6,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
+import '../bridge/device.dart';
 import '../bridge/dlog.dart';
 import '../bridge/gateway.dart';
 import '../bridge/models.dart';
@@ -494,14 +495,51 @@ class ChatState extends ChangeNotifier
       // 发送期间用户可能已经切到别的会话：请求仍落在发送时那个会话，
       // 但回执不能把当前视图抢回去，也不能把 follow 流重订到旧会话。
       viewSessionId = sessionId;
-      final sid = await _gateway.sendText(
-        sessionId: sessionId,
-        text: trimmed,
+      final contentParts = imageParts == null || imageParts.isEmpty
+          ? null
+          : imageParts;
+      final parts = [
+        if (trimmed.isNotEmpty) PromptPart.text(trimmed),
+        ...?contentParts,
+      ];
+      // 通道选择（真机反馈 2026-11-28：相册原图 base64 后 2.5–9 MB，恒超桥默认
+      // 1 MiB maxFrameBytes → 本地预检直接拦死）。判据用整帧字节数而不是图片
+      // 字节数；超了**一开始**就走 REST 大消息通道，不是 WS 失败再回退（先发
+      // 大帧必然换来一次 close(1009)，白付一个往返还多编码一遍）。
+      final frameBytes = messageFrameBytes(
+        parts,
         mode: mode,
-        contentParts: imageParts == null || imageParts.isEmpty
-            ? null
-            : imageParts,
+        clientTimeZone: DshDevice.ianaZone,
+        sessionId: sessionId,
       );
+      final String? sid;
+      if (frameBytes > _gateway.frameLimitBytes) {
+        if (frameBytes > restMessageLimitBytes) {
+          throw RequestException(
+            'PAYLOAD_TOO_LARGE',
+            gatewayRestMessageLimitHint(frameBytes),
+          );
+        }
+        final restSid = sessionId ?? await ensureSessionOpen();
+        if (restSid == null || restSid.isEmpty) {
+          throw RequestException('NO_SESSION', '大消息需要先有会话，请重试');
+        }
+        DshLog.w('ui send via REST sid=$restSid frame=$frameBytes');
+        await gatewaySendMessage(
+          _gateway,
+          sessionId: restSid,
+          parts: parts,
+          mode: mode,
+        );
+        sid = restSid;
+      } else {
+        sid = await _gateway.sendText(
+          sessionId: sessionId,
+          text: trimmed,
+          mode: mode,
+          contentParts: contentParts,
+        );
+      }
       DshLog.w('ui send done sid=$sid');
       if (sessionId != viewSessionId) {
         DshLog.w('ui send reply ignored (view switched '

@@ -12,6 +12,8 @@
 ///   `[Image: source: <绝对路径>]` 占位（真机反馈第 8 条桌面识别回路）。
 library;
 
+import 'dart:convert';
+
 /// 历史消息里的图片引用（attachmentId，字节走 REST attachments 接口取）。
 class ContentImageRef {
   const ContentImageRef({required this.attachmentId});
@@ -123,6 +125,49 @@ class PromptPart {
     'file' => {'type': 'file', 'receiptId': receiptId},
     _ => {'type': 'text', 'text': text_ ?? ''},
   };
+}
+
+/// WS `message` 帧的 body：`content`/`mode`/`sessionId`/`clientTimeZone`。
+///
+/// 发送（gateway_api.sendText）与「这条消息的帧有多大」估算共用这一份构造，
+/// 免得两处各写一遍字段后漂移 —— 漏一个字段估算就偏小，大图又会被送进 WS
+/// 换一次 close(1009)。
+Map<String, dynamic> messageFrameBody({
+  required List<PromptPart> parts,
+  required String mode,
+  required String clientTimeZone,
+  String? sessionId,
+}) => {
+  'sessionId': ?sessionId,
+  'mode': mode,
+  'content': parts.map((p) => p.toJson()).toList(),
+  'clientTimeZone': clientTimeZone,
+};
+
+/// 这条消息整帧编码后的 UTF-8 字节数，判据与 gateway `_sendRaw` 同一套：
+/// `utf8.encode(jsonEncode({'type':'message', ...body, 'requestId':...}))`。
+///
+/// 真实 requestId 由网关生成（`r<seq>-<毫秒>`），这里取同形状的样本值；
+/// 差值在 10 字节内，不影响「超没超帧上限」的判断。给「大图改走 REST」
+/// 的分支做发射前决策用（真机反馈 2026-11-28：相册原图 base64 后 2.5–9 MB，
+/// 恒超桥默认 1 MiB 帧上限）。
+int messageFrameBytes(
+  List<PromptPart> parts, {
+  required String mode,
+  required String clientTimeZone,
+  String? sessionId,
+}) {
+  final frame = <String, dynamic>{
+    'type': 'message',
+    ...messageFrameBody(
+      parts: parts,
+      mode: mode,
+      clientTimeZone: clientTimeZone,
+      sessionId: sessionId,
+    ),
+    'requestId': 'r99-0000000000000',
+  };
+  return utf8.encode(jsonEncode(frame)).length;
 }
 
 /// 斜杠命令面板的条目来源（对齐 dsh-go 的 SlashCommandKind）。

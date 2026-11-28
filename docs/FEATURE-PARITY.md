@@ -79,7 +79,7 @@
 | P1 | 后台任务面板 | 桥已补 `job-list`/`job-output`/`job-kill` 帧与 `chat.job.*` 事件（2026-11-27，待合并验收）；客户端 UI 未做 | 中 |
 | P1 | 会话 fork | ✅ 会话长按「分叉到新会话」（`fork` 帧，自动打开新会话） | 已完成 |
 | P1 | 上下文用量环 | ✅ 输入条上方 `ContextUsageBar`（环 + 用量 sheet） | 已完成 |
-| P1 | 协议卫生 | **✅ 2026-11-27**：`hello.maxFrameBytes` 预检 + `PAYLOAD_TOO_LARGE`、1009/1013 人话提示、`error.retryable/details` 与 429 重试（`gateway.dart`、`chat_state.dart`、`LinkErrorRow`） | 已完成 |
+| P1 | 协议卫生 | **✅ 2026-11-27**：`hello.maxFrameBytes` 预检 + `PAYLOAD_TOO_LARGE`、1009/1013 人话提示、`error.retryable/details` 与 429 重试（`gateway.dart`、`chat_state.dart`、`LinkErrorRow`）。**✅ 2026-11-28**：预检之后不能只是报错——整帧超上限的消息改走 REST 大消息通道（`content.messageFrameBytes` 估帧 + `gateway_rest.gatewaySendMessage`，12 MB body，按体积一开始就选通道，对齐 companion issue #15），相册原图（base64 2.5–9 MB）可发 | 已完成 |
 | P1 | 自动允许胶囊 | 批量放行挂起审批，需确认协议是否支持 | 小 |
 | P2 | ~~输入条直接回答提问~~ | **✅ 已完成**（`singleOpenQuestion` + send 拦截） | 已完成 |
 | P2 | 会话导出（md/json） | ✅ 顶栏 ⋯「复制/分享对话（Markdown）」 | 已完成 |

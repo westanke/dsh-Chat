@@ -9,9 +9,12 @@ library;
 
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math';
 
 import 'package:http/http.dart' as http;
 
+import 'content.dart';
+import 'device.dart';
 import 'gateway.dart';
 
 /// REST POST /api/v1/chat/workspaces（登记工作区；chat.write scope）。
@@ -56,16 +59,21 @@ Future<void> gatewayRenameWorkspace(
   );
 }
 
-/// REST JSON 请求骨架：Bearer token + 30s 超时 + 状态码校验。
+/// REST JSON 请求骨架：Bearer token + 超时 + 状态码校验。
 /// 返回解码后的 JSON 体（无 body/空 body 回空 Map）。
+///
+/// [body] 是 `Object?`：多数接口是扁平 `Map<String,String>`，大消息通道要塞
+/// `content` 数组（嵌套），所以不能定死成字符串 map。[timeoutDuration] 默认
+/// 30s，上传大图的那次调用给更长的时限。
 Future<Object?> _restJson(
   GatewayClient gateway, {
   required String method,
   required String path,
-  required Map<String, String> body,
+  required Object? body,
   required String fail,
   required String timeout,
   List<int> okCodes = const [200, 201],
+  Duration timeoutDuration = const Duration(seconds: 30),
 }) async {
   final token = gateway.token;
   if (token == null || token.isEmpty) {
@@ -82,7 +90,7 @@ Future<Object?> _restJson(
     final resp = await client
         .send(request)
         .then(http.Response.fromStream)
-        .timeout(const Duration(seconds: 30));
+        .timeout(timeoutDuration);
     if (!okCodes.contains(resp.statusCode)) {
       throw RequestException(
         'HTTP_${resp.statusCode}',
@@ -96,6 +104,51 @@ Future<Object?> _restJson(
   } finally {
     client.close();
   }
+}
+
+/// REST 大消息通道上限（bridge routes/chat.ts `readJson(req, 12_000_000)`）：
+/// 整条消息 body 12 MB。多图叠加超过它服务端会 413，客户端先挡（见
+/// gatewayRestMessageLimitHint）。
+const int restMessageLimitBytes = 12000000;
+
+/// 一次消息内容超 REST 通道上限时的提示（chat_state.send 里就地挡下）。
+String gatewayRestMessageLimitHint(int bytes) {
+  final mb = (bytes / (1024 * 1024)).toStringAsFixed(1);
+  return '这条消息约 $mb MiB，超过大消息通道 '
+      '${(restMessageLimitBytes / (1024 * 1024)).floor()} MiB 上限，请分批发送';
+}
+
+/// REST POST /api/v1/chat/sessions/{sessionId}/messages（chat.write）。
+///
+/// 这是桥本来就有的**大消息通道**（routes/chat.ts:219-245，body 12 MB），字段
+/// 与 WS `message` 帧同形：content / mode / clientTimeZone / clientRequestId
+/// （后者给桥做幂等）。手机端发相册原图（base64 后 2.5–9 MB）只能走这里 ——
+/// WS 单帧上限默认 1 MiB（server.ts DEFAULT_MAX_PAYLOAD_BYTES），发出去必吃
+/// close(1009)。选通道的判据在 ui/chat_state.send()，不是「失败再回退」：
+/// 大图一开始就选 REST（dsh-companion issue #15 的结论，本仓对齐）。
+Future<void> gatewaySendMessage(
+  GatewayClient gateway, {
+  required String sessionId,
+  required List<PromptPart> parts,
+  String mode = 'queue',
+}) async {
+  await _restJson(
+    gateway,
+    method: 'POST',
+    path: '/api/v1/chat/sessions/${Uri.encodeComponent(sessionId)}/messages',
+    body: {
+      'content': parts.map((p) => p.toJson()).toList(),
+      'mode': mode,
+      'clientTimeZone': DshDevice.ianaZone,
+      // 幂等键：桥按它去重，重试不会发两条。
+      'clientRequestId':
+          'c${DateTime.now().microsecondsSinceEpoch}-${Random().nextInt(1 << 32)}',
+    },
+    fail: '发送失败',
+    timeout: '发送超时（大图上传）',
+    okCodes: const [200, 202],
+    timeoutDuration: const Duration(seconds: 120),
+  );
 }
 
 /// REST GET /api/v1/roots/resolve?path=<绝对路径>（openapi.yaml:151-177，
