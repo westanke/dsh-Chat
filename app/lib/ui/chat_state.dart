@@ -366,8 +366,8 @@ class ChatState extends ChangeNotifier
     try {
       final listing = await _gateway.workspaceListing();
       final pins = listing.pinnedSessionIds;
-      // 桥的 workspaces 帧当前不回 pinnedSessionIds（只有 kernel-local 的 baseline 回）。
-      // 字段缺席 != 用户清空了置顶：保留应答里那份，别用空集合把它擦掉。
+      // 桥 2.19 起 workspaces 帧恒带 pinnedSessionIds；旧桥字段缺席。
+      // 字段缺席 != 用户清空了置顶：保留本地那份，别用空集合把它擦掉。
       if (pins != null) {
         pinnedSessionIds = pins.toSet();
         notifyListeners();
