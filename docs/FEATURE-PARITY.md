@@ -9,13 +9,13 @@
 
 | 功能 | dsh-Go 做法（文件） | dsh-Chat 现状 | 结论 |
 |---|---|---|---|
-| 顶栏标题胶囊 | 可点进会话详情（`ui/chat/chat_header.dart`） | 标题 + 状态行，无详情页（`ui/chat_top_bar.dart`） | ◐ |
-| 顶栏状态机 | 生成中/停止中/同步中/重连中/待审批/已结束结果（`chat_screen.dart:2403`） | 连接态 + 生成 + 待审批/回答（`chat_header_status.dart`） | ◐ 缺「同步中/停止中」 |
-| 模型胶囊 | 标题旁胶囊，点开模型 + 推理强度（`ui/chat/model_sheet.dart`） | ⋯ 菜单里选模型，不显示当前模型（`ui/model_sheet.dart`） | ◐ |
+| 顶栏标题胶囊 | 可点进会话详情（`ui/chat/chat_header.dart`） | **✅ 2026-11-28**：标题胶囊（空标题回退主机名）+ 时钟（定时任务）+ 成员图标；无详情页 | ◐ 无详情页 |
+| 顶栏状态机 | 生成中/停止中/同步中/重连中/待审批/已结束结果（`chat_screen.dart:2403`） | **✅ 2026-11-28**：第二行状态 chip（在线/生成中/待审批…短标签，主机名留给标题胶囊与读屏）；状态源仍是 `chat_header_status.dart` | ◐ 缺「同步中/停止中」 |
+| 模型胶囊 | 标题旁胶囊，点开模型 + 推理强度（`ui/chat/model_sheet.dart`） | **✅ 2026-11-28**：顶栏模型 chip 显示当前模型名，点开复用 `ui/model_sheet.dart`（与 ⋯ 同面板） | ✅ |
 | ＋ 新建对话 | 顶栏 ＋，首次发送才建会话 | ✅ 同口径（`chat_state.dart:215`） | ✅ |
 | 定时任务入口 | 标题胶囊时钟 + 小 sheet（`header_schedule.dart`） | **✅ 2026-11-27**：标题胶囊尾端时钟按钮（能力位 `chat-schedules-v1` 才渲染，`chat_top_bar.dart`）→ 底部 sheet 列表/启停/立即运行/删除/详情（`schedule_sheet.dart`、`schedule_detail.dart`、`bridge/gateway_schedule.dart`）；启停走 `schedule-edit` 的 `patch.active` + CAS；新建/编辑表单与历史分页未做 | ◐ 无新建/编辑表单 |
-| 会话抽屉分组 | 文件夹分组 + 运行点 + 待确认/未读（`ui/shell/sessions_drawer.dart`） | 今天/昨天/更早 + 待回答/待审批角标 | ◐ 无文件夹/置顶/未读 |
-| 会话长按菜单 | 置顶/重命名/移动/分享/多选/归档/删除（`sessions_drawer.dart:535`） | **✅ 重命名 + 归档（2026-11-21）**；**✅ 2026-11-27 抽屉「显示已归档」开关**（`archived:true` 帧、底部「已归档 · N 条」，`sessions_drawer.dart`）；无置顶/移动/分享/多选/恢复 | ◐ |
+| 会话抽屉分组 | 文件夹分组 + 运行点 + 待确认/未读（`ui/shell/sessions_drawer.dart`） | 今天/昨天/更早 + 待回答/待审批 + **✅ 2026-11-28 置顶分组/未读圆点与筛选**（`drawer_org.dart`） | ◐ 无文件夹 |
+| 会话长按菜单 | 置顶/重命名/移动/分享/多选/归档/删除（`sessions_drawer.dart:535`） | **✅ 2026-11-21 重命名/归档**；**✅ 2026-11-27 显示已归档**；**✅ 2026-11-28 置顶/取消置顶 + 多选批量归档**（`session_actions.dart`）；无移动/分享/删除/恢复 | ◐ |
 | 会话正文搜索 | 标题本地匹配 + 服务端正文命中（`session_search_page.dart`） | ✅ kernel-call `session/search`，老桥降级 | ✅ |
 | 空态建议卡 | 一组建议 prompt 卡（`empty_state.dart`） | **✅ 2026-11-25**：`empty_suggestions.dart` + `EmptyGreeting` 已接入（此前表格记错为 ❌） | ✅ |
 | 新对话选项 | 文件夹/预设/权限预先挂起（`new_chat_options.dart`） | 只有工作目录（`session_location_sheet.dart`） | ◐ |
@@ -28,14 +28,14 @@
 | 回合脚注 | 时长/步数/花费/tokens，窄屏依次省（`turn_footnote.dart`） | 轮尾「已完成，用时 X」 | ◐ 无花费/步数 |
 | 运行轨迹 | 瀑布图 + 步骤详情页（`trajectory_sheet.dart`） | 本地事件轨迹 JSON 面板（`projection_sheets.dart`） | ◐ |
 | 改动卡 → diff 页 | 文件 chip + 行号 + 换行开关（`diff_page.dart`） | **✅ 左右滑切文件**（`chat_diff_page.dart`，本轮问题 5） | ✅ |
-| 产物卡/预览 | 缩略图 + PDF/Office 转图 + CSV 表格（`artifact_preview.dart`） | 文件卡打开/分享；md 全屏渲染 | ◐ |
+| 产物卡/预览 | 缩略图 + PDF/Office 转图 + CSV 表格（`artifact_preview.dart`） | **✅ 2026-11-28**：行点开/预览（md 走 `MdViewerPage`，其余下载后交系统查看器）、复制路径、分享真文件（`file_open.dart`）；PDF/Office/CSV 仍无内置渲染 | ◐ |
 | 命令记录行 | 等宽命令行 + 宿主结果（`command_row.dart`） | ✅ 命令卡（`role=='command'`） | ✅ |
 | 审批卡 | 主键「拒绝/允许本次」，都允许降级文字按钮（`approval_card.dart`） | ✅ 允许一次/拒绝（`question_card.dart`） | ✅ 无「本对话都允许」（协议也不支持） |
 | 自动允许胶囊 | 常驻可见、一点即关（`auto_approve_pill.dart`） | 无 | ❌ |
 | 完全权限胶囊 | 常驻输入条上方警示（`permission_pill.dart`） | 权限 chip 在输入条（`composer_bar.dart`） | ◐ |
 | 提问卡 | 选项 + 提交 + 可拒绝（`question_card.dart`） | ✅ 单选/多选/自定义（`question_card.dart`） | ✅ |
 | 输入条直接回答提问 | 单问 + 纯文本时发送即回答（`chat_screen.dart:693`） | **✅ 2026-11-21**：`singleOpenQuestion` + send() 拦截走 question-answer custom；hint 切「直接回答上面的提问…」 | ✅ |
-| 后台任务卡/列表 | `tool-jobs` 消息卡 + jobs 页（`background_task_notice.dart`、`jobs_page.dart`） | 只有工具行文字 | ❌ |
+| 后台任务卡/列表 | `tool-jobs` 消息卡 + jobs 页（`background_task_notice.dart`、`jobs_page.dart`） | **✅ 2026-11-28**：顶栏「后台任务 N 个」胶囊 + `JobsSheet`（运行中/已结束、停止、刷新、输出明细；`bridge/jobs.dart`、`ui/jobs_sheet.dart`） | ✅ |
 | dsh-ui 交互块 | 图表/表单/选择块 + 回复 chip（`ui/chat/dsh_ui/`） | 无 | ❌ |
 | 消息菜单 | 复制/选中/引用/分享/朗读/重答/分叉/编辑（`message_menu.dart`） | 复制/点赞/朗读/分享/重新生成/**从此消息分叉**（`message_actions.dart`） | ◐ 无选中/引用/编辑 |
 | 分叉 / 编辑重发 | 一律开新会话（`session/fork`）；残留队列清掉 | 会话长按「分叉到新会话」+ **消息级 `fork atSeq`（2026-11-27，仅 seq>=0）**已接 `fork` 帧并自动打开；「重新生成」仍是重发最后一条 | ◐ 编辑重发缺 |
@@ -76,7 +76,7 @@
 | 优先级 | 事项 | 说明 | 成本 |
 |---|---|---|---|
 | P0 | ~~队列真管理~~ | **✅ 已接 IKX2AE**（桥 22a5223）：撤回/改插话/改写；真机四步回归待做 | 已完成 |
-| P1 | 后台任务面板 | 桥已补 `job-list`/`job-output`/`job-kill` 帧与 `chat.job.*` 事件（2026-11-27，待合并验收）；客户端 UI 未做 | 中 |
+| P1 | 后台任务面板 | **✅ 2026-11-28**：桥三帧 + 推送已有，客户端 `JobsController`/`JobsSheet`/顶栏胶囊已接；真机验证 2 个运行中 + 3 个已结束 | 已完成 |
 | P1 | 会话 fork | ✅ 会话长按「分叉到新会话」（`fork` 帧，自动打开新会话） | 已完成 |
 | P1 | 上下文用量环 | ✅ 输入条上方 `ContextUsageBar`（环 + 用量 sheet） | 已完成 |
 | P1 | 协议卫生 | **✅ 2026-11-27**：`hello.maxFrameBytes` 预检 + `PAYLOAD_TOO_LARGE`、1009/1013 人话提示、`error.retryable/details` 与 429 重试（`gateway.dart`、`chat_state.dart`、`LinkErrorRow`）。**✅ 2026-11-28**：预检之后不能只是报错——整帧超上限的消息改走 REST 大消息通道（`content.messageFrameBytes` 估帧 + `gateway_rest.gatewaySendMessage`，12 MB body，按体积一开始就选通道，对齐 companion issue #15），相册原图（base64 2.5–9 MB）可发 | 已完成 |
@@ -84,7 +84,7 @@
 | P2 | ~~输入条直接回答提问~~ | **✅ 已完成**（`singleOpenQuestion` + send 拦截） | 已完成 |
 | P2 | 会话导出（md/json） | ✅ 顶栏 ⋯「复制/分享对话（Markdown）」 | 已完成 |
 | P2 | 语音输入 | 依赖原生 ASR 通道，工作量最大 | 大 |
-| P3 | 文件夹/置顶/未读 | 抽屉信息架构升级 | 中 |
+| P3 | 文件夹/置顶/未读 | **✅ 2026-11-28 置顶/未读/多选归档**（`drawer_org.dart`、`session_actions.dart`）；文件夹未做 | 部分完成 |
 | P3 | 分叉/编辑重发 | 与「会话不可变」模型绑定，需先接 fork | 中 |
 | P3 | 思考胶囊扫光 | dsh-Go `thinking_pill.dart` 的 shimmer（lead 600ms / sweep 1s / period 4s）；只影响进行中思考行的装饰 | 小 |
 | P3 | 思考胶囊翻译 chip | 同文件里的翻译 chip（高 26、padding 10、`StadiumBorder`）；本仓无翻译通道，需先定数据来源 | 中 |
