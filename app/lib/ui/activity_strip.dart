@@ -103,14 +103,20 @@ class ActivityStrip extends StatefulWidget {
     required this.colors,
     this.jobsRunning = 0,
     this.onOpenJobs,
+    this.showSchedule = false,
+    this.onOpenSchedule,
   });
 
   final LiveActivity? activity;
   final DsColors colors;
 
-  /// 正在跑的后台任务数：>0 时在活动条右侧挂绿色小胶囊，并把活动条收矮。
+  /// 正在跑的后台任务数：>0 时在活动条右端挂浅绿小胶囊。
   final int jobsRunning;
   final VoidCallback? onOpenJobs;
+
+  /// 定时任务入口：默认收起成活动条右端的浅黄时钟图标。
+  final bool showSchedule;
+  final VoidCallback? onOpenSchedule;
 
   @override
   State<ActivityStrip> createState() => _ActivityStripState();
@@ -156,12 +162,15 @@ class _ActivityStripState extends State<ActivityStrip> {
     final c = widget.colors;
     final a = widget.activity;
     final jobs = widget.jobsRunning;
-    if (a == null && jobs <= 0) return const SizedBox.shrink();
+    final showSchedule = widget.showSchedule;
+    if (a == null && jobs <= 0 && !showSchedule) {
+      return const SizedBox.shrink();
+    }
     final elapsed = a?.elapsedLabel(DateTime.now().millisecondsSinceEpoch);
     final detail = a?.detail;
     final hasDetail = detail != null && detail.trim().isNotEmpty;
-    // 有后台任务胶囊时把活动条收矮一点，让绿色药丸和文字同居一行。
-    final compact = jobs > 0;
+    // 右端有任务胶囊 / 定时任务时统一收矮，保证两者能同居一行。
+    final compact = jobs > 0 || showSchedule;
     return Container(
       margin: const EdgeInsets.fromLTRB(
         DsSpacing.screenPad,
@@ -218,6 +227,13 @@ class _ActivityStripState extends State<ActivityStrip> {
             ],
           ] else
             const Spacer(),
+          if (showSchedule) ...[
+            const SizedBox(width: DsSpacing.activityStripIconGap),
+            _ScheduleClock(
+              colors: c,
+              onTap: widget.onOpenSchedule,
+            ),
+          ],
           if (jobs > 0) ...[
             const SizedBox(width: DsSpacing.activityStripIconGap),
             ChatJobsPill(
@@ -240,4 +256,39 @@ class _ActivityStripState extends State<ActivityStrip> {
     ToolActivityKind.webSearch || ToolActivityKind.webFetch => Icons.language,
     _ => Icons.build_outlined,
   };
+}
+
+/// 活动条右端的定时任务入口：默认收起成浅黄时钟图标。
+class _ScheduleClock extends StatelessWidget {
+  const _ScheduleClock({required this.colors, this.onTap});
+
+  final DsColors colors;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = colors;
+    return Semantics(
+      button: true,
+      label: '定时任务',
+      excludeSemantics: true,
+      child: Material(
+        color: c.chatStatusWarn.withValues(alpha: DsSpacing.statusTintAlpha),
+        shape: const CircleBorder(),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: SizedBox(
+            width: DsSpacing.activityExtraSize,
+            height: DsSpacing.activityExtraSize,
+            child: Icon(
+              Icons.schedule_outlined,
+              size: DsSpacing.chipIconSize + 2,
+              color: c.chatStatusWarn,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }

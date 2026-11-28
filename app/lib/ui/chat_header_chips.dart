@@ -39,7 +39,9 @@ class ChatJobsPill extends StatelessWidget {
       label: '后台任务 $running 个，点击查看',
       excludeSemantics: true,
       child: Material(
-        color: c.chatStatusOk,
+        color: c.chatStatusOk.withValues(
+          alpha: DsSpacing.statusTintAlpha,
+        ),
         borderRadius: BorderRadius.circular(DsSpacing.chipRadius),
         clipBehavior: Clip.antiAlias,
         child: InkWell(
@@ -53,7 +55,7 @@ class ChatJobsPill extends StatelessWidget {
             child: Text(
               '后台 $running',
               style: DsTypography.chipLabel.copyWith(
-                color: c.bgBase,
+                color: c.chatStatusOk,
                 fontWeight: FontWeight.w600,
               ),
             ),

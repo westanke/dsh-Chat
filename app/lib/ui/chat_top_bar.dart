@@ -12,8 +12,6 @@ import '../design/tokens.dart';
 import 'window_class.dart';
 import 'chat_header_chips.dart';
 import 'chat_header_status.dart';
-import 'chat_state.dart';
-import 'schedule_sheet.dart';
 
 // 状态点 / chip 组件现在住在 chat_header_chips.dart；从这里转出，
 // 让既有 `import 'chat_top_bar.dart'` 的调用方（含测试）不用改。
@@ -29,7 +27,6 @@ class ChatTopBar extends StatelessWidget {
     required this.onMenu,
     required this.onNewChat,
     this.onOpenTeam,
-    this.state,
     required this.trailing,
   });
 
@@ -43,20 +40,12 @@ class ChatTopBar extends StatelessWidget {
   /// 传 null 时不渲染（老调用点/离屏测试不受影响）。
   final VoidCallback? onOpenTeam;
 
-  /// 会话状态：定时任务入口、模型名、上下文用量都要从这里读。
-  /// 传 null 时这些入口退化（定时任务不渲染、模型显示「模型」、用量 chip 不显示）。
-  final ChatState? state;
-
   /// 右侧溢出菜单（由会话页提供，避免这里依赖各面板）。
   final Widget trailing;
 
   @override
   Widget build(BuildContext context) {
     final c = colors;
-    final st = state;
-    final openSchedule = st != null && scheduleEntryVisible(st)
-        ? () => showScheduleSheet(context, st, c)
-        : null;
     // 新对话还没有标题时，胶囊沿用旧顶栏的做法显示主机名，避免一条空白药丸。
     final heading = title.trim().isEmpty ? status.label : title;
 
@@ -92,13 +81,6 @@ class ChatTopBar extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(width: DsSpacing.chipIconGap),
-                      if (openSchedule != null)
-                        _RoundAction(
-                          colors: c,
-                          icon: Icons.schedule_outlined,
-                          tooltip: '定时任务',
-                          onTap: openSchedule,
-                        ),
                       if (onOpenTeam != null) ...[
                         const SizedBox(width: 2),
                         _RoundAction(

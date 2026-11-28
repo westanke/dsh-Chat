@@ -1,23 +1,11 @@
 // 顶栏收口（2026-11-28 用户反馈）：状态改成标题前色点；模型/上下文/子代理不再
 // 在顶栏重复出现；只有后台任务在跑时多一行 chip。
-import 'package:dshchat/bridge/gateway.dart';
 import 'package:dshchat/design/tokens.dart';
 import 'package:dshchat/ui/chat_header_status.dart';
-import 'package:dshchat/ui/chat_state.dart';
 import 'package:dshchat/ui/chat_top_bar.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-
-class _FakeGateway extends GatewayClient {
-  _FakeGateway() : super(baseUrl: 'http://127.0.0.1:1');
-
-  @override
-  Future<Map<String, dynamic>> request(
-    String type,
-    Map<String, dynamic> payload,
-  ) async => <String, dynamic>{};
-}
 
 class _Taps {
   int menu = 0;
@@ -30,9 +18,6 @@ Future<void> _pumpTopBar(
   ChatHeaderStatus? status,
   _Taps? taps,
 }) async {
-  final gateway = _FakeGateway();
-  final state = ChatState(gateway)..sessionId = 's1';
-  addTearDown(state.dispose);
   final t = taps ?? _Taps();
 
   await tester.pumpWidget(
@@ -42,7 +27,6 @@ Future<void> _pumpTopBar(
           colors: const DsColors(false),
           title: title,
           status: status ?? const ChatHeaderStatus(ChatStatusTone.ok, '就绪'),
-          state: state,
           onMenu: () => t.menu++,
           onNewChat: () => t.newChat++,
           trailing: const SizedBox.shrink(),
@@ -115,6 +99,11 @@ void main() {
       find.bySemanticsLabel('DSH Chat (V2080A)'),
       findsOneWidget,
     );
+  });
+
+  testWidgets('定时任务不再出现在顶栏', (tester) async {
+    await _pumpTopBar(tester);
+    expect(find.byIcon(Icons.schedule_outlined), findsNothing);
   });
 
   testWidgets('模型/上下文/子代理不在顶栏重复出现', (tester) async {

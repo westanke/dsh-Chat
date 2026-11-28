@@ -499,6 +499,12 @@ class DsSpacing {
   static const jobsPillHeight = 20.0;
   static const jobsPillPadH = 8.0;
 
+  /// 活动栏右侧附加动作（定时任务时钟）：直径 26dp。
+  static const activityExtraSize = 26.0;
+
+  /// 浅色状态底：浅绿 / 浅黄都用同一个透明度叠在 bgBase 上。
+  static const statusTintAlpha = 0.16;
+
   /// 输入条上方一排 dock（排队 / 目标 / 活动 / 任务）之间的统一间距：
   /// 2026-11-28 从 16 / 6 收到 4，让它们彼此紧贴、最后一层紧挨输入框。
   static const dockStackGap = 4.0;

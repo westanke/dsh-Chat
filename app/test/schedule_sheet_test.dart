@@ -8,9 +8,9 @@ library;
 import 'package:dshchat/bridge/gateway.dart';
 import 'package:dshchat/bridge/gateway_schedule.dart';
 import 'package:dshchat/design/tokens.dart';
-import 'package:dshchat/ui/chat_header_status.dart';
 import 'package:dshchat/ui/chat_state.dart';
-import 'package:dshchat/ui/chat_top_bar.dart';
+import 'package:dshchat/ui/activity_strip.dart';
+import 'package:dshchat/ui/schedule_sheet.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -91,14 +91,13 @@ Future<void> _pumpTopBar(WidgetTester tester, ChatState state) async {
   await tester.pumpWidget(
     MaterialApp(
       home: Scaffold(
-        body: ChatTopBar(
-          colors: const DsColors(false),
-          title: '会话标题',
-          status: const ChatHeaderStatus(ChatStatusTone.ok, '就绪'),
-          state: state,
-          onMenu: () {},
-          onNewChat: () {},
-          trailing: const SizedBox.shrink(),
+        body: Builder(
+          builder: (context) => ActivityStrip(
+            colors: const DsColors(false),
+            showSchedule: scheduleEntryVisible(state),
+            onOpenSchedule: () => showScheduleSheet(context, state,
+                const DsColors(false)),
+          ),
         ),
       ),
     ),

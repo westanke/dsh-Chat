@@ -23,6 +23,7 @@ import 'jobs_sheet.dart';
 import 'queue_dock.dart';
 import 'chat_top_bar.dart';
 import 'projection_sheets.dart';
+import 'schedule_sheet.dart';
 import 'composer.dart';
 import 'chat_page_composer.dart';
 import 'chat_setup.dart';
@@ -414,7 +415,6 @@ class _ChatPageState extends State<ChatPage>
           colors: c,
           title: st.sessionTitle,
           status: _headerStatus,
-          state: st,
           onMenu: _openDrawer,
           onNewChat: () => st.newChat(),
           // 成员圆钮（dsh-go chat_header 同位置）：复用「更多」菜单里的团队面板。
@@ -482,12 +482,16 @@ class _ChatPageState extends State<ChatPage>
               ),
             // 当前活动条（dsh-go ActivityStrip 移植）：这一轮在跑时显示
             // 「思考中 / 正在调用工具 + 细节 + 实时秒表」，不跑就不占位。
-            if (activity != null || _jobs.runningCount > 0)
+            if (activity != null ||
+                _jobs.runningCount > 0 ||
+                scheduleEntryVisible(st))
               ActivityStrip(
                 activity: activity,
                 colors: c,
                 jobsRunning: _jobs.runningCount,
                 onOpenJobs: () => unawaited(_openJobs()),
+                showSchedule: scheduleEntryVisible(st),
+                onOpenSchedule: () => showScheduleSheet(context, st, c),
               ),
             // 输入条上方的任务条（dsh-go TodoDock 移植）：没有清单时不占位。
             if (todoDock != null)

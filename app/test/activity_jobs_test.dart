@@ -17,6 +17,8 @@ Future<void> _pump(
   LiveActivity? activity,
   int jobs = 0,
   VoidCallback? onOpenJobs,
+  bool showSchedule = false,
+  VoidCallback? onOpenSchedule,
 }) async {
   await tester.pumpWidget(
     MaterialApp(
@@ -26,6 +28,8 @@ Future<void> _pump(
           colors: const DsColors(false),
           jobsRunning: jobs,
           onOpenJobs: onOpenJobs,
+          showSchedule: showSchedule,
+          onOpenSchedule: onOpenSchedule,
         ),
       ),
     ),
@@ -47,6 +51,15 @@ void main() {
     await _pump(tester, activity: _a, jobs: 1);
     expect(find.textContaining('思考中'), findsOneWidget);
     expect(find.text('后台 1'), findsOneWidget);
+  });
+
+  testWidgets('定时任务收起成浅黄时钟图标，只有它时也占位', (tester) async {
+    var taps = 0;
+    await _pump(tester, showSchedule: true, onOpenSchedule: () => taps++);
+    expect(find.byIcon(Icons.schedule_outlined), findsOneWidget);
+    await tester.tap(find.byIcon(Icons.schedule_outlined));
+    await tester.pump();
+    expect(taps, 1);
   });
 
   testWidgets('没有活动也没有任务时不占位', (tester) async {
