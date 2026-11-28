@@ -11,12 +11,12 @@
 </p>
 
 <p align="center">
-  <a href="https://gitee.com/westanke/dsh-Chat/releases/tag/v1.0.38"><code>Download v1.0.38 · APK / HAP</code></a>
+  <a href="https://gitee.com/westanke/dsh-Chat/releases/tag/v1.0.39"><code>Download v1.0.39 · APK / HAP</code></a>
 </p>
 
 <p align="center">
   <a href="./README.md">中文</a> ·
-  <img alt="Version" src="https://img.shields.io/badge/version-1.0.38-087f8c">
+  <img alt="Version" src="https://img.shields.io/badge/version-1.0.39-087f8c">
   <img alt="License" src="https://img.shields.io/badge/license-AGPL--3.0-2da44e">
   <img alt="Platforms" src="https://img.shields.io/badge/platform-Android%20%7C%20iOS%20%7C%20HarmonyOS-586069">
   <img alt="Built with Flutter" src="https://img.shields.io/badge/built%20with-Flutter-02569B">
@@ -89,16 +89,16 @@ Right: settings, with connection state, device permissions, appearance and notif
 | **iOS** | Native bridge covers IANA time zone, private directory, notifications, TTS, sharing, image picker and file opening. CI builds an unsigned IPA. **Not verified on an iPhone**; updates go through the App Store |
 | **HarmonyOS** | **Flutter-OH build verified on HarmonyOS hardware / API 26**: pairing, chat, sessions, sharing, TTS, picker and notifications (including tap-to-return) passed. Release distribution needs an AGC certificate/profile |
 
-Current version: `app/pubspec.yaml` is `1.0.38+39`, tag `v1.0.38`.
+Current version: `app/pubspec.yaml` is `1.0.39+40`, tag `v1.0.39`.
 
 ## Download and install
 
-Latest **v1.0.38** (Gitee primary; GitHub mirrors the same tag):
+Latest **v1.0.39** (Gitee primary; GitHub mirrors the same tag):
 
 | Artifact | Size | SHA-256 |
 |---|---|---|
-| [APK](https://gitee.com/westanke/dsh-Chat/releases/download/v1.0.38/dsh-Chat-v1.0.38.apk) | 26,812,418 bytes | `0c7239ad242f4c70bcef9926f808241f5a9e27c05ab1a80bc0d46eb1e01b1f18` |
-| [HAP](https://gitee.com/westanke/dsh-Chat/releases/download/v1.0.38/dsh-Chat-v1.0.38-harmony.hap) | 34,716,698 bytes | `17002d782648b9416fc0028e1bc57942d5f8af550cf8dc33df4a24be05aa2166` (signed with the local release cert) |
+| [APK](https://gitee.com/westanke/dsh-Chat/releases/download/v1.0.39/dsh-Chat-v1.0.39.apk) | 26,812,418 bytes | `7c72d1c9f354609026aab86ade3c8023e07293eaf7d6b6a3a1f64b6ba64bbcc9` |
+| [HAP](https://gitee.com/westanke/dsh-Chat/releases/download/v1.0.39/dsh-Chat-v1.0.39-harmony.hap) | 34,716,698 bytes | `f75e96bc1fc12b6d68d86a57b92137bb3bc748ba5ddac21eab8be4ed4b253716` (signed with the local release cert) |
 
 - Android: install the APK directly. Some Android builds show a risk-interception page; confirm and continue.
 - HarmonyOS: the HAP must be signed by a certificate the device trusts. For development use

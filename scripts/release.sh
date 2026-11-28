@@ -64,7 +64,9 @@ BUILD_HAP="${BUILD_HAP:-1}"
 # HAP_SIGN=1 时调 scripts/sign-hap.sh，口令从 HAP_KEYSTORE_PWD/HAP_KEY_PWD 读。
 HAP_SIGN="${HAP_SIGN:-0}"
 if [ "$HAP_SIGN" = "1" ]; then
-  HAP_NOTE="${HAP_NOTE:-已签名（本地证书）}"
+  # 不要写「已签名（本地证书）」：README 的行模板会再套一层（……），变成
+  # 「（已签名（本地证书））」。用扁平描述，与 v1.0.38 的历史写法一致。
+  HAP_NOTE="${HAP_NOTE:-本地发布证书签名}"
 else
   HAP_NOTE="${HAP_NOTE:-未签名，本机验证用}"
 fi

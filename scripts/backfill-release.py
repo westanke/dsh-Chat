@@ -25,6 +25,13 @@ def row_en(kind, dl, size, sha, note=None):
         base = f"| [{kind}]({dl}) | {size:,} bytes | `{sha}` ({note}) |"
     return base
 
+# 备注只在命令行给一份中文（release.sh 传「本地发布证书签名」之类），英文 README
+# 里要换成本地化说法，否则会出现 "… (本地发布证书签名)" 这种中英混排。
+EN_NOTE = {
+    "本地发布证书签名": "signed with the local release cert",
+    "未签名，本机验证用": "unsigned, for local verification",
+}
+
 def backfill(text, ver, code, size, sha, apk, hap=None, hap_size=None, hap_sha=None,
              hap_note=None, lang="zh"):
     gitee = f"https://gitee.com/westanke/dsh-Chat/releases/download/v{ver}"
@@ -38,7 +45,11 @@ def backfill(text, ver, code, size, sha, apk, hap=None, hap_size=None, hap_sha=N
         current_re = r"(当前版本：`app/pubspec\.yaml` 为 `)[\d.]+\+\d+(`，tag `)v[\d.]+(`)"
     else:
         apk_row = row_en("APK", apk_dl, size, sha)
-        hap_row = row_en("HAP", hap_dl, hap_size, hap_sha, hap_note) if hap else None
+        hap_row = (
+            row_en("HAP", hap_dl, hap_size, hap_sha, EN_NOTE.get(hap_note, hap_note))
+            if hap
+            else None
+        )
         section = "## Download and install"
         latest_re = r"(Latest \*\*)v[\d.]+(\*\*)"
         current_re = r"(Current version: `app/pubspec\.yaml` is `)[\d.]+\+\d+(`, tag `)v[\d.]+(`)"
@@ -46,8 +57,16 @@ def backfill(text, ver, code, size, sha, apk, hap=None, hap_size=None, hap_sha=N
     out = text
     # 1) badge
     out = re.sub(r"(img\.shields\.io/badge/version-)[\d.]+(-087f8c)", rf"\g<1>{ver}\g<2>", out, count=1)
-    # 2) top download button (first tag link only)
+    # 2) top download button (first tag link only) —— 按钮的 href 与**按钮文案**
+    #    两处都带版本号，只改 href 会出现「链接指向 v1.0.39、按钮写着 v1.0.38」
+    #    （v1.0.39 发版时实测踩到）。
     out = re.sub(r"(releases/tag/)v[\d.]+", rf"\g<1>v{ver}", out, count=1)
+    out = re.sub(
+        r"(<code>(?:下载|Download) )v[\d.]+( · APK / HAP</code>)",
+        rf"\g<1>v{ver}\g<2>",
+        out,
+        count=1,
+    )
     # 3) 最新版 / Latest
     out = re.sub(latest_re, rf"\g<1>v{ver}\g<2>", out, count=1)
     # 4) 当前版本行
