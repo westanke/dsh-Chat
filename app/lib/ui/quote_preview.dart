@@ -100,6 +100,15 @@ class QuoteTarget {
 
 /// 8 行以内不折叠；超过 20 行时保留首尾各 8 行，中间用「…」占一行。
 const _foldThreshold = 20;
+/// 横幅正文：只有零宽字符/空白时给一句可读兜底，避免看起来是空条。
+String _visiblePreview(String raw) {
+  final stripped = raw.replaceAll(
+    RegExp(r'[\s\u200B\u200C\u200D\u2060\uFE0E\uFE0F\uFEFF]'),
+    '',
+  );
+  return stripped.isEmpty ? '（无文字内容）' : raw;
+}
+
 const _foldHead = 8;
 const _foldTail = 8;
 
@@ -198,7 +207,7 @@ class QuotePreview extends StatelessWidget {
                             ),
                           ),
                           Text(
-                            quote.text,
+                            _visiblePreview(quote.text),
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                             style: DsTypography.small.copyWith(

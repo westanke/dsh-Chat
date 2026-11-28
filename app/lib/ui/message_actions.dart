@@ -120,7 +120,7 @@ class _DsMessageActionsState extends State<DsMessageActions> {
             tooltip: _copied ? '已复制' : '复制',
             onTap: _copy,
           ),
-          if (widget.onQuote != null)
+          if (widget.onQuote != null && _hasVisibleText(widget.text))
             _ActionIcon(
               icon: Icons.format_quote_outlined,
               color: c.labelTertiary,
@@ -183,6 +183,15 @@ String formatSentTime(int epochMs) {
   final mi = d.minute.toString().padLeft(2, '0');
   return '${d.year}-$mm-$dd $hh:$mi';
 }
+
+/// 有可展示的正文：去掉空白与零宽字符后仍有内容。
+///
+/// 历史里存在只带零宽字符的助手消息（工具轮的空正文），`trim()` 不认
+/// ZWSP，会让「引用」入口出现在一条看起来没有文字的消息上。
+bool _hasVisibleText(String raw) =>
+    raw.replaceAll(_invisible, '').isNotEmpty;
+
+final RegExp _invisible = RegExp(r'[\s\u200B\u200C\u200D\u2060\uFE0E\uFE0F\uFEFF]');
 
 class _ActionIcon extends StatelessWidget {
   const _ActionIcon({

@@ -219,6 +219,53 @@ void main() {
       expect(find.byTooltip('复制'), findsOneWidget);
     });
   });
+
+  testWidgets('只有零宽字符也不渲染「引用」', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: DsMessageActions(
+            colors: const DsColors(false),
+            text: '\u200b\ufe0f',
+            messageSeq: 10,
+            onQuote: (_) {},
+          ),
+        ),
+      ),
+    );
+    expect(find.byIcon(Icons.format_quote_outlined), findsNothing);
+  });
+
+  testWidgets('零宽正文的横幅显示兜底文案', (tester) async {
+    await tester.pumpWidget(
+      _host(
+        QuotePreview(
+          quote: _target(seq: 11, text: '\u200b'),
+          colors: const DsColors(false),
+          onClear: () {},
+        ),
+      ),
+    );
+    expect(find.text('（无文字内容）'), findsOneWidget);
+  });
+
+  testWidgets('空正文不渲染「引用」', (tester) async {
+    var called = false;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: DsMessageActions(
+            colors: const DsColors(false),
+            text: '   ',
+            messageSeq: 9,
+            onQuote: (_) => called = true,
+          ),
+        ),
+      ),
+    );
+    expect(find.byIcon(Icons.format_quote_outlined), findsNothing);
+    expect(called, isFalse);
+  });
 }
 
 // 折叠规则与实现同源的本地常量（测试里直接引用数字，避免把私有实现暴露成 API）。
