@@ -279,7 +279,7 @@ else
 fi
 say ""
 
-say "3) 两站 Release + APK 附件"
+say "3) 两站 Release + 附件（AtomGit 附件尽力而为；CI 也会补传）"
 gitee_release() {
   [ -z "$GT" ] && { warn "无 Gitee token，跳过"; return 0; }
   local id
@@ -344,6 +344,40 @@ except Exception: print('')" 2>/dev/null || true)
   done
 }
 
+atomgit_upload() {
+  # AtomGit 附件上传（2026-11-28 实测可用）：先取 tag 维度的 upload_url 与 headers，再 PUT 字节。
+  # 幂等：同名附件已存在就跳过；任何失败都只 warn，不阻塞发版。
+  local tag="$1" file="$2"
+  [ "$DRY_RUN" = "1" ] && { say "  [dry] 跳过 AtomGit 附件上传"; return 0; }
+  local base; base=$(basename "$file")
+  if [ ! -f "$file" ]; then warn "AtomGit 跳过缺失附件 $base"; return 0; fi
+  local have
+  have=$(curl -s --max-time 30 -H "Authorization: Bearer $AT" \
+    "https://atomgit.com/api/v5/repos/$REPO_ATOMGIT/releases/tags/$tag" 2>/dev/null \
+    | python3 -c "import json,sys
+try: print(' '.join(a.get('name','') for a in json.load(sys.stdin).get('assets',[])))
+except Exception: print('')" 2>/dev/null || true)
+  if echo " $have " | grep -qF " $base "; then ok "AtomGit 已有 $base"; return 0; fi
+  local meta
+  meta=$(curl -s --max-time 30 -G -H "Authorization: Bearer $AT" \
+    --data-urlencode "access_token=$AT" --data-urlencode "file_name=$base" \
+    "https://atomgit.com/api/v5/repos/$REPO_ATOMGIT/releases/$tag/upload_url" 2>/dev/null || true)
+  if [ -z "$meta" ]; then warn "AtomGit 取上传地址失败（$base），跳过"; return 0; fi
+  if META="$meta" FILE="$file" python3 - <<'PYUP'
+import json, os, urllib.request
+meta = json.loads(os.environ["META"])
+with open(os.environ["FILE"], "rb") as fh:
+    data = fh.read()
+req = urllib.request.Request(meta["url"], data=data, method="PUT")
+for k, v in (meta.get("headers") or {}).items():
+    req.add_header(k, v)
+with urllib.request.urlopen(req, timeout=300) as r:
+    print(r.status)
+PYUP
+  then ok "AtomGit 已传 $base"; else warn "AtomGit 上传失败（$base），不阻塞发版"; fi
+  return 0
+}
+
 atomgit_release() {
   [ -z "$AT" ] && { warn "无 AtomGit token，跳过"; return 0; }
   local cur
@@ -360,7 +394,7 @@ try:
 except Exception:
     print('')" 2>/dev/null || true)
   if [ "$cur" = "$TAG" ]; then
-    ok "AtomGit Release 已存在（$TAG），跳过"
+    ok "AtomGit Release 已存在（$TAG），跳过创建"
   else
     [ "$DRY_RUN" = "1" ] && { say "  [dry] 创建 AtomGit Release $TAG"; return 0; }
     local payload
@@ -375,24 +409,31 @@ lines = [
     "## " + tag, "",
     "- Android 产物：`" + apk + "`，**{:,} 字节**".format(size),
     "- SHA-256：`" + sha + "`",
-    "- 下载：" + base + apk,
+    "- 下载（Gitee 镜像）：" + base + apk,
 ]
 if os.environ.get("BUILD_HAP") == "1" and os.environ.get("HAP_NAME"):
     hap = os.environ["HAP_NAME"]
     lines += [
         "- 鸿蒙产物：`" + hap + "`，**" + format(int(os.environ["HAP_SIZE"]), ",") + " 字节**（" + os.environ.get("HAP_NOTE", "未签名，本机验证用") + "）",
         "- SHA-256：`" + os.environ["HAP_SHA"] + "`",
-        "- 下载：" + base + hap,
+        "- 下载（Gitee 镜像）：" + base + hap,
     ]
-lines += [""]
+lines += [
+    "",
+    "APK 由 AtomGit Actions 在本站构建时也会作为附件上传；若附件暂缺，以上 Gitee 链接为准。",
+]
 print(json.dumps({"tag_name": tag, "name": os.environ["VER"],
                   "body": "\n".join(lines), "target_commitish": "main"}))
 ')
-    curl -s -X POST "https://atomgit.com/api/v5/repos/$REPO_ATOMGIT/releases" \
-      -H "Authorization: Bearer $AT" -H 'Content-Type: application/json' -d "$payload" >/dev/null
+    curl -s --max-time 60 -X POST "https://atomgit.com/api/v5/repos/$REPO_ATOMGIT/releases" \
+      -H "Authorization: Bearer $AT" -H 'Content-Type: application/json' -d "$payload" >/dev/null || true
     ok "AtomGit Release 已建（正文含 Gitee 下载链接）"
   fi
-  warn "AtomGit 不支持附件上传（API 不存在），产物以 Gitee 为准"
+  atomgit_upload "$TAG" "$APK"
+  if [ "$BUILD_HAP" = "1" ] && [ -n "${HAP:-}" ] && [ -f "$HAP" ]; then
+    atomgit_upload "$TAG" "$HAP"
+  fi
+  atomgit_upload "$TAG" artifacts/SHA256SUMS.txt
 }
 
 gitee_release
@@ -425,6 +466,20 @@ for r in gitee atomgit; do
     bad "$r: tag $TAG 缺失"; rc=1
   fi
 done
+
+# AtomGit 附件是尽力而为：CI 可能还在排队、令牌可能没权限——缺了只提示，不算失败。
+if [ -n "$AT" ]; then
+  have_at=$(curl -s --max-time 30 -H "Authorization: Bearer $AT" \
+    "https://atomgit.com/api/v5/repos/$REPO_ATOMGIT/releases/tags/$TAG" 2>/dev/null \
+    | python3 -c "import json,sys
+try: print(' '.join(a.get('name','') for a in json.load(sys.stdin).get('assets',[])))
+except Exception: print('')" 2>/dev/null || true)
+  if echo " $have_at " | grep -qF " $APK_NAME "; then
+    ok "AtomGit: APK 附件已就位"
+  else
+    warn "AtomGit: APK 附件暂缺（CI 可能仍在构建；不影响发版，Gitee 为准）"
+  fi
+fi
 
 # 下载回来的字节数必须与本地产物的 SHA 对得上（防「传了个旧包」）。
 if [ "$rc" -eq 0 ]; then

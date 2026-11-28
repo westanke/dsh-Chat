@@ -165,10 +165,15 @@ bash scripts/release.sh --publish
    （分支先推、tag 再**逐个**推，不用 `git push --tags`）；
 4. 建 **Gitee Release**（API v5）：`access_token` 必须挂 query 不进 JSON body
    （挂 body 会报 40001）；附件上传 APK + HAP + SHA256SUMS.txt；
-5. 建 **AtomGit Release**（API v5）：**该站不支持附件**，正文写 Gitee 下载链接；
+5. 建 **AtomGit Release**（API v5）：推 tag 后 AtomGit 的
+   `.gitcode/workflows/release-android.yml` 会自动构建 APK 并建 Release/传附件；
+   本机脚本也会兜底建 Release（不存在时）并用「tag 维度 `upload_url` + `PUT`」补传
+   APK / SHA256SUMS /（可选）HAP（见 §3.5）。两条路都幂等：附件同名就跳过。
+   旧文档写的「该站不支持附件」已于 2026-11-28 实测纠正。
    该接口按创建时间**升序**返回，要在整个 `per_page=100` 里找本 tag，不能取首项；
 6. **回读**：Gitee 的 APK / HAP 下载链接 HTTP 200、下载回来的字节 SHA 与本地一致、
-   两站 tag 都在。
+   两站 tag 都在；AtomGit 附件是**尽力而为**（CI 排队或令牌没配时可能暂缺），
+   缺了只提示不算失败，以 Gitee 为准。
 
 ### 阶段 C · iOS IPA（两段式，本机打不了）
 
@@ -203,12 +208,36 @@ curl -X POST https://api.github.com/repos/westanke/dsh-Chat/releases \
 
 ---
 
+## 3.5 AtomGit Actions 自动构建（可选，2026-11-28 接入）
+
+`.gitcode/workflows/release-android.yml` 让 **AtomGit 备站自己出 APK**，本机只当兜底。
+
+- **触发**：`push.tags: ["v*"]`（发版推 tag 即自动跑）或 Actions 页 `workflow_dispatch`（可传 tag）；
+- **演练**：tag 名以 `-ci` 结尾 → `TESTONLY=1`，只构建、不建 Release
+  （例：`v1.0.38-ci` 是演练 tag，验完可删）；
+- **产物**：`artifacts/dsh-Chat-<tag>.apk` + `SHA256SUMS.txt`，同时进 Actions artifact 与 Release 附件；
+- **前提**：项目设置 → 基础设置 →「Actions 权限控制」已开启；代码化流水线需 AtomGit
+  **内测名额**（名额有限，找客服申请）；要让它建 Release/传附件，再在
+  「项目设置 → Action 密钥与变量」配 `ATOMGIT_TOKEN`（仓库读写令牌）；
+- **环境**：托管 runner 用 `[ubuntu-latest, x64, medium]`（4c16G），预装 Java 17 / Node 20 / Python 3，
+  **没有 Android SDK**——工作流从腾讯云镜像铺 platform-tools / platforms;android-36 /
+  build-tools;36.0.0 / cmdline-tools；纯 Dart+Java 工程不依赖 NDK，所以**不装 NDK**（省约 700MB）；
+- **Flutter**：走 `scripts/ci/setup-flutter-oh.sh`（从 AtomGit 的 `oh-flutter/flutter_flutter` clone，
+  国内可达），并同时写 `GITHUB_ENV|ATOMGIT_ENV` 与 `GITHUB_PATH|ATOMGIT_PATH`；
+- **失败不影响发版**：本机 `release.sh` 仍是权威出口（Gitee 必传、AtomGit 兜底），
+  AtomGit 流水线只当「备站自己出包」的加速项；某次没跑成就照旧看 Gitee 的包；
+- **排查**：平台没有公开的运行查询 API（`actions/runs` / `pipelines` / `check-runs` 全 404），
+  只能看网页 Actions 页；工作流最后一步会往 Issue #1 发一条收尾评论（`if: always()`、
+  任何失败都 `exit 0`，不阻塞构建），没有评论通常意味着 Job 没启动（入口/内测/权限没开）。
+
+---
+
 ## 4. 凭据与远端口径
 
 | 站 | 用途 | 凭据位置 |
 |---|---|---|
 | Gitee | **主站**，Release 产物落这里 | `~/.config/dsh-git/tokens.conf` 的 `gitee.com` 行 |
-| AtomGit | **备站**，只建 Release 对象 + 正文给 Gitee 链接 | 同上的 `atomgit.com` 行 |
+| AtomGit | **备站**：CI 自动构建 APK 并建 Release/传附件；本机脚本兜底（幂等，见 §3.5） | 同上的 `atomgit.com` 行 |
 | GitHub | **镜像从站**，由 `mirror-sync.yml` 每 3 小时从 Gitee `push --mirror` 同步 | `~/.git-credentials` 里的 token（`tokens.conf` 的 github 行已 401 失效，勿用） |
 
 - 本机到 `github.com:443` 长期被阻断，`api.github.com` 可达；

@@ -239,8 +239,10 @@ CI 构建没人用（理由见 ci.yml 头注释）；鸿蒙构建需 DevEco 工�
   → analyze/test/docs-check 全绿 → `SKIP_CHECK=1 bash scripts/release.sh`
   （产出 `artifacts/dsh-Chat-v<ver>.apk` + README/SHA256SUMS 回填 + commit）。
 - 阶段 B（双站 Release）：`SKIP_CHECK=1 bash scripts/release.sh --publish`
-  （PUSH_TAGS=1 推分支+tag；建 Gitee Release 传 APK/SHA256SUMS；AtomGit Release 正文链 Gitee；
-  回读下载验证 SHA 一致）。**推送须用户明确同意**（见上）。
+  （PUSH_TAGS=1 推分支+tag；建 Gitee Release 传 APK/SHA256SUMS；AtomGit 由
+  `.gitcode/workflows/release-android.yml` 在 tag 上自动出 APK 并建 Release/传附件，
+  本机脚本兜底建 Release 并用「tag 维度 upload_url + PUT」补传，幂等；回读验证 SHA 一致，
+  AtomGit 附件缺失只提示不失败。详见 `docs/project/RELEASE.md` §3.5）。**推送须用户明确同意**（见上）。
 - 阶段 C（iOS IPA，两段式：本机 Linux 打不了 iOS，产物只在 GitHub Actions macOS）：
   1. API 触发镜像立即同步（别等 3h cron）：
      `POST https://api.github.com/repos/westanke/dsh-Chat/actions/workflows/mirror-sync.yml/dispatches -d '{"ref":"main"}'`
@@ -256,7 +258,8 @@ CI 构建没人用（理由见 ci.yml 头注释）；鸿蒙构建需 DevEco 工�
   Release 下载后上传（uploads.github.com）。最后查 Actions 全绿（ci.yml 门禁 +
   release.yml 的 Android / iOS job；HAP job 启用时也要绿）。
   release.yml Android job 曾因 runner 走阿里云 maven 镜像超时失败——gradle 仓库段已改为
-  `CI=true`（GitHub Actions 自动注入）时跳过国内镜像直连官方源（settings.gradle.kts / build.gradle.kts）。
+  `GITHUB_ACTIONS=true`（GitHub 自动注入）时跳过国内镜像直连官方源；本机与 AtomGit 国内
+  runner 仍走阿里云镜像（settings.gradle.kts / build.gradle.kts）。
 - token 口径：GitHub API 用 `~/.git-credentials` 里的 token（`tokens.conf` 的 github 行已 401 失效勿用）；
   Gitee/AtomGit 用 `~/.config/dsh-git/tokens.conf`。api.github.com 可达，github.com:443 被阻断。
 - 错位 tag 修法：`DELETE /git/refs/tags/<tag>` 后再 `POST /git/refs`（annotated tag 的
