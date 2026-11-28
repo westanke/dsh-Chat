@@ -4,9 +4,16 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('swipeIntent', () {
-    test('抽屉开着不接管（抽屉内左滑不自动关）', () {
+    test('抽屉开着时左滑收起', () {
       expect(
         swipeIntent(dx: -200, velocity: -2000, drawerOpen: true, panelOpen: false),
+        SwipeIntent.closeDrawer,
+      );
+    });
+
+    test('抽屉开着时右滑不动', () {
+      expect(
+        swipeIntent(dx: 80, velocity: 200, drawerOpen: true, panelOpen: false),
         SwipeIntent.none,
       );
     });

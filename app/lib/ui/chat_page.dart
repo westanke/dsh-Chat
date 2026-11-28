@@ -172,6 +172,14 @@ class _ChatPageState extends State<ChatPage>
   /// 屏内右滑的累计位移（逻辑像素）。
   double _swipeDx = 0;
 
+  /// 抽屉本体上的左滑累计位移：滑出方向相反即可收起。
+  double _drawerSwipeDx = 0;
+
+  /// 右侧面板上的原始指针位移：PageView 会吃掉横向手势，这里用 Listener
+  /// 兜一层，向右滑回即可收起。
+  double _panelPointerDx = 0;
+  double? _panelPointerStartX;
+
   void _onSwipeStart(DragStartDetails _) => _swipeDx = 0;
 
   void _onSwipeUpdate(DragUpdateDetails d) => _swipeDx += d.delta.dx;
@@ -186,6 +194,8 @@ class _ChatPageState extends State<ChatPage>
     switch (intent) {
       case SwipeIntent.openDrawer:
         _openDrawer();
+      case SwipeIntent.closeDrawer:
+        _closeDrawer();
       case SwipeIntent.closePanel:
         _closePanels();
       case SwipeIntent.openPanel:
@@ -248,16 +258,27 @@ class _ChatPageState extends State<ChatPage>
         child: _buildChatScaffold(context),
       ),
     );
-    final drawer = sideRail(
-      shift: _drawerShift,
-      alignment: Alignment.centerLeft,
-      width: cls.sidebarWidth,
-      child: SessionsDrawer(
-        state: st,
-        colors: c,
-        onOpenSettings: widget.onOpenSettings,
-        onClose: _closeDrawer,
+    final drawer = GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onHorizontalDragStart: (_) => _drawerSwipeDx = 0,
+      onHorizontalDragUpdate: (d) => _drawerSwipeDx += d.delta.dx,
+      onHorizontalDragEnd: (d) {
+        // 抽屉从左滑出，向左滑回即收起；纵向列表滚动不受影响。
+        if (_drawerSwipeDx < -60 || (d.primaryVelocity ?? 0) < -300) {
+          _closeDrawer();
+        }
+      },
+      child: sideRail(
+        shift: _drawerShift,
+        alignment: Alignment.centerLeft,
         width: cls.sidebarWidth,
+        child: SessionsDrawer(
+          state: st,
+          colors: c,
+          onOpenSettings: widget.onOpenSettings,
+          onClose: _closeDrawer,
+          width: cls.sidebarWidth,
+        ),
       ),
     );
     // 右侧「会话面板」：把原来散在「更多」菜单里的几个面板收成一个可左右滑
@@ -333,7 +354,32 @@ class _ChatPageState extends State<ChatPage>
           scrim,
           drawer,
           // 右侧面板必须钉在右缘：Stack 的非定位子级默认从左上开始排。
-          Positioned(top: 0, bottom: 0, right: 0, child: panels),
+          // PageView 会赢得横向手势竞技场，用原始指针再兜一层「右滑收起」。
+          Positioned(
+            top: 0,
+            bottom: 0,
+            right: 0,
+            child: Listener(
+              onPointerDown: (e) {
+                _panelPointerStartX = e.position.dx;
+                _panelPointerDx = 0;
+              },
+              onPointerMove: (e) {
+                final start = _panelPointerStartX;
+                if (start != null) _panelPointerDx = e.position.dx - start;
+              },
+              onPointerUp: (_) {
+                if (_panelPointerDx > 100) _closePanels();
+                _panelPointerStartX = null;
+                _panelPointerDx = 0;
+              },
+              onPointerCancel: (_) {
+                _panelPointerStartX = null;
+                _panelPointerDx = 0;
+              },
+              child: panels,
+            ),
+          ),
         ],
       ),
     );

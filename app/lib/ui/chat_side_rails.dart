@@ -9,7 +9,7 @@ import 'package:material_ui/material_ui.dart';
 import '../design/tokens.dart';
 
 /// 一次水平滑动的意图。
-enum SwipeIntent { openDrawer, closePanel, openPanel, none }
+enum SwipeIntent { openDrawer, closeDrawer, closePanel, openPanel, none }
 
 /// 按位移与速度判定这次横滑要干什么。
 ///
@@ -23,7 +23,10 @@ SwipeIntent swipeIntent({
   required bool drawerOpen,
   required bool panelOpen,
 }) {
-  if (drawerOpen) return SwipeIntent.none;
+  if (drawerOpen) {
+    final back = dx <= -DsSpacing.drawerSwipeMinTravel || velocity < -500;
+    return back ? SwipeIntent.closeDrawer : SwipeIntent.none;
+  }
   if (panelOpen) {
     final back = dx <= -DsSpacing.drawerSwipeMinTravel || velocity < -500;
     return back ? SwipeIntent.none : SwipeIntent.closePanel;

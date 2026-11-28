@@ -2,7 +2,8 @@
 /// （2026-11-22 用户要求：集合到一个窗口里多个 TAB，支持左右滑动查看）。
 ///
 /// 每个 TAB 直接复用既有面板的身体类，不复制逻辑：
-/// 会话信息 / 会话统计 / 运行轨迹 / 智能团队 / 任务（代码工作视图按设置出现）。
+/// 会话信息 / 会话统计 / 运行轨迹（代码工作视图按设置出现）。团队与待办
+/// 已有顶栏成员图标与底部待办条入口，这里不再重复放 TAB。
 library;
 
 import 'package:material_ui/material_ui.dart';
@@ -53,18 +54,6 @@ List<SessionTab> sessionTabsOf({Future<void> Function()? onShare}) {
       icon: Icons.timeline,
       builder: (context, state, colors) =>
           TrajectoryBody(state: state, colors: colors),
-    ),
-    SessionTab(
-      label: '团队',
-      icon: Icons.groups_outlined,
-      builder: (context, state, colors) =>
-          TeamSheet(state: state, colors: colors),
-    ),
-    SessionTab(
-      label: '任务',
-      icon: Icons.checklist_outlined,
-      builder: (context, state, colors) =>
-          TodoSheet(state: state, colors: colors),
     ),
     if (appSettings.codeWorkView)
       SessionTab(
@@ -132,6 +121,9 @@ class _SessionTabsSheetState extends State<SessionTabsSheet> {
     initialPage: widget.initial,
   );
   late int _index = widget.initial;
+
+  /// 把手上的横向累计位移：侧栏从右滑出，向右滑回即收起。
+  double _handleDx = 0;
   final GlobalKey<_TabBarState> _tabKey = GlobalKey<_TabBarState>();
 
   @override
@@ -219,6 +211,14 @@ class _SessionTabsSheetState extends State<SessionTabsSheet> {
     onTap: widget.onClose,
     onVerticalDragEnd: (d) {
       if ((d.primaryVelocity ?? 0) > 200) widget.onClose?.call();
+    },
+    onHorizontalDragStart: (_) => _handleDx = 0,
+    onHorizontalDragUpdate: (d) => _handleDx += d.delta.dx,
+    onHorizontalDragEnd: (d) {
+      // 侧栏从右滑出，向右滑回即收起（面板头部的把手区域）。
+      if (_handleDx > 60 || (d.primaryVelocity ?? 0) > 300) {
+        widget.onClose?.call();
+      }
     },
     child: Padding(
       padding: const EdgeInsets.only(top: 8, bottom: 6),
