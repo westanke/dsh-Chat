@@ -16,6 +16,7 @@ import '../bridge/gateway_schedule.dart';
 import '../design/tokens.dart';
 import 'chat_state.dart';
 import 'schedule_detail.dart';
+import 'schedule_form.dart';
 import 'window_class.dart';
 
 /// 顶栏时钟入口是否可见：必须在会话内，且桥 hello 声明了能力位。
@@ -170,6 +171,33 @@ class _ScheduleSheetState extends State<ScheduleSheet> {
     }
   }
 
+  Future<void> _createTask() async {
+    if (_busy) return;
+    final created = await showScheduleForm(context, widget.state, _c);
+    if (created == true) await _load();
+  }
+
+  Future<void> _editTask(ScheduleTask task) async {
+    if (_busy) return;
+    final saved = await showScheduleForm(
+      context,
+      widget.state,
+      _c,
+      task: task,
+    );
+    if (saved != true) return;
+    await _load();
+    if (!mounted) return;
+    ScheduleTask? refreshed;
+    for (final item in _tasks ?? const <ScheduleTask>[]) {
+      if (item.id == task.id) {
+        refreshed = item;
+        break;
+      }
+    }
+    setState(() => _detail = refreshed);
+  }
+
   void _snack(String text) {
     if (!mounted) return;
     final messenger = ScaffoldMessenger.maybeOf(context);
@@ -260,10 +288,24 @@ class _ScheduleSheetState extends State<ScheduleSheet> {
             ),
           if (detail == null)
             IconButton(
+              tooltip: '新建定时任务',
+              icon: const Icon(Icons.add),
+              color: c.labelSecondary,
+              onPressed: _busy ? null : () => unawaited(_createTask()),
+            ),
+          if (detail == null)
+            IconButton(
               tooltip: '刷新',
               icon: const Icon(Icons.refresh),
               color: c.labelSecondary,
               onPressed: _busy || _loading ? null : () => unawaited(_load()),
+            ),
+          if (detail != null)
+            IconButton(
+              tooltip: '编辑',
+              icon: const Icon(Icons.edit_outlined),
+              color: c.labelSecondary,
+              onPressed: _busy ? null : () => unawaited(_editTask(detail)),
             ),
         ],
       ),

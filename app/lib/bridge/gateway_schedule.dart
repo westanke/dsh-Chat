@@ -247,6 +247,28 @@ extension GatewaySchedule on GatewayClient {
     return ScheduleTask.fromJson(value);
   }
 
+  /// 新建（`schedule-create` 直通帧）。
+  ///
+  /// [payload] 是内核 `schedule/create` 的 request；用
+  /// `buildScheduleCreateRequest(...)` 构造，避免把 wire 形状散在 UI 里。
+  Future<ScheduleTask> scheduleCreate(Map<String, dynamic> payload) async {
+    final value = _unwrap(
+      await request('schedule-create', {'request': payload}),
+    );
+    return ScheduleTask.fromJson(_entryOf(value));
+  }
+
+  /// 编辑（`schedule-edit` 直通帧）。
+  ///
+  /// [payload] 是内核 `schedule/edit` 的 request；用
+  /// `buildScheduleEditRequest(...)` 构造。
+  Future<ScheduleTask> scheduleEdit(Map<String, dynamic> payload) async {
+    final value = _unwrap(
+      await request('schedule-edit', {'request': payload}),
+    );
+    return ScheduleTask.fromJson(_entryOf(value));
+  }
+
   /// 立即运行（`schedule-run` 直通帧）。内核可能回 `schedule_execution_pending`。
   Future<ScheduleTask> scheduleRun(String id) async {
     final value = _unwrap(
@@ -304,6 +326,13 @@ extension GatewaySchedule on GatewayClient {
     });
     return ScheduleHistoryPage.fromJson(r);
   }
+}
+
+/// create/edit 的 value 可能直接是 entry，也可能包一层 `{task: entry}`。
+Map<String, dynamic> _entryOf(Map<String, dynamic> value) {
+  final nested = value['task'];
+  if (nested is Map) return Map<String, dynamic>.from(nested);
+  return value;
 }
 
 /// 直通帧把业务失败包成 `{ok:false,error}`，转成统一的 [RequestException]。
