@@ -9,6 +9,7 @@ import 'package:flutter/foundation.dart';
 import '../bridge/device.dart';
 import '../bridge/dlog.dart';
 import '../bridge/gateway.dart';
+import '../bridge/mobile_frames.dart';
 import '../bridge/models.dart';
 import '../bridge/queue.dart';
 import '../design/app_settings.dart';
@@ -29,6 +30,7 @@ import 'streaming_tools.dart';
 export 'hitl_state.dart';
 
 part 'chat_state_events.dart';
+part 'chat_state_ws.dart';
 
 /// 纯函数：取 [0..end] 区间里最后一条有正文的用户消息文本
 /// （对照 companion ChatRetry.kt：排除只有图片 / 空正文的用户消息）。
@@ -57,8 +59,7 @@ class BatchArchiveResult {
   int get total => archived + failed;
 }
 
-class ChatState extends ChangeNotifier
-    with GroupExpandState, ChatSetupState {
+class ChatState extends ChangeNotifier with GroupExpandState, ChatSetupState {
   ChatState(this._gateway) {
     _sub = _gateway.events.listen(_handleGatewayEvent);
     _stateSub = _gateway.state.listen(_onGatewayState);
@@ -223,6 +224,25 @@ class ChatState extends ChangeNotifier
   /// 面板必须容忍缺席，不能把「读不到」渲染成「功能不存在」。
   Map<String, dynamic>? projections;
 
+  /// 当前会话的**权威** todos 投影（WS `tasks` 帧，能力位 `mobile-tasks-v1`）。
+  /// null = 没拉到 / 老桥不支持 → 页面继续用 `todoItems(projections)` 的本地推导。
+  /// 拉取成功时已合并进 [projections]（见 `projectionsWithTodos`），
+  /// 因此现有页面（chat_page / todo_dock 读 projections）无需改动即可看到权威值。
+  SessionTasks? sessionTasks;
+
+  /// 每个会话的最近一次 `chat.session.snapshot`（cursor 切点）。
+  final Map<String, SessionSnapshot> sessionSnapshots = {};
+
+  /// 每个会话**第一次**见到的快照（resync 比较的基线）。
+  final Map<String, SessionSnapshot> sessionSnapshotBaselines = {};
+
+  /// 最近一次紧凑历史预取（`compact:true`；能力位 `history-compact-v1`）。
+  /// 只作缓存，不参与首屏渲染——首屏默认行为保持非紧凑。
+  HistoryPage? compactHistoryPrefetch;
+
+  /// tasks 帧按会话节流（history 重拉在流式期间很密集，避免每帧都打一次 tasks）。
+  final Map<String, DateTime> _tasksRefreshedAt = {};
+
   // ---- HITL 问答 / 审批（真机反馈补充：DSH 向用户提问）----
   // 状态与动作在 hitl_state.dart（宪法 §7 拆分）；这里组合并转发事件。
 
@@ -301,11 +321,11 @@ class ChatState extends ChangeNotifier
       // 旧条目一直留在抽屉里。
       if (showArchived) {
         try {
-          archivedSessions =
-              await _retryTransient(() => _gateway.sessions(archived: true));
+          archivedSessions = await _retryTransient(
+            () => _gateway.sessions(archived: true),
+          );
         } on RequestException catch (e) {
-          reportError('加载已归档会话失败', e,
-              retry: () => loadArchivedSessions());
+          reportError('加载已归档会话失败', e, retry: () => loadArchivedSessions());
         }
       }
       notifyListeners();
@@ -331,8 +351,7 @@ class ChatState extends ChangeNotifier
     try {
       archivedSessions = await _gateway.sessions(archived: true);
     } on RequestException catch (e) {
-      reportError('加载已归档会话失败', e,
-          retry: () => loadArchivedSessions());
+      reportError('加载已归档会话失败', e, retry: () => loadArchivedSessions());
     } finally {
       loadingArchived = false;
       notifyListeners();
@@ -438,7 +457,13 @@ class ChatState extends ChangeNotifier
       if (s.id == id) return openSession(s);
     }
     await openSession(
-      DshSession(id: id, rootId: '', updatedAt: 0, running: false, blank: false),
+      DshSession(
+        id: id,
+        rootId: '',
+        updatedAt: 0,
+        running: false,
+        blank: false,
+      ),
     );
   }
 
@@ -468,6 +493,8 @@ class ChatState extends ChangeNotifier
     // （reloadHistory 里 projections 缺席时会保留上一份）。
     rawEvents = [];
     projections = null;
+    sessionTasks = null;
+    compactHistoryPrefetch = null;
     historyHasMore = false;
     loadingOlder = historyPageJustLoaded = historyTruncated = false;
     queue = const [];
@@ -531,6 +558,8 @@ class ChatState extends ChangeNotifier
     queue = const [];
     rawEvents = [];
     projections = null;
+    sessionTasks = null;
+    compactHistoryPrefetch = null;
     historyHasMore = false;
     loadingOlder = false;
     historyPageJustLoaded = false;
@@ -545,7 +574,8 @@ class ChatState extends ChangeNotifier
     notifyListeners();
   }
 
-  Future<void> reloadHistory() => reloadChatHistory(this); // 实现见 chat_history_actions.dart
+  Future<void> reloadHistory() =>
+      reloadChatHistory(this); // 实现见 chat_history_actions.dart
 
   Future<void> loadOlder() => loadOlderMessages(this);
 
@@ -575,8 +605,9 @@ class ChatState extends ChangeNotifier
     collapseOnNewInput();
     // 繁忙发送模式（对照 companion ComposerSendPolicy）：运行中再发消息时，
     // queue = 排队等当前回合结束，steer = 立即打断。设置页偏好在这里落地。
-    final mode =
-        appSettings.busySendMode == BusySendMode.steer ? 'steer' : 'queue';
+    final mode = appSettings.busySendMode == BusySendMode.steer
+        ? 'steer'
+        : 'queue';
     // steer 会打断当前回合：清掉流式缓冲；queue 保留当前流式显示继续跑。
     // 注意：queue 时首回合 committed 会短暂置 streaming=false，随后次回合
     // delta 再置回 true（本版本不做多回合队列跟踪，属已知简化）。
@@ -672,8 +703,10 @@ class ChatState extends ChangeNotifier
       }
       DshLog.w('ui send done sid=$sid');
       if (sessionId != viewSessionId) {
-        DshLog.w('ui send reply ignored (view switched '
-            '${viewSessionId ?? "new"} -> ${sessionId ?? "new"})');
+        DshLog.w(
+          'ui send reply ignored (view switched '
+          '${viewSessionId ?? "new"} -> ${sessionId ?? "new"})',
+        );
         _pendingSessionId = null;
         return;
       }
@@ -688,19 +721,17 @@ class ChatState extends ChangeNotifier
     } on RequestException catch (e) {
       // 用户已切走：失败不能把错误条/流式态写到新会话上。
       if (sessionId != viewSessionId) {
-        DshLog.w('ui send FAIL ignored (view switched '
-            '${viewSessionId ?? "new"} -> ${sessionId ?? "new"})');
+        DshLog.w(
+          'ui send FAIL ignored (view switched '
+          '${viewSessionId ?? "new"} -> ${sessionId ?? "new"})',
+        );
         _pendingSessionId = null;
         return;
       }
       _pendingSessionId = null;
       DshLog.w('ui send FAIL ${e.code} ${e.message}');
       streaming = false;
-      reportError(
-        '发送失败',
-        e,
-        retry: () => send(text, imageParts: imageParts),
-      );
+      reportError('发送失败', e, retry: () => send(text, imageParts: imageParts));
       notifyListeners();
     }
   }
@@ -772,7 +803,9 @@ class ChatState extends ChangeNotifier
           _mobileWorkspaceId = wsId;
         } else {
           // 老桥没有工作区概念：建到默认位置（未分组），不阻挠命令派发。
-          sid = await _gateway.createSessionAt(agentPreset: setup.agentPresetId);
+          sid = await _gateway.createSessionAt(
+            agentPreset: setup.agentPresetId,
+          );
         }
       }
     } on RequestException catch (e) {
@@ -963,7 +996,10 @@ class ChatState extends ChangeNotifier
 /// 桥侧已把内核 `rpc/timeout` 归一成可重试的 `TIMEOUT`（2026-11-27）：慢盘、
 /// 长回合、上百会话时 `sessions.list` 偶尔会顶到上限，一秒后再问通常就回了。
 /// 只在 TIMEOUT/retryable 上重试，鉴权/参数错误不重试。
-Future<T> _retryTransient<T>(Future<T> Function() run, {int attempts = 2}) async {
+Future<T> _retryTransient<T>(
+  Future<T> Function() run, {
+  int attempts = 2,
+}) async {
   for (var i = 0; ; i++) {
     try {
       return await run();

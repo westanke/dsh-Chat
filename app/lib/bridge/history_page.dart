@@ -43,9 +43,9 @@ class DeliverableFile {
   DeliverableFile({required this.path, this.description});
 
   factory DeliverableFile.fromJson(Map<String, dynamic> j) => DeliverableFile(
-        path: (j['path'] ?? '') as String,
-        description: j['description'] as String?,
-      );
+    path: (j['path'] ?? '') as String,
+    description: j['description'] as String?,
+  );
 
   final String path;
   final String? description;
@@ -199,7 +199,6 @@ class ChatMessage {
   }
 }
 
-
 /// 历史响应（REST 与 WS history 同源）：{events, hasMore, projections?}。
 class HistoryPage {
   const HistoryPage({
@@ -210,6 +209,7 @@ class HistoryPage {
     this.truncated = false,
     this.bytes,
     this.historyFormatVersion,
+    this.compact = false,
   });
 
   /// 已装配为 UI 消息（user/assistant/process；tool/turn 等装配进 process）。
@@ -228,6 +228,11 @@ class HistoryPage {
   /// 历史事件**形状**版本（bridge `HISTORY_FORMAT_VERSION`，当前 1）。
   /// 只在 `/messages` 应答里；本轮只声明不校验，客户端记下来用于诊断。
   final int? historyFormatVersion;
+
+  /// 本次应答是**紧凑历史**（WS `history` 帧请求 `compact:true`，
+  /// 能力位 `history-compact-v1`）：超长字符串已被桥压成摘要，不能当全文缓存。
+  /// 只有请求 compact 时服务端才回 `compact:true`；默认首屏恒为 false。
+  final bool compact;
 
   /// 原始事件（已剥掉 REST `{event:...}` 外包装，保留 `{type,seq,time,data}`）。
   /// 轨迹 Sheet 由客户端本地分组用，不参与消息流装配（对照 companion
@@ -259,6 +264,7 @@ class HistoryPage {
     bool truncated = false,
     int? bytes,
     int? historyFormatVersion,
+    bool compact = false,
   }) {
     final items = <ChatMessage>[];
     final normalized = <Map<String, dynamic>>[];
@@ -475,9 +481,7 @@ class HistoryPage {
           raw
             ..failed = failed
             ..resultText = toolResultText(msg is Map ? msg['content'] : null)
-            ..meta = rawMeta is Map
-                ? Map<String, dynamic>.from(rawMeta)
-                : null;
+            ..meta = rawMeta is Map ? Map<String, dynamic>.from(rawMeta) : null;
           final info = ToolCallInfo(
             callId: callId,
             name: raw.name,
@@ -557,8 +561,9 @@ class HistoryPage {
           if (rawFiles is! List || rawFiles.isEmpty) break;
           final files = rawFiles
               .whereType<Map>()
-              .map((f) => DeliverableFile.fromJson(
-                  Map<String, dynamic>.from(f)))
+              .map(
+                (f) => DeliverableFile.fromJson(Map<String, dynamic>.from(f)),
+              )
               .where((f) => f.path.isNotEmpty)
               .toList();
           if (files.isEmpty) break;
@@ -630,6 +635,7 @@ class HistoryPage {
       truncated: truncated,
       bytes: bytes,
       historyFormatVersion: historyFormatVersion,
+      compact: compact,
     );
   }
 }

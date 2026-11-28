@@ -104,7 +104,9 @@ List<TrajectoryTurn> trajectoryOf(List<Map<String, dynamic>> events) {
         : (turnRaw is num ? turnRaw.toInt() : kUnknownTurn);
     final seq = e['seq'] is int ? e['seq'] as int : 0;
     final time = e['time'] is int ? e['time'] as int : 0;
-    grouped.putIfAbsent(turn, () => <TrajectoryNode>[]).add(
+    grouped
+        .putIfAbsent(turn, () => <TrajectoryNode>[])
+        .add(
           TrajectoryNode(
             seq: seq,
             time: time,
@@ -155,7 +157,10 @@ String _str(Map<String, dynamic> m, String key, [String fallback = '']) {
 
 List<String> _stringList(dynamic raw) {
   if (raw is! List) return const <String>[];
-  return <String>[for (final s in raw) if (s is String) s];
+  return <String>[
+    for (final s in raw)
+      if (s is String) s,
+  ];
 }
 
 class TodoItem {
@@ -166,23 +171,31 @@ class TodoItem {
 
   bool get isCompleted => status == 'completed';
   bool get isInProgress => status == 'in_progress';
+
+  /// 显式序列化（WS `tasks` 帧模型的 round-trip 需要）。
+  Map<String, dynamic> toJson() => <String, dynamic>{
+    'content': content,
+    'status': status,
+  };
 }
 
 /// 只认 {content:String, status:String}；content 空白或 status 缺失丢弃。
 /// 桥 fixture 的 {id,text,status} 变体同样会被丢弃（与 companion 一致）。
-List<TodoItem> todoItems(Map<String, dynamic>? projections) {
-  final raw = _values(projections)['todos'];
-  return <TodoItem>[
-    for (final item in _objectArray(raw))
-      if (item['content'] is String &&
-          (item['content'] as String).trim().isNotEmpty &&
-          item['status'] is String)
-        TodoItem(
-          content: item['content'] as String,
-          status: item['status'] as String,
-        ),
-  ];
-}
+List<TodoItem> todoItems(Map<String, dynamic>? projections) =>
+    todoItemsFromRaw(_values(projections)['todos']);
+
+/// 同一套解析规则，输入是裸 todos 数组（WS `tasks` 帧的 `data.todos`）。
+/// 与 [todoItems] 共用实现，保证「权威投影」和「本地推导」不会解析出两种结果。
+List<TodoItem> todoItemsFromRaw(dynamic raw) => <TodoItem>[
+  for (final item in _objectArray(raw))
+    if (item['content'] is String &&
+        (item['content'] as String).trim().isNotEmpty &&
+        item['status'] is String)
+      TodoItem(
+        content: item['content'] as String,
+        status: item['status'] as String,
+      ),
+];
 
 class TeamMemberRow {
   const TeamMemberRow({
@@ -252,8 +265,7 @@ class AgentTeamProjection {
   final String? failure;
 
   bool get hasTeam => members.isNotEmpty;
-  int get completedTasks =>
-      tasks.where((t) => t.status == 'completed').length;
+  int get completedTasks => tasks.where((t) => t.status == 'completed').length;
 }
 
 /// 读 projections.values.{agentTeam,subagentCatalog}。空壳（三块都空且无

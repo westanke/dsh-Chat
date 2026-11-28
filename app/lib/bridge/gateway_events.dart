@@ -7,6 +7,7 @@
 /// 透出来，让上层决定「值得重拉」的类型（tool/call 等）。
 library;
 
+import 'mobile_frames.dart';
 import 'models.dart';
 import 'questions.dart';
 import 'queue.dart';
@@ -15,7 +16,9 @@ import 'queue.dart';
 enum GatewayState { idle, connecting, ready, closed, authFailed }
 
 /// 网关推送事件（客户端 UI 消费）。
-sealed class GatewayEvent {}
+sealed class GatewayEvent {
+  const GatewayEvent();
+}
 
 class DeltaEvent extends GatewayEvent {
   DeltaEvent(this.delta);
@@ -161,6 +164,14 @@ class ToolResultEvent extends GatewayEvent {
 
 /// 队列快照推送（`queue-item-updated`，bridge 22a5223 / IKX2AE）：
 /// 整份快照（不是增量），只推已订阅会话。
+/// `chat.session.snapshot`（能力位 `session-snapshot-v1`）：订阅基线/断档切点。
+/// 事件只带 `{sessionId, cursor?, hasMore?, recordCount?}`，没有事件正文；
+/// ChatState 按 sessionId 记 cursor，用于 resync 后判断「基线是否未前进」。
+class SessionSnapshotEvent extends GatewayEvent {
+  const SessionSnapshotEvent(this.snapshot);
+  final SessionSnapshot snapshot;
+}
+
 class QueueUpdatedEvent extends GatewayEvent {
   QueueUpdatedEvent(this.sessionId, this.queue);
 

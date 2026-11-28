@@ -17,6 +17,7 @@ import '../bridge/models.dart';
 import '../bridge/permissions.dart';
 import '../bridge/platform.dart';
 import '../bridge/slash_commands.dart';
+import '../bridge/speech.dart';
 import '../design/tokens.dart';
 import 'composer_status.dart';
 import 'composer_drafts.dart';
@@ -33,6 +34,7 @@ part 'composer_rows.dart';
 part 'composer_editor.dart';
 part 'composer_permission.dart';
 part 'composer_slash.dart';
+part 'composer_speech.dart';
 
 /// 待发送图片：选图后暂存，随下一条消息一起发（2026-11-21 起支持多张）。
 /// 字段与草稿模型 [ComposerDraftImage] 同构（见 composer_drafts.dart）。

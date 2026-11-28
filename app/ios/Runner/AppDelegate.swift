@@ -17,5 +17,6 @@ import UserNotifications
     GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
     DshPlatformChannels.register(engineBridge.pluginRegistry)
     DshNotifyChannels.register(engineBridge.pluginRegistry)
+    DshSpeechChannels.register(engineBridge.pluginRegistry)
   }
 }

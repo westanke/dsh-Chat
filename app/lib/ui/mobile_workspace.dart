@@ -42,12 +42,16 @@ Future<String?> ensureMobileWorkspace(
       // 409 = 目录已存在（幂等），其余错误也继续试登记（登记幂等）。
       DshLog.w('ui mobile-dir create ${e.code}');
     }
+    // 登记仍走 REST：`workspace-create` 帧只收**宿主绝对路径**（ws-sessions.ts
+    // 用 resolvePath + matchAuthorizedRootResolved），而客户端只有 rootId +
+    // 根内相对 path，REST /roots 也不下发绝对路径 —— 换不成帧，保留 REST。
     final wsId = await gateway.createWorkspaceRest(
       rootId: rootId,
       path: mobileWorkspaceDir,
     );
     try {
-      await gateway.renameWorkspaceRest(wsId, mobileWorkspaceTitle);
+      // 改名优先 workspace-update 帧（带 name），老桥回退 REST PATCH（title）。
+      await gateway.renameWorkspace(wsId, mobileWorkspaceTitle);
     } on RequestException catch (e) {
       DshLog.w('ui mobile-ws rename FAIL ${e.code}'); // 名字不重要，继续
     }

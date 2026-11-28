@@ -97,8 +97,22 @@ void _onGatewayEvent(ChatState state, GatewayEvent event) {
       state.streaming = false;
       state._clearStream();
       state.reloadHistory();
+    case SessionSnapshotEvent(:final snapshot):
+      // `chat.session.snapshot`（能力位 session-snapshot-v1）：只记每个会话的
+      // cursor 切点，不改消息/投影，也不需要重建（不 notify）。
+      state.recordSessionSnapshot(snapshot);
     case ResyncEvent():
-      // 背压丢帧：走 REST/WS 重拉当前历史。
+      // 背压丢帧：走 WS 重拉当前历史。
+      // 能力位 session-snapshot-v1 下已有 cursor 基线时，这里先记一条
+      // 「能否跳过整页重拉」的判定（可单测），但**仍重拉**——判定接入刻意保守，
+      // 避免 cursor 语义在旧桥/边界情况下误跳过真实断档。
+      final resyncSid = state.sessionId;
+      if (resyncSid != null && resyncSid.isNotEmpty) {
+        DshLog.w(
+          'ui resync sid=$resyncSid '
+          'skip=${state.shouldSkipResyncReload(resyncSid)}',
+        );
+      }
       state.reloadHistory();
     case ToolCallEvent(:final call):
       // 工具开始执行：参数定稿覆盖 preparing 行（streaming 标记由 delta 流

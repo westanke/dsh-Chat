@@ -30,6 +30,9 @@ class MainActivity : FlutterActivity() {
     private var notifyPermissionResult: MethodChannel.Result? = null
     private var pendingTap: Map<String, String>? = null
 
+    // 语音输入（dsh/speech）：录音 + 麦克风权限回执，实现在 SpeechChannel.kt。
+    private var speechChannel: SpeechChannel? = null
+
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "dsh/device")
@@ -312,6 +315,7 @@ class MainActivity : FlutterActivity() {
                     else -> result.notImplemented()
                 }
             }
+        speechChannel = SpeechChannel(this, flutterEngine.dartExecutor.binaryMessenger)
     }
 
     private val notifyPermissionRequest = 4301
@@ -329,6 +333,7 @@ class MainActivity : FlutterActivity() {
         grantResults: IntArray,
     ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (speechChannel?.onRequestPermissionsResult(requestCode, grantResults) == true) return
         if (requestCode != notifyPermissionRequest) return
         val result = notifyPermissionResult
         notifyPermissionResult = null
@@ -445,6 +450,8 @@ class MainActivity : FlutterActivity() {
         tts = null
         ttsReady = false
         pendingSpeak = null
+        speechChannel?.dispose()
+        speechChannel = null
         super.onDestroy()
     }
     /**

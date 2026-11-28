@@ -28,6 +28,7 @@ import 'gateway_events.dart';
 import 'gateway_kernel.dart';
 import 'gateway_liveness.dart';
 import 'gateway_pending.dart';
+import 'mobile_frames.dart';
 import 'models.dart';
 import 'questions.dart';
 import 'queue.dart';
@@ -49,9 +50,11 @@ export 'questions.dart';
 /// 事件量与授权判定白付（以前 `subscribe(null)` 直接 return，一次都没退订过）。
 List<Map<String, Object?>> subscriptionFrames(String? current, String? next) {
   if (next == null || next.isEmpty) {
-    return current == null ? const [] : const [
-      {'type': 'unsubscribe'},
-    ];
+    return current == null
+        ? const []
+        : const [
+            {'type': 'unsubscribe'},
+          ];
   }
   if (current == next) return const [];
   return [
@@ -86,16 +89,27 @@ String gatewayDownMessage(int? code, String? reason) {
 const int defaultMaxFrameBytes = 1024 * 1024;
 
 /// 解析 hello.data.maxFrameBytes（正整数才认；其它形状回 null 走回退值）。
-int? parseMaxFrameBytes(Object? raw) =>
-    raw is int && raw > 0 ? raw : null;
+int? parseMaxFrameBytes(Object? raw) => raw is int && raw > 0 ? raw : null;
+
+/// 解析 hello.data.frames（本桥支持的客户端帧 type 全集；老桥无此字段 → 空表）。
+///
+/// 空表 = **不知道**，调用方必须按「帧不可用」处理（回退 REST/旧行为），
+/// 不能把「没这个字段」当成「支持所有帧」。
+List<String> parseHelloFrames(Object? raw) {
+  if (raw is! List) return const [];
+  return [
+    for (final f in raw)
+      if (f is String && f.isNotEmpty) f,
+  ];
+}
 
 class GatewayClient {
   GatewayClient({
     required this.baseUrl,
     Duration? connectTimeout,
     Duration? helloTimeout,
-  })  : connectTimeout = connectTimeout ?? const Duration(seconds: 10),
-        helloTimeout = helloTimeout ?? const Duration(seconds: 8);
+  }) : connectTimeout = connectTimeout ?? const Duration(seconds: 10),
+       helloTimeout = helloTimeout ?? const Duration(seconds: 8);
 
   /// WebSocket 建连（TCP+TLS+upgrade）等待上限。隧道端点的 RTT 比局域网高一个量级，
   /// 用同一个 10s 会把「慢」误判成「不通」（IKX5KQ 现场：288ms RTT + 冷启动）。
@@ -173,6 +187,15 @@ class GatewayClient {
   /// 探测特性、不硬比版本**；位名权威来源 bridge `src/host/capabilities.ts`。
   List<String> capabilities = const [];
 
+  /// hello.data.frames：本桥**实际支持**的客户端帧 type 全集。
+  ///
+  /// 老桥不认这个字段 → 空表。判「这条帧能不能发」用它，不要拿 REST 能力位
+  /// 推断帧面（能力位与传输解耦，同一个能力可能只有 REST 侧登记过）。
+  ///
+  /// 字段名带 supported 前缀：测试里的假网关普遍有名为 `frames` 的收帧记录表，
+  /// 直接叫 frames 会撞名。
+  List<String> supportedFrames = const [];
+
   /// hello.data.port：LAN 直连与隧道数据端口不同，诊断页用它说清接入通道。
   int? listenerPort;
 
@@ -199,7 +222,8 @@ class GatewayClient {
   /// 清空。所以界面不能只在自身重建时读一次快照 —— 那会让「能力刚可用」和
   /// 「能力不可用」长得一模一样（真机踩过：抽屉里输完字，这一节整节不出现）。
   /// 要听变化就用 [kernelCatalogListenable]。
-  final ValueNotifier<List<KernelEndpoint>> _catalog = ValueNotifier<List<KernelEndpoint>>(const []);
+  final ValueNotifier<List<KernelEndpoint>> _catalog =
+      ValueNotifier<List<KernelEndpoint>>(const []);
 
   /// 目录的当前快照。
   List<KernelEndpoint> get kernelCatalog => _catalog.value;
@@ -209,7 +233,8 @@ class GatewayClient {
 
   /// 测试用：不真的连桥，直接把目录塞进去，验证「能力晚到」这条时序。
   @visibleForTesting
-  void debugSetKernelCatalog(List<KernelEndpoint> endpoints) => _catalog.value = endpoints;
+  void debugSetKernelCatalog(List<KernelEndpoint> endpoints) =>
+      _catalog.value = endpoints;
 
   final Liveness _live = Liveness();
   Timer? _heartbeat;
@@ -229,11 +254,18 @@ class GatewayClient {
   /// 后台任务推送走旁路流（[JobPush]）：不进 [events] 的穷尽分派。
   final _jobCtrl = StreamController<JobPush>.broadcast();
 
+  /// 语音推送（`speech-state` / `speech-preparing` / `speech-transcript`）
+  /// 走旁路流：原始帧交给 [SpeechController]，不进 [events]。
+  final _speechCtrl = StreamController<Map<String, dynamic>>.broadcast();
+
   Stream<GatewayState> get state => _stateCtrl.stream;
   Stream<GatewayEvent> get events => _eventCtrl.stream;
 
   /// 后台任务推送（`chat.job.updated` / `chat.job.finished`）。
   Stream<JobPush> get jobPushes => _jobCtrl.stream;
+
+  /// 语音推送原始帧（kind + data），供 `SpeechController.attachPushStream`。
+  Stream<Map<String, dynamic>> get speechPushes => _speechCtrl.stream;
   GatewayState get currentState => _state;
 
   String get _wsUrl {
@@ -353,7 +385,9 @@ class GatewayClient {
     // 顶层没有；两处都兜着读。
     final requestId = (frame['requestId'] ?? data['requestId']) as String?;
     // 逐帧日志会写死 UI 线程（真机：流式期间同步写盘 → tap 5s 无响应 → ANR）。
-    if (kind != 'pong' && kind != 'event') DshLog.w('gw <- kind=$kind rid=$requestId');
+    if (kind != 'pong' && kind != 'event') {
+      DshLog.w('gw <- kind=$kind rid=$requestId');
+    }
     switch (kind) {
       case 'hello':
         final protocol = (data['protocol'] ?? 0) as int;
@@ -375,13 +409,18 @@ class GatewayClient {
             for (final c in caps)
               if (c is String) c,
         ];
+        // 客户端帧白名单跟着 hello 走：老桥没有 frames 字段 → 空表（按不可用处理）。
+        supportedFrames = parseHelloFrames(data['frames']);
         listenerPort = data['port'] is int ? data['port'] as int : null;
         // 单帧上限跟着 hello 走：重连后桥可能换了配置，不能沿用上一轮的值。
         maxFrameBytes = parseMaxFrameBytes(data['maxFrameBytes']);
         // 目录跟着 hello 作废：重连后桥可能换了内核版本、或这次没协商上
         // dshrb-v1。留着上一轮的目录会让 UI 以为端点还在，点了才报端点不存在。
         _catalog.value = const [];
-        DshLog.w('gw hello caps=${capabilities.length} port=$listenerPort');
+        DshLog.w(
+          'gw hello caps=${capabilities.length} '
+          'frames=${supportedFrames.length} port=$listenerPort',
+        );
         connectedEndpoint = baseUrl;
         // 重连后服务端订阅白名单已重置：补发一次订阅，否则事件过滤退回
         // 「接收所有已授权会话」（会影响后台会话的通知与流量）。
@@ -415,6 +454,11 @@ class GatewayClient {
           data['callId'] as String?,
           parseKernelCallResult(data),
         );
+      case 'speech-state':
+      case 'speech-preparing':
+      case 'speech-transcript':
+        // ws-speech 的三条主动推送；交给语音控制器做跟随/准备/转写结果。
+        _speechCtrl.add({'kind': kind, 'data': data});
       case 'event':
         _onEventData(data);
       case 'connection-resync-required':
@@ -427,13 +471,16 @@ class GatewayClient {
         final message = (data['message'] ?? '') as String;
         final requestType = data['requestType'] as String?;
         final retryable = data['retryable'] == true;
-        final statusCode =
-            data['statusCode'] is int ? data['statusCode'] as int : null;
+        final statusCode = data['statusCode'] is int
+            ? data['statusCode'] as int
+            : null;
         final details = data['details'] is Map
             ? Map<String, dynamic>.from(data['details'] as Map)
             : null;
-        DshLog.w('gw error code=$code msg=$message type=$requestType '
-            'retryable=$retryable rid=$requestId');
+        DshLog.w(
+          'gw error code=$code msg=$message type=$requestType '
+          'retryable=$retryable rid=$requestId',
+        );
         final error = RequestException(
           code,
           message,
@@ -477,7 +524,9 @@ class GatewayClient {
     final type = (data['type'] ?? '') as String;
     final payload = Map<String, dynamic>.from(data['data'] as Map? ?? const {});
     // delta 最高频（流式每帧一条），逐条记会刷爆日志文件。
-    if (type != 'chat.message.delta') DshLog.w('gw event $type sid=${payload['sessionId']}');
+    if (type != 'chat.message.delta') {
+      DshLog.w('gw event $type sid=${payload['sessionId']}');
+    }
     switch (type) {
       case 'chat.message.delta':
         _deltaCount++;
@@ -496,7 +545,9 @@ class GatewayClient {
           ),
         );
       case 'chat.turn.start':
-        _eventCtrl.add(TurnStartedEvent((payload['sessionId'] ?? '') as String));
+        _eventCtrl.add(
+          TurnStartedEvent((payload['sessionId'] ?? '') as String),
+        );
       case 'chat.turn.end':
         // 官方轮结束判据（client.js:4935/4941）；reason.kind 宽容解析。
         final reason = payload['reason'];
@@ -528,7 +579,9 @@ class GatewayClient {
         );
       case 'chat.tool.call':
         // 工具开始执行（参数已定稿）：按 callId 去重覆盖 preparing 行。
-        DshLog.w('gw tool.call callId=${payload['callId']} name=${payload['name']}');
+        DshLog.w(
+          'gw tool.call callId=${payload['callId']} name=${payload['name']}',
+        );
         _eventCtrl.add(ToolCallEvent(ToolCallStarted.from(payload)));
       case 'chat.tool.result':
         // 工具结果（error.code 是内核失败分类，UI 端分派已停止/已取消/失败）。
@@ -539,7 +592,9 @@ class GatewayClient {
           (payload['sessionId'] ?? '') as String,
           payload,
         );
-        DshLog.w('gw question requested callId=${q.callId} n=${q.questions.length}');
+        DshLog.w(
+          'gw question requested callId=${q.callId} n=${q.questions.length}',
+        );
         _eventCtrl.add(QuestionRequestedEvent(q));
       case 'chat.userQuestions/answered' || 'chat.userQuestions/dismissed':
         // settled（App 先答 / 电脑端先答 / 超时 / 中止）：卡片要移除。
@@ -580,7 +635,9 @@ class GatewayClient {
         DshLog.w('gw models.updated provider=${payload['provider']}');
         _eventCtrl.add(
           ModelsUpdatedEvent(
-            payload['provider'] is String ? payload['provider'] as String : null,
+            payload['provider'] is String
+                ? payload['provider'] as String
+                : null,
           ),
         );
       case 'queue-item-updated':
@@ -589,6 +646,10 @@ class GatewayClient {
         _eventCtrl.add(
           QueueUpdatedEvent(qsid, QueueEntry.listFrom(payload['queue'])),
         );
+      case 'chat.session.snapshot':
+        // 订阅基线（能力位 session-snapshot-v1）：只带 cursor 切点，不带正文。
+        // 老桥不发这条；字段缺席时模型保持 null，上层按「无法判定」处理。
+        _eventCtrl.add(SessionSnapshotEvent(SessionSnapshot.fromJson(payload)));
       case 'chat.job.updated' || 'chat.job.finished':
         // 后台任务推送（bridge src/host/ws-jobs.ts）：不新增 kind，复用 event 帧；
         // 非终态走 updated，终态（completed/killed/failed）走 finished，形状一致。
@@ -608,10 +669,12 @@ class GatewayClient {
     _downHandled = true;
     final hello = _helloCompleter;
     if (hello != null && !hello.isCompleted) {
-      hello.completeError(RequestException(
-        code == 4001 ? 'AUTH_FAILED' : 'LINK_CLOSED',
-        gatewayDownMessage(code, reason),
-      ));
+      hello.completeError(
+        RequestException(
+          code == 4001 ? 'AUTH_FAILED' : 'LINK_CLOSED',
+          gatewayDownMessage(code, reason),
+        ),
+      );
     }
     _helloCompleter = null;
     final revoked = code == 4001;
@@ -671,6 +734,9 @@ class GatewayClient {
 
   /// 能力位探测（`<能力>-v<主版本>`，只增不撤），如 `mobile-session-stats-v1`。
   bool hasCapability(String name) => capabilities.contains(name);
+
+  /// 本桥是否声明支持某条客户端帧（hello.frames）。老桥无字段 → 恒 false。
+  bool hasFrame(String type) => supportedFrames.contains(type);
 
   /// 内核调用面的在途登记表：`gateway_kernel.dart` 的 extension 靠它配对结果帧。
   KernelCallRegistry get kernelCallRegistry => _kernelCalls;
@@ -791,8 +857,8 @@ class GatewayClient {
   /// 客户端也把首屏页从 200 条降到 80 条 —— 正常网络下不该再走到这个上限。
   Duration get historyTimeout =>
       classifyEndpoint(baseUrl) == EndpointKind.tunnel
-          ? const Duration(seconds: 90)
-          : const Duration(seconds: 30);
+      ? const Duration(seconds: 90)
+      : const Duration(seconds: 30);
 
   // ---- 业务封装（实现在 gateway_api.dart 的 extension GatewayApi）----
 
@@ -816,6 +882,7 @@ class GatewayClient {
     _stateCtrl.close();
     _eventCtrl.close();
     _jobCtrl.close();
+    _speechCtrl.close();
     _catalog.dispose();
   }
 }

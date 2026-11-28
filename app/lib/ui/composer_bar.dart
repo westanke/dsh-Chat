@@ -2,71 +2,10 @@
 // ≤500 行）。同为 composer.dart 的 part。
 part of 'composer.dart';
 
-/// 权限档位选择底部弹层（真机反馈 2026-11-04 第 4 项）。
-/// 服务端是权威：options 里没有的档位不出现；当前档位打勾。
-class _PermissionSheet extends StatelessWidget {
-  const _PermissionSheet({
-    required this.colors,
-    required this.options,
-    required this.current,
-  });
-
-  final DsColors colors;
-  final List<PermissionOption> options;
-
-  /// 当前档位 value（可空=尚未设置，无一打勾）。
-  final String? current;
-
-  @override
-  Widget build(BuildContext context) {
-    return SafeArea(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(DsSpacing.settingsCardPadH),
-            child: Text(
-              '会话权限档位',
-              style: DsTypography.baseStrong.copyWith(
-                color: colors.labelPrimary,
-              ),
-            ),
-          ),
-          for (final o in options)
-            ListTile(
-              leading: Icon(
-                o.value == current ? Icons.check_circle : Icons.circle_outlined,
-                size: 20,
-                color: o.value == current ? colors.brand : colors.labelTertiary,
-              ),
-              title: Text(
-                o.label,
-                style: DsTypography.base.copyWith(color: colors.labelPrimary),
-              ),
-              subtitle: o.descriptionLabel == null
-                  ? null
-                  : Text(
-                      o.descriptionLabel!,
-                      style: DsTypography.small.copyWith(
-                        color: colors.labelTertiary,
-                      ),
-                    ),
-              onTap: () => Navigator.pop(context, o),
-            ),
-          const SizedBox(height: DsSpacing.settingsCardPadV),
-        ],
-      ),
-    );
-  }
-}
-
 /// 输入容器（白浮层卡）：单行收起（没有输入）⇄ 双行展开（有文字/待发图）。
-///
-/// 几何交给 [_ComposerRows] 补间（对照 dsh-go `Composer`）：收起态是
-/// `(+) 文字 … (环)(↑)` 的一行胶囊，展开后文字独占第一行，`+`、模型 chip、
-/// 图片 chip、上下文环、发送键落到第二行。纯展示 + 回调上行，状态都在
-/// ComposerState；开合只看内容（`controller.text` / `pendingImageNames`），
-/// 不看焦点——用户要求「无输入默认收缩单行」。
+/// 几何交给 [_ComposerRows] 补间：收起态是一行胶囊，展开后文字独占第一行，
+/// `+`、模型 chip、图片 chip、上下文环、发送键落到第二行。开合只看内容
+/// （`controller.text` / `pendingImageNames`），不看焦点——无输入默认收缩单行。
 class _ComposerBar extends StatefulWidget {
   const _ComposerBar({
     required this.colors,
@@ -148,6 +87,9 @@ class _ComposerBarState extends State<_ComposerBar>
     curve: DsMotion.composerExpandCurve,
   );
 
+  /// 录音/转写中的提示语（由话筒控制器回调，null = 用默认 hint）。
+  String? _speechStatus;
+
   /// 展开态：有文字或有待发图片。空输入一律单行收起。
   bool get _expanded =>
       widget.controller.text.trim().isNotEmpty ||
@@ -192,7 +134,8 @@ class _ComposerBarState extends State<_ComposerBar>
   int _maxLines(BuildContext context) {
     final media = MediaQuery.of(context);
     final available = media.size.height - media.viewInsets.bottom;
-    final line = media.textScaler.scale(DsSpacing.composerFontSize) *
+    final line =
+        media.textScaler.scale(DsSpacing.composerFontSize) *
         DsSpacing.composerLineHeight;
     if (line <= 0 || available <= 0) return 2;
     return (available * 0.4 / line).floor().clamp(2, 6);
@@ -202,7 +145,8 @@ class _ComposerBarState extends State<_ComposerBar>
   int _lineCount(BuildContext context) {
     final text = widget.controller.text;
     if (text.isEmpty) return 0;
-    final width = MediaQuery.sizeOf(context).width -
+    final width =
+        MediaQuery.sizeOf(context).width -
         2 * DsSpacing.composerMargin -
         2 * DsSpacing.composerKeyGap -
         2 * DsSpacing.composerTextInset;
@@ -232,7 +176,6 @@ class _ComposerBarState extends State<_ComposerBar>
         maxLines: maxLines,
         keyboardType: TextInputType.multiline,
         textInputAction: TextInputAction.newline,
-        // dsh-go：字号 15、行高 1.45。
         style: DsTypography.base.copyWith(
           fontSize: DsSpacing.composerFontSize,
           height: DsSpacing.composerLineHeight,
@@ -241,13 +184,15 @@ class _ComposerBarState extends State<_ComposerBar>
         cursorColor: c.brand,
         decoration: InputDecoration(
           // dsh-go 文案：空闲「给 DSH 发消息…」，生成中「生成中 · 可直接插话」。
-          hintText: !widget.enabled
-              ? '未连接到 bridge'
-              : widget.answering
-              ? '直接回答上面的提问…'
-              : widget.onStop != null
-              ? '生成中 · 可直接插话'
-              : '给 DSH 发消息…',
+          hintText:
+              _speechStatus ??
+              (!widget.enabled
+                  ? '未连接到 bridge'
+                  : widget.answering
+                  ? '直接回答上面的提问…'
+                  : widget.onStop != null
+                  ? '生成中 · 可直接插话'
+                  : '给 DSH 发消息…'),
           hintStyle: DsTypography.inputPlaceholder.copyWith(
             color: c.inputHintText,
           ),
@@ -347,15 +292,49 @@ class _ComposerBarState extends State<_ComposerBar>
     );
   }
 
-  /// 收起态在左侧的「+」键。
+  /// 话筒状态回调：录音/转写提示语进 hint，触发输入条重建。
+  void _onSpeechStatus(String? status) {
+    if (!mounted || status == _speechStatus) return;
+    setState(() => _speechStatus = status);
+  }
+
+  /// 把转写文本插到光标处（替换选区），沿用草稿保存回调并保持焦点。
+  void _insertSpeechText(String text) {
+    final controller = widget.controller;
+    final selection = controller.selection;
+    final base = controller.text;
+    final start = selection.isValid ? selection.start : base.length;
+    final end = selection.isValid ? selection.end : base.length;
+    final next = base.replaceRange(start, end, text);
+    controller.value = TextEditingValue(
+      text: next,
+      selection: TextSelection.collapsed(offset: start + text.length),
+    );
+    widget.onChanged(next);
+    widget.focusNode.requestFocus();
+  }
+
+  /// 收起态在左侧的「+」与「语音」键（语音只在目录/权限可用时出现）。
   Widget _leading(DsColors c) {
-    return _RoundIconButton(
-      colors: c,
-      filled: false,
-      quietFill: true,
-      icon: Icons.add,
-      iconSize: 22,
-      onPressed: widget.canPickImage ? widget.onPickImage : null,
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _RoundIconButton(
+          colors: c,
+          filled: false,
+          quietFill: true,
+          icon: Icons.add,
+          iconSize: 22,
+          onPressed: widget.canPickImage ? widget.onPickImage : null,
+        ),
+        _ComposerSpeechKeys(
+          colors: c,
+          gateway: widget.gateway,
+          enabled: widget.enabled,
+          onInsert: _insertSpeechText,
+          onStatusChanged: _onSpeechStatus,
+        ),
+      ],
     );
   }
 
@@ -371,8 +350,7 @@ class _ComposerBarState extends State<_ComposerBar>
         ),
         const SizedBox(width: DsSpacing.composerButtonGap),
         switch (widget.sendState) {
-          _SendKeyState.send ||
-          _SendKeyState.disabled => _RoundIconButton(
+          _SendKeyState.send || _SendKeyState.disabled => _RoundIconButton(
             colors: c,
             filled: widget.sendState == _SendKeyState.send,
             quietFill: widget.sendState != _SendKeyState.send,

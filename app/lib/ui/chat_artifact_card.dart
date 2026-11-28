@@ -19,11 +19,15 @@ class ArtifactCard extends StatefulWidget {
     required this.files,
     required this.colors,
     this.gateway,
+    this.rootId,
   });
 
   final List<ArtifactFile> files;
   final DsColors colors;
   final GatewayClient? gateway;
+
+  /// 当前会话工作区的授权根；拿不到就 null（桥落首个授权根）。
+  final String? rootId;
 
   @override
   State<ArtifactCard> createState() => _ArtifactCardState();
@@ -72,6 +76,7 @@ class _ArtifactCardState extends State<ArtifactCard> {
               file: file,
               colors: colors,
               gateway: widget.gateway,
+              rootId: widget.rootId,
             ),
           if (hidden > 0)
             InkWell(
@@ -107,11 +112,13 @@ class _ArtifactRow extends StatelessWidget {
     required this.file,
     required this.colors,
     required this.gateway,
+    required this.rootId,
   });
 
   final ArtifactFile file;
   final DsColors colors;
   final GatewayClient? gateway;
+  final String? rootId;
 
   void _open(BuildContext context) {
     final client = gateway;
@@ -146,6 +153,91 @@ class _ArtifactRow extends StatelessWidget {
     );
   }
 
+  /// 同目录下的新路径（`file.path` 原样保留目录部分）。
+  String _siblingPath(String name) {
+    final slash = file.path.lastIndexOf('/');
+    return slash < 0 ? name : '${file.path.substring(0, slash + 1)}$name';
+  }
+
+  Future<void> _rename(BuildContext context) async {
+    final client = gateway;
+    if (client == null) {
+      _toast(context, '未连接，无法重命名');
+      return;
+    }
+    var input = file.name;
+    final entered = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('重命名'),
+        content: TextFormField(
+          initialValue: file.name,
+          autofocus: true,
+          decoration: const InputDecoration(labelText: '文件名'),
+          onChanged: (v) => input = v,
+          onFieldSubmitted: (v) => Navigator.pop(ctx, v),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('取消'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, input),
+            child: const Text('保存'),
+          ),
+        ],
+      ),
+    );
+    if (!context.mounted) return;
+    final name = (entered ?? '').trim();
+    if (name.isEmpty || name == file.name) return;
+    try {
+      await client.renameFile(
+        rootId: rootId,
+        from: file.path,
+        to: _siblingPath(name),
+      );
+    } on RequestException catch (e) {
+      if (context.mounted) _toast(context, '重命名失败：${e.message}');
+      return;
+    }
+    if (context.mounted) _toast(context, '已重命名');
+  }
+
+  Future<void> _delete(BuildContext context) async {
+    final client = gateway;
+    if (client == null) {
+      _toast(context, '未连接，无法移到回收站');
+      return;
+    }
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('移到回收站？'),
+        content: Text('「${file.name}」将移入回收站，可在回收站恢复。'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('取消'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('移到回收站'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !context.mounted) return;
+    try {
+      await client.moveFileToTrash(rootId: rootId, path: file.path);
+    } on RequestException catch (e) {
+      if (context.mounted) _toast(context, '移到回收站失败：${e.message}');
+      return;
+    }
+    if (context.mounted) _toast(context, '已移入回收站');
+  }
+
   Future<void> _showMenu(BuildContext context) async {
     final action = await showModalBottomSheet<String>(
       context: context,
@@ -168,6 +260,18 @@ class _ArtifactRow extends StatelessWidget {
               title: const Text('分享文件'),
               onTap: () => Navigator.pop(context, 'share'),
             ),
+            if (gateway?.hasFrame('file-rename') == true)
+              ListTile(
+                leading: const Icon(Icons.edit_outlined),
+                title: const Text('重命名'),
+                onTap: () => Navigator.pop(context, 'rename'),
+              ),
+            if (gateway?.hasFrame('file-delete') == true)
+              ListTile(
+                leading: const Icon(Icons.delete_outline),
+                title: const Text('移到回收站'),
+                onTap: () => Navigator.pop(context, 'delete'),
+              ),
           ],
         ),
       ),
@@ -184,6 +288,10 @@ class _ArtifactRow extends StatelessWidget {
         );
       case 'share':
         _share(context);
+      case 'rename':
+        await _rename(context);
+      case 'delete':
+        await _delete(context);
       default:
         return;
     }
@@ -237,6 +345,11 @@ class _ArtifactRow extends StatelessWidget {
       ),
     );
   }
+}
+
+/// 文件操作结果统一走 SnackBar（失败也走这里，文案带桥的 message）。
+void _toast(BuildContext context, String text) {
+  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
 }
 
 /// 40×40 缩略图：图片走网关取字节，其余用类型图标。

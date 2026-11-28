@@ -41,7 +41,9 @@ int? oldestSeqOf(ChatState state) {
   final firstSeq = fresh.where((m) => m.seq >= 0).isEmpty
       ? null
       : fresh.firstWhere((m) => m.seq >= 0).seq;
-  if (firstSeq == null) return (messages: [...fresh, ...pending], keptOlder: false);
+  if (firstSeq == null) {
+    return (messages: [...fresh, ...pending], keptOlder: false);
+  }
   final older = previous.where((m) => m.seq >= 0 && m.seq < firstSeq).toList();
   if (older.isEmpty) {
     return (messages: [...fresh, ...pending], keptOlder: false);
@@ -61,7 +63,6 @@ List<Map<String, dynamic>> mergeRefreshedRawEvents(
       .toList();
   return older.isEmpty ? fresh : [...older, ...fresh];
 }
-
 
 /// 一次历史请求，遇到「只是宿主这会儿没回话」的错误自动重试。
 ///
@@ -96,7 +97,8 @@ Future<HistoryPage> _historyWithRetry(
 /// 历史里默认折叠，页面上就只剩一排折叠条，看起来像「历史没加载出来」。
 /// 判定不通过时继续向前取页，直到看到正文（或真的翻不动了）。
 bool _hasHumanContent(Iterable<ChatMessage> items) => items.any(
-  (m) => m.role == 'user' || (m.role == 'assistant' && m.text.trim().isNotEmpty),
+  (m) =>
+      m.role == 'user' || (m.role == 'assistant' && m.text.trim().isNotEmpty),
 );
 
 /// 记住当前最后一屏，供下次 openSession 先上屏。
@@ -167,11 +169,14 @@ Future<void> reloadChatHistory(ChatState state) async {
       hasMore: hasMore,
       truncated: truncated,
       projections: page.projections,
+      compact: page.compact,
     );
-    DshLog.w('ui history id=$id items=${page.items.length} '
-        'raw=${page.rawEvents.length} '
-        'projections=${page.projections != null} '
-        'hasMore=${page.hasMore} truncated=${page.truncated}');
+    DshLog.w(
+      'ui history id=$id items=${page.items.length} '
+      'raw=${page.rawEvents.length} '
+      'projections=${page.projections != null} '
+      'hasMore=${page.hasMore} truncated=${page.truncated}',
+    );
     // 命令卡保留（第六轮反馈 m03878 / IKX5MV）：reloadHistory 重建 messages，
     // 本地命令卡（role=='command'，seq=-1）不在服务端历史里，merge 会把它丢掉。
     // 从**按会话归属**的 commandCards 取，不扫 messages：扫 messages 会把上一会话
@@ -184,13 +189,19 @@ Future<void> reloadChatHistory(ChatState state) async {
     state.dropPersistedToolRows();
     state.rawEvents = mergeRefreshedRawEvents(state.rawEvents, page.rawEvents);
     // 旧页还在 → 延续旧结论（更早的确实还没读完），别被「最后一页没更多」覆盖。
-    state.historyHasMore = merged.keptOlder ? state.historyHasMore : page.hasMore;
+    state.historyHasMore = merged.keptOlder
+        ? state.historyHasMore
+        : page.hasMore;
     // 字节预算裁剪：只有真裁剪时服务端才带 truncated（未裁剪时字段缺席）。
     state.historyTruncated = page.truncated;
     // 命令卡保留（第六轮反馈 m03878）：已在上方 merge 前收集并拼回尾部。
     // 翻页/刷新时 projections 可能缺席：保留上一份（同会话），避免面板闪空。
     // 切会话时 newChat()/openSession() 会先清空，不会串台。
     state.projections = page.projections ?? state.projections;
+    // 权威 todos 投影（WS `tasks` 帧，能力位 mobile-tasks-v1）：history 拿到
+    // projections 后顺手对齐一次；缺能力位/帧失败时整段跳过，页面继续用
+    // `todoItems(projections)` 的本地推导（不弹错、不清面板）。
+    state.maybeRefreshSessionTasks();
     // 重连后重拉成功 → 把上一次的「加载历史失败」红条撤掉。
     // （2026-11-21 工单 1：此前成功路径不清 lastError，重连后红条一直挂着，
     // 用户看到的就是「连接正常却提示加载历史失败」。）
@@ -208,11 +219,7 @@ Future<void> reloadChatHistory(ChatState state) async {
       DshLog.w('ui history deferred (disconnected): ${e.message}');
       return;
     }
-    state.reportError(
-      '加载历史失败',
-      e,
-      retry: () => reloadChatHistory(state),
-    );
+    state.reportError('加载历史失败', e, retry: () => reloadChatHistory(state));
     state.notifyUi();
   }
 }
@@ -227,10 +234,7 @@ Future<void> reloadChatHistory(ChatState state) async {
 /// followBottom，视觉上「新消息被冲走」。
 Future<void> loadOlderMessages(ChatState state) async {
   final id = state.sessionId;
-  if (id == null ||
-      id.isEmpty ||
-      state.loadingOlder ||
-      !state.historyHasMore) {
+  if (id == null || id.isEmpty || state.loadingOlder || !state.historyHasMore) {
     return;
   }
   final before = oldestSeqOf(state);
@@ -245,8 +249,10 @@ Future<void> loadOlderMessages(ChatState state) async {
       maxMessages: 200,
       beforeSeq: before,
     );
-    DshLog.w('ui history-older id=$id before=$before '
-        'items=${page.items.length} hasMore=${page.hasMore}');
+    DshLog.w(
+      'ui history-older id=$id before=$before '
+      'items=${page.items.length} hasMore=${page.hasMore}',
+    );
     if (requestId != state.historyRequestId || id != state.sessionId) {
       return; // 翻页期间切了会话或又刷新了：丢弃
     }
@@ -270,6 +276,7 @@ Future<void> loadOlderMessages(ChatState state) async {
         hasMore: older.hasMore,
         truncated: page.truncated || older.truncated,
         projections: page.projections,
+        compact: page.compact,
       );
       backfilled++;
     }
@@ -292,11 +299,7 @@ Future<void> loadOlderMessages(ChatState state) async {
     state.notifyUi();
   } on RequestException catch (e) {
     if (requestId != state.historyRequestId || id != state.sessionId) return;
-    state.reportError(
-      '加载更早消息失败',
-      e,
-      retry: () => loadOlderMessages(state),
-    );
+    state.reportError('加载更早消息失败', e, retry: () => loadOlderMessages(state));
     state.notifyUi();
   } finally {
     state.loadingOlder = false;

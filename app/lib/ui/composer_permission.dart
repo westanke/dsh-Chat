@@ -144,9 +144,8 @@ extension _ComposerPermission on ComposerState {
           SnackBar(content: Text('已选择「${selected.label}」，创建会话后生效')),
         );
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('请先打开一个会话再切换权限档位')),
-        );
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('请先打开一个会话再切换权限档位')));
       }
       return;
     }
@@ -166,5 +165,63 @@ extension _ComposerPermission on ComposerState {
             .showSnackBar(SnackBar(content: Text('切换失败：${e.message}')));
       }
     }
+  }
+}
+
+/// 权限档位选择底部弹层（真机反馈 2026-11-04 第 4 项）。
+/// 服务端是权威：options 里没有的档位不出现；当前档位打勾。
+class _PermissionSheet extends StatelessWidget {
+  const _PermissionSheet({
+    required this.colors,
+    required this.options,
+    required this.current,
+  });
+
+  final DsColors colors;
+  final List<PermissionOption> options;
+
+  /// 当前档位 value（可空=尚未设置，无一打勾）。
+  final String? current;
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(DsSpacing.settingsCardPadH),
+            child: Text(
+              '会话权限档位',
+              style: DsTypography.baseStrong.copyWith(
+                color: colors.labelPrimary,
+              ),
+            ),
+          ),
+          for (final o in options)
+            ListTile(
+              leading: Icon(
+                o.value == current ? Icons.check_circle : Icons.circle_outlined,
+                size: 20,
+                color: o.value == current ? colors.brand : colors.labelTertiary,
+              ),
+              title: Text(
+                o.label,
+                style: DsTypography.base.copyWith(color: colors.labelPrimary),
+              ),
+              subtitle: o.descriptionLabel == null
+                  ? null
+                  : Text(
+                      o.descriptionLabel!,
+                      style: DsTypography.small.copyWith(
+                        color: colors.labelTertiary,
+                      ),
+                    ),
+              onTap: () => Navigator.pop(context, o),
+            ),
+          const SizedBox(height: DsSpacing.settingsCardPadV),
+        ],
+      ),
+    );
   }
 }

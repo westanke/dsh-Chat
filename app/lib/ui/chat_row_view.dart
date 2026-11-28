@@ -107,6 +107,7 @@ Widget chatRowView(
         files: r.files,
         colors: colors,
         gateway: state.gateway,
+        rootId: _currentRootId(state),
       );
     case HistoryMoreRow():
       return _HistoryMoreButton(state: state, colors: colors);
@@ -144,6 +145,18 @@ Widget chatRowView(
         ],
       );
   }
+}
+
+/// 当前会话所属工作区的授权根；拿不到就不带（桥落首个授权根）。
+///
+/// 不从 ChatState 加 getter：那个文件由用户统一集成，且会话列表已是公开字段。
+String? _currentRootId(ChatState state) {
+  final id = state.sessionId;
+  if (id == null || id.isEmpty) return null;
+  for (final s in state.sessions) {
+    if (s.id == id) return s.rootId.isEmpty ? null : s.rootId;
+  }
+  return null;
 }
 
 /// 新行入场淡入（token rowFadeIn）。只对新行播，老行不重播。

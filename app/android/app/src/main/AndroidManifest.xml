@@ -3,6 +3,8 @@
     <uses-permission android:name="android.permission.INTERNET"/>
     <!-- Android 13+ 通知运行时权限（回答完成/等待审批提醒；通知设置页负责引导） -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <!-- 语音输入：录音后本地转 WAV 交给 bridge 的 speech-transcribe（dsh/speech 通道） -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO"/>
 
     <!-- 应用内更新：下载完成自动拉起安装器（真机反馈第三轮 2）。
          缺它时 startActivity(ACTION_VIEW apk) 被系统静默拒绝（v1.0.3 不弹安装的根因）；

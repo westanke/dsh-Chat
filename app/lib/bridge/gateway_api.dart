@@ -6,8 +6,10 @@
 library;
 
 import 'device.dart';
+import 'dlog.dart';
 import 'gateway.dart';
 import 'goal.dart';
+import 'mobile_frames.dart';
 import 'models.dart';
 import 'queue.dart';
 
@@ -52,7 +54,9 @@ extension GatewayApi on GatewayClient {
     final pinned = r['pinnedSessionIds'];
     return WorkspaceListing(
       workspaces: list
-          .map((e) => DshWorkspace.fromJson(Map<String, dynamic>.from(e as Map)))
+          .map(
+            (e) => DshWorkspace.fromJson(Map<String, dynamic>.from(e as Map)),
+          )
           .toList(),
       pinnedSessionIds: pinned is List
           ? [
@@ -80,10 +84,9 @@ extension GatewayApi on GatewayClient {
     // 桥 v2.19+ 的专用帧（能力位 session-pin-v1）：授权、幂等与错误码都在桥里，
     // 不依赖内核调用面。优先它，老桥再退回 kernel-call。
     if (hasCapability('session-pin-v1')) {
-      final r = await request(
-        pinned ? 'session-pin' : 'session-unpin',
-        {'sessionId': sessionId},
-      );
+      final r = await request(pinned ? 'session-pin' : 'session-unpin', {
+        'sessionId': sessionId,
+      });
       final ids = r['pinnedSessionIds'];
       if (ids is! List) {
         throw RequestException('BAD_REPLY', '$action应答缺少 pinnedSessionIds');
@@ -273,6 +276,52 @@ extension GatewayApi on GatewayClient {
     });
   }
 
+  /// 文件改名 / 移动（`file-rename` 帧，能力位 `file-write-v1`，2026-11-28）。
+  ///
+  /// 帧参数 `{rootId?, from, to}`，**只收根内相对路径**；[rootId] 缺省时桥落
+  /// 首个授权根。与 REST `PATCH /roots/{rootId}/entries` 同一套 FileService，
+  /// 应答 `file-renamed {rootId,from,to}`。需 `files.write` scope。
+  Future<void> renameFile({
+    String? rootId,
+    required String from,
+    required String to,
+  }) async {
+    if (!hasFrame('file-rename')) {
+      throw RequestException(
+        'NOT_SUPPORTED',
+        '当前主机不支持 file-rename 帧（hello.frames 里没有它）',
+      );
+    }
+    await request('file-rename', {
+      'rootId': ?rootId,
+      'from': from,
+      'to': to,
+    });
+  }
+
+  /// 把文件 / 目录移进回收站（`file-delete` 帧，能力位 `file-trash-v1` /
+  /// `file-write-v1`，2026-11-28）。
+  ///
+  /// 帧参数 `{rootId?, path}`，**只收根内相对路径**；应答
+  /// `file-deleted {rootId,path,trashId}`，返回 `trashId`（可交给
+  /// `trash-restore` 恢复）。需 `files.delete` scope。
+  Future<String?> moveFileToTrash({
+    String? rootId,
+    required String path,
+  }) async {
+    if (!hasFrame('file-delete')) {
+      throw RequestException(
+        'NOT_SUPPORTED',
+        '当前主机不支持 file-delete 帧（hello.frames 里没有它）',
+      );
+    }
+    final r = await request('file-delete', {
+      'rootId': ?rootId,
+      'path': path,
+    });
+    return r['trashId'] as String?;
+  }
+
   /// REST POST /api/v1/chat/workspaces（登记工作区，实现拆 gateway_rest.dart）。
   /// body.path 是授权根内相对路径（WirePath）；目录必须已存在，幂等。
   Future<String> createWorkspaceRest({
@@ -321,11 +370,12 @@ extension GatewayApi on GatewayClient {
   }
 
   /// 归一化 `questions` 应答 / REST items：两条通道同形，但都要防非 Map 元素。
-  List<PendingQuestion> _pendingQuestionsFrom(String sessionId, Object? raw) => [
-    for (final e in raw is List ? raw : const [])
-      if (e is Map)
-        PendingQuestion.from(sessionId, Map<String, dynamic>.from(e)),
-  ];
+  List<PendingQuestion> _pendingQuestionsFrom(String sessionId, Object? raw) =>
+      [
+        for (final e in raw is List ? raw : const [])
+          if (e is Map)
+            PendingQuestion.from(sessionId, Map<String, dynamic>.from(e)),
+      ];
 
   /// 取图片交接产物（REST GET /api/v1/image-handoff，openapi.yaml:314-344）：
   /// 纯文本模型发图时 bridge 把图交接成工作区 `.dsh-images/<sha256>.<ext>`，
@@ -413,18 +463,19 @@ extension GatewayApi on GatewayClient {
     String sessionId, {
     int? maxMessages,
     int? beforeSeq,
+    bool compact = false,
   }) async {
     // 超时按链路走：隧道放宽到 90s（首屏 600 KB 级的大帧，见 `historyTimeout` 的说明）。
     final r = await requestWithTimeout('history', {
       'sessionId': sessionId,
       'maxMessages': ?maxMessages,
       'beforeSeq': ?beforeSeq,
+      // compact 只在调用方显式要摘要时下发；默认 false = 老行为（首屏不变）。
+      if (compact) 'compact': true,
     }, historyTimeout);
     final events = r['events'] as List? ?? const [];
     final raw = r['projections'];
-    final projections = raw is Map
-        ? Map<String, dynamic>.from(raw)
-        : null;
+    final projections = raw is Map ? Map<String, dynamic>.from(raw) : null;
     // hasMore 从应答取真值（此前硬编码 false 导致列表到头也不提示加载更多）。
     final hasMore = r['hasMore'] == true;
     // 字节预算裁剪标记（history-byte-budget-v1）：真裁剪才带这两个字段，
@@ -441,24 +492,59 @@ extension GatewayApi on GatewayClient {
       truncated: truncated,
       bytes: bytes,
       historyFormatVersion: format,
+      // 服务端只在**请求了 compact** 时才回 `compact:true`（ws-basic.ts history）；
+      // 缺席 = 全文，不能把「没这个字段」当成摘要。
+      compact: r['compact'] == true,
     );
   }
 
-  /// 子会话（团队成员）历史 —— 只读窄口 REST
+  /// 子会话（团队成员）历史。
+  ///
+  /// 优先 WS `subagent-history` 帧（桥能力位 `subagent-history-v1`，
+  /// hello.frames 里必须声明；授权/成员关系判据与 REST 完全同源）。帧失败
+  /// （老桥不认、超时、无权限等）回退 REST 只读窄口：
   /// GET /chat/sessions/{leadSessionId}/subagents/{subagentId}/messages
-  /// （openapi.yaml:992-1050，第四轮反馈 3）。授权：Lead 可见 + 内核投影
-  /// 背书成员关系；成员猜 id 不通（404）。应答形状同 history（events/hasMore）。
+  /// （openapi.yaml:992-1050，第四轮反馈 3）。
+  ///
+  /// 两种链路都装配成 [HistoryPage]：WS 应答额外带 projections/bytes/
+  /// truncated/historyFormatVersion，REST 只有 events/hasMore——缺席字段按
+  /// history 的既有口径处理（不能把「没给」当成「裁剪了」）。
   Future<HistoryPage> subagentHistory(
     String leadSessionId,
     String subagentId, {
     int? maxMessages,
     int? beforeSeq,
   }) async {
+    if (hasFrame('subagent-history')) {
+      try {
+        final r = await request('subagent-history', {
+          'leadSessionId': leadSessionId,
+          'subagentId': subagentId,
+          'maxMessages': ?maxMessages,
+          'beforeSeq': ?beforeSeq,
+        });
+        final events = r['events'] as List? ?? const [];
+        final raw = r['projections'];
+        return HistoryPage.fromEvents(
+          events,
+          projections: raw is Map ? Map<String, dynamic>.from(raw) : null,
+          hasMore: r['hasMore'] == true,
+          truncated: r['truncated'] == true,
+          bytes: r['bytes'] is int ? r['bytes'] as int : null,
+          historyFormatVersion: r['historyFormatVersion'] is int
+              ? r['historyFormatVersion'] as int
+              : null,
+        );
+      } on RequestException catch (e) {
+        DshLog.w('gw subagent-history 帧失败 ${e.code}，回退 REST');
+      }
+    }
     final q = <String>[
       if (maxMessages != null) 'maxMessages=$maxMessages',
       if (beforeSeq != null) 'beforeSeq=$beforeSeq',
     ];
-    final path = '/api/v1/chat/sessions/$leadSessionId/subagents/'
+    final path =
+        '/api/v1/chat/sessions/$leadSessionId/subagents/'
         '$subagentId/messages${q.isEmpty ? '' : '?${q.join('&')}'}';
     final r = await gatewayHttpJson(this, path);
     final events = r['events'] as List? ?? const [];
@@ -664,13 +750,106 @@ extension GatewayApi on GatewayClient {
     }
   }
 
-  /// Agent 预设清单（REST GET /chat/agent-presets，「代码工作视图」第三段）。
-  Future<List<GatewayAgentPreset>> agentPresets() =>
-      gatewayAgentPresets(this);
+  /// Agent 预设清单：优先 WS `agent-presets` 帧（能力位 `agent-presets-v1`），
+  /// 帧失败/老桥不认（UNKNOWN_TYPE/NOT_IMPLEMENTED）回退 REST
+  /// GET /chat/agent-presets（「代码工作视图」第三段）。
+  ///
+  /// 帧形状（ws-presets.ts）：`{kind:'agent-presets', data:{presets:[...]}}`，
+  /// presets 元素与 REST 的 GatewayAgentPreset 同构。
+  Future<List<GatewayAgentPreset>> agentPresets() async {
+    if (hasFrame('agent-presets')) {
+      try {
+        return await _agentPresetsFromWs();
+      } on RequestException catch (e) {
+        DshLog.w('gw agent-presets 帧失败 ${e.code}，回退 REST');
+      }
+    }
+    return gatewayAgentPresets(this);
+  }
 
-  /// 切换空白会话的 Agent 预设（REST PUT，409=预设已锁，由调用方处理）。
-  Future<String?> selectAgentPreset(String sessionId, String presetId) =>
-      gatewaySelectAgentPreset(this, sessionId, presetId);
+  Future<List<GatewayAgentPreset>> _agentPresetsFromWs() async {
+    final r = await request('agent-presets', const <String, dynamic>{});
+    final raw = r['presets'];
+    if (raw is! List) {
+      throw RequestException('BAD_REPLY', 'agent-presets 应答缺 presets 数组');
+    }
+    return <GatewayAgentPreset>[
+      for (final item in raw)
+        if (item is Map)
+          GatewayAgentPreset.fromJson(Map<String, dynamic>.from(item)),
+    ];
+  }
+
+  /// 切换空白会话的 Agent 预设：优先 `session-agent-preset` 帧
+  /// （能力位 `session-config-v1`；应答 kind=sent，data.type 判别），
+  /// 帧失败/409/老桥不认回退 REST PUT /chat/sessions/{id}/agent-preset
+  /// （409=预设已锁，由调用方处理）。
+  Future<String?> selectAgentPreset(String sessionId, String presetId) async {
+    final frameType = hasFrame('session-agent-preset')
+        ? 'session-agent-preset'
+        : (hasFrame('select-agent-preset') ? 'select-agent-preset' : null);
+    if (frameType != null) {
+      try {
+        final r = await request(frameType, {
+          'sessionId': sessionId,
+          'agentPresetId': presetId,
+        });
+        if (r['accepted'] == false) {
+          throw RequestException(
+            'PRESET_REJECTED',
+            (r['reason'] ?? '预设未被接受') as String,
+          );
+        }
+        final applied = r['agentPresetId'];
+        if (applied is String && applied.isNotEmpty) return applied;
+        throw RequestException(
+          'BAD_REPLY',
+          'session-agent-preset 应答缺 agentPresetId',
+        );
+      } on RequestException catch (e) {
+        DshLog.w('gw session-agent-preset 帧失败 ${e.code}，回退 REST');
+      }
+    }
+    return gatewaySelectAgentPreset(this, sessionId, presetId);
+  }
+
+  /// 会话任务投影：WS `tasks` 帧（能力位 [tasksCapability]，只读）。
+  ///
+  /// 返回与 `todoItems(projections)` **同一套解析规则**的数据；应答 `todos`
+  /// 键缺席/null 时 [SessionTasks.hasTodosProjection] 为 false，调用方不得用它
+  /// 覆盖本地推导。
+  Future<SessionTasks> sessionTasks(String sessionId) async {
+    if (!hasFrame('tasks')) {
+      throw RequestException(
+        'NOT_SUPPORTED',
+        '当前主机不支持 tasks 帧（hello.frames 里没有 tasks）',
+      );
+    }
+    final r = await request('tasks', {'sessionId': sessionId});
+    return SessionTasks.fromJson(<String, dynamic>{
+      ...r,
+      'sessionId': r['sessionId'] ?? sessionId,
+    });
+  }
+
+  /// 工作区改名：优先 WS `workspace-update` 帧（{workspaceId,name}），
+  /// 帧失败/老桥不认回退 REST PATCH（REST 字段是 `title`，帧字段是 `name`）。
+  ///
+  /// 改名失败不阻断业务流程（调用方只在「手机会话」标题上用它）。
+  Future<void> renameWorkspace(String workspaceId, String name) async {
+    if (hasFrame('workspace-update')) {
+      try {
+        await request('workspace-update', {
+          'workspaceId': workspaceId,
+          'name': name,
+        });
+        return;
+      } on RequestException catch (e) {
+        DshLog.w('gw workspace-update 帧失败 ${e.code}，回退 REST');
+      }
+    }
+    return renameWorkspaceRest(workspaceId, name);
+  }
 }
 
 /// 图片交接的请求路径（纯函数，便于单测把「两个 query 都在」钉死）：

@@ -50,6 +50,8 @@ dependencies:
   # bridge 连接
   web_socket_channel: ^3.0.0
   http: ^1.2.0
+  # WS 附件上传（file-upload-open 帧）要求本地给 sha256，桥据此校验完整性。
+  crypto: ^3.0.0
   # 会话内链接跳转（真机反馈第四轮 5）：外接浏览器打开，零 UI 依赖。
   url_launcher: ^6.3.0
 
