@@ -80,11 +80,15 @@ Future<void> showSessionTabsSheet(
     constraints: modalSheetConstraints(context),
     backgroundColor: colors.bgLayer1,
     isScrollControlled: true,
-    builder: (_) => SessionTabsSheet(
-      state: state,
-      colors: colors,
-      tabs: tabs,
-      initial: start,
+    builder: (_) => _SwipeDismissOnRight(
+      onDismiss: () => Navigator.of(context).pop(),
+      child: SessionTabsSheet(
+        state: state,
+        colors: colors,
+        tabs: tabs,
+        initial: start,
+        onClose: () => Navigator.of(context).pop(),
+      ),
     ),
   );
 }
@@ -377,6 +381,39 @@ class _TabBarState extends State<_TabBar> {
           );
         },
       ),
+    );
+  }
+}
+
+
+/// 底部弹层的右滑关闭兜底：PageView 会吃掉横向手势，这里用原始指针
+/// 判断「向右滑超过 100px」后直接 pop。
+class _SwipeDismissOnRight extends StatefulWidget {
+  const _SwipeDismissOnRight({required this.child, required this.onDismiss});
+
+  final Widget child;
+  final VoidCallback onDismiss;
+
+  @override
+  State<_SwipeDismissOnRight> createState() => _SwipeDismissOnRightState();
+}
+
+class _SwipeDismissOnRightState extends State<_SwipeDismissOnRight> {
+  double? _startX;
+
+  @override
+  Widget build(BuildContext context) {
+    return Listener(
+      onPointerDown: (e) => _startX = e.position.dx,
+      onPointerUp: (e) {
+        final start = _startX;
+        _startX = null;
+        if (start != null && e.position.dx - start > 100) {
+          widget.onDismiss();
+        }
+      },
+      onPointerCancel: (_) => _startX = null,
+      child: widget.child,
     );
   }
 }
