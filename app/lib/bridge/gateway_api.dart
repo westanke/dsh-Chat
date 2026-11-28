@@ -77,6 +77,22 @@ extension GatewayApi on GatewayClient {
     required bool pinned,
   }) async {
     final action = pinned ? '置顶' : '取消置顶';
+    // 桥 v2.19+ 的专用帧（能力位 session-pin-v1）：授权、幂等与错误码都在桥里，
+    // 不依赖内核调用面。优先它，老桥再退回 kernel-call。
+    if (hasCapability('session-pin-v1')) {
+      final r = await request(
+        pinned ? 'session-pin' : 'session-unpin',
+        {'sessionId': sessionId},
+      );
+      final ids = r['pinnedSessionIds'];
+      if (ids is! List) {
+        throw RequestException('BAD_REPLY', '$action应答缺少 pinnedSessionIds');
+      }
+      return {
+        for (final id in ids)
+          if (id is String && id.isNotEmpty) id,
+      };
+    }
     if (!kernelCallsEnabled) {
       throw RequestException('NOT_SUPPORTED', '当前主机不支持$action（内核调用未启用）');
     }

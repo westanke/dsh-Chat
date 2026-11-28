@@ -88,6 +88,13 @@ class _FakeGateway extends GatewayClient {
           ],
           if (!omitPinned) 'pinnedSessionIds': pinned,
         };
+      case 'session-pin':
+      case 'session-unpin':
+        final id = payload['sessionId'] as String? ?? '';
+        pinned = type == 'session-pin'
+            ? [id, ...pinned.whereType<String>().where((e) => e != id)]
+            : pinned.where((e) => e != id).toList();
+        return {'sessionId': id, 'pinnedSessionIds': pinned};
       case 'session-archive':
         final id = payload['sessionId'] as String? ?? '';
         if (failArchive.contains(id)) {
@@ -398,6 +405,31 @@ void main() {
       final gw = _FakeGateway()..omitPinned = true;
       final listing = await gw.workspaceListing();
       expect(listing.pinnedSessionIds, isNull);
+    });
+
+    test('桥声明 session-pin-v1 时走专用帧，不碰内核调用面', () async {
+      final gw = _FakeGateway()
+        ..capabilities = ['session-pin-v1']
+        ..pinned = <Object?>[];
+      final state = ChatState(gw);
+
+      await state.setSessionPinned('s1', true);
+      expect(
+        gw.requests.any(
+          (r) => r.type == 'session-pin' && r.payload['sessionId'] == 's1',
+        ),
+        isTrue,
+      );
+      expect(state.pinnedSessionIds, {'s1'});
+
+      await state.setSessionPinned('s1', false);
+      expect(
+        gw.requests.any(
+          (r) => r.type == 'session-unpin' && r.payload['sessionId'] == 's1',
+        ),
+        isTrue,
+      );
+      expect(state.pinnedSessionIds, isEmpty);
     });
 
     test('setSessionPinned 发 kernel-call 并更新置顶集合', () async {
