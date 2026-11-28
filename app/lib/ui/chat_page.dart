@@ -492,9 +492,7 @@ class _ChatPageState extends State<ChatPage>
                 summary: todoDock,
                 todos: todoItems(st.projections),
                 colors: c,
-                topGap: activity != null
-                    ? DsSpacing.activityStripGap
-                    : DsSpacing.blockGap,
+                topGap: DsSpacing.dockStackGap,
               ),
             _buildComposer(
               context: context,

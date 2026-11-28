@@ -117,7 +117,7 @@ void main() {
 
     await _pumpTopBar(tester, state);
 
-    expect(find.byIcon(Icons.schedule), findsNothing);
+    expect(find.byIcon(Icons.schedule_outlined), findsNothing);
   });
 
   testWidgets('有任务时列表渲染标题/规则/状态/最近结果', (tester) async {
@@ -128,9 +128,9 @@ void main() {
     final state = ChatState(gateway)..sessionId = 's1';
 
     await _pumpTopBar(tester, state);
-    expect(find.byIcon(Icons.schedule), findsOneWidget);
+    expect(find.byIcon(Icons.schedule_outlined), findsOneWidget);
 
-    await tester.tap(find.byIcon(Icons.schedule));
+    await tester.tap(find.byIcon(Icons.schedule_outlined));
     await tester.pumpAndSettle();
 
     expect(find.text('每日站会'), findsOneWidget);
@@ -150,7 +150,7 @@ void main() {
     final state = ChatState(gateway)..sessionId = 's1';
 
     await _pumpTopBar(tester, state);
-    await tester.tap(find.byIcon(Icons.schedule));
+    await tester.tap(find.byIcon(Icons.schedule_outlined));
     await tester.pumpAndSettle();
 
     await tester.tap(find.byKey(const ValueKey('schedule-toggle-task-1')));
@@ -206,7 +206,7 @@ void main() {
     final state = ChatState(gateway)..sessionId = 's1';
 
     await _pumpTopBar(tester, state);
-    await tester.tap(find.byIcon(Icons.schedule));
+    await tester.tap(find.byIcon(Icons.schedule_outlined));
     await tester.pumpAndSettle();
     await tester.tap(find.text('立即运行'));
     await tester.pumpAndSettle();
@@ -222,7 +222,7 @@ void main() {
     final state = ChatState(gateway)..sessionId = 's1';
 
     await _pumpTopBar(tester, state);
-    await tester.tap(find.byIcon(Icons.schedule));
+    await tester.tap(find.byIcon(Icons.schedule_outlined));
     await tester.pumpAndSettle();
     await tester.tap(find.text('详情'));
     await tester.pumpAndSettle();
@@ -241,7 +241,7 @@ void main() {
     final state = ChatState(gateway)..sessionId = 's1';
 
     await _pumpTopBar(tester, state);
-    await tester.tap(find.byIcon(Icons.schedule));
+    await tester.tap(find.byIcon(Icons.schedule_outlined));
     await tester.pumpAndSettle();
     await tester.tap(find.text('删除'));
     await tester.pumpAndSettle();

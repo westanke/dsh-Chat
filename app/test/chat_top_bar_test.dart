@@ -131,11 +131,11 @@ void main() {
     expect(find.textContaining('子代理'), findsNothing);
   });
 
-  testWidgets('后台任务 >0 时多一行 chip 并可点；0 时不占高度', (tester) async {
+  testWidgets('后台任务 >0 时右侧出绿色胶囊并可点；0 时不占高度', (tester) async {
     final taps = _Taps();
     await _pumpTopBar(tester, jobsRunning: 2, taps: taps);
-    expect(find.text('后台任务 2'), findsOneWidget);
-    await tester.tap(find.text('后台任务 2'));
+    expect(find.text('后台 2'), findsOneWidget);
+    await tester.tap(find.text('后台 2'));
     await tester.pump();
     expect(taps.jobs, 1);
 

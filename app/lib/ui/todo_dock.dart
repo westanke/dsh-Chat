@@ -82,7 +82,7 @@ class TodoDockBar extends StatefulWidget {
     required this.summary,
     required this.todos,
     required this.colors,
-    this.topGap = DsSpacing.blockGap,
+    this.topGap = DsSpacing.dockStackGap,
   });
 
   /// 与上方组件的间距（dsh-go dock 之间 6）。

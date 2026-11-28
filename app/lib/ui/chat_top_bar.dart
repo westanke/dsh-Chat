@@ -17,7 +17,7 @@ import 'schedule_sheet.dart';
 
 // 状态点 / chip 组件现在住在 chat_header_chips.dart；从这里转出，
 // 让既有 `import 'chat_top_bar.dart'` 的调用方（含测试）不用改。
-export 'chat_header_chips.dart' show ChatStatusDot, statusDotColor;
+export 'chat_header_chips.dart' show ChatStatusDot;
 
 /// 顶栏：左菜单 + 会话名 + 新对话 + 右侧溢出菜单，下面一条信息 chip 带。
 class ChatTopBar extends StatelessWidget {
@@ -70,10 +70,10 @@ class ChatTopBar extends StatelessWidget {
     // 新对话还没有标题时，胶囊沿用旧顶栏的做法显示主机名，避免一条空白药丸。
     final heading = title.trim().isEmpty ? status.label : title;
 
-    final chips = <Widget>[
-      if (running > 0)
-        ChatJobsChip(colors: c, running: running, onTap: onOpenJobs),
-    ];
+    // 有后台任务时整行略收 4dp，右侧多一枚绿色小胶囊；没有任务时不占位。
+    final rowHeight = running > 0
+        ? DsSpacing.topBarHeight - 4
+        : DsSpacing.topBarHeight;
 
     return ColoredBox(
       color: c.bgBase,
@@ -82,54 +82,58 @@ class ChatTopBar extends StatelessWidget {
         child: LayoutBuilder(
           builder: (context, constraints) {
             // 顶栏与输入条同一浮层列（§4.16）：比正文列窄两侧各 chatFloatInset。
-            // 宽度取实际拿到的布局宽度——抽屉打开时页面变窄，顶栏跟着收。
             final columnMax = floatingColumnWidth(constraints.maxWidth);
             return Center(
               child: ConstrainedBox(
                 constraints: BoxConstraints(maxWidth: columnMax),
                 child: SizedBox(
-                  height: DsSpacing.topBarHeight +
-                      (chips.isEmpty ? 0 : DsSpacing.chipHeight),
-                  child: Column(
+                  height: rowHeight,
+                  child: Row(
                     children: [
-                      SizedBox(
-                        height: DsSpacing.topBarHeight,
-                        child: Row(
-                          children: [
-                            IconButton(
-                              icon: Icon(Icons.menu),
-                              color: c.labelPrimary,
-                              onPressed: onMenu,
-                            ),
-                            const SizedBox(width: 4),
-                            // 标题胶囊：单行会话名（超长省略）+ 定时任务入口。
-                            // 状态已挪到第二行 chip 带，胶囊不再撑两行。
-                            Expanded(
-                              child: _TitleCapsule(
-                                colors: c,
-                                title: heading,
-                                status: status,
-                                onOpenSchedule: openSchedule,
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            if (onOpenTeam != null) ...[
-                              _RoundAction(
-                                colors: c,
-                                icon: Icons.groups_outlined,
-                                tooltip: '成员',
-                                onTap: onOpenTeam!,
-                              ),
-                              const SizedBox(width: 6),
-                            ],
-                            _NewChatSquare(colors: c, onTap: onNewChat),
-                            trailing,
-                            const SizedBox(width: DsSpacing.screenPad),
-                          ],
+                      const SizedBox(width: DsSpacing.screenPad),
+                      // 标题胶囊吃掉全部剩余宽度：菜单 / 新会话 / 团队 / 定时
+                      // 任务都收到右侧，标题能显示更多字。
+                      Expanded(
+                        child: _TitleCapsule(
+                          colors: c,
+                          title: heading,
+                          status: status,
                         ),
                       ),
-                      if (chips.isNotEmpty)
-                        ChatHeaderChipStrip(chips: chips),
+                      if (running > 0) ...[
+                        const SizedBox(width: DsSpacing.chipIconGap),
+                        ChatJobsPill(
+                          colors: c,
+                          running: running,
+                          onTap: onOpenJobs,
+                        ),
+                      ],
+                      const SizedBox(width: DsSpacing.chipIconGap),
+                      if (openSchedule != null)
+                        _RoundAction(
+                          colors: c,
+                          icon: Icons.schedule_outlined,
+                          tooltip: '定时任务',
+                          onTap: openSchedule,
+                        ),
+                      if (onOpenTeam != null) ...[
+                        const SizedBox(width: 2),
+                        _RoundAction(
+                          colors: c,
+                          icon: Icons.groups_outlined,
+                          tooltip: '成员',
+                          onTap: onOpenTeam!,
+                        ),
+                      ],
+                      const SizedBox(width: 2),
+                      _NewChatSquare(colors: c, onTap: onNewChat),
+                      IconButton(
+                        icon: Icon(Icons.menu),
+                        color: c.labelPrimary,
+                        tooltip: '会话列表',
+                        onPressed: onMenu,
+                      ),
+                      const SizedBox(width: DsSpacing.screenPad - 8),
                     ],
                   ),
                 ),
@@ -142,16 +146,15 @@ class ChatTopBar extends StatelessWidget {
   }
 }
 
-/// 标题胶囊：单行会话名 + 尾端定时任务入口，圆角浮层底。
+/// 标题胶囊：单行会话名 + 状态点，圆角浮层底。
 ///
-/// 状态文案不再画在这里（已拆到 [ChatStatusChip]），所以胶囊只保留一行；
-/// 高度仍用 topBarCapsuleHeight（44），与菜单 / 新对话按钮同一视觉基准。
+/// 定时任务入口已移到胶囊外（右侧圆钮），胶囊因此能把宽度全给标题；
+/// 高度仍用 topBarCapsuleHeight（44），与右侧按钮同一视觉基准。
 class _TitleCapsule extends StatelessWidget {
   const _TitleCapsule({
     required this.colors,
     required this.title,
     required this.status,
-    this.onOpenSchedule,
   });
 
   final DsColors colors;
@@ -159,8 +162,6 @@ class _TitleCapsule extends StatelessWidget {
 
   /// 只用于无障碍朗读（标题 + 当前状态一句说完）。
   final ChatHeaderStatus status;
-
-  final VoidCallback? onOpenSchedule;
 
   @override
   Widget build(BuildContext context) {
@@ -198,10 +199,6 @@ class _TitleCapsule extends StatelessWidget {
                 style: DsTypography.h4.copyWith(color: c.labelPrimary),
               ),
             ),
-            if (onOpenSchedule != null) ...[
-              const SizedBox(width: 6),
-              _ScheduleAction(colors: c, onTap: onOpenSchedule!),
-            ],
           ],
         ),
       ),
@@ -209,44 +206,6 @@ class _TitleCapsule extends StatelessWidget {
   }
 }
 
-/// 标题胶囊尾端的定时任务入口（dsh-go HeaderScheduleCap 同位置）。
-class _ScheduleAction extends StatelessWidget {
-  const _ScheduleAction({required this.colors, required this.onTap});
-
-  final DsColors colors;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = colors;
-    return Tooltip(
-      message: '定时任务',
-      child: Semantics(
-        button: true,
-        label: '定时任务',
-        child: Material(
-          color: Colors.transparent,
-          shape: const CircleBorder(),
-          clipBehavior: Clip.antiAlias,
-          child: InkWell(
-            onTap: onTap,
-            child: SizedBox(
-              width: DsSpacing.topBarNewChatSize,
-              height: DsSpacing.topBarNewChatSize,
-              child: Icon(
-                Icons.schedule,
-                size: DsSpacing.chipIconSize + 4,
-                color: c.labelSecondary,
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// 「新对话」方形描边钮（dsh-go 顶栏最右那枚）。
 class _NewChatSquare extends StatelessWidget {
   const _NewChatSquare({required this.colors, required this.onTap});
 

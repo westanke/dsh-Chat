@@ -153,9 +153,9 @@ class _ActivityStripState extends State<ActivityStrip> {
     return Container(
       margin: const EdgeInsets.fromLTRB(
         DsSpacing.screenPad,
-        0,
+        DsSpacing.dockStackGap,
         DsSpacing.screenPad,
-        DsSpacing.activityStripGap,
+        0,
       ),
       padding: const EdgeInsets.symmetric(
         horizontal: DsSpacing.activityStripPadH,

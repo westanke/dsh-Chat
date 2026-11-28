@@ -34,7 +34,7 @@ Widget buildChatComposer({
     // 上方已有活动条/任务条时，间距收到 6（dsh-go dock 与输入条之间 6），
     // 否则保留 16 的正文间隔。
     topGap: (activity != null || todoDock != null)
-        ? DsSpacing.activityStripGap
+        ? DsSpacing.dockStackGap
         : DsSpacing.blockGap,
     enabled: state.connectionState == GatewayState.ready,
     onSend: (text) {

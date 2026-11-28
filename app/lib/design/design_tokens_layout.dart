@@ -495,6 +495,14 @@ class DsSpacing {
   /// 顶栏状态点直径。
   static const chatStatusDot = 6.0;
 
+  /// 后台任务小胶囊：高 20dp，左右内边距 8dp（2026-11-28 顶栏收口）。
+  static const jobsPillHeight = 20.0;
+  static const jobsPillPadH = 8.0;
+
+  /// 输入条上方一排 dock（排队 / 目标 / 活动 / 任务）之间的统一间距：
+  /// 2026-11-28 从 16 / 6 收到 4，让它们彼此紧贴、最后一层紧挨输入框。
+  static const dockStackGap = 4.0;
+
   /// 状态点与状态文字之间的间距。
   static const chatStatusDotGap = 5.0;
 

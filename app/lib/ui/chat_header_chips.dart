@@ -14,114 +14,12 @@ import 'package:material_ui/material_ui.dart';
 import '../design/tokens.dart';
 import 'chat_header_status.dart';
 
-/// 顶栏 chip 带：一行、横向滚动、不换行。
-class ChatHeaderChipStrip extends StatelessWidget {
-  const ChatHeaderChipStrip({super.key, required this.chips});
-
-  final List<Widget> chips;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      height: DsSpacing.chipHeight,
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: DsSpacing.screenPad),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            for (var i = 0; i < chips.length; i++) ...[
-              if (i > 0) const SizedBox(width: DsSpacing.drawerFilterGap),
-              chips[i],
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// 顶栏 chip 的通用外壳：29 高胶囊、单行省略、可选前置图标。
-class ChatHeaderChip extends StatelessWidget {
-  const ChatHeaderChip({
-    super.key,
-    required this.colors,
-    required this.label,
-    this.semanticsLabel,
-    this.icon,
-    this.leading,
-    this.onTap,
-    this.accent,
-    this.maxWidth = DsSpacing.composerModelChipMaxWidth,
-  });
-
-  final DsColors colors;
-  final String label;
-  final String? semanticsLabel;
-  final IconData? icon;
-  final Widget? leading;
-  final VoidCallback? onTap;
-  final Color? accent;
-  final double maxWidth;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = colors;
-    final accentColor = accent;
-    return Semantics(
-      button: onTap != null,
-      label: semanticsLabel ?? label,
-      excludeSemantics: true,
-      child: Material(
-        color: accentColor == null ? c.inputFill : c.chipSelectedBg,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(DsSpacing.chipRadius),
-          side: BorderSide(color: accentColor ?? c.inputBorder),
-        ),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: onTap,
-          child: Container(
-            height: DsSpacing.chipHeight,
-            constraints: BoxConstraints(maxWidth: maxWidth),
-            padding: const EdgeInsets.symmetric(horizontal: DsSpacing.chipPadH),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (leading != null) ...[
-                  leading!,
-                  const SizedBox(width: DsSpacing.chipIconGap),
-                ],
-                if (icon != null) ...[
-                  Icon(
-                    icon,
-                    size: DsSpacing.chipIconSize,
-                    color: accentColor ?? c.labelTertiary,
-                  ),
-                  const SizedBox(width: DsSpacing.chipIconGap),
-                ],
-                Flexible(
-                  child: Text(
-                    label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: DsTypography.chipLabel.copyWith(
-                      color: accentColor ?? c.labelPrimary,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// 后台任务 chip：`jobsRunning` 个在跑时显示，0 / null 不显示。
-class ChatJobsChip extends StatelessWidget {
-  const ChatJobsChip({
+/// 后台任务小胶囊：绿色实底，放在状态栏右侧；没有任务时不渲染。
+///
+/// 2026-11-28 二次收口后，顶栏不再有整行 chip 带，只在有后台任务时显示这枚
+/// 20dp 高的小胶囊（点开后台任务面板），标题胶囊因此保持最长。
+class ChatJobsPill extends StatelessWidget {
+  const ChatJobsPill({
     super.key,
     required this.colors,
     required this.running,
@@ -135,12 +33,33 @@ class ChatJobsChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (running <= 0) return const SizedBox.shrink();
-    return ChatHeaderChip(
-      colors: colors,
-      label: '后台任务 $running',
-      semanticsLabel: '后台任务 $running 个，点击查看',
-      icon: Icons.bolt,
-      onTap: onTap,
+    final c = colors;
+    return Semantics(
+      button: true,
+      label: '后台任务 $running 个，点击查看',
+      excludeSemantics: true,
+      child: Material(
+        color: c.chatStatusOk,
+        borderRadius: BorderRadius.circular(DsSpacing.chipRadius),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: Container(
+            height: DsSpacing.jobsPillHeight,
+            padding: const EdgeInsets.symmetric(
+              horizontal: DsSpacing.jobsPillPadH,
+            ),
+            alignment: Alignment.center,
+            child: Text(
+              '后台 $running',
+              style: DsTypography.chipLabel.copyWith(
+                color: c.bgBase,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -176,15 +95,6 @@ class ChatJobsChip extends StatelessWidget {
       return (color: c.labelTertiary, pulsing: false);
   }
 }
-
-/// 兼容旧调用点的颜色映射。
-Color statusDotColor(DsColors c, ChatStatusTone tone) => switch (tone) {
-  ChatStatusTone.ok => c.chatStatusOk,
-  ChatStatusTone.busy => c.chatStatusWarn,
-  ChatStatusTone.warn => c.brand,
-  ChatStatusTone.error => c.danger,
-  ChatStatusTone.idle => c.labelTertiary,
-};
 
 /// 状态点：工作时呼吸（淡入淡出），其余静态。
 class ChatStatusDot extends StatefulWidget {

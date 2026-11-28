@@ -741,9 +741,10 @@ dsh-Go 的「拍照」（本仓原生通道无相机 Intent）、「生成」「
 对齐 dsh-go 会话页外围信息（`chat_header.dart` / `job_*` / `drawer`），本批不新增色值，
 只登记新组合的尺寸与语义：
 
-- **顶栏一行 + 可选任务行**：标题行沿用 56dp；只有后台任务在跑时才多一行 29dp chip
-  （`topBarHeight + chipHeight`，无任务时总高 56dp）。chip 带横向 `SingleChildScrollView`，
-  内距 `screenPad`、chip 间距 `drawerFilterGap`；窄屏只横滚、不换行。
+- **顶栏单行**：高 56dp；有后台任务时收到 52dp。标题胶囊从左侧 `screenPad` 起，吃掉
+  全部剩余宽度；定时任务、成员、新建、菜单四枚按钮全部排在右侧，胶囊因此最长。
+  后台任务不占第二行：状态栏右侧挂一枚 20dp 高绿色小胶囊「后台 N」（`jobsPillHeight` /
+  `jobsPillPadH`，实底 `chatStatusOk`，文字 `bgBase`）。
 - **状态点（2026-11-28 二次收口）**：模型/上下文/子代理/在线文字都已在输入条或面板有入口，
   顶栏不再重复；连接状态改成标题胶囊前的一枚 `chatStatusDot` 色点：绿常亮=已连接，
   绿呼吸=生成中（工作中），黄常亮=连接中/重连，红常亮=断开/鉴权失败，蓝常亮=等审批/回答，
@@ -751,6 +752,8 @@ dsh-Go 的「拍照」（本仓原生通道无相机 Intent）、「生成」「
 - **后台任务面板**：行高与定时任务面板一致（`scheduleRow` 口径），运行中状态点用
   `chatStatusBusy`，失败用 `chatStatusError`；输出等宽字体 `DsTypography.mono`，长文本在
   sheet 内滚动，truncated 时顶部给「更早输出已省略」提示。
+- **输入条上方 dock 栈**：排队 / 目标 / 活动 / 任务四条 dock 与输入框之间统一用
+  `dockStackGap = 4dp`（此前 16 / 6 混用），彼此紧贴，最后一层紧挨输入框上沿。
 - **抽屉组织**：置顶分组标题与时间组标题同字号（`DsTypography.caption`，`labelTertiary`）；
   未读圆点 6dp，取 `brand`；多选勾选框行高 +0，复用 `SessionOrgRow` 的 44dp 点击区；底部
   多选操作条高 56dp，归档主按钮用 `brand`，计数文案带成功/失败数。
