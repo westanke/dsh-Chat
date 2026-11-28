@@ -30,7 +30,7 @@ ChatMessage _editTurn() => ChatMessage(
 );
 
 void main() {
-  testWidgets('渲染标题/轮数/统计/主机，切到「插件」是空态', (tester) async {
+  testWidgets('渲染标题/轮数/统计/主机，切到「插件」显示未连接提示', (tester) async {
     final gateway = GatewayClient(baseUrl: 'http://127.0.0.1:9');
     final state = ChatState(gateway);
     state.sessionId = 's1';
@@ -86,8 +86,9 @@ void main() {
 
     await tester.tap(find.text('插件'));
     await tester.pumpAndSettle();
-    expect(find.text('这个会话没有插件'), findsOneWidget);
-    expect(find.text('当前客户端还没有接入插件面板。'), findsOneWidget);
+    // 离线状态没有能力位/端点目录，插件页给「不支持」而不是假装空列表。
+    expect(find.text('当前连接不支持插件管理'), findsOneWidget);
+    expect(find.text('重试'), findsOneWidget);
     expect(find.text('共 1 轮'), findsNothing);
 
     expect(tester.takeException(), isNull);

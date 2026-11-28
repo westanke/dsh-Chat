@@ -13,7 +13,7 @@
 | 顶栏状态机 | 生成中/停止中/同步中/重连中/待审批/已结束结果（`chat_screen.dart:2403`） | **✅ 2026-11-28**：第二行状态 chip（在线/生成中/待审批…短标签，主机名留给标题胶囊与读屏）；状态源仍是 `chat_header_status.dart` | ◐ 缺「同步中/停止中」 |
 | 模型胶囊 | 标题旁胶囊，点开模型 + 推理强度（`ui/chat/model_sheet.dart`） | **✅ 2026-11-28**：顶栏模型 chip 显示当前模型名，点开复用 `ui/model_sheet.dart`（与 ⋯ 同面板） | ✅ |
 | ＋ 新建对话 | 顶栏 ＋，首次发送才建会话 | ✅ 同口径（`chat_state.dart:215`） | ✅ |
-| 定时任务入口 | 标题胶囊时钟 + 小 sheet（`header_schedule.dart`） | **✅ 2026-11-27**：标题胶囊尾端时钟按钮（能力位 `chat-schedules-v1` 才渲染，`chat_top_bar.dart`）→ 底部 sheet 列表/启停/立即运行/删除/详情（`schedule_sheet.dart`、`schedule_detail.dart`、`bridge/gateway_schedule.dart`）；启停走 `schedule-edit` 的 `patch.active` + CAS；新建/编辑表单与历史分页未做 | ◐ 无新建/编辑表单 |
+| 定时任务入口 | 标题胶囊时钟 + 小 sheet（`header_schedule.dart`） | **✅ 2026-11-28**：标题胶囊尾端时钟按钮（能力位 `chat-schedules-v1` 才渲染，`chat_top_bar.dart`）→ 底部 sheet 列表/启停/立即运行/删除/详情（`schedule_sheet.dart`、`schedule_detail.dart`、`bridge/gateway_schedule.dart`）；启停走 `schedule-edit` 的 `patch.active` + CAS；**新建/编辑共用一个表单**（`schedule_form.dart`、`bridge/schedule_timing.dart`：每天/每周/间隔/cron/一次 + IANA 时区 + 校验/预览），走 `schedule-create`/`schedule-edit` 直通；真机 create→edit→delete 全链路通过；历史分页未做 | ✅ 已落地（历史分页除外） |
 | 会话抽屉分组 | 文件夹分组 + 运行点 + 待确认/未读（`ui/shell/sessions_drawer.dart`） | 今天/昨天/更早 + 待回答/待审批 + **✅ 2026-11-28 置顶分组/未读圆点与筛选**（`drawer_org.dart`） | ◐ 无文件夹 |
 | 会话长按菜单 | 置顶/重命名/移动/分享/多选/归档/删除（`sessions_drawer.dart:535`） | **✅ 2026-11-21 重命名/归档**；**✅ 2026-11-27 显示已归档**；**✅ 2026-11-28 置顶/取消置顶 + 多选批量归档**（`session_actions.dart`）；无移动/分享/删除/恢复 | ◐ |
 | 会话正文搜索 | 标题本地匹配 + 服务端正文命中（`session_search_page.dart`） | ✅ kernel-call `session/search`，老桥降级 | ✅ |
@@ -36,8 +36,9 @@
 | 提问卡 | 选项 + 提交 + 可拒绝（`question_card.dart`） | ✅ 单选/多选/自定义（`question_card.dart`） | ✅ |
 | 输入条直接回答提问 | 单问 + 纯文本时发送即回答（`chat_screen.dart:693`） | **✅ 2026-11-21**：`singleOpenQuestion` + send() 拦截走 question-answer custom；hint 切「直接回答上面的提问…」 | ✅ |
 | 后台任务卡/列表 | `tool-jobs` 消息卡 + jobs 页（`background_task_notice.dart`、`jobs_page.dart`） | **✅ 2026-11-28**：顶栏「后台任务 N 个」胶囊 + `JobsSheet`（运行中/已结束、停止、刷新、输出明细；`bridge/jobs.dart`、`ui/jobs_sheet.dart`） | ✅ |
+| 子代理谱系 | 顶栏胶囊 + 谱系树 + 点开续聊（`agents/lineage_sheet.dart`） | **✅ 2026-11-28**：顶栏子代理 chip（有子代理才渲染）→ `AgentLineageSheet` 缩进树（状态点/时长/最近活动）→ 点节点打开只读历史（`ui/agent_lineage.dart`）；无续聊 | ◐ 只读 |
 | dsh-ui 交互块 | 图表/表单/选择块 + 回复 chip（`ui/chat/dsh_ui/`） | 无 | ❌ |
-| 消息菜单 | 复制/选中/引用/分享/朗读/重答/分叉/编辑（`message_menu.dart`） | 复制/点赞/朗读/分享/重新生成/**从此消息分叉**（`message_actions.dart`） | ◐ 无选中/引用/编辑 |
+| 消息菜单 | 复制/选中/引用/分享/朗读/重答/分叉/编辑（`message_menu.dart`） | 复制/点赞/朗读/分享/重新生成/**从此消息分叉**/**引用**（`message_actions.dart`，助手消息 seq≥0 才有；用户气泡未挂） | ◐ 无选中/编辑/用户消息引用 |
 | 分叉 / 编辑重发 | 一律开新会话（`session/fork`）；残留队列清掉 | 会话长按「分叉到新会话」+ **消息级 `fork atSeq`（2026-11-27，仅 seq>=0）**已接 `fork` 帧并自动打开；「重新生成」仍是重发最后一条 | ◐ 编辑重发缺 |
 | 分享面板 | 范围 + 隐私项 → 链接/图片/文件/文本（`share_panel.dart`） | 单条消息系统分享 | ◐ |
 | 对话回放 | `.dshgo` 只读回放（`replay_page.dart`） | 无 | ❌ |
@@ -53,7 +54,7 @@
 | 底部卡片叠 | 待办/目标/活动/插件折成一副牌（`dock_stack.dart`） | 待办与目标上下两张，不折 | ◐ |
 | 斜杠面板 | 应用级 + 宿主 + 技能（`slash_palette.dart`，dsh-go `commands_state.dart` 同口径） | **✅ 2026-11-21 全对齐**：①中文——first-party 按 `definitionId` 换上官方 zh 字典的 label/描述/参数占位（此前只透传内核英文）；②四条客户端功能命令 new/model/export/features（本地执行，`/features` 落设置页）；③会话技能行（内核 `skills/list`，经 `dshrb-v1` kernel-call，需桥 `KERNEL_ALLOWLIST` 放行——桥 v2.14.x 起）；④面板 `中文名 /name 参数` 三列 + 按 name/label 四档过滤 + 中文名精确解析；⑤三态（候选/参数提示/不显示）与点选语义（无参命令点一下直接执行、有参插入 `'/name '`、技能与带后缀一律插入、光标按插入点定位）；⑥发送分流（裸 `/` 吃掉回车、技能整行当消息、名字不全先选首行）；⑦关闭语义（点面板外 / 返回键 / Esc 只关面板，文本不变不重弹，重敲裸 `/` 才重开）；⑧视觉逐值对齐（容器圆角 28、行圆角 22、行高 52、图标槽 32/20、选中底 6%、⏎ 仅首行显形、空态「没有匹配的指令，按普通消息发送」）；数据面 `bridge/slash_commands.dart`、渲染 `ui/composer_palette.dart`、状态 `ui/composer_slash.dart` | ✅（真机已验：V2080A 上 13 条——4 客户端 + 4 宿主中文化（compact 当前会话未提供、export 按 dsh-go 口径隐藏）+ 5 技能行；`/features` 开设置页、`/export` 复制 Markdown 均实测生效）|
 | @ 提及 | 文件/文件夹/子代理/会话（`mention_picker.dart`） | ✅ 文件/目录/会话（`composer_panels.dart:105`） | ◐ 无子代理 |
-| 引用追问 | 引文片拼 Markdown 引用块（`quote_chip.dart`） | 无 | ❌ |
+| 引用追问 | 引文片拼 Markdown 引用块（`quote_chip.dart`） | **✅ 2026-11-28**：消息操作条「引用」→ 输入条上方 `QuotePreview`（#seq/作者/两行原文/关闭）→ 发送时 `composeQuotedMessage` 拼 Markdown 引用块（>20 行首尾各 8 行折叠）；带图发送不拼引用（`quote_preview.dart`） | ✅ 助手消息；用户消息入口待补 |
 | 附件面板 | 相册/拍照/文件/生成 + 权限/计划（`plus_panel.dart`） | ✅ 相册多图（最多 6） | ◐ 无拍照/文件选择 |
 | 语音听写 | 云识别 → 引擎 → 系统三级回退（`voice_controller.dart`） | 无（hint「按住说话」名不副实） | ❌ |
 | 草稿按会话保存 | 每会话一份文本+附件（`draft_store.dart`） | **✅ 2026-11-25**：`ui/composer_drafts.dart` 按 sessionId 存文本+图片（null 键 = 新对话），切会话自动存/取，发送成功清草稿 | ✅ |

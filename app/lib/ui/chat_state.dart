@@ -22,6 +22,7 @@ import 'history_snapshot_cache.dart';
 import 'chat_setup_state.dart';
 import 'composer_drafts.dart';
 import 'mobile_workspace.dart';
+import 'quote_preview.dart';
 import 'session_groups.dart';
 import 'streaming_tools.dart';
 
@@ -174,6 +175,22 @@ class ChatState extends ChangeNotifier
   /// 目录 sheet 的写入入口（含通知；别直接赋值）。
   void setPendingLocation(SessionLocation? loc) {
     pendingLocation = loc;
+    notifyListeners();
+  }
+
+  /// 引用追问：输入条上方挂着的引用；发送时由装配层拼进正文。
+  QuoteTarget? quote;
+
+  /// 挂一条引用（消息操作条回调）。
+  void quoteFrom(QuoteTarget target) {
+    quote = target;
+    notifyListeners();
+  }
+
+  /// 取消引用。
+  void clearQuote() {
+    if (quote == null) return;
+    quote = null;
     notifyListeners();
   }
 

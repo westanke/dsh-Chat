@@ -20,6 +20,7 @@ import 'chat_shell.dart';
 import 'chat_state.dart';
 import 'goal_dock.dart';
 import 'jobs_sheet.dart';
+import 'agent_lineage.dart';
 import 'queue_dock.dart';
 import 'chat_top_bar.dart';
 import 'projection_sheets.dart';
@@ -378,6 +379,11 @@ class _ChatPageState extends State<ChatPage>
           onPickModel: _pickModel,
           jobsRunning: _jobs.runningCount,
           onOpenJobs: () => unawaited(_openJobs()),
+          subagentCount:
+              agentTeamProjectionOf(st.projections)?.subagents.length ?? 0,
+          onOpenSubagents: st.sessionId == null
+              ? null
+              : () => showAgentLineage(context, st, c),
           trailing: ChatOverflowMenu(colors: c, state: st),
         ),
         body: Column(

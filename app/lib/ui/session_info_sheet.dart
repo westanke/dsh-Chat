@@ -23,6 +23,7 @@ import '../bridge/models_view.dart';
 import '../design/tokens.dart';
 import 'chat_state.dart';
 import 'model_sheet.dart';
+import 'plugins_panel.dart';
 import 'session_info_stats.dart';
 import 'window_class.dart';
 
@@ -346,34 +347,8 @@ class _SessionInfoSheetState extends State<SessionInfoContent> {
     );
   }
 
-  Widget _pluginsBody(DsColors c) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(
-        vertical: DsSpacing.settingsSectionGap,
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            Icons.extension_outlined,
-            size: DsSpacing.fabSize,
-            color: c.labelTertiary,
-          ),
-          const SizedBox(height: DsSpacing.blockGap),
-          Text(
-            '这个会话没有插件',
-            style: DsTypography.smallStrong.copyWith(color: c.labelPrimary),
-          ),
-          const SizedBox(height: DsSpacing.nestedListGap),
-          Text(
-            '当前客户端还没有接入插件面板。',
-            textAlign: TextAlign.center,
-            style: DsTypography.caption.copyWith(color: c.labelTertiary),
-          ),
-        ],
-      ),
-    );
-  }
+  Widget _pluginsBody(DsColors c) =>
+      PluginsPanel(state: widget.state, colors: c);
 }
 
 /// 三元统计里的一格。

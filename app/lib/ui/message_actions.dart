@@ -12,20 +12,42 @@ import 'package:flutter/services.dart';
 
 import '../bridge/platform.dart';
 import '../design/tokens.dart';
+import 'quote_preview.dart';
 
-/// 助手消息操作条：复制 / 喜欢 / 朗读 / 分享 —— 右侧重新生成。
+/// 消息操作条：复制 / 引用 / 喜欢 / 朗读 / 分享 —— 右侧重新生成。
+///
+/// 「引用」只在调用方传了 [onQuote] 时出现（助手与用户消息都复用本组件，
+/// 来源由 [quoteAuthor] 指定）。
 class DsMessageActions extends StatefulWidget {
   const DsMessageActions({
     super.key,
     required this.colors,
     required this.text,
     this.sentAt,
+    this.messageSeq = -1,
+    this.quoteAuthor = QuoteAuthor.assistant,
+    this.messageId,
     this.onRegenerate,
     this.onFork,
+    this.onQuote,
   });
 
   final DsColors colors;
   final String text;
+
+  /// 该消息的服务端序号：构造 [QuoteTarget] 用。流式消息没有序号时保持 -1；
+  /// 调用方一般只在 seq>=0 时传 [onQuote]。
+  final int messageSeq;
+
+  /// 该消息的发出者（用户消息传 [QuoteAuthor.you]）。
+  final QuoteAuthor quoteAuthor;
+
+  /// 该消息的服务端 id（协议里有就带上，可空）。
+  final String? messageId;
+
+  /// 「引用」入口：null 不渲染该按钮；非 null 时点击回传
+  /// 「本条消息的 seq / author / text」构成的 [QuoteTarget]。
+  final ValueChanged<QuoteTarget>? onQuote;
 
   /// 消息发送时间（epochMs，第四轮反馈 7）：分享文本尾部附加，
   /// 让分享出去的内容带时间戳。null 不加。
@@ -98,6 +120,20 @@ class _DsMessageActionsState extends State<DsMessageActions> {
             tooltip: _copied ? '已复制' : '复制',
             onTap: _copy,
           ),
+          if (widget.onQuote != null)
+            _ActionIcon(
+              icon: Icons.format_quote_outlined,
+              color: c.labelTertiary,
+              tooltip: '引用',
+              onTap: () => widget.onQuote!(
+                QuoteTarget(
+                  messageSeq: widget.messageSeq,
+                  author: widget.quoteAuthor,
+                  text: widget.text,
+                  messageId: widget.messageId,
+                ),
+              ),
+            ),
           _ActionIcon(
             icon: _liked ? Icons.thumb_up_alt : Icons.thumb_up_alt_outlined,
             color: _liked ? c.brand : c.labelTertiary,

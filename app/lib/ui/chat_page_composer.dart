@@ -13,6 +13,7 @@ import '../design/tokens.dart';
 import 'chat_setup.dart';
 import 'chat_state.dart';
 import 'composer.dart';
+import 'quote_preview.dart';
 
 /// 装出输入条。
 ///
@@ -27,7 +28,7 @@ Widget buildChatComposer({
   required ValueChanged<String> onAppCommand,
   required VoidCallback onPickModel,
 }) {
-  return Composer(
+  final composer = Composer(
     key: composerKey,
     colors: colors,
     // 上方已有活动条/任务条时，间距收到 6（dsh-go dock 与输入条之间 6），
@@ -36,8 +37,20 @@ Widget buildChatComposer({
         ? DsSpacing.activityStripGap
         : DsSpacing.blockGap,
     enabled: state.connectionState == GatewayState.ready,
-    onSend: state.send,
-    onSendWithImages: state.sendWithImages,
+    onSend: (text) {
+      final quote = state.quote;
+      if (quote == null) {
+        state.send(text);
+        return;
+      }
+      state.clearQuote();
+      state.send(composeQuotedMessage(quote, text));
+    },
+    // 带图发送不拼引用：图片和引用同发没有产品定义，直接清掉避免残留。
+    onSendWithImages: (text, images) {
+      state.clearQuote();
+      state.sendWithImages(text, images);
+    },
     onCancel: state.cancelTurn,
     onCommand: state.runCommand,
     streaming: state.streaming,
@@ -70,5 +83,27 @@ Widget buildChatComposer({
       state.setup.plan = on;
       state.notifyUi();
     },
+  );
+
+  final quote = state.quote;
+  if (quote == null) return composer;
+  return Column(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      Padding(
+        padding: const EdgeInsets.fromLTRB(
+          DsSpacing.screenPad,
+          DsSpacing.blockGap,
+          DsSpacing.screenPad,
+          0,
+        ),
+        child: QuotePreview(
+          quote: quote,
+          colors: colors,
+          onClear: state.clearQuote,
+        ),
+      ),
+      composer,
+    ],
   );
 }
