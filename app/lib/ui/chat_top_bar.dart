@@ -1,13 +1,8 @@
-// 会话页顶栏：标题行 + 信息 chip 带。
+// 会话页顶栏：一行标题 + 可选的后台任务 chip。
 //
-// 结构借自 dsh-go 的 chat_header.dart（标题下面一行状态），2026-11-28 改造：
-// - 第一行沿用菜单 / 标题胶囊 / 成员 / 新对话 / 更多；
-// - 原来塞在标题胶囊里的「状态点 + 人话」拆出来，与模型、上下文用量、后台任务、
-//   子代理并排成一条**可横向滚动**的 chip 带（lib/ui/chat_header_chips.dart）。
-//
-// 窄屏（<360 逻辑宽）靠横向滚动而不是换行挤压；顶栏内容总高 =
-// topBarHeight(56) + chipHeight(29) = 85，低于 88 的预算。
-// 排版细节：chip 带本身不吃上下留白，就是为了守住这个高度。
+// 2026-11-28 用户收口：状态文字、模型、上下文用量、子代理都已有输入条/面板入口，
+// 不再在顶栏重复展示；连接状态改成标题胶囊前的一枚色点（绿=通、红=断、黄=连接中、
+// 绿闪=工作中、蓝=等用户、灰=未连接）。只有后台任务在跑时才多一行 chip。
 
 library;
 
@@ -18,7 +13,6 @@ import 'window_class.dart';
 import 'chat_header_chips.dart';
 import 'chat_header_status.dart';
 import 'chat_state.dart';
-import 'context_usage_bar.dart';
 import 'schedule_sheet.dart';
 
 // 状态点 / chip 组件现在住在 chat_header_chips.dart；从这里转出，
@@ -36,11 +30,8 @@ class ChatTopBar extends StatelessWidget {
     required this.onNewChat,
     this.onOpenTeam,
     this.state,
-    this.onPickModel,
     this.jobsRunning,
     this.onOpenJobs,
-    this.subagentCount,
-    this.onOpenSubagents,
     required this.trailing,
   });
 
@@ -58,22 +49,11 @@ class ChatTopBar extends StatelessWidget {
   /// 传 null 时这些入口退化（定时任务不渲染、模型显示「模型」、用量 chip 不显示）。
   final ChatState? state;
 
-  /// 模型 chip 的点击回调（会话页接 `_pickModel`，打开模型选择）。
-  /// null 时 chip 仍显示当前模型（纯展示），方便离屏测试与旧调用点。
-  final VoidCallback? onPickModel;
-
   /// 正在跑的后台任务数；null / 0 时不渲染 jobs chip。
-  /// 只收计数与动作，不依赖 jobs 面板的具体实现（并行改动互不牵连）。
   final int? jobsRunning;
 
   /// 点 jobs chip 打开后台任务面板；null 时 chip 只展示数量。
   final VoidCallback? onOpenJobs;
-
-  /// 活跃子代理数；null / 0 时不渲染子代理 chip。
-  final int? subagentCount;
-
-  /// 点子代理 chip 打开子代理面板；null 时 chip 只展示数量。
-  final VoidCallback? onOpenSubagents;
 
   /// 右侧溢出菜单（由会话页提供，避免这里依赖各面板）。
   final Widget trailing;
@@ -85,28 +65,14 @@ class ChatTopBar extends StatelessWidget {
     final openSchedule = st != null && scheduleEntryVisible(st)
         ? () => showScheduleSheet(context, st, c)
         : null;
-    final usage = contextUsageFromChatProjections(st?.projections);
     final running = jobsRunning ?? 0;
-    final subagents = subagentCount ?? 0;
 
-    // 顺序即信息优先级：连接状态 → 模型 → 上下文用量 → jobs → 子代理。
     // 新对话还没有标题时，胶囊沿用旧顶栏的做法显示主机名，避免一条空白药丸。
     final heading = title.trim().isEmpty ? status.label : title;
 
     final chips = <Widget>[
-      ChatStatusChip(colors: c, status: status),
-      ChatModelChip(colors: c, modelLabel: st?.modelLabel, onTap: onPickModel),
-      if (usage != null)
-        ChatContextUsageChip(
-          colors: c,
-          usage: usage,
-          // 与输入条右侧圆环同一个明细 sheet（context_usage_bar.dart）。
-          onTap: () => showContextUsageSheet(context, c, usage),
-        ),
       if (running > 0)
         ChatJobsChip(colors: c, running: running, onTap: onOpenJobs),
-      if (subagents > 0)
-        ChatSubagentChip(colors: c, count: subagents, onTap: onOpenSubagents),
     ];
 
     return ColoredBox(
@@ -122,7 +88,8 @@ class ChatTopBar extends StatelessWidget {
               child: ConstrainedBox(
                 constraints: BoxConstraints(maxWidth: columnMax),
                 child: SizedBox(
-                  height: DsSpacing.topBarHeight + DsSpacing.chipHeight,
+                  height: DsSpacing.topBarHeight +
+                      (chips.isEmpty ? 0 : DsSpacing.chipHeight),
                   child: Column(
                     children: [
                       SizedBox(
@@ -161,7 +128,8 @@ class ChatTopBar extends StatelessWidget {
                           ],
                         ),
                       ),
-                      ChatHeaderChipStrip(chips: chips),
+                      if (chips.isNotEmpty)
+                        ChatHeaderChipStrip(chips: chips),
                     ],
                   ),
                 ),
@@ -198,6 +166,7 @@ class _TitleCapsule extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = colors;
     final heading = title.trim();
+    final visual = statusDotVisual(c, status);
     return Semantics(
       label: heading.isEmpty
           ? status.spokenLabel
@@ -216,6 +185,11 @@ class _TitleCapsule extends StatelessWidget {
         ),
         child: Row(
           children: [
+            ChatStatusDot(
+              color: visual.color,
+              pulsing: visual.pulsing,
+            ),
+            const SizedBox(width: DsSpacing.chipIconGap),
             Expanded(
               child: Text(
                 title,

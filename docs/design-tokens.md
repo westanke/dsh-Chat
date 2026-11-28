@@ -741,10 +741,13 @@ dsh-Go 的「拍照」（本仓原生通道无相机 Intent）、「生成」「
 对齐 dsh-go 会话页外围信息（`chat_header.dart` / `job_*` / `drawer`），本批不新增色值，
 只登记新组合的尺寸与语义：
 
-- **顶栏两行**：标题行沿用 56dp；第二行 chip 带高 29dp（`topBarHeight + chipHeight`，总高
-  85dp ≤ 88dp 预算）。chip 带横向 `SingleChildScrollView`，内距 `screenPad`、chip 间距
-  `drawerFilterGap`；窄屏只横滚、不换行。chip 顺序：状态 → 模型 → 上下文用量 → 后台任务
-  → 子代理；状态色取 `chatStatusOk/Warn/Error`，上下文 ≥80% 用 `chatStatusWarn` 描边+文字。
+- **顶栏一行 + 可选任务行**：标题行沿用 56dp；只有后台任务在跑时才多一行 29dp chip
+  （`topBarHeight + chipHeight`，无任务时总高 56dp）。chip 带横向 `SingleChildScrollView`，
+  内距 `screenPad`、chip 间距 `drawerFilterGap`；窄屏只横滚、不换行。
+- **状态点（2026-11-28 二次收口）**：模型/上下文/子代理/在线文字都已在输入条或面板有入口，
+  顶栏不再重复；连接状态改成标题胶囊前的一枚 `chatStatusDot` 色点：绿常亮=已连接，
+  绿呼吸=生成中（工作中），黄常亮=连接中/重连，红常亮=断开/鉴权失败，蓝常亮=等审批/回答，
+  灰常亮=未连接。
 - **后台任务面板**：行高与定时任务面板一致（`scheduleRow` 口径），运行中状态点用
   `chatStatusBusy`，失败用 `chatStatusError`；输出等宽字体 `DsTypography.mono`，长文本在
   sheet 内滚动，truncated 时顶部给「更早输出已省略」提示。

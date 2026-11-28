@@ -10,8 +10,8 @@
 | 功能 | dsh-Go 做法（文件） | dsh-Chat 现状 | 结论 |
 |---|---|---|---|
 | 顶栏标题胶囊 | 可点进会话详情（`ui/chat/chat_header.dart`） | **✅ 2026-11-28**：标题胶囊（空标题回退主机名）+ 时钟（定时任务）+ 成员图标；无详情页 | ◐ 无详情页 |
-| 顶栏状态机 | 生成中/停止中/同步中/重连中/待审批/已结束结果（`chat_screen.dart:2403`） | **✅ 2026-11-28**：第二行状态 chip（在线/生成中/待审批…短标签，主机名留给标题胶囊与读屏）；状态源仍是 `chat_header_status.dart` | ◐ 缺「同步中/停止中」 |
-| 模型胶囊 | 标题旁胶囊，点开模型 + 推理强度（`ui/chat/model_sheet.dart`） | **✅ 2026-11-28**：顶栏模型 chip 显示当前模型名，点开复用 `ui/model_sheet.dart`（与 ⋯ 同面板） | ✅ |
+| 顶栏状态机 | 生成中/停止中/同步中/重连中/待审批/已结束结果（`chat_screen.dart:2403`） | **✅ 2026-11-28 收口**：状态只留标题胶囊前色点（绿=通、绿闪=工作中、黄=连接中、红=断开、蓝=等用户、灰=未连接）；状态源仍是 `chat_header_status.dart` | ◐ 缺「同步中/停止中」文字 |
+| 模型胶囊 | 标题旁胶囊，点开模型 + 推理强度（`ui/chat/model_sheet.dart`） | **✅ 2026-11-28**：模型入口在输入条 chip，复用 `ui/model_sheet.dart`；顶栏不再重复 | ✅ |
 | ＋ 新建对话 | 顶栏 ＋，首次发送才建会话 | ✅ 同口径（`chat_state.dart:215`） | ✅ |
 | 定时任务入口 | 标题胶囊时钟 + 小 sheet（`header_schedule.dart`） | **✅ 2026-11-28**：标题胶囊尾端时钟按钮（能力位 `chat-schedules-v1` 才渲染，`chat_top_bar.dart`）→ 底部 sheet 列表/启停/立即运行/删除/详情（`schedule_sheet.dart`、`schedule_detail.dart`、`bridge/gateway_schedule.dart`）；启停走 `schedule-edit` 的 `patch.active` + CAS；**新建/编辑共用一个表单**（`schedule_form.dart`、`bridge/schedule_timing.dart`：每天/每周/间隔/cron/一次 + IANA 时区 + 校验/预览），走 `schedule-create`/`schedule-edit` 直通；真机 create→edit→delete 全链路通过；历史分页未做 | ✅ 已落地（历史分页除外） |
 | 会话抽屉分组 | 文件夹分组 + 运行点 + 待确认/未读（`ui/shell/sessions_drawer.dart`） | 今天/昨天/更早 + 待回答/待审批 + **✅ 2026-11-28 置顶分组/未读圆点与筛选**（`drawer_org.dart`） | ◐ 无文件夹 |
@@ -36,7 +36,7 @@
 | 提问卡 | 选项 + 提交 + 可拒绝（`question_card.dart`） | ✅ 单选/多选/自定义（`question_card.dart`） | ✅ |
 | 输入条直接回答提问 | 单问 + 纯文本时发送即回答（`chat_screen.dart:693`） | **✅ 2026-11-21**：`singleOpenQuestion` + send() 拦截走 question-answer custom；hint 切「直接回答上面的提问…」 | ✅ |
 | 后台任务卡/列表 | `tool-jobs` 消息卡 + jobs 页（`background_task_notice.dart`、`jobs_page.dart`） | **✅ 2026-11-28**：顶栏「后台任务 N 个」胶囊 + `JobsSheet`（运行中/已结束、停止、刷新、输出明细；`bridge/jobs.dart`、`ui/jobs_sheet.dart`） | ✅ |
-| 子代理谱系 | 顶栏胶囊 + 谱系树 + 点开续聊（`agents/lineage_sheet.dart`） | **✅ 2026-11-28**：顶栏子代理 chip（有子代理才渲染）→ `AgentLineageSheet` 缩进树（状态点/时长/最近活动）→ 点节点打开只读历史（`ui/agent_lineage.dart`）；无续聊 | ◐ 只读 |
+| 子代理谱系 | 顶栏胶囊 + 谱系树 + 点开续聊（`agents/lineage_sheet.dart`） | **✅ 2026-11-28**：入口在成员图标打开的智能团队面板 →「查看谱系」→ `AgentLineageSheet` 缩进树 → 点节点打开只读历史（`ui/agent_lineage.dart`）；无续聊 | ◐ 只读 |
 | dsh-ui 交互块 | 图表/表单/选择块 + 回复 chip（`ui/chat/dsh_ui/`） | 无 | ❌ |
 | 消息菜单 | 复制/选中/引用/分享/朗读/重答/分叉/编辑（`message_menu.dart`） | 复制/点赞/朗读/分享/重新生成/**从此消息分叉**/**引用**（`message_actions.dart`，助手消息 seq≥0 才有；用户气泡未挂） | ◐ 无选中/编辑/用户消息引用 |
 | 分叉 / 编辑重发 | 一律开新会话（`session/fork`）；残留队列清掉 | 会话长按「分叉到新会话」+ **消息级 `fork atSeq`（2026-11-27，仅 seq>=0）**已接 `fork` 帧并自动打开；「重新生成」仍是重发最后一条 | ◐ 编辑重发缺 |

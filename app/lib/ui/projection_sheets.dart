@@ -14,6 +14,7 @@ import 'package:material_ui/material_ui.dart';
 import '../bridge/gateway.dart';
 import '../bridge/projections.dart';
 import '../design/tokens.dart';
+import 'agent_lineage.dart';
 import 'chat_state.dart';
 import 'subagent_history_page.dart';
 import 'window_class.dart';
@@ -304,7 +305,19 @@ class TeamSheet extends StatelessWidget {
               t.status));
         }
       }
-      children.add(_sectionTitle(c, '子会话（${team.subagents.length}）'));
+      children.add(Row(
+        children: [
+          Expanded(child: _sectionTitle(c, '子会话（${team.subagents.length}）')),
+          TextButton(
+            onPressed: () {
+              final nav = Navigator.of(context);
+              nav.pop();
+              showAgentLineage(nav.context, state, c);
+            },
+            child: const Text('查看谱系'),
+          ),
+        ],
+      ));
       if (team.subagents.isEmpty) {
         children.add(_emptyHint(c, '暂无子会话。'));
       } else {
