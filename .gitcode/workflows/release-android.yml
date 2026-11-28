@@ -249,26 +249,37 @@ jobs:
             echo "已上传：$name"
           done
 
-      - name: 回报 Issue #1
+      - name: 回报 Issue #1（可选，失败不影响构建结果）
         if: ${{ always() }}
         env:
           TOKEN: ${{ secrets.ATOMGIT_TOKEN }}
+          TAG: ${{ steps.ver.outputs.tag }}
+          TESTONLY: ${{ steps.ver.outputs.testonly }}
         run: |
           set -u
           T="${TOKEN:-${ATOMGIT_TOKEN:-}}"
-          [ -n "$T" ] || { echo "无令牌，跳过回报"; exit 0; }
-          TAG="${{ steps.ver.outputs.tag }}"
-          TESTONLY="${{ steps.ver.outputs.testonly }}"
-          STATUS="${{ job.status }}"
-          REPO="${ATOMGIT_REPOSITORY}"
-          BODY=$(cat <<EOF
-          AtomGit Actions 流水线收尾：\`${TAG}\`（试跑=${TESTONLY:-?}，状态=${STATUS:-unknown}）。
-
-          产物在 Actions 页面的制品区；正式 tag（不以 -ci 结尾）会自动建 Release 并上传 APK 与 SHA256SUMS.txt。
-          EOF
-          )
+          if [ -z "$T" ]; then
+            echo "没有可用令牌，跳过 Issue 回报"
+            exit 0
+          fi
+          REPO="${ATOMGIT_REPOSITORY:-westanke163/dsh-Chat}"
+          case "$REPO" in */*) ;; *) REPO="westanke163/$REPO" ;; esac
+          BODY="AtomGit Actions 收尾：tag=${TAG:-?}，试跑=${TESTONLY:-?}。制品见 Actions 页面；正式 tag 会建 Release 并上传 APK 与 SHA256SUMS.txt。"
           export BODY
-          python3 -c "import json,os;print(json.dumps({'body':os.environ['BODY']},ensure_ascii=False))" > /tmp/comment.json
-          curl -fsS -X POST -H "Authorization: Bearer $T" -H "Content-Type: application/json" \
-            --data-binary @/tmp/comment.json "https://atomgit.com/api/v5/repos/${REPO}/issues/1/comments" \
-            > /dev/null && echo "已回报 Issue #1"
+          if ! python3 -c "import json,os;print(json.dumps({'body':os.environ['BODY']},ensure_ascii=False))" > /tmp/comment.json 2>/tmp/comment.err; then
+            echo "构造评论失败，跳过"
+            cat /tmp/comment.err || true
+            exit 0
+          fi
+          code=$(curl -sS --max-time 20 --retry 2 -o /tmp/comment.resp -w '%{http_code}' \
+            -X POST -H "Authorization: Bearer $T" -H "Content-Type: application/json" \
+            --data-binary @/tmp/comment.json \
+            "https://atomgit.com/api/v5/repos/${REPO}/issues/1/comments" 2>/tmp/curl.err || echo 000)
+          echo "Issue 回报 HTTP ${code}"
+          head -c 400 /tmp/comment.resp 2>/dev/null || true
+          cat /tmp/curl.err 2>/dev/null || true
+          case "$code" in
+            200|201) echo "已回报 Issue #1" ;;
+            *) echo "回报失败（非致命，构建结果不受影响）" ;;
+          esac
+          exit 0
