@@ -1,7 +1,13 @@
-// 会话页顶栏：标题 + 状态行。
+// 会话页顶栏：标题行 + 信息 chip 带。
 //
-// 结构借自 dsh-go 的 chat_header.dart（标题下面一行状态），配色和控件仍用本仓 token：
-// 状态点颜色只是辅助，状态永远带文字。
+// 结构借自 dsh-go 的 chat_header.dart（标题下面一行状态），2026-11-28 改造：
+// - 第一行沿用菜单 / 标题胶囊 / 成员 / 新对话 / 更多；
+// - 原来塞在标题胶囊里的「状态点 + 人话」拆出来，与模型、上下文用量、后台任务、
+//   子代理并排成一条**可横向滚动**的 chip 带（lib/ui/chat_header_chips.dart）。
+//
+// 窄屏（<360 逻辑宽）靠横向滚动而不是换行挤压；顶栏内容总高 =
+// topBarHeight(56) + chipHeight(29) = 85，低于 88 的预算。
+// 排版细节：chip 带本身不吃上下留白，就是为了守住这个高度。
 
 library;
 
@@ -9,11 +15,17 @@ import 'package:material_ui/material_ui.dart';
 
 import '../design/tokens.dart';
 import 'window_class.dart';
+import 'chat_header_chips.dart';
 import 'chat_header_status.dart';
 import 'chat_state.dart';
+import 'context_usage_bar.dart';
 import 'schedule_sheet.dart';
 
-/// 顶栏：左菜单 + 会话名 + 新对话 + 右侧溢出菜单，下面一行状态。
+// 状态点 / chip 组件现在住在 chat_header_chips.dart；从这里转出，
+// 让既有 `import 'chat_top_bar.dart'` 的调用方（含测试）不用改。
+export 'chat_header_chips.dart' show ChatStatusDot, statusDotColor;
+
+/// 顶栏：左菜单 + 会话名 + 新对话 + 右侧溢出菜单，下面一条信息 chip 带。
 class ChatTopBar extends StatelessWidget {
   const ChatTopBar({
     super.key,
@@ -24,6 +36,11 @@ class ChatTopBar extends StatelessWidget {
     required this.onNewChat,
     this.onOpenTeam,
     this.state,
+    this.onPickModel,
+    this.jobsRunning,
+    this.onOpenJobs,
+    this.subagentCount,
+    this.onOpenSubagents,
     required this.trailing,
   });
 
@@ -37,9 +54,26 @@ class ChatTopBar extends StatelessWidget {
   /// 传 null 时不渲染（老调用点/离屏测试不受影响）。
   final VoidCallback? onOpenTeam;
 
-  /// 会话状态：定时任务入口要靠它读 gateway 能力位与当前会话 id。
-  /// 传 null 时时钟入口同样不渲染（离屏测试/旧调用点）。
+  /// 会话状态：定时任务入口、模型名、上下文用量都要从这里读。
+  /// 传 null 时这些入口退化（定时任务不渲染、模型显示「模型」、用量 chip 不显示）。
   final ChatState? state;
+
+  /// 模型 chip 的点击回调（会话页接 `_pickModel`，打开模型选择）。
+  /// null 时 chip 仍显示当前模型（纯展示），方便离屏测试与旧调用点。
+  final VoidCallback? onPickModel;
+
+  /// 正在跑的后台任务数；null / 0 时不渲染 jobs chip。
+  /// 只收计数与动作，不依赖 jobs 面板的具体实现（并行改动互不牵连）。
+  final int? jobsRunning;
+
+  /// 点 jobs chip 打开后台任务面板；null 时 chip 只展示数量。
+  final VoidCallback? onOpenJobs;
+
+  /// 活跃子代理数；null / 0 时不渲染子代理 chip。
+  final int? subagentCount;
+
+  /// 点子代理 chip 打开子代理面板；null 时 chip 只展示数量。
+  final VoidCallback? onOpenSubagents;
 
   /// 右侧溢出菜单（由会话页提供，避免这里依赖各面板）。
   final Widget trailing;
@@ -51,6 +85,30 @@ class ChatTopBar extends StatelessWidget {
     final openSchedule = st != null && scheduleEntryVisible(st)
         ? () => showScheduleSheet(context, st, c)
         : null;
+    final usage = contextUsageFromChatProjections(st?.projections);
+    final running = jobsRunning ?? 0;
+    final subagents = subagentCount ?? 0;
+
+    // 顺序即信息优先级：连接状态 → 模型 → 上下文用量 → jobs → 子代理。
+    // 新对话还没有标题时，胶囊沿用旧顶栏的做法显示主机名，避免一条空白药丸。
+    final heading = title.trim().isEmpty ? status.label : title;
+
+    final chips = <Widget>[
+      ChatStatusChip(colors: c, status: status),
+      ChatModelChip(colors: c, modelLabel: st?.modelLabel, onTap: onPickModel),
+      if (usage != null)
+        ChatContextUsageChip(
+          colors: c,
+          usage: usage,
+          // 与输入条右侧圆环同一个明细 sheet（context_usage_bar.dart）。
+          onTap: () => showContextUsageSheet(context, c, usage),
+        ),
+      if (running > 0)
+        ChatJobsChip(colors: c, running: running, onTap: onOpenJobs),
+      if (subagents > 0)
+        ChatSubagentChip(colors: c, count: subagents, onTap: onOpenSubagents),
+    ];
+
     return ColoredBox(
       color: c.bgBase,
       child: SafeArea(
@@ -64,38 +122,46 @@ class ChatTopBar extends StatelessWidget {
               child: ConstrainedBox(
                 constraints: BoxConstraints(maxWidth: columnMax),
                 child: SizedBox(
-                  height: DsSpacing.topBarHeight,
-                  child: Row(
+                  height: DsSpacing.topBarHeight + DsSpacing.chipHeight,
+                  child: Column(
                     children: [
-                      IconButton(
-                        icon: Icon(Icons.menu),
-                        color: c.labelPrimary,
-                        onPressed: onMenu,
-                      ),
-                      const SizedBox(width: 4),
-                      // 标题胶囊（2026-11-22 对齐 dsh-go chat_header）：两行——
-                      // 上行会话名，下行状态点 + 一句人话，整体一个圆角容器。
-                      Expanded(
-                        child: _TitleCapsule(
-                          colors: c,
-                          title: title,
-                          status: status,
-                          onOpenSchedule: openSchedule,
+                      SizedBox(
+                        height: DsSpacing.topBarHeight,
+                        child: Row(
+                          children: [
+                            IconButton(
+                              icon: Icon(Icons.menu),
+                              color: c.labelPrimary,
+                              onPressed: onMenu,
+                            ),
+                            const SizedBox(width: 4),
+                            // 标题胶囊：单行会话名（超长省略）+ 定时任务入口。
+                            // 状态已挪到第二行 chip 带，胶囊不再撑两行。
+                            Expanded(
+                              child: _TitleCapsule(
+                                colors: c,
+                                title: heading,
+                                status: status,
+                                onOpenSchedule: openSchedule,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            if (onOpenTeam != null) ...[
+                              _RoundAction(
+                                colors: c,
+                                icon: Icons.groups_outlined,
+                                tooltip: '成员',
+                                onTap: onOpenTeam!,
+                              ),
+                              const SizedBox(width: 6),
+                            ],
+                            _NewChatSquare(colors: c, onTap: onNewChat),
+                            trailing,
+                            const SizedBox(width: DsSpacing.screenPad),
+                          ],
                         ),
                       ),
-                      const SizedBox(width: 8),
-                      if (onOpenTeam != null) ...[
-                        _RoundAction(
-                          colors: c,
-                          icon: Icons.groups_outlined,
-                          tooltip: '成员',
-                          onTap: onOpenTeam!,
-                        ),
-                        const SizedBox(width: 6),
-                      ],
-                      _NewChatSquare(colors: c, onTap: onNewChat),
-                      trailing,
-                      const SizedBox(width: DsSpacing.screenPad),
+                      ChatHeaderChipStrip(chips: chips),
                     ],
                   ),
                 ),
@@ -108,7 +174,10 @@ class ChatTopBar extends StatelessWidget {
   }
 }
 
-/// 标题胶囊：会话名 + 状态行（状态点 + 人话），圆角浮层底。
+/// 标题胶囊：单行会话名 + 尾端定时任务入口，圆角浮层底。
+///
+/// 状态文案不再画在这里（已拆到 [ChatStatusChip]），所以胶囊只保留一行；
+/// 高度仍用 topBarCapsuleHeight（44），与菜单 / 新对话按钮同一视觉基准。
 class _TitleCapsule extends StatelessWidget {
   const _TitleCapsule({
     required this.colors,
@@ -119,76 +188,48 @@ class _TitleCapsule extends StatelessWidget {
 
   final DsColors colors;
   final String title;
+
+  /// 只用于无障碍朗读（标题 + 当前状态一句说完）。
   final ChatHeaderStatus status;
+
   final VoidCallback? onOpenSchedule;
 
   @override
   Widget build(BuildContext context) {
     final c = colors;
-    return Container(
-      constraints: const BoxConstraints(
-        minHeight: DsSpacing.topBarCapsuleHeight,
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-      decoration: BoxDecoration(
-        color: c.chipSelectedBg,
-        borderRadius: BorderRadius.circular(DsSpacing.topBarCapsuleRadius),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Semantics(
-              label: '$title，${status.spokenLabel}',
-              excludeSemantics: true,
-              // 高度按内容撑、下限 44（dsh-go pillHeightOf = max(44, 15*1.3 + 11*1.25 + 8)）。
-              // 之前写死 44 且沿用 16 号/行高 1.75 的标题体，两行合计 53 会溢到胶囊外。
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    // dsh-go titleSmall：15 / 1.3。
-                    style: DsTypography.baseStrong.copyWith(
-                      fontSize: 15,
-                      height: 1.3,
-                      color: c.labelPrimary,
-                    ),
-                  ),
-                  Row(
-                    children: [
-                      ChatStatusDot(
-                        color: statusDotColor(c, status.tone),
-                        pulsing: status.tone == ChatStatusTone.busy,
-                      ),
-                      const SizedBox(width: DsSpacing.chatStatusDotGap),
-                      Expanded(
-                        child: Text(
-                          status.spokenLabel,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          // dsh-go labelSmall：11 / 1.25，紧贴标题不额外留白。
-                          style: DsTypography.caption.copyWith(
-                            fontSize: 11,
-                            height: 1.25,
-                            color: c.labelTertiary,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
+    final heading = title.trim();
+    return Semantics(
+      label: heading.isEmpty
+          ? status.spokenLabel
+          : (status.spokenLabel.isEmpty || status.spokenLabel == heading
+              ? heading
+              : '$heading，${status.spokenLabel}'),
+      excludeSemantics: true,
+      child: Container(
+        constraints: const BoxConstraints(
+          minHeight: DsSpacing.topBarCapsuleHeight,
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+        decoration: BoxDecoration(
+          color: c.chipSelectedBg,
+          borderRadius: BorderRadius.circular(DsSpacing.topBarCapsuleRadius),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: DsTypography.h4.copyWith(color: c.labelPrimary),
               ),
             ),
-          ),
-          if (onOpenSchedule != null) ...[
-            const SizedBox(width: 6),
-            _ScheduleAction(colors: c, onTap: onOpenSchedule!),
+            if (onOpenSchedule != null) ...[
+              const SizedBox(width: 6),
+              _ScheduleAction(colors: c, onTap: onOpenSchedule!),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }
@@ -220,7 +261,7 @@ class _ScheduleAction extends StatelessWidget {
               height: DsSpacing.topBarNewChatSize,
               child: Icon(
                 Icons.schedule,
-                size: 18,
+                size: DsSpacing.chipIconSize + 4,
                 color: c.labelSecondary,
               ),
             ),
@@ -260,85 +301,13 @@ class _NewChatSquare extends StatelessWidget {
               height: DsSpacing.topBarNewChatSize,
               child: Icon(
                 Icons.edit_outlined,
-                size: 18,
+                size: DsSpacing.chipIconSize + 4,
                 color: c.labelPrimary,
               ),
             ),
           ),
         ),
       ),
-    );
-  }
-}
-
-/// 状态点颜色：颜色只是辅助，旁边的文字才是状态本身。
-Color statusDotColor(DsColors c, ChatStatusTone tone) => switch (tone) {
-  ChatStatusTone.ok => c.chatStatusOk,
-  ChatStatusTone.busy => c.brand,
-  ChatStatusTone.warn => c.chatStatusWarn,
-  ChatStatusTone.error => c.danger,
-  ChatStatusTone.idle => c.labelTertiary,
-};
-
-/// 状态点：busy 时呼吸（淡入淡出），其余静态。
-class ChatStatusDot extends StatefulWidget {
-  const ChatStatusDot({super.key, required this.color, this.pulsing = false});
-
-  final Color color;
-
-  /// 是否呼吸（连接中 / 生成中）。
-  final bool pulsing;
-
-  @override
-  State<ChatStatusDot> createState() => _ChatStatusDotState();
-}
-
-class _ChatStatusDotState extends State<ChatStatusDot>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _controller = AnimationController(
-    vsync: this,
-    duration: DsMotion.statusPulse,
-  );
-
-  @override
-  void initState() {
-    super.initState();
-    if (widget.pulsing) _controller.repeat(reverse: true);
-  }
-
-  @override
-  void didUpdateWidget(ChatStatusDot oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (widget.pulsing == oldWidget.pulsing) return;
-    if (widget.pulsing) {
-      _controller.repeat(reverse: true);
-    } else {
-      _controller
-        ..stop()
-        ..value = 1.0;
-    }
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final dot = Container(
-      width: DsSpacing.chatStatusDot,
-      height: DsSpacing.chatStatusDot,
-      decoration: BoxDecoration(color: widget.color, shape: BoxShape.circle),
-    );
-    if (!widget.pulsing) return dot;
-    return FadeTransition(
-      opacity: Tween<double>(
-        begin: 0.35,
-        end: 1.0,
-      ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut)),
-      child: dot,
     );
   }
 }

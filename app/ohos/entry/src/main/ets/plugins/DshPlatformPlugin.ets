@@ -3,7 +3,7 @@
  *
  * 对齐安卓 MainActivity.kt 的 dsh/platform（:116）：
  *   speak / stopSpeak / share / pickImage / appVersion /
- *   downloadApk / downloadStatus / installApk / openFile
+ *   downloadApk / downloadStatus / installApk / openFile / shareFile
  *
  * 鸿蒙口径：
  * - speak/stopSpeak → CoreSpeechKit（platform/Tts.ets）；
@@ -13,6 +13,7 @@
  * - downloadApk/downloadStatus/installApk → 鸿蒙是应用市场分发制，不能自更新，
  *   返回失败占位（Dart 侧 supportsInAppUpdate=false 不会走到这里）；
  * - openFile → 字节写 cacheDir 后 startAbility(ohos.want.action.viewData)。
+ * - shareFile → 暂未接入系统分享面板，回 false（Dart 侧回退路径分享）。
  *
  * UI 上下文来自 AbilityAware：configureFlutterEngine 阶段引擎已 attachToAbility，
  * add() 会立即回调 onAttachedToAbility。
@@ -104,6 +105,10 @@ export default class DshPlatformPlugin implements FlutterPlugin, AbilityAware {
         break;
       case 'openFile':
         this.handleOpenFile(call, result);
+        break;
+      case 'shareFile':
+        // 系统分享面板接入前显式回 false，Dart 侧回退分享路径。
+        result.success(false);
         break;
       default:
         result.notImplemented();

@@ -7,6 +7,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 
 import '../bridge/goal.dart';
+import '../bridge/jobs.dart';
 import '../bridge/projections.dart';
 import '../design/tokens.dart';
 import 'chat_header_status.dart';
@@ -18,6 +19,7 @@ import 'chat_side_rails.dart';
 import 'chat_shell.dart';
 import 'chat_state.dart';
 import 'goal_dock.dart';
+import 'jobs_sheet.dart';
 import 'queue_dock.dart';
 import 'chat_top_bar.dart';
 import 'projection_sheets.dart';
@@ -70,10 +72,15 @@ class _ChatPageState extends State<ChatPage>
   ChatState get st => widget.state;
   DsColors get c => widget.colors;
 
+  /// 后台任务控制器：跟当前会话绑定，负责基线拉取与推送归并。
+  late final JobsController _jobs;
+
   @override
   void initState() {
     super.initState();
     st.addListener(_onChange);
+    _jobs = JobsController(gateway: st.gateway, sessionId: st.sessionId)
+      ..addListener(_onJobsChange);
     st.loadSessions();
     // 历史图片下载器（真机反馈 2026-11-04 第 1 项）：attachment / image-handoff
     // 都走 REST，token 从 gateway 拿；sessionId 在 _onChange 里随会话刷新。
@@ -106,6 +113,9 @@ class _ChatPageState extends State<ChatPage>
   @override
   void dispose() {
     st.removeListener(_onChange);
+    _jobs
+      ..removeListener(_onJobsChange)
+      ..dispose();
     _drawerCtrl.dispose();
     _panelCtrl.dispose();
     super.dispose();
@@ -114,7 +124,19 @@ class _ChatPageState extends State<ChatPage>
   /// 已经为哪个新会话补拉过一次清单（防止服务端清单不含当前会话时无限重拉）。
   String? _listRefreshFor;
 
+  void _onJobsChange() {
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _openJobs() async {
+    await _jobs.refresh();
+    if (!mounted) return;
+    await showJobsSheet(context, _jobs, c);
+  }
+
   void _onChange() {
+    // 后台任务按会话隔离：换会话就换基线，旧会话的推送不再归并。
+    if (_jobs.sessionId != st.sessionId) _jobs.bind(st.sessionId);
     // 图片下载器要跟当前会话走：attachments 接口必填 sessionId query
     // （内核按会话事件校验引用），换会话就换下载器。
     final sid = st.sessionId;
@@ -353,6 +375,9 @@ class _ChatPageState extends State<ChatPage>
           onOpenTeam: st.sessionId == null
               ? null
               : () => showTeamSheet(context, st, c),
+          onPickModel: _pickModel,
+          jobsRunning: _jobs.runningCount,
+          onOpenJobs: () => unawaited(_openJobs()),
           trailing: ChatOverflowMenu(colors: c, state: st),
         ),
         body: Column(

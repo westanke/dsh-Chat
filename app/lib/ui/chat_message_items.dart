@@ -7,15 +7,14 @@ import 'package:material_ui/material_ui.dart';
 
 import '../bridge/gateway.dart';
 import '../bridge/models.dart';
-import '../bridge/platform.dart';
 import '../design/app_settings.dart';
 import '../design/tokens.dart';
 import 'chat_expand_state.dart';
 import 'chat_image.dart';
 import 'chat_state.dart';
 import 'chat_thinking.dart';
+import 'file_open.dart';
 import 'md_view.dart';
-import 'md_viewer.dart';
 import 'workspace_link.dart';
 import 'message_actions.dart';
 import 'process_group.dart';
@@ -393,73 +392,14 @@ class DeliverablesCard extends StatelessWidget {
   /// 当前会话的 gateway（resolve/readContent/openFile 都要走 REST）。
   final GatewayClient gateway;
 
-  bool _isMarkdown(String path) {
-    final lower = path.toLowerCase();
-    return lower.endsWith('.md') || lower.endsWith('.markdown');
-  }
-
   void _open(BuildContext context, DeliverableFile f) {
-    if (_isMarkdown(f.path)) {
-      Navigator.push(
-        context,
-        MaterialPageRoute<void>(
-          builder: (_) => MdViewerPage(
-            gateway: gateway,
-            absolutePath: f.path,
-            title: f.name,
-            colors: colors,
-          ),
-        ),
-      );
-      return;
-    }
-    _openWithSystem(context, f);
-  }
-
-  /// 非 md：先 resolve 确认可读，取字节交给系统「打开方式」；
-  /// 失败回退系统分享（体验兜底，不留死交互）。
-  Future<void> _openWithSystem(BuildContext context, DeliverableFile f) async {
-    final messenger = ScaffoldMessenger.of(context);
-    try {
-      final resolved =
-          await gatewayResolvePath(gateway, f.path);
-      final bytes =
-          await gatewayReadFileBytes(gateway, resolved.rootId, resolved.path);
-      final ok = await DshPlatform.openFile(
-        name: f.name,
-        bytes: bytes,
-        mime: resolved.contentType,
-      );
-      if (!messenger.mounted) return;
-      if (!ok) {
-        messenger.showSnackBar(
-          const SnackBar(content: Text('没有可打开此文件的应用，改为分享')),
-        );
-        await DshPlatform.share(f.path);
-      }
-    } on RequestException {
-      _fallbackShare(messenger, '文件读取失败，改为分享');
-    } on Exception {
-      _fallbackShare(messenger, '打开失败，改为分享');
-    }
-  }
-
-  Future<void> _fallbackShare(
-    ScaffoldMessengerState messenger,
-    String tip,
-  ) async {
-    // 注意：这里分享的是路径文本（老行为），不是文件字节——字节分享需要
-    // 临时文件 + FileProvider，作为纯兜底不值得引入。
-    final ok = await DshPlatform.share(
-      files.where((f) => f.path.isNotEmpty).map((f) => f.path).join('\n'),
+    openWorkspaceFile(
+      context,
+      gateway: gateway,
+      path: f.path,
+      name: f.name,
+      colors: colors,
     );
-    if (!messenger.mounted) return;
-    messenger.showSnackBar(SnackBar(content: Text(tip)));
-    if (!ok) {
-      messenger.showSnackBar(
-        const SnackBar(content: Text('分享暂不可用')),
-      );
-    }
   }
 
   @override

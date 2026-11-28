@@ -16,14 +16,89 @@ import 'queue.dart';
 Map<String, Object?> sessionsFrame({bool archived = false}) =>
     archived ? const {'archived': true} : const {};
 
+/// workspace 清单 + 置顶集合的一次读取结果。
+///
+/// `pinnedSessionIds` 是**应答顶层**字段（kernel-local.ts:334,348），不在每个
+/// workspace 元素里；顺序即内核的置顶顺序（最近置顶在前），抽屉照此排。
+class WorkspaceListing {
+  const WorkspaceListing({
+    required this.workspaces,
+    required this.pinnedSessionIds,
+  });
+
+  final List<DshWorkspace> workspaces;
+
+  /// 应答带 `pinnedSessionIds` 时为置顶顺序；**字段缺席时是 null**（不是空集合）——
+  /// 桥当前的 `workspaces` 帧只回 `{workspaces}`，不能当成「用户取消了所有置顶」。
+  final List<String>? pinnedSessionIds;
+}
+
+/// `workspace/pinSession` / `workspace/unpinSession` 的调用参数。
+///
+/// 内核描述符的 wire 是 `request.sessionId`（`z.object({request: {sessionId}})`，
+/// 严格校验多一个键都拒）——真机错误原文：
+/// `args fields do not match the descriptor: missing "request"; unexpected "sessionId"`。
+/// 桥的会话授权提取器读的也是 `args.request.sessionId`（kernel-allowlist.ts:78-85）。
+Map<String, Object?> pinSessionArgs(String sessionId) => {
+  'request': {'sessionId': sessionId},
+};
+
 extension GatewayApi on GatewayClient {
-  /// 授权根下的工作区清单（workspaces 帧，ws-basic.ts:73-76）。
-  Future<List<DshWorkspace>> workspaces() async {
+  /// 授权根下的工作区清单（workspaces 帧，ws-basic.ts:73-76），
+  /// 连同应答顶层的置顶会话 id 一起解析。
+  Future<WorkspaceListing> workspaceListing() async {
     final r = await request('workspaces', const {});
     final list = r['workspaces'] as List? ?? const [];
-    return list
-        .map((e) => DshWorkspace.fromJson(Map<String, dynamic>.from(e as Map)))
-        .toList();
+    final pinned = r['pinnedSessionIds'];
+    return WorkspaceListing(
+      workspaces: list
+          .map((e) => DshWorkspace.fromJson(Map<String, dynamic>.from(e as Map)))
+          .toList(),
+      pinnedSessionIds: pinned is List
+          ? [
+              for (final id in pinned)
+                if (id is String && id.isNotEmpty) id,
+            ]
+          : null,
+    );
+  }
+
+  /// 只要工作区列表的旧入口（保持既有调用方语义）。
+  Future<List<DshWorkspace>> workspaces() async =>
+      (await workspaceListing()).workspaces;
+
+  /// 置顶 / 取消置顶会话（内核 `workspace/pinSession` / `workspace/unpinSession`）。
+  ///
+  /// 内核调用面由能力位 `kernel-call-v1` 开关；端点不在目录里也算不支持。
+  /// 成功后返回应答里的最新置顶集合（顺序同内核）；失败抛 [RequestException]
+  /// 带上内核的 code/message，UI 好原样说明原因，不静默吞掉。
+  Future<Set<String>> pinWorkspaceSession(
+    String sessionId, {
+    required bool pinned,
+  }) async {
+    final action = pinned ? '置顶' : '取消置顶';
+    if (!kernelCallsEnabled) {
+      throw RequestException('NOT_SUPPORTED', '当前主机不支持$action（内核调用未启用）');
+    }
+    final endpoint = pinned ? 'workspace/pinSession' : 'workspace/unpinSession';
+    if (kernelEndpoint(endpoint) == null) {
+      throw RequestException('NOT_SUPPORTED', '当前主机不支持$action');
+    }
+    final result = await kernelCall(endpoint, args: pinSessionArgs(sessionId));
+    if (!result.ok) {
+      throw RequestException(
+        result.code ?? 'KERNEL_FAILED',
+        result.message ?? '$action失败',
+      );
+    }
+    final ids = result.object?['pinnedSessionIds'];
+    if (ids is! List) {
+      throw RequestException('BAD_REPLY', '$action应答缺少 pinnedSessionIds');
+    }
+    return {
+      for (final id in ids)
+        if (id is String && id.isNotEmpty) id,
+    };
   }
 
   /// 会话清单（sessions 帧；bridge 已过滤 origin=='subagent'）。

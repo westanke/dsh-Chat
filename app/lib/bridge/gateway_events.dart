@@ -168,6 +168,57 @@ class QueueUpdatedEvent extends GatewayEvent {
   final List<QueueEntry> queue;
 }
 
+/// 后台任务推送（`chat.job.updated` / `chat.job.finished`，bridge
+/// `src/host/ws-jobs.ts`）：同一个 event 帧，data =
+/// `{sessionId, jobId, status, progress?, finishedAt?}`，非终态走 updated、
+/// 终态（completed/killed/failed）走 finished，两者形状一致。
+///
+/// 刻意**不并入 [GatewayEvent]**：任务推送是会话作用域的旁路流
+/// （[GatewayClient.jobPushes]），不进聊天时间线的事件穷尽分派——否则每加一类
+/// 运维帧都要改 UI 的 switch，且 ChatState 对它毫无兴趣。桥只推已订阅且已授权
+/// 的会话，**没有回放**：重连后必须重拉 job-list 才有基线（见 jobs.dart）。
+class JobPush {
+  const JobPush({
+    required this.sessionId,
+    required this.jobId,
+    required this.status,
+    this.progress,
+    this.finishedAt,
+  });
+
+  factory JobPush.fromJson(Map<String, dynamic> json) => JobPush(
+    sessionId: (json['sessionId'] ?? '') as String,
+    jobId: (json['jobId'] ?? '') as String,
+    status: (json['status'] ?? '') as String,
+    progress: json['progress'] is String ? json['progress'] as String : null,
+    finishedAt: json['finishedAt'] is int ? json['finishedAt'] as int : null,
+  );
+
+  final String sessionId;
+  final String jobId;
+
+  /// 线值原样透传：running / stopping / completed / killed / failed。
+  final String status;
+
+  /// 运行进度行；终态帧不带（桥在终态清空）。
+  final String? progress;
+
+  /// 结束时刻（epoch ms）；通常只有终态帧带。
+  final int? finishedAt;
+
+  /// 终态判据按 status 推导（桥的终态集合由协议定死）。
+  bool get terminal =>
+      status == 'completed' || status == 'killed' || status == 'failed';
+
+  Map<String, dynamic> toJson() => {
+    'sessionId': sessionId,
+    'jobId': jobId,
+    'status': status,
+    if (progress != null) 'progress': progress,
+    if (finishedAt != null) 'finishedAt': finishedAt,
+  };
+}
+
 /// WS 请求 / REST 通道共用的错误（code 是稳定的错误名，如 HTTP_404/TIMEOUT）。
 ///
 /// bridge 的 error 帧带 retryable（仅上游/内部错误为 true）、statusCode 与

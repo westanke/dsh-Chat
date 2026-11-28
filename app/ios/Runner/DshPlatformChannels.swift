@@ -108,6 +108,9 @@ enum DshPlatformChannels {
       case "openFile":
         openFile(arguments: call.arguments, result: result)
 
+      case "shareFile":
+        shareFile(arguments: call.arguments, result: result)
+
       default:
         result(FlutterMethodNotImplemented)
       }
@@ -216,7 +219,7 @@ enum DshPlatformChannels {
 
   // MARK: - 工具
 
-  private static func topViewController(_ base: UIViewController? = nil) -> UIViewController? {
+  static func topViewController(_ base: UIViewController? = nil) -> UIViewController? {
     let root: UIViewController?
     if let base = base {
       root = base

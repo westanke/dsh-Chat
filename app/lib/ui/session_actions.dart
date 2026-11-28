@@ -9,15 +9,16 @@ import '../design/tokens.dart';
 import 'chat_state.dart';
 import 'composer_drafts.dart';
 
-/// 长按会话：重命名 / 归档（对照 dsh-go 会话长按菜单的常用两项）。
-/// 归档/改名失败只在当前页 SnackBar 说明，不改本地列表——真值以服务端应答为准，
-/// 动作成功后 `loadSessions()` 重拉。
+/// 长按会话：置顶 / 重命名 / 分叉 / 归档。
+/// 归档/改名/置顶失败只在当前页 SnackBar 说明，不改本地列表——真值以服务端应答为准，
+/// 动作成功后 `loadSessions()` / `refreshPinnedSessions()` 重拉。
 Future<void> openSessionMenu(
   BuildContext context,
   ChatState state,
   DshSession session,
   DsColors c,
 ) async {
+  final pinned = state.isSessionPinned(session.id);
   final action = await showModalBottomSheet<String>(
     context: context,
     backgroundColor: c.bgLayer1,
@@ -36,8 +37,26 @@ Future<void> openSessionMenu(
             ),
           ),
           ListTile(
+            leading: Icon(
+              pinned ? Icons.push_pin : Icons.push_pin_outlined,
+              color: c.labelPrimary,
+            ),
+            title: Text(
+              pinned ? '取消置顶' : '置顶',
+              style: DsTypography.base.copyWith(color: c.labelPrimary),
+            ),
+            subtitle: Text(
+              pinned ? '移回时间分组' : '固定在抽屉顶部',
+              style: DsTypography.caption.copyWith(color: c.labelTertiary),
+            ),
+            onTap: () => Navigator.of(sheet).pop('pin'),
+          ),
+          ListTile(
             leading: Icon(Icons.edit_outlined, color: c.labelPrimary),
-            title: Text('重命名', style: DsTypography.base.copyWith(color: c.labelPrimary)),
+            title: Text(
+              '重命名',
+              style: DsTypography.base.copyWith(color: c.labelPrimary),
+            ),
             onTap: () => Navigator.of(sheet).pop('rename'),
           ),
           ListTile(
@@ -54,7 +73,10 @@ Future<void> openSessionMenu(
           ),
           ListTile(
             leading: Icon(Icons.archive_outlined, color: c.danger),
-            title: Text('归档会话', style: DsTypography.base.copyWith(color: c.danger)),
+            title: Text(
+              '归档会话',
+              style: DsTypography.base.copyWith(color: c.danger),
+            ),
             subtitle: Text(
               '从列表隐藏，记录仍保留',
               style: DsTypography.caption.copyWith(color: c.labelTertiary),
@@ -67,6 +89,22 @@ Future<void> openSessionMenu(
     ),
   );
   if (action == null || !context.mounted) return;
+
+  if (action == 'pin') {
+    try {
+      await state.setSessionPinned(session.id, !pinned);
+    } on RequestException catch (e) {
+      if (context.mounted) {
+        await _alert(
+          context,
+          '${pinned ? '取消置顶' : '置顶'}失败',
+          e.message,
+          c,
+        );
+      }
+    }
+    return;
+  }
 
   if (action == 'rename') {
     final title = await showDialog<String>(
@@ -103,7 +141,11 @@ Future<void> openSessionMenu(
     context: context,
     builder: (dialog) => AlertDialog(
       title: const Text('归档会话？'),
-      content: Text(session.displayTitle, maxLines: 3, overflow: TextOverflow.ellipsis),
+      content: Text(
+        session.displayTitle,
+        maxLines: 3,
+        overflow: TextOverflow.ellipsis,
+      ),
       actions: [
         TextButton(
           onPressed: () => Navigator.of(dialog).pop(false),
@@ -138,6 +180,39 @@ void _toast(BuildContext context, String text) {
     ..showSnackBar(SnackBar(content: Text(text)));
 }
 
+/// 置顶失败用对话框，不用 SnackBar：抽屉是全屏覆盖层，SnackBar 会落在它下面，
+/// 用户看到的是「点了没反应」（真机验过）。对话框在覆盖层之上，且能放完整原因。
+Future<void> _alert(
+  BuildContext context,
+  String title,
+  String text,
+  DsColors c,
+) {
+  return showDialog<void>(
+    context: context,
+    builder: (dialog) => AlertDialog(
+      backgroundColor: c.bgLayer1,
+      title: Text(
+        title,
+        style: DsTypography.h4.copyWith(color: c.labelPrimary),
+      ),
+      content: Text(
+        text,
+        style: DsTypography.small.copyWith(color: c.labelSecondary),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(dialog).pop(),
+          child: Text(
+            '知道了',
+            style: DsTypography.base.copyWith(color: c.brand),
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
 /// 修剪会话标题：去首尾空白；空 → null（不可保存）；超长按 80 字截断
 /// （桌面端重命名上限同口径；ws-sessions 不校验长度，客户端自己收敛）。
 String? normalizeSessionTitle(String raw) {
@@ -157,9 +232,9 @@ class _RenameDialog extends StatefulWidget {
 }
 
 class _RenameDialogState extends State<_RenameDialog> {
-  late final TextEditingController _controller =
-      TextEditingController(text: widget.initial)
-        ..selection = TextSelection.collapsed(offset: widget.initial.length);
+  late final TextEditingController _controller = TextEditingController(
+    text: widget.initial,
+  )..selection = TextSelection.collapsed(offset: widget.initial.length);
 
   @override
   void dispose() {

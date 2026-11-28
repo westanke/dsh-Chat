@@ -226,8 +226,14 @@ class GatewayClient {
   final _stateCtrl = StreamController<GatewayState>.broadcast();
   final _eventCtrl = StreamController<GatewayEvent>.broadcast();
 
+  /// 后台任务推送走旁路流（[JobPush]）：不进 [events] 的穷尽分派。
+  final _jobCtrl = StreamController<JobPush>.broadcast();
+
   Stream<GatewayState> get state => _stateCtrl.stream;
   Stream<GatewayEvent> get events => _eventCtrl.stream;
+
+  /// 后台任务推送（`chat.job.updated` / `chat.job.finished`）。
+  Stream<JobPush> get jobPushes => _jobCtrl.stream;
   GatewayState get currentState => _state;
 
   String get _wsUrl {
@@ -583,6 +589,14 @@ class GatewayClient {
         _eventCtrl.add(
           QueueUpdatedEvent(qsid, QueueEntry.listFrom(payload['queue'])),
         );
+      case 'chat.job.updated' || 'chat.job.finished':
+        // 后台任务推送（bridge src/host/ws-jobs.ts）：不新增 kind，复用 event 帧；
+        // 非终态走 updated，终态（completed/killed/failed）走 finished，形状一致。
+        final jobId = (payload['jobId'] ?? '') as String;
+        if (jobId.isNotEmpty) {
+          DshLog.w('gw $type job=$jobId status=${payload['status']}');
+          _jobCtrl.add(JobPush.fromJson(payload));
+        }
       default:
         break; // 其余事件忽略（goal/task 等低频帧暂不消费）
     }
@@ -801,6 +815,7 @@ class GatewayClient {
     _teardown();
     _stateCtrl.close();
     _eventCtrl.close();
+    _jobCtrl.close();
     _catalog.dispose();
   }
 }

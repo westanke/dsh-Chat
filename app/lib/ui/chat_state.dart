@@ -20,6 +20,7 @@ import 'chat_expand_state.dart';
 import 'chat_hitl_actions.dart';
 import 'history_snapshot_cache.dart';
 import 'chat_setup_state.dart';
+import 'composer_drafts.dart';
 import 'mobile_workspace.dart';
 import 'session_groups.dart';
 import 'streaming_tools.dart';
@@ -42,10 +43,23 @@ String? lastUserTextBefore(List<ChatMessage> messages, int end) {
   return last;
 }
 
+/// 批量归档的结果：桥只有单条归档，抽屉多选是逐条调用后汇总。
+///
+/// 部分失败不中止整批（先尽可能归档），把成功/失败数交给 UI 如实报告。
+class BatchArchiveResult {
+  const BatchArchiveResult({required this.archived, required this.failed});
+
+  final int archived;
+  final int failed;
+
+  bool get ok => failed == 0;
+  int get total => archived + failed;
+}
+
 class ChatState extends ChangeNotifier
     with GroupExpandState, ChatSetupState {
   ChatState(this._gateway) {
-    _sub = _gateway.events.listen((event) => _onGatewayEvent(this, event));
+    _sub = _gateway.events.listen(_handleGatewayEvent);
     _stateSub = _gateway.state.listen(_onGatewayState);
     // HITL 卡片要自己驱动重建：hitl 表变更（含 replay/REST 合流）直达 UI，
     // 不依赖 reloadHistory「碰巧」触发（2026-11-16 真机：replay 晚于 reloadHistory 时提问卡永不出现）。
@@ -128,6 +142,16 @@ class ChatState extends ChangeNotifier
   List<DshSession> archivedSessions = const [];
   bool showArchived = false;
   bool loadingArchived = false;
+
+  /// 置顶会话 id（内核 workspace 清单的顶层 `pinnedSessionIds`，顺序即
+  /// 内核置顶顺序：最近置顶在前）。抽屉顶部「置顶」分组按此排序。
+  Set<String> pinnedSessionIds = <String>{};
+
+  /// 未读会话 id（**只存本页内存，不落盘**）。
+  ///
+  /// 判定：非当前会话收到回合正常结束/失败事件时标未读（打开会话即清）。
+  /// 不做历史回放标记——否则一启动整屏都会是未读，正是要避免的假象。
+  final Set<String> unreadSessionIds = <String>{};
 
   List<ChatMessage> messages = [];
 
@@ -298,6 +322,93 @@ class ChatState extends ChangeNotifier
     }
   }
 
+  /// 该会话是否置顶（抽屉长按菜单据此显示「置顶/取消置顶」）。
+  bool isSessionPinned(String sessionId) =>
+      pinnedSessionIds.contains(sessionId);
+
+  /// 该会话是否被本地标记未读（行尾圆点 / unread 筛选据此判断）。
+  bool isSessionUnread(String sessionId) =>
+      unreadSessionIds.contains(sessionId);
+
+  /// 标记未读：已读/重复标记都直接返回，避免无意义重建。
+  void markSessionUnread(String sessionId) {
+    if (sessionId.isEmpty || !unreadSessionIds.add(sessionId)) return;
+    notifyListeners();
+  }
+
+  /// 清除未读（打开会话、用户回来看到内容时调用）。
+  void clearSessionUnread(String sessionId) {
+    if (unreadSessionIds.remove(sessionId)) notifyListeners();
+  }
+
+  /// 从 workspace 清单拉一次置顶集合（内核真值）。
+  ///
+  /// 失败只记日志不冒泡：抽屉初始化/归档后顺手刷新，拉不到不该打断主流程，
+  /// 本地已有的置顶集合继续用（下次成功再对齐）。
+  Future<void> refreshPinnedSessions() async {
+    try {
+      final listing = await _gateway.workspaceListing();
+      final pins = listing.pinnedSessionIds;
+      // 桥的 workspaces 帧当前不回 pinnedSessionIds（只有 kernel-local 的 baseline 回）。
+      // 字段缺席 != 用户清空了置顶：保留应答里那份，别用空集合把它擦掉。
+      if (pins != null) {
+        pinnedSessionIds = pins.toSet();
+        notifyListeners();
+      }
+    } on RequestException catch (e) {
+      DshLog.w('ui pinned sessions refresh failed ${e.code}');
+    }
+  }
+
+  /// 置顶 / 取消置顶（内核 workspace/pinSession|unpinSession）。
+  ///
+  /// 成功后用应答里的置顶集合即时更新，再拉一次 workspace 清单对齐其他端
+  /// 的并发修改；失败抛 [RequestException]，由调用方（长按菜单）弹 SnackBar
+  /// 说明原因，不静默。
+  Future<void> setSessionPinned(String sessionId, bool pinned) async {
+    final ids = await _gateway.pinWorkspaceSession(sessionId, pinned: pinned);
+    pinnedSessionIds = ids;
+    notifyListeners();
+    await refreshPinnedSessions();
+  }
+
+  /// 批量归档（抽屉多选）。逐条调桥的单条归档，部分失败继续跑完并计数。
+  ///
+  /// 当前会话被归档时切到新对话；成功后刷新会话清单与置顶集合
+  /// （内核归档会顺手摘掉置顶）。失败项只记日志，由返回值让 UI 报数。
+  Future<BatchArchiveResult> archiveSessions(Iterable<String> ids) async {
+    final targets = <String>{
+      for (final id in ids)
+        if (id.isNotEmpty) id,
+    };
+    if (targets.isEmpty) {
+      return const BatchArchiveResult(archived: 0, failed: 0);
+    }
+    var archived = 0;
+    var failed = 0;
+    var archivedCurrent = false;
+    for (final id in targets) {
+      try {
+        await _gateway.archiveSession(id);
+        // 会话没了，它那份输入草稿也一并清掉（草稿只在内存里，留着占位），
+        // 未读记账同 id 也失效（归档区不会再给已归档的已读会话点圆点）。
+        composerDrafts.clearDraft(id);
+        unreadSessionIds.remove(id);
+        archived++;
+        if (sessionId == id) archivedCurrent = true;
+      } on RequestException catch (e) {
+        failed++;
+        DshLog.w('ui batch archive failed sid=$id ${e.code}');
+      }
+    }
+    if (archivedCurrent) await newChat();
+    if (archived > 0) {
+      await loadSessions();
+      await refreshPinnedSessions();
+    }
+    return BatchArchiveResult(archived: archived, failed: failed);
+  }
+
   /// 按 id 打开会话（通知点击用）：先查已加载列表，没命中就重拉一次；
   /// 还找不到就按最小会话对象打开（bridge 会补齐投影/历史）。
   Future<void> openSessionById(String id) async {
@@ -318,6 +429,8 @@ class ChatState extends ChangeNotifier
     // 命令卡只活在执行它的那一次会话里：进会话即清，切走也不带走
     // （真机 2026-11-23：命令结果卡跨会话串台，只有重进会话才消失）。
     commandCards.remove(s.id);
+    // 打开即视为已读（本地未读记账；随后的 notifyListeners 会刷新抽屉圆点）。
+    unreadSessionIds.remove(s.id);
     sessionId = s.id;
     // 旧会话的发送回执/事件还在路上：切走后一律不认。
     // 不这么做时，A 在执行的 delta/committed 仍会因为 _pendingSessionId
@@ -797,6 +910,26 @@ class ChatState extends ChangeNotifier
   bool _isCurrent(String sid) =>
       (sessionId != null && sessionId!.isNotEmpty) &&
       (sid == sessionId || sid == _pendingSessionId);
+
+  /// 事件入口：先做未读记账，再交给 chat_state_events 的事件状态机。
+  ///
+  /// 未读必须**早于**状态机里的「是否当前会话」早退判断：别的会话跑完一轮
+  /// 而用户正在看这页时，抽屉要给那条会话点未读；当前会话则保持已读。
+  /// 只看 turn.end / turn.failed 两类真实收尾，不看历史回放（否则启动即全未读）。
+  void _handleGatewayEvent(GatewayEvent event) {
+    if (event is TurnEndedEvent) {
+      const abortKinds = {'aborted', 'interrupted', 'error'};
+      if (!_isCurrent(event.sessionId) &&
+          !abortKinds.contains(event.reasonKind)) {
+        markSessionUnread(event.sessionId);
+      }
+    } else if (event is TurnFailedEvent) {
+      if (!_isCurrent(event.sessionId)) {
+        markSessionUnread(event.sessionId);
+      }
+    }
+    _onGatewayEvent(this, event);
+  }
 
   @override
   void dispose() {

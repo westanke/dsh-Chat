@@ -736,6 +736,24 @@ dsh-Go 的「拍照」（本仓原生通道无相机 Intent）、「生成」「
   展开钮并走完弹层写回 / 短文本无展开钮）。注意 `AnimationController.forward()` 后第一帧
   只对齐 ticker 起始时间，测试要 `pump()` 再 `pump(400ms)`。
 
+## 4.22 顶栏 chip 带 · 后台任务 · 抽屉组织（2026-11-28 P0，全部复用既有 token）
+
+对齐 dsh-go 会话页外围信息（`chat_header.dart` / `job_*` / `drawer`），本批不新增色值，
+只登记新组合的尺寸与语义：
+
+- **顶栏两行**：标题行沿用 56dp；第二行 chip 带高 29dp（`topBarHeight + chipHeight`，总高
+  85dp ≤ 88dp 预算）。chip 带横向 `SingleChildScrollView`，内距 `screenPad`、chip 间距
+  `drawerFilterGap`；窄屏只横滚、不换行。chip 顺序：状态 → 模型 → 上下文用量 → 后台任务
+  → 子代理；状态色取 `chatStatusOk/Warn/Error`，上下文 ≥80% 用 `chatStatusWarn` 描边+文字。
+- **后台任务面板**：行高与定时任务面板一致（`scheduleRow` 口径），运行中状态点用
+  `chatStatusBusy`，失败用 `chatStatusError`；输出等宽字体 `DsTypography.mono`，长文本在
+  sheet 内滚动，truncated 时顶部给「更早输出已省略」提示。
+- **抽屉组织**：置顶分组标题与时间组标题同字号（`DsTypography.caption`，`labelTertiary`）；
+  未读圆点 6dp，取 `brand`；多选勾选框行高 +0，复用 `SessionOrgRow` 的 44dp 点击区；底部
+  多选操作条高 56dp，归档主按钮用 `brand`，计数文案带成功/失败数。
+- **产物卡菜单**：底部 sheet 三项（打开/预览、复制路径、分享文件），行高 48dp，图标
+  `labelSecondary`；「分享文件」失败回退路径分享时用 SnackBar 明说，不静默。
+
 ## 5. 截图资产（ref/）
 - official-login-page.png 登录页（+86 152 1388 0002 / 验证码输入 / 发送验证码按钮）
 - official-welcome.png 欢迎引导页（开启对话主按钮）

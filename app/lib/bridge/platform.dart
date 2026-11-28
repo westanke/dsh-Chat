@@ -98,6 +98,31 @@ class DshPlatform {
     }
   }
 
+  /// 调起系统分享面板分享**文件字节**（产物卡/交付卡用）。
+  ///
+  /// 与 [share] 的区别：接收方收到的是文件本体，不是路径字符串。
+  /// Android 写应用缓存 + FileProvider + ACTION_SEND；iOS 写 caches +
+  /// UIActivityViewController；鸿蒙暂未接入，返回 false，调用方回退路径分享。
+  static Future<bool> shareFile({
+    required String name,
+    required List<int> bytes,
+    String? mime,
+  }) async {
+    if (name.trim().isEmpty || bytes.isEmpty) return false;
+    try {
+      return await _channel.invokeMethod<bool>('shareFile', {
+            'name': name,
+            'mime': mime ?? '',
+            'bytes': Uint8List.fromList(bytes),
+          }) ??
+          false;
+    } on PlatformException {
+      return false;
+    } on MissingPluginException {
+      return false;
+    }
+  }
+
   /// 调起系统相册/文件选择器选一张图（真机反馈 2026-11-04 第 2 项，
   /// 零依赖方案：Android ACTION_GET_CONTENT，vivo 拦应用内注入但不拦系统选择器）。
   ///

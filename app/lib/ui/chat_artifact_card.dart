@@ -9,8 +9,8 @@ import 'package:flutter/services.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../bridge/gateway.dart';
-import '../bridge/platform.dart';
 import '../design/tokens.dart';
+import 'file_open.dart';
 import 'turn_changes.dart';
 
 class ArtifactCard extends StatefulWidget {
@@ -113,7 +113,40 @@ class _ArtifactRow extends StatelessWidget {
   final DsColors colors;
   final GatewayClient? gateway;
 
-  Future<void> _menu(BuildContext context) async {
+  void _open(BuildContext context) {
+    final client = gateway;
+    if (client == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('未连接，无法打开文件')),
+      );
+      return;
+    }
+    openWorkspaceFile(
+      context,
+      gateway: client,
+      path: file.path,
+      name: file.name,
+      colors: colors,
+    );
+  }
+
+  void _share(BuildContext context) {
+    final client = gateway;
+    if (client == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('未连接，无法分享文件')),
+      );
+      return;
+    }
+    shareWorkspaceFile(
+      context,
+      gateway: client,
+      path: file.path,
+      name: file.name,
+    );
+  }
+
+  Future<void> _showMenu(BuildContext context) async {
     final action = await showModalBottomSheet<String>(
       context: context,
       builder: (context) => SafeArea(
@@ -121,13 +154,18 @@ class _ArtifactRow extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             ListTile(
+              leading: const Icon(Icons.open_in_new),
+              title: const Text('打开 / 预览'),
+              onTap: () => Navigator.pop(context, 'open'),
+            ),
+            ListTile(
               leading: const Icon(Icons.link),
               title: const Text('复制路径'),
               onTap: () => Navigator.pop(context, 'copy'),
             ),
             ListTile(
               leading: const Icon(Icons.ios_share),
-              title: const Text('分享'),
+              title: const Text('分享文件'),
               onTap: () => Navigator.pop(context, 'share'),
             ),
           ],
@@ -135,16 +173,17 @@ class _ArtifactRow extends StatelessWidget {
       ),
     );
     if (!context.mounted) return;
-    final messenger = ScaffoldMessenger.of(context);
     switch (action) {
+      case 'open':
+        _open(context);
       case 'copy':
         await Clipboard.setData(ClipboardData(text: file.path));
-        messenger.showSnackBar(const SnackBar(content: Text('已复制路径')));
+        if (!context.mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('已复制路径')),
+        );
       case 'share':
-        final ok = await DshPlatform.share(file.path);
-        if (!ok) {
-          messenger.showSnackBar(const SnackBar(content: Text('分享暂不可用')));
-        }
+        _share(context);
       default:
         return;
     }
@@ -153,7 +192,7 @@ class _ArtifactRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return InkWell(
-      onTap: () => _menu(context),
+      onTap: () => _open(context),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(14, 6, 8, 6),
         child: Row(
@@ -181,7 +220,18 @@ class _ArtifactRow extends StatelessWidget {
                 ],
               ),
             ),
-            Icon(Icons.more_horiz, size: 18, color: colors.labelTertiary),
+            InkWell(
+              onTap: () => _showMenu(context),
+              borderRadius: BorderRadius.circular(16),
+              child: Padding(
+                padding: const EdgeInsets.all(6),
+                child: Icon(
+                  Icons.more_horiz,
+                  size: 18,
+                  color: colors.labelTertiary,
+                ),
+              ),
+            ),
           ],
         ),
       ),

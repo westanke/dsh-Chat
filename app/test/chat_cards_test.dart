@@ -181,6 +181,50 @@ void main() {
     expect(find.text('clip.mp4'), findsOneWidget);
   });
 
+  testWidgets('生成文件卡：行内更多菜单提供打开/复制/分享', (tester) async {
+    tester.view.physicalSize = const Size(1080, 2400);
+    tester.view.devicePixelRatio = 3.0;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(
+      _host(
+        ArtifactCard(
+          colors: DsColors(false),
+          files: [_artifact('/w/shot_landscape.png')],
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byIcon(Icons.more_horiz));
+    await tester.pumpAndSettle();
+
+    expect(find.text('打开 / 预览'), findsOneWidget);
+    expect(find.text('复制路径'), findsOneWidget);
+    expect(find.text('分享文件'), findsOneWidget);
+  });
+
+  testWidgets('生成文件卡：未连接时点行给提示，不崩', (tester) async {
+    tester.view.physicalSize = const Size(1080, 2400);
+    tester.view.devicePixelRatio = 3.0;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(
+      _host(
+        ArtifactCard(
+          colors: DsColors(false),
+          files: [_artifact('/w/shot_landscape.png')],
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('shot_landscape.png'));
+    await tester.pump();
+
+    expect(find.text('未连接，无法打开文件'), findsOneWidget);
+  });
+
   testWidgets('查看改动页：文件 chips、路径、增删与修改次数', (tester) async {
     tester.view.physicalSize = const Size(1080, 2400);
     tester.view.devicePixelRatio = 3.0;
