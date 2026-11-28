@@ -11,12 +11,12 @@
 </p>
 
 <p align="center">
-  <a href="https://gitee.com/westanke/dsh-Chat/releases/tag/v1.0.40"><code>下载 v1.0.40 · APK / HAP</code></a>
+  <a href="https://gitee.com/westanke/dsh-Chat/releases/tag/v1.0.41"><code>下载 v1.0.41 · APK / HAP</code></a>
 </p>
 
 <p align="center">
   <a href="./README.en.md">English</a> ·
-  <img alt="Version" src="https://img.shields.io/badge/version-1.0.40-087f8c">
+  <img alt="Version" src="https://img.shields.io/badge/version-1.0.41-087f8c">
   <img alt="License" src="https://img.shields.io/badge/license-AGPL--3.0-2da44e">
   <img alt="Platforms" src="https://img.shields.io/badge/platform-Android%20%7C%20iOS%20%7C%20HarmonyOS-586069">
   <img alt="Built with Flutter" src="https://img.shields.io/badge/built%20with-Flutter-02569B">
@@ -86,18 +86,18 @@
 | **iOS** | 原生桥已补齐 IANA 时区、私有目录、通知、TTS、分享、选图、打开文件；CI 已构建出未签名 IPA。**未在 iPhone 真机验证**；安装/更新走 App Store |
 | **HarmonyOS** | **Flutter-OH 版已真机验证**（API 26）：配对、聊天、会话、分享、TTS、选图、通知与点击回跳均通过。正式 release HAP 需 AGC 正式签名 |
 
-当前版本：`app/pubspec.yaml` 为 `1.0.40+41`，tag `v1.0.40`。
+当前版本：`app/pubspec.yaml` 为 `1.0.41+42`，tag `v1.0.41`。
 
 未验证的功能不会被写成“已完成”。真机截图是唯一验收证据。
 
 ## 下载安装
 
-最新版 **v1.0.40**（Gitee 主站；GitHub 镜像同步同一 tag）：
+最新版 **v1.0.41**（Gitee 主站；GitHub 镜像同步同一 tag）：
 
 | 产物 | 大小 | SHA-256 |
 |---|---|---|
-| [APK](https://gitee.com/westanke/dsh-Chat/releases/download/v1.0.40/dsh-Chat-v1.0.40.apk) | 27,731,018 字节 | `cd332f1132750c110a79bd99d5456948000ab34ae20b960e1178374c3b66aefc` |
-| [HAP](https://gitee.com/westanke/dsh-Chat/releases/download/v1.0.40/dsh-Chat-v1.0.40-unsigned.hap) | 35,304,836 字节 | `2f83cbc21698291a9ca0da7a6cddaee2506fb24d9b6e0a3a89b03b047636c8b1`（未签名，本机验证用） |
+| [APK](https://gitee.com/westanke/dsh-Chat/releases/download/v1.0.41/dsh-Chat-v1.0.41.apk) | 27,731,018 字节 | `fe6ac051bf610850f124224b6d2978246dbb98bc0b083104ecb07a6e4f0f737f` |
+| [HAP](https://gitee.com/westanke/dsh-Chat/releases/download/v1.0.41/dsh-Chat-v1.0.41-unsigned.hap) | 35,304,836 字节 | `822a8fb66584e0e4a5bbadf20b69fd679ea5827ac0b76aefc98f93f2068a4dd9`（未签名，本机验证用） |
 
 - Android：直接安装 APK；部分机型会弹风险拦截页，勾选确认后继续。
 - HarmonyOS：HAP 需要设备信任的签名。开发机可用 `scripts/sign-hap.sh` 生成 debug 签名包；
