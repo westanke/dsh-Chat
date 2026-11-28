@@ -30,8 +30,6 @@ class ChatTopBar extends StatelessWidget {
     required this.onNewChat,
     this.onOpenTeam,
     this.state,
-    this.jobsRunning,
-    this.onOpenJobs,
     required this.trailing,
   });
 
@@ -49,12 +47,6 @@ class ChatTopBar extends StatelessWidget {
   /// 传 null 时这些入口退化（定时任务不渲染、模型显示「模型」、用量 chip 不显示）。
   final ChatState? state;
 
-  /// 正在跑的后台任务数；null / 0 时不渲染 jobs chip。
-  final int? jobsRunning;
-
-  /// 点 jobs chip 打开后台任务面板；null 时 chip 只展示数量。
-  final VoidCallback? onOpenJobs;
-
   /// 右侧溢出菜单（由会话页提供，避免这里依赖各面板）。
   final Widget trailing;
 
@@ -65,15 +57,8 @@ class ChatTopBar extends StatelessWidget {
     final openSchedule = st != null && scheduleEntryVisible(st)
         ? () => showScheduleSheet(context, st, c)
         : null;
-    final running = jobsRunning ?? 0;
-
     // 新对话还没有标题时，胶囊沿用旧顶栏的做法显示主机名，避免一条空白药丸。
     final heading = title.trim().isEmpty ? status.label : title;
-
-    // 有后台任务时整行略收 4dp，右侧多一枚绿色小胶囊；没有任务时不占位。
-    final rowHeight = running > 0
-        ? DsSpacing.topBarHeight - 4
-        : DsSpacing.topBarHeight;
 
     return ColoredBox(
       color: c.bgBase,
@@ -87,12 +72,18 @@ class ChatTopBar extends StatelessWidget {
               child: ConstrainedBox(
                 constraints: BoxConstraints(maxWidth: columnMax),
                 child: SizedBox(
-                  height: rowHeight,
+                  height: DsSpacing.topBarHeight,
                   child: Row(
                     children: [
-                      const SizedBox(width: DsSpacing.screenPad),
-                      // 标题胶囊吃掉全部剩余宽度：菜单 / 新会话 / 团队 / 定时
-                      // 任务都收到右侧，标题能显示更多字。
+                      // 会话列表菜单固定在标题胶囊前面，保持可见。
+                      IconButton(
+                        icon: Icon(Icons.menu),
+                        color: c.labelPrimary,
+                        tooltip: '会话列表',
+                        onPressed: onMenu,
+                      ),
+                      const SizedBox(width: 2),
+                      // 标题胶囊吃掉剩余宽度；定时任务 / 团队 / 新建 / 更多在右。
                       Expanded(
                         child: _TitleCapsule(
                           colors: c,
@@ -100,14 +91,6 @@ class ChatTopBar extends StatelessWidget {
                           status: status,
                         ),
                       ),
-                      if (running > 0) ...[
-                        const SizedBox(width: DsSpacing.chipIconGap),
-                        ChatJobsPill(
-                          colors: c,
-                          running: running,
-                          onTap: onOpenJobs,
-                        ),
-                      ],
                       const SizedBox(width: DsSpacing.chipIconGap),
                       if (openSchedule != null)
                         _RoundAction(
@@ -127,13 +110,8 @@ class ChatTopBar extends StatelessWidget {
                       ],
                       const SizedBox(width: 2),
                       _NewChatSquare(colors: c, onTap: onNewChat),
-                      IconButton(
-                        icon: Icon(Icons.menu),
-                        color: c.labelPrimary,
-                        tooltip: '会话列表',
-                        onPressed: onMenu,
-                      ),
-                      const SizedBox(width: DsSpacing.screenPad - 8),
+                      trailing,
+                      const SizedBox(width: DsSpacing.screenPad),
                     ],
                   ),
                 ),

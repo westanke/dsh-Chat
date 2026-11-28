@@ -22,14 +22,12 @@ class _FakeGateway extends GatewayClient {
 class _Taps {
   int menu = 0;
   int newChat = 0;
-  int jobs = 0;
 }
 
 Future<void> _pumpTopBar(
   WidgetTester tester, {
   String title = '会话标题',
   ChatHeaderStatus? status,
-  int? jobsRunning,
   _Taps? taps,
 }) async {
   final gateway = _FakeGateway();
@@ -47,8 +45,6 @@ Future<void> _pumpTopBar(
           state: state,
           onMenu: () => t.menu++,
           onNewChat: () => t.newChat++,
-          jobsRunning: jobsRunning,
-          onOpenJobs: () => t.jobs++,
           trailing: const SizedBox.shrink(),
         ),
       ),
@@ -122,34 +118,10 @@ void main() {
   });
 
   testWidgets('模型/上下文/子代理不在顶栏重复出现', (tester) async {
-    await _pumpTopBar(
-      tester,
-      jobsRunning: 0,
-    );
+    await _pumpTopBar(tester);
     expect(find.textContaining('模型'), findsNothing);
     expect(find.textContaining('上下文'), findsNothing);
     expect(find.textContaining('子代理'), findsNothing);
-  });
-
-  testWidgets('后台任务 >0 时右侧出绿色胶囊并可点；0 时不占高度', (tester) async {
-    final taps = _Taps();
-    await _pumpTopBar(tester, jobsRunning: 2, taps: taps);
-    expect(find.text('后台 2'), findsOneWidget);
-    await tester.tap(find.text('后台 2'));
-    await tester.pump();
-    expect(taps.jobs, 1);
-
-    await _pumpTopBar(tester, jobsRunning: 0);
-    expect(find.textContaining('后台任务'), findsNothing);
-    final bar = tester.widget<SizedBox>(
-      find
-          .descendant(
-            of: find.byType(ChatTopBar),
-            matching: find.byType(SizedBox),
-          )
-          .first,
-    );
-    expect(bar.height, DsSpacing.topBarHeight);
   });
 
   testWidgets('标题行菜单 / 新对话回调仍可点', (tester) async {

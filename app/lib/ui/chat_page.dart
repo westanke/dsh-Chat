@@ -421,8 +421,6 @@ class _ChatPageState extends State<ChatPage>
           onOpenTeam: st.sessionId == null
               ? null
               : () => showTeamSheet(context, st, c),
-          jobsRunning: _jobs.runningCount,
-          onOpenJobs: () => unawaited(_openJobs()),
           trailing: ChatOverflowMenu(colors: c, state: st),
         ),
         body: Column(
@@ -484,8 +482,13 @@ class _ChatPageState extends State<ChatPage>
               ),
             // 当前活动条（dsh-go ActivityStrip 移植）：这一轮在跑时显示
             // 「思考中 / 正在调用工具 + 细节 + 实时秒表」，不跑就不占位。
-            if (activity != null)
-              ActivityStrip(activity: activity, colors: c),
+            if (activity != null || _jobs.runningCount > 0)
+              ActivityStrip(
+                activity: activity,
+                colors: c,
+                jobsRunning: _jobs.runningCount,
+                onOpenJobs: () => unawaited(_openJobs()),
+              ),
             // 输入条上方的任务条（dsh-go TodoDock 移植）：没有清单时不占位。
             if (todoDock != null)
               TodoDockBar(

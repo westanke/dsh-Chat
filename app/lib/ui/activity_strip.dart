@@ -16,6 +16,7 @@ import 'package:material_ui/material_ui.dart';
 import '../bridge/history_page.dart';
 import '../bridge/tool_call.dart';
 import '../design/tokens.dart';
+import 'chat_header_chips.dart';
 import 'tool_present.dart';
 import 'tool_titles.dart';
 
@@ -98,12 +99,18 @@ class LiveActivity {
 class ActivityStrip extends StatefulWidget {
   const ActivityStrip({
     super.key,
-    required this.activity,
+    this.activity,
     required this.colors,
+    this.jobsRunning = 0,
+    this.onOpenJobs,
   });
 
-  final LiveActivity activity;
+  final LiveActivity? activity;
   final DsColors colors;
+
+  /// 正在跑的后台任务数：>0 时在活动条右侧挂绿色小胶囊，并把活动条收矮。
+  final int jobsRunning;
+  final VoidCallback? onOpenJobs;
 
   @override
   State<ActivityStrip> createState() => _ActivityStripState();
@@ -122,16 +129,17 @@ class _ActivityStripState extends State<ActivityStrip> {
   void didUpdateWidget(ActivityStrip oldWidget) {
     super.didUpdateWidget(oldWidget);
     // 换了活动（思考 → 工具）时重新起表，秒表从新活动的起点算。
-    if (oldWidget.activity.since != widget.activity.since ||
-        oldWidget.activity.label != widget.activity.label) {
+    final a = widget.activity;
+    final b = oldWidget.activity;
+    if (a?.since != b?.since || a?.label != b?.label) {
       _startTicker();
     }
   }
 
   void _startTicker() {
     _ticker?.cancel();
-    // 没有起点就没有秒表，不必白跑定时器。
-    if (widget.activity.since == null) return;
+    // 没有活动 / 没有起点就没有秒表，不必白跑定时器。
+    if (widget.activity?.since == null) return;
     _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
       if (mounted) setState(() {});
     });
@@ -147,9 +155,13 @@ class _ActivityStripState extends State<ActivityStrip> {
   Widget build(BuildContext context) {
     final c = widget.colors;
     final a = widget.activity;
-    final elapsed = a.elapsedLabel(DateTime.now().millisecondsSinceEpoch);
-    final detail = a.detail;
+    final jobs = widget.jobsRunning;
+    if (a == null && jobs <= 0) return const SizedBox.shrink();
+    final elapsed = a?.elapsedLabel(DateTime.now().millisecondsSinceEpoch);
+    final detail = a?.detail;
     final hasDetail = detail != null && detail.trim().isNotEmpty;
+    // 有后台任务胶囊时把活动条收矮一点，让绿色药丸和文字同居一行。
+    final compact = jobs > 0;
     return Container(
       margin: const EdgeInsets.fromLTRB(
         DsSpacing.screenPad,
@@ -157,9 +169,11 @@ class _ActivityStripState extends State<ActivityStrip> {
         DsSpacing.screenPad,
         0,
       ),
-      padding: const EdgeInsets.symmetric(
-        horizontal: DsSpacing.activityStripPadH,
-        vertical: DsSpacing.activityStripPadV,
+      padding: EdgeInsets.symmetric(
+        horizontal: compact
+            ? DsSpacing.activityStripPadH - 2
+            : DsSpacing.activityStripPadH,
+        vertical: compact ? 4 : DsSpacing.activityStripPadV,
       ),
       decoration: BoxDecoration(
         color: c.drawerSearchFill,
@@ -167,38 +181,49 @@ class _ActivityStripState extends State<ActivityStrip> {
       ),
       child: Row(
         children: [
-          Icon(_icon(a.kind), size: DsSpacing.menuIconSize, color: c.brand),
-          const SizedBox(width: DsSpacing.activityStripIconGap),
-          Flexible(
-            child: Text.rich(
-              TextSpan(
-                children: [
-                  TextSpan(
-                    text: a.label,
-                    style: DsTypography.smallStrong.copyWith(
-                      color: c.labelPrimary,
-                    ),
-                  ),
-                  if (hasDetail)
+          if (a != null) ...[
+            Icon(_icon(a.kind), size: DsSpacing.menuIconSize, color: c.brand),
+            const SizedBox(width: DsSpacing.activityStripIconGap),
+            Flexible(
+              child: Text.rich(
+                TextSpan(
+                  children: [
                     TextSpan(
-                      text: '  $detail',
-                      style: DsTypography.codeBlockLabel.copyWith(
-                        color: c.labelTertiary,
+                      text: a.label,
+                      style: DsTypography.smallStrong.copyWith(
+                        color: c.labelPrimary,
                       ),
                     ),
-                ],
+                    if (hasDetail)
+                      TextSpan(
+                        text: '  $detail',
+                        style: DsTypography.codeBlockLabel.copyWith(
+                          color: c.labelTertiary,
+                        ),
+                      ),
+                  ],
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
             ),
-          ),
-          if (elapsed != null) ...[
-            const SizedBox(width: DsSpacing.activityStripIconGap),
-            Text(
-              elapsed,
-              style: DsTypography.codeBlockLabel.copyWith(
-                color: c.labelTertiary,
+            if (elapsed != null) ...[
+              const SizedBox(width: DsSpacing.activityStripIconGap),
+              Text(
+                elapsed,
+                style: DsTypography.codeBlockLabel.copyWith(
+                  color: c.labelTertiary,
+                ),
               ),
+            ],
+          ] else
+            const Spacer(),
+          if (jobs > 0) ...[
+            const SizedBox(width: DsSpacing.activityStripIconGap),
+            ChatJobsPill(
+              colors: c,
+              running: jobs,
+              onTap: widget.onOpenJobs,
             ),
           ],
         ],
